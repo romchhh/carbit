@@ -17,8 +17,13 @@ const telegramBotUrl =
 
 const apiUrl =
   process.env.NEXT_PUBLIC_API_URL?.trim() ||
+  (process.env.NODE_ENV === "production" ? "/api/v1" : "") ||
   process.env.BACKEND_URL?.trim() ||
   "http://localhost:8000/api/v1";
+
+const backendInternal =
+  process.env.BACKEND_INTERNAL_URL?.trim() ||
+  (process.env.NODE_ENV === "production" ? "http://backend:8000" : "http://localhost:8000");
 
 /** @type {import('next').NextConfig} */
 const withPWA = require("next-pwa")({
@@ -35,6 +40,14 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: apiUrl,
     NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: telegramBotUsername,
     NEXT_PUBLIC_TELEGRAM_BOT_URL: telegramBotUrl,
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${backendInternal}/api/v1/:path*`,
+      },
+    ];
   },
   images: {
     remotePatterns: [

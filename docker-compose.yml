@@ -49,6 +49,7 @@ services:
       dockerfile: docker/frontend/Dockerfile
       args:
         BACKEND_URL: ${BACKEND_URL:-http://localhost:8000/api/v1}
+        BACKEND_INTERNAL_URL: http://backend:8000
         TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
         TELEGRAM_BOT_URL: ${TELEGRAM_BOT_URL:-}
     container_name: carbit-frontend

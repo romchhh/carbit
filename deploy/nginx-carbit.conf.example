@@ -1,0 +1,48 @@
+# /etc/nginx/sites-available/carbit
+# sudo ln -s /etc/nginx/sites-available/carbit /etc/nginx/sites-enabled/
+# sudo nginx -t && sudo systemctl reload nginx
+#
+# ВАЖЛИВО: є два робочі варіанти (оберіть ОДИН):
+#
+# Варіант A — API через Next.js (рекомендовано, frontend сам проксує /api/v1 → backend)
+#   У nginx НЕ має бути location /api/ — весь трафік йде на frontend :3000
+#
+# Варіант B — API напряму через nginx
+#   location /api/ { proxy_pass http://127.0.0.1:8000/api/; }  ← обов'язково /api/ в кінці!
+#   НЕПРАВИЛЬНО: proxy_pass http://127.0.0.1:8000/;  ← зрізає /api, дає 404
+
+server {
+    listen 80;
+    server_name carbit.telebots.site;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name carbit.telebots.site;
+
+    # ssl_certificate /etc/letsencrypt/live/carbit.telebots.site/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/carbit.telebots.site/privkey.pem;
+
+    # ── Варіант B: розкоментуйте, якщо хочете API напряму (без Next.js proxy) ──
+    # location /api/ {
+    #     proxy_pass http://127.0.0.1:8000/api/;
+    #     proxy_http_version 1.1;
+    #     proxy_set_header Host $host;
+    #     proxy_set_header X-Real-IP $remote_addr;
+    #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #     proxy_set_header X-Forwarded-Proto $scheme;
+    # }
+
+    # Frontend (Next.js проксує /api/v1 → backend:8000 всередині Docker)
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
