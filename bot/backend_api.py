@@ -47,3 +47,25 @@ async def init_telegram_login(
             logger.error("Backend login init failed: %s", res.text)
             return None
         return res.json()
+
+
+async def init_telegram_register(
+    telegram_id: str,
+    telegram_username: str | None,
+    chat_id: str,
+    name: str | None = None,
+) -> dict | None:
+    url = f"{settings.BACKEND_URL}/internal/bot/register"
+    headers = {"X-Internal-Secret": settings.INTERNAL_API_SECRET}
+    payload = {
+        "telegram_id": telegram_id,
+        "telegram_username": telegram_username,
+        "chat_id": chat_id,
+        "name": name,
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.post(url, json=payload, headers=headers)
+        if res.status_code >= 400:
+            logger.error("Backend register init failed: %s", res.text)
+            return None
+        return res.json()

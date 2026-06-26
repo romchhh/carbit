@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.models import User
 from app.services.telegram import tokens as tg_tokens
+from app.services.telegram.links import TELEGRAM_PLACEHOLDER_EMAIL_SUFFIX
 from app.services.user_avatar import sync_telegram_avatar
 
 router = APIRouter(prefix="/internal/bot", tags=["internal"])
@@ -23,6 +24,13 @@ class BotLoginRequest(BaseModel):
     telegram_id: str
     telegram_username: str | None = None
     chat_id: str
+
+
+class BotRegisterRequest(BaseModel):
+    telegram_id: str
+    telegram_username: str | None = None
+    chat_id: str
+    name: str | None = None
 
 
 def verify_internal_secret(x_internal_secret: str = Header(...)):
@@ -76,4 +84,42 @@ async def bot_init_login(
         "success": True,
         "login_url": login_url,
         "user_name": user.name,
+    }
+
+
+@router.post("/register")
+async def bot_init_register(
+    body: BotRegisterRequest,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_internal_secret),
+):
+    user = await db.scalar(select(User).where(User.telegram_id == body.telegram_id))
+    if user:
+        if not user.is_active:
+            return {"error": "account_deactivated"}
+
+        token = await tg_tokens.create_login_token(user.id)
+        login_url = f"{settings.FRONTEND_URL}/auth/telegram/login?token={token}"
+        return {
+            "success": True,
+            "already_registered": True,
+            "login_url": login_url,
+            "user_name": user.name,
+        }
+
+    name = (body.name or body.telegram_username or "Користувач").strip()
+    email = f"tg{body.telegram_id}{TELEGRAM_PLACEHOLDER_EMAIL_SUFFIX}"
+
+    token = await tg_tokens.create_registration_token(
+        telegram_id=body.telegram_id,
+        chat_id=body.chat_id,
+        name=name,
+        email=email,
+        username=body.telegram_username,
+    )
+    register_url = f"{settings.FRONTEND_URL}/auth/telegram?token={token}"
+    return {
+        "success": True,
+        "register_url": register_url,
+        "user_name": name,
     }

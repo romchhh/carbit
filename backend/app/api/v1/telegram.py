@@ -4,12 +4,11 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import get_current_user_id, hash_password, create_access_token
+from app.core.security import get_current_user_id, create_access_token
 from app.models.models import User
 from app.schemas.schemas import (
     TelegramConnectLinkOut,
     TelegramStatusOut,
-    TelegramRegisterInfoOut,
     TelegramRegisterCompleteRequest,
     TelegramRegisterCompleteOut,
 )
@@ -67,14 +66,6 @@ async def disconnect_telegram(
     await db.flush()
 
 
-@router.get("/register/{token}", response_model=TelegramRegisterInfoOut)
-async def get_register_info(token: str):
-    data = await tg_tokens.get_registration_token(token)
-    if not data:
-        return TelegramRegisterInfoOut(name="", email="", valid=False)
-    return TelegramRegisterInfoOut(name=data["name"], email=data["email"], valid=True)
-
-
 @router.post("/register/complete", response_model=TelegramRegisterCompleteOut)
 async def complete_register(
     body: TelegramRegisterCompleteRequest,
@@ -84,18 +75,20 @@ async def complete_register(
     if not data:
         raise HTTPException(400, "Токен прострочений або недійсний")
 
-    existing = await db.scalar(select(User).where(User.email == data["email"]))
-    if existing:
-        raise HTTPException(400, "Email already registered")
-
     tg_existing = await db.scalar(select(User).where(User.telegram_id == data["telegram_id"]))
     if tg_existing:
-        raise HTTPException(400, "Telegram already linked to another account")
+        await tg_tokens.delete_registration_token(body.token)
+        return TelegramRegisterCompleteOut(
+            access_token=create_access_token(tg_existing.id),
+            user=user_out(tg_existing),
+        )
+
+    email = data["email"]
 
     user = User(
-        email=data["email"],
+        email=email,
         name=data["name"],
-        hashed_password=hash_password(body.password),
+        hashed_password=None,
         telegram_id=data["telegram_id"],
         telegram_username=data.get("username"),
         telegram_connected=True,

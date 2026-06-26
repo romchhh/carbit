@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { IconGear, IconCreditCard, IconTelegram, IconArrowRight, IconZap } from "@/components/icons";
 import { useAuth } from "@/contexts/AuthProvider";
-import { ApiError, telegram as telegramApi, billing as billingApi } from "@/lib/api";
+import { ApiError, telegram as telegramApi, billing as billingApi, users as usersApi } from "@/lib/api";
+import { CodeInput } from "@/components/auth/CodeInput";
 import { PLAN_LABELS } from "@/lib/utils";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { getTelegramBotMention, getTelegramBotUrl } from "@/lib/telegram";
@@ -23,6 +24,12 @@ export default function AccountPage() {
   const [tgLoading, setTgLoading] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [polling, setPolling] = useState(false);
+  const [bindEmail, setBindEmail] = useState("");
+  const [bindCode, setBindCode] = useState("");
+  const [bindStep, setBindStep] = useState<"idle" | "code">("idle");
+  const [bindLoading, setBindLoading] = useState(false);
+  const [bindError, setBindError] = useState("");
+  const [bindSuccess, setBindSuccess] = useState("");
 
   useEffect(() => {
     billingApi.subscription().then(setSubscription).catch(() => {});
@@ -83,6 +90,46 @@ export default function AccountPage() {
     setConnectUrl(null);
   };
 
+  const sendBindCode = async () => {
+    setBindError("");
+    setBindSuccess("");
+    if (!bindEmail.trim()) {
+      setBindError("Вкажіть email");
+      return;
+    }
+    setBindLoading(true);
+    try {
+      await usersApi.sendEmailBindCode(bindEmail.trim());
+      setBindStep("code");
+      setBindSuccess("Код надіслано на пошту");
+    } catch (err) {
+      setBindError(err instanceof ApiError ? err.message : "Не вдалося надіслати код");
+    } finally {
+      setBindLoading(false);
+    }
+  };
+
+  const verifyBindCode = async () => {
+    setBindError("");
+    setBindSuccess("");
+    if (bindCode.length !== 6) {
+      setBindError("Введіть 6-значний код");
+      return;
+    }
+    setBindLoading(true);
+    try {
+      await usersApi.verifyEmailBind(bindEmail.trim(), bindCode);
+      await refreshUser();
+      setBindStep("idle");
+      setBindCode("");
+      setBindSuccess("Email підтверджено");
+    } catch (err) {
+      setBindError(err instanceof ApiError ? err.message : "Невірний код");
+    } finally {
+      setBindLoading(false);
+    }
+  };
+
   return (
     <AppPage title="Акаунт" description="Профіль, тариф і підключення Telegram">
       <div className="space-y-4">
@@ -106,7 +153,9 @@ export default function AccountPage() {
               ) : (
                 <>
                   <div className="text-[16px] font-bold text-ink">{user.name}</div>
-                  <div className="mt-0.5 text-[12px] text-muted">{user.email}</div>
+                  <div className="mt-0.5 text-[12px] text-muted">
+                    {user.email_verified ? user.email : "Email не вказано"}
+                  </div>
                 </>
               )}
             </div>
@@ -148,6 +197,44 @@ export default function AccountPage() {
             <Link href="/pricing"><Button variant="secondary" size="md">Тарифи</Button></Link>
           </div>
         </AppSection>
+
+        {!user.email_verified && (
+          <AppSection className="!bg-white">
+            <div className="text-[14px] font-semibold text-ink">Email</div>
+            <p className="mt-1 text-[12px] text-muted">
+              Додайте email для входу через пошту та сповіщень. Потрібне підтвердження кодом.
+            </p>
+            {bindStep === "idle" ? (
+              <div className="mt-4 space-y-3">
+                <input
+                  type="email"
+                  className="auth-input w-full"
+                  placeholder="you@example.com"
+                  value={bindEmail}
+                  onChange={e => setBindEmail(e.target.value)}
+                />
+                <Button variant="primary" size="sm" loading={bindLoading} onClick={sendBindCode}>
+                  Надіслати код
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <p className="text-[12px] text-muted">Код надіслано на <strong>{bindEmail}</strong></p>
+                <CodeInput value={bindCode} onChange={setBindCode} />
+                <div className="flex gap-2">
+                  <Button variant="primary" size="sm" loading={bindLoading} onClick={verifyBindCode}>
+                    Підтвердити
+                  </Button>
+                  <Button variant="secondary" size="sm" disabled={bindLoading} onClick={() => { setBindStep("idle"); setBindCode(""); setBindError(""); }}>
+                    Змінити email
+                  </Button>
+                </div>
+              </div>
+            )}
+            {bindError && <p className="mt-3 text-[12px] text-red-600">{bindError}</p>}
+            {bindSuccess && <p className="mt-3 text-[12px] text-emerald-dark">{bindSuccess}</p>}
+          </AppSection>
+        )}
 
         <AppSection className="!bg-white">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

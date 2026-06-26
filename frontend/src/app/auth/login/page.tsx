@@ -213,14 +213,21 @@ function AuthForm() {
     window.location.href = authApi.googleLoginUrl();
   };
 
-  const handleTelegramLogin = async () => {
+  const handleTelegramAuth = async () => {
     setError("");
     setSuccess("");
     setLoading(true);
     try {
-      const { bot_url } = await authApi.telegramLoginUrl();
+      const { bot_url } =
+        tab === "register"
+          ? await authApi.telegramRegisterUrl()
+          : await authApi.telegramLoginUrl();
       window.open(bot_url, "_blank", "noopener,noreferrer");
-      setSuccess("Відкрийте Telegram і натисніть кнопку «Увійти в кабінет»");
+      setSuccess(
+        tab === "register"
+          ? "Відкрийте Telegram і натисніть «Відкрити кабінет»"
+          : "Відкрийте Telegram і натисніть «Увійти в кабінет»",
+      );
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 503
@@ -516,7 +523,7 @@ function AuthForm() {
 
           <div className="flex items-center gap-2.5">
             <SocialButton provider="google" disabled={loading} onClick={handleGoogleLogin} />
-            <SocialButton provider="telegram" disabled={loading} onClick={handleTelegramLogin} />
+            <SocialButton provider="telegram" disabled={loading} onClick={handleTelegramAuth} />
           </div>
         </form>
       </div>

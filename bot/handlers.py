@@ -6,7 +6,7 @@ from aiogram.filters import CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from backend_api import init_telegram_login, link_telegram_account
+from backend_api import init_telegram_login, init_telegram_register, link_telegram_account
 from config import settings
 from states import Registration
 import tokens as tg_tokens
@@ -37,16 +37,14 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
         await _handle_login(message, telegram_id, username)
         return
 
+    if command.args == "register":
+        telegram_id, username = _user_meta(message)
+        await _handle_register(message, telegram_id, username)
+        return
+
     telegram_id, username = _user_meta(message)
     await state.clear()
-    await state.update_data(telegram_id=telegram_id, username=username)
-    await state.set_state(Registration.name)
-    await message.answer(
-        "👋 <b>Вітаємо в AutoRadar!</b>\n\n"
-        "Я допоможу знаходити авто на AUTO.RIA, OLX і в Telegram-групах "
-        "швидше за конкурентів.\n\n"
-        "Як вас звати?",
-    )
+    await _handle_register(message, telegram_id, username)
 
 
 @router.message(Registration.name)
@@ -87,13 +85,12 @@ async def process_email(message: Message, state: FSMContext) -> None:
 
     reg_url = f"{settings.FRONTEND_URL}/auth/telegram?token={token}"
     markup = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="🚀 Завершити реєстрацію", url=reg_url)]],
+        inline_keyboard=[[InlineKeyboardButton(text="🚀 Відкрити кабінет", url=reg_url)]],
     )
     await message.answer(
         f"✅ <b>Майже готово!</b>\n\n"
         f"Email: <code>{email}</code>\n\n"
-        "Натисніть кнопку нижче, щоб відкрити кабінет і встановити пароль.\n"
-        "Після цього ви одразу отримуватимете нові авто сюди в Telegram.",
+        "Натисніть кнопку нижче, щоб відкрити кабінет.",
         reply_markup=markup,
     )
 
@@ -141,10 +138,7 @@ async def _handle_login(message: Message, telegram_id: str, username: str | None
         return
 
     if result.get("error") == "not_registered":
-        await message.answer(
-            "👋 Акаунт з цим Telegram не знайдено.\n\n"
-            "Натисніть /start щоб зареєструватись або увійдіть через email на сайті.",
-        )
+        await _handle_register(message, telegram_id, username)
         return
 
     if result.get("error") == "account_deactivated":
@@ -157,6 +151,48 @@ async def _handle_login(message: Message, telegram_id: str, username: str | None
     )
     await message.answer(
         f"Привіт, <b>{result.get('user_name', '')}</b>!\n\n"
-        "Натисніть кнопку нижче, щоб увійти в AutoRadar.",
+        "Натисніть кнопку нижче, щоб увійти в Carbit.",
+        reply_markup=markup,
+    )
+
+
+async def _handle_register(message: Message, telegram_id: str, username: str | None) -> None:
+    user = message.from_user
+    display_name = (
+        (user.full_name if user and user.full_name else None)
+        or (f"@{username}" if username else None)
+        or "Користувач"
+    )
+    result = await init_telegram_register(
+        telegram_id, username, str(message.chat.id), display_name
+    )
+    if not result:
+        await message.answer("⚠️ Не вдалося підключитись до сервера. Спробуйте пізніше.")
+        return
+
+    if result.get("error") == "account_deactivated":
+        await message.answer("⚠️ Акаунт деактивовано. Зверніться до підтримки.")
+        return
+
+    if result.get("already_registered"):
+        login_url = result.get("login_url", "")
+        markup = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="🔐 Увійти в кабінет", url=login_url)]],
+        )
+        await message.answer(
+            f"Привіт, <b>{result.get('user_name', display_name)}</b>!\n\n"
+            "У вас уже є акаунт. Натисніть кнопку, щоб увійти в кабінет.",
+            reply_markup=markup,
+        )
+        return
+
+    register_url = result.get("register_url", "")
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🚀 Відкрити кабінет", url=register_url)]],
+    )
+    await message.answer(
+        f"👋 <b>Реєстрація в Carbit</b>\n\n"
+        f"Привіт, <b>{result.get('user_name', display_name)}</b>!\n\n"
+        "Натисніть кнопку нижче, щоб відкрити кабінет і завершити реєстрацію.",
         reply_markup=markup,
     )

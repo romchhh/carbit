@@ -7,6 +7,7 @@ export interface User {
   telegram_connected: boolean;
   telegram_username?: string | null;
   avatar_url?: string | null;
+  email_verified?: boolean;
   trial_ends_at?: string | null;
   is_trial_active?: boolean;
   onboarding_completed?: boolean;
@@ -137,4 +138,5 @@ export interface TelegramRegisterInfo {
   name: string;
   email: string;
   valid: boolean;
+  telegram_only?: boolean;
 }

@@ -9,7 +9,6 @@ import type {
   SearchQuery,
   Subscription,
   TelegramConnectLink,
-  TelegramRegisterInfo,
   TelegramStatus,
   TokenResponse,
   User,
@@ -64,6 +63,7 @@ export const auth = {
   telegramLogin: (token: string) =>
     request<TokenResponse>("/auth/telegram/login", { method: "POST", body: JSON.stringify({ token }) }),
   telegramLoginUrl: () => request<{ bot_url: string; bot_username: string }>("/auth/telegram/login-url"),
+  telegramRegisterUrl: () => request<{ bot_url: string; bot_username: string }>("/auth/telegram/register-url"),
   googleLoginUrl: () => `${API_URL}/auth/google`,
   me: () => request<User>("/auth/me"),
   updateProfile: (name: string) =>
@@ -75,6 +75,16 @@ export const users = {
   dashboard: () => request<DashboardStats>("/users/me/dashboard"),
   completeOnboarding: () =>
     request<User>("/users/me/onboarding", { method: "POST", body: JSON.stringify({ completed: true }) }),
+  sendEmailBindCode: (email: string) =>
+    request<{ message: string }>("/users/me/email/send-code", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  verifyEmailBind: (email: string, code: string) =>
+    request<User>("/users/me/email/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    }),
 };
 
 // ── Searches ──────────────────────────────────────────
@@ -119,10 +129,9 @@ export const telegram = {
   connectLink: () => request<TelegramConnectLink>("/telegram/connect-link"),
   status: () => request<TelegramStatus>("/telegram/status"),
   disconnect: () => request<void>("/telegram/disconnect", { method: "DELETE" }),
-  registerInfo: (token: string) => request<TelegramRegisterInfo>(`/telegram/register/${token}`),
-  registerComplete: (token: string, password: string) =>
+  registerComplete: (token: string) =>
     request<{ access_token: string; user: User }>("/telegram/register/complete", {
       method: "POST",
-      body: JSON.stringify({ token, password }),
+      body: JSON.stringify({ token }),
     }),
 };

@@ -236,6 +236,18 @@ async def telegram_login_url():
     )
 
 
+@router.get("/telegram/register-url", response_model=TelegramLoginUrlOut)
+async def telegram_register_url():
+    username = bot_username()
+    url = bot_url("register")
+    if not url:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram bot not configured")
+    return TelegramLoginUrlOut(
+        bot_url=url,
+        bot_username=username,
+    )
+
+
 @router.post("/telegram/login", response_model=TokenResponse)
 async def telegram_login(body: TelegramLoginRequest, db: AsyncSession = Depends(get_db)):
     user_id = await tg_tokens.consume_login_token(body.token)

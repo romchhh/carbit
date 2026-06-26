@@ -80,6 +80,7 @@ class UserOut(BaseModel):
     telegram_connected: bool
     telegram_username: str | None = None
     avatar_url: str | None = None
+    email_verified: bool = False
     trial_ends_at: datetime | None = None
     is_trial_active: bool = False
     onboarding_completed: bool = False
@@ -91,6 +92,15 @@ class UserOut(BaseModel):
 
 class OnboardingCompleteRequest(BaseModel):
     completed: bool = True
+
+
+class EmailBindSendRequest(BaseModel):
+    email: EmailStr
+
+
+class EmailBindVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 # Search filters
@@ -265,11 +275,11 @@ class TelegramRegisterInfoOut(BaseModel):
     name: str
     email: str
     valid: bool
+    telegram_only: bool = False
 
 
 class TelegramRegisterCompleteRequest(BaseModel):
-    token: str
-    password: str = Field(min_length=8)
+    token: str = Field(min_length=10)
 
 
 class TelegramRegisterCompleteOut(BaseModel):

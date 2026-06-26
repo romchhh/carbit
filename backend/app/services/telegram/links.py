@@ -1,5 +1,7 @@
 from app.core.config import settings
 
+TELEGRAM_PLACEHOLDER_EMAIL_SUFFIX = "@telegram.carbit.local"
+
 
 def bot_username() -> str:
     return (settings.TELEGRAM_BOT_USERNAME or "").lstrip("@")
@@ -22,3 +24,7 @@ def bot_url(start: str | None = None) -> str:
         return base
     separator = "&" if "?" in base else "?"
     return f"{base}{separator}start={start}"
+
+
+def is_placeholder_email(email: str) -> bool:
+    return email.endswith(TELEGRAM_PLACEHOLDER_EMAIL_SUFFIX)
