@@ -11,13 +11,13 @@ WORKDIR /app
 COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
 COPY frontend ./frontend
 
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+ARG BACKEND_URL=http://localhost:8000/api/v1
 ARG TELEGRAM_BOT_USERNAME=
 ARG TELEGRAM_BOT_URL=
 
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production \
-    NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    BACKEND_URL=$BACKEND_URL \
     TELEGRAM_BOT_USERNAME=$TELEGRAM_BOT_USERNAME \
     TELEGRAM_BOT_URL=$TELEGRAM_BOT_URL
 

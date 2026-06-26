@@ -48,7 +48,7 @@ services:
       context: .
       dockerfile: docker/frontend/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+        BACKEND_URL: ${BACKEND_URL:-http://localhost:8000/api/v1}
         TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
         TELEGRAM_BOT_URL: ${TELEGRAM_BOT_URL:-}
     container_name: carbit-frontend

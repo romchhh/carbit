@@ -15,6 +15,11 @@ const telegramBotUrl =
   process.env.TELEGRAM_BOT_URL?.trim() ||
   "";
 
+const apiUrl =
+  process.env.NEXT_PUBLIC_API_URL?.trim() ||
+  process.env.BACKEND_URL?.trim() ||
+  "http://localhost:8000/api/v1";
+
 /** @type {import('next').NextConfig} */
 const withPWA = require("next-pwa")({
   dest: "public",
@@ -27,7 +32,7 @@ const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_API_URL: apiUrl,
     NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: telegramBotUsername,
     NEXT_PUBLIC_TELEGRAM_BOT_URL: telegramBotUrl,
   },
