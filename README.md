@@ -1,4 +1,4 @@
-# AutoRadar
+# Carbit
 
 Агрегатор оголошень авторинку України (AUTO.RIA · OLX · Telegram).
 

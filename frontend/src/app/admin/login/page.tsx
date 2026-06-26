@@ -27,8 +27,8 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen bg-ink flex items-center justify-center p-6">
       <div className="w-full max-w-[380px] bg-white rounded-2xl p-8 shadow-2xl">
-        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted mb-1">AutoRadar</div>
-        <h1 className="text-[24px] font-black text-ink mb-6">Admin Panel</h1>
+        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted mb-1">Carbit</div>
+        <h1 className="text-[24px] font-black text-ink mb-6">Carbit Admin Panel</h1>
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="block text-[12px] font-semibold text-ink mb-1">Логін</label>

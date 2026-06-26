@@ -114,7 +114,7 @@ export default function ResetPasswordPage() {
             <span className="w-10 h-10 rounded-full bg-emerald-light ring-1 ring-emerald/20 flex items-center justify-center">
               <LogoIcon size={22} />
             </span>
-            <span className="text-[17px] font-bold text-ink">AutoRadar</span>
+            <span className="text-[17px] font-bold text-ink">Carbit</span>
           </Link>
         </div>
         <div className="bg-white rounded-[1.5rem] border border-border/60 shadow-card p-6 sm:p-7">

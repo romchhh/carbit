@@ -1,49 +1,10 @@
-import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { PricingPlans } from "@/components/pricing/PricingPlans";
 import { CtaLink } from "@/components/ui/CtaLink";
 import { cn } from "@/lib/utils";
+import { PRICING_COMPARE, PRICING_PLAN_HEADERS } from "@/lib/pricing-plans";
 import { IconCheck, IconX } from "@/components/icons";
-
-const plans = [
-  {
-    name: "Безкоштовно", price: "0", period: "7 днів тест-драйв",
-    features: ["1 пошуковий запит", "Оновлення раз на годину", "Вебкабінет"],
-    missing: ["Telegram-бот", "Анти-дубль", "Оцінка ризиків", "Пріоритет"],
-    cta: "Почати безкоштовно", href: "/auth/login", accent: false, popular: false,
-  },
-  {
-    name: "Lite", price: "500", period: "грн / місяць",
-    features: ["3 пошукових запити", "Оновлення кожні 30 хв", "Telegram-бот", "Анти-дубль"],
-    missing: ["Оцінка ризиків", "Пріоритетна підтримка"],
-    cta: "Вибрати Lite", href: "/auth/login?plan=lite", accent: false, popular: false,
-  },
-  {
-    name: "Стандарт", price: "2 000", period: "грн / місяць",
-    features: ["10 пошукових запитів", "Оновлення кожні 5 хв", "Telegram-бот", "Анти-дубль", "Оцінка ризиків", "Експорт Excel"],
-    missing: [],
-    cta: "Вибрати Стандарт", href: "/auth/login?plan=standard", accent: true, popular: true,
-  },
-  {
-    name: "Pro", price: "6 000", period: "грн / місяць",
-    features: ["50 запитів", "Оновлення в реальному часі", "Telegram-бот", "Анти-дубль", "Оцінка ризиків", "Повний API-доступ", "Персональний менеджер", "Підтримка 24/7"],
-    missing: [],
-    cta: "Зв'язатися", href: "/contact", accent: false, popular: false,
-  },
-];
-
-const compare = [
-  { feature: "Пошукові запити", free: "1", lite: "3", std: "10", pro: "50" },
-  { feature: "Частота оновлення", free: "1 год", lite: "30 хв", std: "5 хв", pro: "Реал-тайм" },
-  { feature: "Telegram-бот", free: false, lite: true, std: true, pro: true },
-  { feature: "Анти-дубль", free: false, lite: true, std: true, pro: true },
-  { feature: "Оцінка ризиків", free: false, lite: false, std: true, pro: true },
-  { feature: "Експорт Excel/CSV", free: false, lite: false, std: true, pro: true },
-  { feature: "API-доступ", free: false, lite: false, std: false, pro: true },
-  { feature: "Персональний менеджер", free: false, lite: false, std: false, pro: true },
-];
-
-const planHeaders = ["Безкоштовно", "Lite", "Стандарт", "Pro"] as const;
 
 function Cell({ v }: { v: string | boolean }) {
   if (typeof v === "boolean") {
@@ -72,68 +33,10 @@ export default function PricingPage() {
         </section>
 
         <div className="max-w-[1280px] mx-auto px-8 py-20">
-          {/* Plan cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-24">
-            {plans.map(({ name, price, period, features, missing, cta, href, accent, popular }) => (
-              <div
-                key={name}
-                className={cn(
-                  "relative rounded-3xl p-8 flex flex-col transition-all duration-300 hover:-translate-y-1",
-                  accent
-                    ? "bg-ink text-white shadow-xl shadow-ink/25 ring-2 ring-emerald/50 xl:scale-[1.03] xl:-mt-2 xl:mb-2"
-                    : "card-rounded"
-                )}
-              >
-                {popular && (
-                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-emerald text-white text-[11px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-lg shadow-emerald/30">
-                    Популярний
-                  </span>
-                )}
-                <h3 className={cn("text-[22px] font-bold", accent ? "text-white" : "text-ink")}>{name}</h3>
-                <div className="mt-5 flex items-end gap-1.5">
-                  <span className={cn("text-[52px] font-black leading-none tracking-tight", accent ? "text-emerald" : "text-ink")}>
-                    {price}
-                  </span>
-                  {price !== "0" && (
-                    <span className={cn("pb-2 text-[15px] font-medium", accent ? "text-white/40" : "text-muted")}>грн</span>
-                  )}
-                </div>
-                <p className={cn("text-[14px] mt-1 mb-8", accent ? "text-white/45" : "text-muted")}>{period}</p>
-                <Link
-                  href={href}
-                  className={cn(
-                    "group flex items-center justify-center gap-2 text-[15px] font-semibold py-3.5 rounded-full transition-all duration-300 mb-8 hover:-translate-y-0.5",
-                    accent
-                      ? "bg-emerald text-white hover:bg-emerald-dark shadow-lg shadow-emerald/30"
-                      : "border border-border text-ink hover:bg-emerald hover:text-white hover:border-emerald"
-                  )}
-                >
-                  {cta}
-                  <span className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center text-[13px] group-hover:translate-x-0.5 transition-transform",
-                    accent ? "bg-white/20" : "bg-ink/5 group-hover:bg-white/20"
-                  )}>→</span>
-                </Link>
-                <div className="space-y-3.5 flex-1">
-                  {features.map(f => (
-                    <div key={f} className={cn("flex gap-3 text-[14px]", accent ? "text-white/80" : "text-ink")}>
-                      <IconCheck size={16} className="text-emerald shrink-0 mt-0.5"/>
-                      {f}
-                    </div>
-                  ))}
-                  {missing.map(f => (
-                    <div key={f} className="flex gap-3 text-[14px] text-muted/50">
-                      <IconX size={16} className="shrink-0 mt-0.5"/>
-                      {f}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          <PricingPlans variant="page" />
 
           {/* Compare table */}
-          <div className="mb-24">
+          <div className="mb-24 mt-24">
             <h2 className="text-[40px] sm:text-[52px] font-black tracking-tight text-ink mb-3">Повне порівняння</h2>
             <p className="text-[16px] text-muted mb-10 max-w-[480px]">Усі можливості в одній таблиці — обери те, що підходить саме тобі.</p>
             <div className="border border-border/60 rounded-3xl overflow-hidden shadow-card overflow-x-auto">
@@ -141,7 +44,7 @@ export default function PricingPage() {
                 <thead>
                   <tr className="bg-white border-b border-border">
                     <th className="text-left px-6 py-5 text-[13px] font-semibold text-muted w-[40%]">Можливість</th>
-                    {planHeaders.map((h, i) => (
+                    {PRICING_PLAN_HEADERS.map((h, i) => (
                       <th
                         key={h}
                         className={cn(
@@ -156,7 +59,7 @@ export default function PricingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {compare.map(({ feature, free, lite, std, pro }) => (
+                  {PRICING_COMPARE.map(({ feature, free, lite, std, pro }) => (
                     <tr key={feature} className="border-t border-border/50 hover:bg-surface/30 transition-colors">
                       <td className="px-6 py-4 text-[14px] font-medium text-ink">{feature}</td>
                       {[free, lite, std, pro].map((v, j) => (

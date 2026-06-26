@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     )
 
     # App
-    APP_NAME: str = "AutoRadar API"
+    APP_NAME: str = "Carbit API"
     DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
@@ -56,11 +56,11 @@ class Settings(BaseSettings):
     OLX_CLIENT_SECRET: str = ""
 
     # CORS
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "https://autoradar.ua"]
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "https://carbit.telebots.site"]
 
     # Email (Resend)
     RESEND_API_KEY: str = ""
-    EMAIL_FROM: str = "AutoRadar <info@13vplus.com>"
+    EMAIL_FROM: str = "Carbit <info@13vplus.com>"
     FRONTEND_URL: str = "http://localhost:3000"
 
     # Admin

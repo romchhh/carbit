@@ -4,7 +4,7 @@ def _base_layout(content: str) -> str:
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>AutoRadar</title>
+  <title>Carbit</title>
 </head>
 <body style="margin:0;padding:0;background:#F7F8FA;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F8FA;padding:40px 16px;">
@@ -19,7 +19,7 @@ def _base_layout(content: str) -> str:
                     <span style="color:#00C896;font-size:18px;font-weight:bold;">✦</span>
                   </td>
                   <td style="padding-left:12px;">
-                    <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.02em;">AutoRadar</span>
+                    <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.02em;">Carbit</span>
                   </td>
                 </tr>
               </table>
@@ -33,8 +33,8 @@ def _base_layout(content: str) -> str:
           <tr>
             <td style="padding:20px 32px 28px;border-top:1px solid #E4E6EA;background:#F7F8FA;">
               <p style="margin:0;font-size:12px;color:#6B7280;line-height:1.6;text-align:center;">
-                © 2026 AutoRadar · Агрегатор авторинку України<br/>
-                <a href="https://autoradar.ua" style="color:#00A47C;text-decoration:none;">autoradar.ua</a>
+                © 2026 Carbit · Агрегатор авторинку України<br/>
+                <a href="https://carbit.telebots.site" style="color:#00A47C;text-decoration:none;">carbit.telebots.site</a>
               </p>
             </td>
           </tr>
@@ -47,7 +47,7 @@ def _base_layout(content: str) -> str:
 
 
 def verification_code_email(name: str, code: str) -> tuple[str, str]:
-    subject = f"{code} — код підтвердження AutoRadar"
+    subject = f"{code} — код підтвердження Carbit"
     content = f"""
       <p style="margin:0 0 8px;font-size:14px;color:#6B7280;">Привіт, {name}!</p>
       <h1 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#0A0C0E;letter-spacing:-0.02em;">
@@ -62,7 +62,7 @@ def verification_code_email(name: str, code: str) -> tuple[str, str]:
         </span>
       </div>
       <p style="margin:0;font-size:13px;color:#6B7280;line-height:1.6;">
-        Якщо ви не реєструвались в AutoRadar — просто проігноруйте цей лист.
+        Якщо ви не реєструвались в Carbit — просто проігноруйте цей лист.
       </p>
     """
     return subject, _base_layout(content)
@@ -70,14 +70,14 @@ def verification_code_email(name: str, code: str) -> tuple[str, str]:
 
 def welcome_email(name: str, dashboard_url: str) -> tuple[str, str]:
     first_name = name.split()[0] if name.strip() else name
-    subject = f"Ласкаво просимо в AutoRadar, {first_name}! 🚗"
+    subject = f"Ласкаво просимо в Carbit, {first_name}! 🚗"
     content = f"""
       <p style="margin:0 0 8px;font-size:14px;color:#6B7280;">Вітаємо, {first_name}!</p>
       <h1 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#0A0C0E;letter-spacing:-0.02em;">
         Ваш акаунт активовано
       </h1>
       <p style="margin:0 0 28px;font-size:14px;color:#6B7280;line-height:1.6;">
-        Тепер AutoRadar моніторить AUTO.RIA, OLX і Telegram за вас — і сповіщає про нові авто раніше за конкурентів.
+        Тепер Carbit моніторить AUTO.RIA, OLX і Telegram за вас — і сповіщає про нові авто раніше за конкурентів.
       </p>
       <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
         <tr>
@@ -116,7 +116,7 @@ def welcome_email(name: str, dashboard_url: str) -> tuple[str, str]:
 
 def password_reset_email(name: str, reset_url: str) -> tuple[str, str]:
     first_name = name.split()[0] if name.strip() else name
-    subject = "Скидання пароля AutoRadar"
+    subject = "Скидання пароля Carbit"
     content = f"""
       <p style="margin:0 0 8px;font-size:14px;color:#6B7280;">Привіт, {first_name}!</p>
       <h1 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#0A0C0E;letter-spacing:-0.02em;">

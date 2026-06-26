@@ -3,9 +3,9 @@ import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
+import { PricingPlans } from "@/components/pricing/PricingPlans";
 import { CtaLink } from "@/components/ui/CtaLink";
-import { cn } from "@/lib/utils";
-import { IconCheck, IconX, IconArrowDown, IconSearch, IconBell, IconShield, IconTelegram, IconGlobe, IconZap } from "@/components/icons";
+import { IconCheck, IconArrowDown, IconSearch, IconBell, IconShield, IconTelegram, IconGlobe, IconZap } from "@/components/icons";
 
 const HERO_IMAGE = "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1920&q=80";
 
@@ -169,68 +169,7 @@ export default function HomePage() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-              {[
-                {
-                  name: "Безкоштовно", price: "0", period: "7 днів", sub: "тест-драйв",
-                  features: ["1 пошуковий запит","Оновлення раз на годину","Кабінет"],
-                  missing: ["Telegram-бот","Анти-дубль","Оцінка ризиків"],
-                  cta: "Почати", href: "/auth/login", accent: false,
-                },
-                {
-                  name: "Lite", price: "500", period: "грн/міс", sub: "для себе",
-                  features: ["3 запити","Оновлення кожні 30 хв","Telegram-бот","Анти-дубль"],
-                  missing: ["Оцінка ризиків","Пріоритет"],
-                  cta: "Вибрати Lite", href: "/auth/login?plan=lite", accent: false,
-                },
-                {
-                  name: "Стандарт", price: "2 000", period: "грн/міс", sub: "для перекупників",
-                  features: ["10 запитів","Оновлення кожні 5 хв","Telegram-бот","Анти-дубль","Оцінка ризиків","Експорт Excel"],
-                  missing: [],
-                  cta: "Вибрати Стандарт", href: "/auth/login?plan=standard", accent: true,
-                },
-              ].map(({ name, price, period, features, missing, cta, href, accent }) => (
-                <article key={name} className={cn(
-                  "rounded-2xl p-5 sm:p-6 transition-all duration-300 hover:-translate-y-0.5",
-                  accent
-                    ? "bg-ink text-white shadow-xl shadow-ink/30 ring-2 ring-emerald/50 md:scale-[1.02]"
-                    : "card-rounded"
-                )}>
-                  <h3 className={cn("text-[20px] font-semibold", accent ? "text-white" : "text-ink")}>{name}</h3>
-                  <div className="mt-3 flex items-end gap-1.5">
-                    <span className={cn("text-[32px] sm:text-[36px] font-semibold leading-none tracking-tight", accent ? "text-emerald" : "text-ink")}>{price}</span>
-                    <span className={cn("pb-1 text-[12px]", accent ? "text-white/40" : "text-muted")}>{period}</span>
-                  </div>
-                  <Link href={href}
-                    className={cn(
-                      "mt-5 group flex items-center justify-center gap-1.5 text-center text-[12px] font-medium py-2 rounded-full transition-all duration-300 hover:-translate-y-0.5",
-                      accent
-                        ? "bg-emerald text-white hover:bg-emerald-dark shadow-lg shadow-emerald/30"
-                        : "bg-surface border border-border text-ink hover:bg-emerald hover:text-white hover:border-emerald"
-                    )}>
-                    {cta}
-                    <span className={cn(
-                      "w-5 h-5 rounded-full flex items-center justify-center transition-all group-hover:translate-x-0.5 text-[10px]",
-                      accent ? "bg-white/20" : "bg-ink/5 group-hover:bg-white/20"
-                    )}>→</span>
-                  </Link>
-                  <div className="mt-5 space-y-2.5">
-                    {features.map(f => (
-                      <div key={f} className={cn("flex gap-2 text-[12px]", accent ? "text-white/80" : "text-ink")}>
-                        <IconCheck size={14} className="text-emerald shrink-0 mt-0.5"/>
-                        {f}
-                      </div>
-                    ))}
-                    {missing.map(f => (
-                      <div key={f} className="flex gap-2 text-[12px] text-muted opacity-50">
-                        <IconX size={14} className="shrink-0 mt-0.5"/>
-                        {f}
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </div>
+            <PricingPlans variant="home" />
           </div>
         </section>
 

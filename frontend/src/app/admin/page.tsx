@@ -33,7 +33,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="max-w-[1100px]">
       <h1 className="text-[28px] font-black text-ink mb-1">Дашборд</h1>
-      <p className="text-[13px] text-muted mb-8">Огляд платформи AutoRadar</p>
+      <p className="text-[13px] text-muted mb-8">Огляд платформи Carbit</p>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {cards.map(({ label, value, sub, accent }) => (

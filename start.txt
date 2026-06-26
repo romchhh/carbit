@@ -8,3 +8,7 @@ python main.py
 
 cd frontend
 npm run dev
+
+
+git pull
+docker compose up -d --build backend bot frontend

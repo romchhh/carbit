@@ -1,4 +1,3 @@
-"""AutoRadar Telegram Bot — aiogram 3 (long polling)."""
 import asyncio
 import logging
 
@@ -26,7 +25,7 @@ async def main() -> None:
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(router)
 
-    logger.info("AutoRadar bot started (@%s)", settings.TELEGRAM_BOT_USERNAME)
+    logger.info("Carbit bot started (@%s)", settings.TELEGRAM_BOT_USERNAME)
     await dp.start_polling(bot)
 
 

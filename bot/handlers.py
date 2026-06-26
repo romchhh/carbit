@@ -97,7 +97,7 @@ async def process_email(message: Message, state: FSMContext) -> None:
 
 @router.message()
 async def fallback(message: Message) -> None:
-    await message.answer("Натисніть /start щоб почати роботу з AutoRadar.")
+    await message.answer("Натисніть /start щоб почати роботу з Carbit.")
 
 
 async def _handle_connect(

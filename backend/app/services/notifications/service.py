@@ -49,7 +49,7 @@ async def create_listing_notification(
             "source_label": source_labels.get(source, source),
             "url": listing.url,
         }
-        search_name = search.name if search else "AutoRadar"
+        search_name = search.name if search else "Carbit"
         result = await telegram_client.send_listing_card(user.telegram_id, listing_data, search_name)
         if result:
             notification.sent_telegram = True

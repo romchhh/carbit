@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Політика конфіденційності — AutoRadar",
-  description: "Як AutoRadar збирає, використовує та захищає персональні дані користувачів.",
+  title: "Політика конфіденційності — Carbit",
+  description: "Як Carbit збирає, використовує та захищає персональні дані користувачів.",
 };
 
 const sections = [
@@ -12,7 +12,7 @@ const sections = [
     content: (
       <>
         <p>
-          Ця Політика конфіденційності описує, як <strong className="text-ink">AutoRadar</strong>{" "}
+          Ця Політика конфіденційності описує, як <strong className="text-ink">Carbit</strong>{" "}
           (далі — «ми», «Сервіс») обробляє персональні дані користувачів відповідно до Закону України
           «Про захист персональних даних» та загальних принципів GDPR, де це застосовно.
         </p>
@@ -184,7 +184,7 @@ const sections = [
     content: (
       <>
         <p>
-          Підключення Telegram-бота означає передачу вашого Telegram ID та username до AutoRadar
+          Підключення Telegram-бота означає передачу вашого Telegram ID та username до Carbit
           для надсилання сповіщень про нові оголошення. Обробка також регулюється політикою Telegram.
         </p>
         <p>
@@ -227,7 +227,7 @@ const sections = [
             Email: <a href="mailto:info@13vplus.com">info@13vplus.com</a>
           </li>
           <li>
-            Умови використання: <a href="/terms">autoradar.ua/terms</a>
+            Умови використання: <a href="/terms">carbit.telebots.site/terms</a>
           </li>
         </ul>
       </>
@@ -239,7 +239,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Політика конфіденційності"
-      subtitle="Як ми збираємо, використовуємо та захищаємо ваші персональні дані в AutoRadar."
+      subtitle="Як ми збираємо, використовуємо та захищаємо ваші персональні дані в Carbit."
       updated="26 червня 2026"
       sections={sections}
     />
