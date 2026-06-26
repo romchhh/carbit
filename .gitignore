@@ -1,0 +1,23 @@
+.env
+.venv/
+backend/.venv/
+bot/.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Database
+database/*.db
+database/*.db-*
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/tsconfig.tsbuildinfo
+
+# OS / IDE
+.DS_Store
+*.log

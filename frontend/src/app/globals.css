@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --emerald: #00C896;
+  --emerald-dark: #00A47C;
+  --ink: #0A0C0E;
+  --ink-2: #1A1D21;
+  --muted: #6B7280;
+  --surface: #F7F8FA;
+  --border: #E4E6EA;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-montserrat), system-ui, sans-serif;
+    background: #eef0f4;
+    color: #0A0C0E;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: #00C896; color: #fff; }
+}
+
+@layer components {
+  .section-wrap {
+    @apply max-w-[1280px] mx-auto px-5 sm:px-6;
+  }
+
+  .section-y {
+    @apply py-10 sm:py-12;
+  }
+
+  .input-field {
+    @apply w-full bg-white border border-border rounded-xl px-3 py-2 text-[13px] text-ink focus:outline-none focus:border-emerald/50 focus:ring-2 focus:ring-emerald/10 transition-all;
+  }
+
+  .card-rounded {
+    @apply bg-white rounded-2xl border border-border/60 shadow-card transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+
+  .text-link {
+    @apply inline-flex items-center gap-1.5 text-[12px] font-medium text-white hover:text-white/80 transition-colors;
+  }
+
+  .text-link-arrow {
+    @apply w-6 h-6 rounded-full border border-white/20 flex items-center justify-center transition-all duration-300 group-hover:bg-emerald group-hover:border-emerald group-hover:translate-y-0.5;
+  }
+
+  .stat-pill {
+    @apply flex flex-col items-center justify-center text-center rounded-xl bg-white/10 backdrop-blur-md border border-white/15 px-3 py-3 w-full h-[72px] sm:h-[76px];
+  }
+
+  .auth-input {
+    @apply w-full h-[40px] bg-surface border border-border rounded-lg px-3 text-[13px] text-ink placeholder:text-muted/50 focus:outline-none focus:border-emerald/50 focus:ring-2 focus:ring-emerald/10 transition-all;
+  }
+
+  .auth-input-wrap {
+    @apply flex items-center gap-2 h-[40px] bg-surface border border-border rounded-lg px-3 focus-within:border-emerald/50 focus-within:ring-2 focus-within:ring-emerald/10 transition-all;
+  }
+
+  .auth-input-inner {
+    @apply flex-1 bg-transparent outline-none text-[13px] text-ink placeholder:text-muted/50;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .shadow-island {
+    box-shadow: 0 2px 8px rgba(10, 12, 14, 0.04), 0 12px 40px -12px rgba(10, 12, 14, 0.1);
+  }
+}

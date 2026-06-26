@@ -1,0 +1,18 @@
+# Next.js build output (auto-generated, safe to delete)
+.next/
+out/
+
+# Dependencies
+node_modules/
+
+# Env
+.env
+.env.local
+.env*.local
+
+# Debug
+npm-debug.log*
+
+# PWA service worker (regenerated on build)
+public/sw.js
+public/workbox-*.js

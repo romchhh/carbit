@@ -1,0 +1,62 @@
+name: carbit
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/python/Dockerfile
+    container_name: carbit-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///database/autoradar.db
+      REDIS_URL: sqlite://database/kv.db
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./database:/app/database
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+  bot:
+    build:
+      context: .
+      dockerfile: docker/python/Dockerfile
+    container_name: carbit-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BACKEND_URL: http://backend:8000/api/v1
+      REDIS_URL: sqlite://database/kv.db
+    entrypoint: ["python", "main.py"]
+    working_dir: /app/bot
+    volumes:
+      - ./database:/app/database
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+        TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+        TELEGRAM_BOT_URL: ${TELEGRAM_BOT_URL:-}
+    container_name: carbit-frontend
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy

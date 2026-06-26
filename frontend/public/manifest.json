@@ -1,0 +1,13 @@
+{
+  "name": "Carbit — агрегатор авторинку",
+  "short_name": "Carbit",
+  "description": "AUTO.RIA, OLX і Telegram в одному пошуку",
+  "start_url": "/app/dashboard",
+  "display": "standalone",
+  "background_color": "#EEF0F4",
+  "theme_color": "#00C896",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

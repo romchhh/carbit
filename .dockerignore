@@ -1,0 +1,32 @@
+# Git / IDE
+.git
+.gitignore
+.cursor
+*.md
+!DOCKER.md
+
+# Python local
+.venv
+backend/.venv
+bot/.venv
+__pycache__
+*.py[cod]
+*.egg-info
+
+# Node local
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/tsconfig.tsbuildinfo
+
+# Data (mount as volume)
+database/*.db
+database/*.db-*
+
+# Secrets (inject via env_file at runtime)
+.env
+
+# Misc
+.DS_Store
+*.log
+terminals
