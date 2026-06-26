@@ -211,6 +211,8 @@ GOOGLE_REDIRECT_URI=https://your-domain.com/api/v1/auth/google/callback
 
 | Симптом | Рішення |
 |---------|---------|
+| Backend unhealthy / Restarting | `docker compose logs backend --tail=50` — часто бракує `storage/` в образі (оновіть код і `--build`) |
+| `ModuleNotFoundError: storage` | `git pull && docker compose up -d --build backend bot` |
 | Frontend не бачить API | Перевірте `NEXT_PUBLIC_API_URL`, перезберіть frontend |
 | Bot не підключається до backend | `INTERNAL_API_SECRET` однаковий у `.env`; bot використовує `BACKEND_URL` з compose |
 | CORS помилки | Додайте домен у `ALLOWED_ORIGINS` у `backend/app/core/config.py` |
