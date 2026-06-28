@@ -68,115 +68,113 @@ export default function SearchPage() {
 
   return (
     <div className="max-w-[1100px]">
-      <div className="mb-7 flex items-start justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:mb-7 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-[26px] font-black tracking-[-0.02em] text-ink">Новий запит</h1>
-          <p className="mt-1 text-[13px] text-muted">Налаштуй фільтри — Carbit шукатиме автоматично</p>
+          <h1 className="text-[26px] font-black tracking-[-0.02em] text-ink">Пошук авто</h1>
+          <p className="mt-1 text-[13px] text-muted">Оберіть параметри — Carbit знайде оголошення автоматично</p>
         </div>
-        <span className="rounded-lg border border-border bg-white px-3 py-1.5 text-[12px] text-muted">
+        <span className="w-fit rounded-lg border border-border bg-white px-3 py-1.5 text-[12px] text-muted">
           Ліміт тарифу <strong className="text-ink">{user?.searches_limit ?? "—"}</strong> запитів
         </span>
       </div>
 
-      <div className="flex items-start gap-6">
-        <SearchFiltersPanel
-          filters={filters}
-          onChange={setFilters}
-          onReset={handleReset}
-          onSearch={handleSearch}
-          searching={searching}
-        />
+      <SearchFiltersPanel
+        filters={filters}
+        onChange={setFilters}
+        onReset={handleReset}
+        onSearch={handleSearch}
+        searching={searching}
+      />
 
-        <div className="min-w-0 flex-1">
-          <div className="mb-4 flex items-center justify-between rounded-xl border border-border bg-white px-5 py-3.5">
-            <div className="flex items-center gap-3 text-[13px]">
-              {running ? (
-                <span className="flex items-center gap-2 font-medium text-emerald-dark">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald" />
-                  Пошук активний
-                </span>
-              ) : (
-                <span className="text-muted">Запустіть пошук</span>
-              )}
-              {running && (
-                <>
-                  <span className="text-border">·</span>
-                  <span className="text-muted">
-                    Знайдено <strong className="text-ink">{results.length}</strong>
-                  </span>
-                </>
-              )}
-            </div>
+      <div className="mt-8">
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-white px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 text-[13px]">
+            {running ? (
+              <span className="flex items-center gap-2 font-medium text-emerald-dark">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald" />
+                Пошук активний
+              </span>
+            ) : (
+              <span className="text-muted">Натисніть «Шукати»</span>
+            )}
             {running && (
-              <div className="flex items-center gap-3">
-                <ExportMenu items={results} filename={exportName} />
-                <select
-                  value={sort}
-                  onChange={e => setSort(e.target.value as SortOption)}
-                  className="rounded-lg border border-border bg-white px-3 py-1.5 text-[12px] text-muted focus:outline-none"
-                >
-                  {SORT_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
+              <>
+                <span className="text-border">·</span>
+                <span className="text-muted">
+                  Знайдено <strong className="text-ink">{results.length}</strong>
+                </span>
+              </>
             )}
           </div>
-
-          {!running ? (
-            <div className="rounded-xl border border-dashed border-border bg-white px-6 py-16 text-center">
-              <p className="text-[15px] font-semibold text-ink">Оберіть фільтри і натисніть «Запустити пошук»</p>
-              <p className="mt-2 text-[13px] text-muted">Марка, модель, регіон, ціна, двигун, КПП та джерела</p>
-            </div>
-          ) : results.length === 0 ? (
-            <div className="rounded-xl border border-border bg-white px-6 py-16 text-center">
-              <p className="text-[15px] font-semibold text-ink">Нічого не знайдено</p>
-              <p className="mt-2 text-[13px] text-muted">Спробуйте розширити діапазон року, ціни або змінити регіон</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {results.map(r => {
-                const risk = riskLabel[r.risk];
-                return (
-                  <article
-                    key={r.id}
-                    className="flex cursor-pointer gap-4 rounded-xl border border-border bg-white p-4 transition-colors hover:border-ink/15"
-                  >
-                    <div className="flex h-32 w-48 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface">
-                      <svg width="40" height="40" viewBox="0 0 28 28" fill="none" className="opacity-10">
-                        <rect x="12.5" y="0" width="3" height="28" fill="#0A0C0E" />
-                        <rect x="0" y="12.5" width="28" height="3" fill="#0A0C0E" />
-                      </svg>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-[15px] font-bold text-ink">{r.title}</h3>
-                          <p className="mt-0.5 text-[12px] text-muted">
-                            {r.year} · {r.mileage.toLocaleString("uk-UA")} км · {r.trans} · {r.fuel} · {r.region}
-                          </p>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-[20px] font-black leading-none text-ink">{r.price.toLocaleString("uk-UA")}</div>
-                          <div className="text-[11px] text-muted">грн</div>
-                        </div>
-                      </div>
-                      <p className="mt-2.5 line-clamp-1 text-[12px] leading-relaxed text-muted">{r.desc}</p>
-                      <div className="mt-3 flex items-center gap-3">
-                        <span className={cn("rounded px-2 py-0.5 text-[11px] font-bold", risk.color)}>{risk.label}</span>
-                        <Badge variant="outline">{r.src}</Badge>
-                        <span className="text-[11px] text-muted">{r.time}</span>
-                        <span className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-emerald-dark hover:underline">
-                          Детальніше <IconArrowRight size={11} />
-                        </span>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+          {running && (
+            <div className="flex items-center gap-3">
+              <ExportMenu items={results} filename={exportName} />
+              <select
+                value={sort}
+                onChange={e => setSort(e.target.value as SortOption)}
+                className="rounded-lg border border-border bg-white px-3 py-1.5 text-[12px] text-muted focus:outline-none"
+              >
+                {SORT_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
             </div>
           )}
         </div>
+
+        {!running ? (
+          <div className="rounded-xl border border-dashed border-border bg-white px-6 py-16 text-center">
+            <p className="text-[15px] font-semibold text-ink">Оберіть фільтри і натисніть «Шукати»</p>
+            <p className="mt-2 text-[13px] text-muted">Марка, модель, рік, ціна, регіон, пальне та КПП</p>
+          </div>
+        ) : results.length === 0 ? (
+          <div className="rounded-xl border border-border bg-white px-6 py-16 text-center">
+            <p className="text-[15px] font-semibold text-ink">Нічого не знайдено</p>
+            <p className="mt-2 text-[13px] text-muted">Спробуйте розширити діапазон року, ціни або змінити регіон</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {results.map(r => {
+              const risk = riskLabel[r.risk];
+              return (
+                <article
+                  key={r.id}
+                  className="flex cursor-pointer gap-4 rounded-xl border border-border bg-white p-4 transition-colors hover:border-emerald/30"
+                >
+                  <div className="flex h-32 w-48 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface">
+                    <svg width="40" height="40" viewBox="0 0 28 28" fill="none" className="opacity-10">
+                      <rect x="12.5" y="0" width="3" height="28" fill="#0A0C0E" />
+                      <rect x="0" y="12.5" width="28" height="3" fill="#0A0C0E" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-ink">{r.title}</h3>
+                        <p className="mt-0.5 text-[12px] text-muted">
+                          {r.year} · {r.mileage.toLocaleString("uk-UA")} км · {r.trans} · {r.fuel} · {r.region}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="text-[20px] font-black leading-none text-ink">{r.price.toLocaleString("uk-UA")}</div>
+                        <div className="text-[11px] text-muted">грн</div>
+                      </div>
+                    </div>
+                    <p className="mt-2.5 line-clamp-1 text-[12px] leading-relaxed text-muted">{r.desc}</p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <span className={cn("rounded px-2 py-0.5 text-[11px] font-bold", risk.color)}>{risk.label}</span>
+                      <Badge variant="outline">{r.src}</Badge>
+                      <span className="text-[11px] text-muted">{r.time}</span>
+                      <span className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-emerald-dark hover:underline">
+                        Детальніше <IconArrowRight size={11} />
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

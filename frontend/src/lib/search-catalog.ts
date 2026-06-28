@@ -8,8 +8,12 @@ export type SearchResult = ExportListing & {
   model: string;
 };
 
+export type VehicleCategory = "all" | "used" | "new" | "import";
+
 export type SearchFilterState = {
   name: string;
+  category: VehicleCategory;
+  vehicleType: string;
   region: string;
   brand: string;
   model: string;
@@ -30,8 +34,19 @@ export const FUEL_OPTIONS = ["Бензин", "Дизель", "Гібрид", "Е
 export const TRANSMISSION_OPTIONS = ["Автомат", "Механіка", "Робот"] as const;
 export const SOURCE_OPTIONS = ["AUTO.RIA", "OLX", "Telegram"] as const;
 
+export const VEHICLE_TYPE_OPTIONS = ["Легкові", "Мото", "Вантажні", "Причепи", "Автобуси", "Сільгосп", "Спецтехніка"] as const;
+
+export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
+  { value: "all", label: "Всі" },
+  { value: "used", label: "Вживані" },
+  { value: "new", label: "Нові" },
+  { value: "import", label: "Під пригон" },
+];
+
 export const DEFAULT_FILTERS: SearchFilterState = {
   name: "",
+  category: "all",
+  vehicleType: "Легкові",
   region: "м. Київ",
   brand: "",
   model: "",

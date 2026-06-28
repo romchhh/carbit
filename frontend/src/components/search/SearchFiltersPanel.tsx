@@ -1,16 +1,18 @@
 "use client";
 
-import { IconFilter, IconLocation, IconPlay } from "@/components/icons";
-import { FilterCombobox } from "@/components/search/FilterCombobox";
-import { Button } from "@/components/ui/Button";
+import { useState } from "react";
+import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
+import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { cn } from "@/lib/utils";
-import { BRANDS, getModelsForBrand, TOTAL_BRANDS, TOTAL_MODELS } from "@/lib/search-data/brands-models";
+import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
 import { UKRAINE_REGIONS } from "@/lib/search-data/regions";
 import {
+  CATEGORY_OPTIONS,
   DEFAULT_FILTERS,
   FUEL_OPTIONS,
   SOURCE_OPTIONS,
   TRANSMISSION_OPTIONS,
+  VEHICLE_TYPE_OPTIONS,
   formatPriceInput,
   toggleValue,
   type SearchFilterState,
@@ -24,16 +26,8 @@ type Props = {
   searching?: boolean;
 };
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-muted">{label}</label>
-      {children}
-    </div>
-  );
-}
-
 export function SearchFiltersPanel({ filters, onChange, onReset, onSearch, searching }: Props) {
+  const [advanced, setAdvanced] = useState(false);
   const models = filters.brand ? getModelsForBrand(filters.brand) : [];
 
   const update = (patch: Partial<SearchFilterState>) => {
@@ -48,212 +42,206 @@ export function SearchFiltersPanel({ filters, onChange, onReset, onSearch, searc
     });
   };
 
+  const brandModelLabel =
+    filters.brand && filters.model
+      ? `${filters.brand} ${filters.model}`
+      : filters.brand || "";
+
   return (
-    <aside className="sticky top-[80px] w-[300px] shrink-0">
-      <div className="flex max-h-[calc(100vh-96px)] flex-col rounded-xl border border-border bg-white">
-        <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
-          <span className="flex items-center gap-2 text-[13px] font-semibold text-ink">
-            <IconFilter size={13} className="text-muted" />
-            Фільтри
-          </span>
-          <button
-            type="button"
-            onClick={onReset}
-            className="text-[11px] text-muted underline underline-offset-2 hover:text-ink"
-          >
-            Скинути
-          </button>
+    <div className="w-full max-w-[640px]">
+      <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-max gap-2">
+          {CATEGORY_OPTIONS.map(({ value, label }) => {
+            const active = filters.category === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => update({ category: value })}
+                className={cn(
+                  "rounded-full border px-4 py-2 text-[14px] font-medium whitespace-nowrap transition-colors",
+                  active
+                    ? "border-ink bg-ink text-white"
+                    : "border-border bg-white text-ink hover:border-emerald/40",
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        <FilterOptionsPopover
+          label="Тип транспорту"
+          value={filters.vehicleType}
+          options={[...VEHICLE_TYPE_OPTIONS]}
+          onChange={vehicleType => update({ vehicleType })}
+        />
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <FilterOptionsPopover
+            label="Марка"
+            value={filters.brand}
+            options={BRANDS}
+            onChange={handleBrandChange}
+            searchable
+            emptyLabel="Будь-яка марка"
+          />
+          <FilterOptionsPopover
+            label="Модель"
+            value={filters.model}
+            options={models}
+            onChange={model => update({ model })}
+            searchable
+            emptyLabel="Будь-яка модель"
+            disabled={!filters.brand}
+          />
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
-          <Field label="Назва запиту">
+        {(filters.brand || filters.model) && (
+          <p className="px-1 text-[12px] text-muted">
+            Обрано: <span className="font-medium text-ink">{brandModelLabel || "—"}</span>
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <FilterRangePopover
+            label="Рік випуску"
+            from={filters.yearFrom}
+            to={filters.yearTo}
+            onChange={(yearFrom, yearTo) => update({ yearFrom, yearTo })}
+            format={v => v.replace(/[^\d]/g, "").slice(0, 4)}
+            placeholderFrom={DEFAULT_FILTERS.yearFrom}
+            placeholderTo={DEFAULT_FILTERS.yearTo}
+          />
+          <FilterRangePopover
+            label="Вартість"
+            from={filters.priceFrom}
+            to={filters.priceTo}
+            onChange={(priceFrom, priceTo) => update({ priceFrom, priceTo })}
+            format={formatPriceInput}
+            placeholderFrom="400 000"
+            placeholderTo="900 000"
+            suffix="грн"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <FilterOptionsPopover
+            label="Регіон"
+            value={filters.region === "Вся Україна" ? "" : filters.region}
+            options={[...UKRAINE_REGIONS.filter(r => r !== "Вся Україна")]}
+            onChange={region => update({ region: region || "Вся Україна" })}
+            searchable
+            emptyLabel="Вся Україна"
+          />
+          <FilterOptionsPopover
+            label="Пальне"
+            value=""
+            values={filters.fuels}
+            options={[...FUEL_OPTIONS]}
+            onChange={() => {}}
+            onToggle={fuel => update({ fuels: toggleValue(filters.fuels, fuel) })}
+            multiple
+          />
+        </div>
+
+        <FilterOptionsPopover
+          label="Коробка передач"
+          value=""
+          values={filters.transmissions}
+          options={[...TRANSMISSION_OPTIONS]}
+          onChange={() => {}}
+          onToggle={trans => update({ transmissions: toggleValue(filters.transmissions, trans) })}
+          multiple
+        />
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <button
+          type="button"
+          onClick={onSearch}
+          disabled={searching}
+          className="w-full rounded-full bg-emerald py-3.5 text-[16px] font-semibold text-white transition-colors hover:bg-emerald-dark disabled:opacity-60"
+        >
+          {searching ? "Шукаємо..." : "Шукати"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setAdvanced(v => !v)}
+          className="w-full rounded-full border border-ink bg-white py-3.5 text-[16px] font-semibold text-ink transition-colors hover:bg-surface"
+        >
+          {advanced ? "Сховати розширений пошук" : "Розширений пошук"}
+        </button>
+      </div>
+
+      {advanced && (
+        <div className="mt-4 space-y-4 rounded-2xl border border-border bg-white p-4">
+          <div>
+            <label className="mb-1.5 block text-[12px] font-semibold text-muted">Назва запиту</label>
             <input
               value={filters.name}
               onChange={e => update({ name: e.target.value })}
               placeholder="Camry під перепродаж"
               className="input-field"
             />
-          </Field>
+          </div>
 
-          <Field label={`Регіон · ${UKRAINE_REGIONS.length - 1} областей`}>
-            <div className="flex items-center gap-2">
-              <IconLocation size={13} className="shrink-0 text-muted" />
-              <FilterCombobox
-                value={filters.region}
-                onChange={region => update({ region: region || "Вся Україна" })}
-                options={[...UKRAINE_REGIONS]}
-                placeholder="Оберіть регіон"
-                emptyLabel="Вся Україна"
-                className="flex-1"
-              />
-            </div>
-          </Field>
-
-          <Field label={`Марка · ${TOTAL_BRANDS} марок`}>
-            <FilterCombobox
-              value={filters.brand}
-              onChange={handleBrandChange}
-              options={BRANDS}
-              placeholder="Toyota, BMW, Volkswagen..."
-              emptyLabel="Будь-яка марка"
-            />
-          </Field>
-
-          <Field label={filters.brand ? `Модель · ${models.length} моделей` : "Модель"}>
-            <FilterCombobox
-              value={filters.model}
-              onChange={model => update({ model })}
-              options={models}
-              placeholder={filters.brand ? "Camry, Passat..." : "Спочатку оберіть марку"}
-              emptyLabel="Будь-яка модель"
-              disabled={!filters.brand}
-            />
-          </Field>
-
-          <Field label="Рік">
-            <div className="flex items-center gap-2">
-              <input
-                value={filters.yearFrom}
-                onChange={e => update({ yearFrom: e.target.value.replace(/[^\d]/g, "").slice(0, 4) })}
-                placeholder={DEFAULT_FILTERS.yearFrom}
-                className="input-field w-full"
-                inputMode="numeric"
-              />
-              <span className="text-[12px] text-muted">—</span>
-              <input
-                value={filters.yearTo}
-                onChange={e => update({ yearTo: e.target.value.replace(/[^\d]/g, "").slice(0, 4) })}
-                placeholder={DEFAULT_FILTERS.yearTo}
-                className="input-field w-full"
-                inputMode="numeric"
-              />
-            </div>
-          </Field>
-
-          <Field label="Ціна, грн">
-            <div className="flex items-center gap-2">
-              <input
-                value={filters.priceFrom}
-                onChange={e => update({ priceFrom: formatPriceInput(e.target.value) })}
-                placeholder="400 000"
-                className="input-field w-full"
-                inputMode="numeric"
-              />
-              <span className="text-[12px] text-muted">—</span>
-              <input
-                value={filters.priceTo}
-                onChange={e => update({ priceTo: formatPriceInput(e.target.value) })}
-                placeholder="900 000"
-                className="input-field w-full"
-                inputMode="numeric"
-              />
-            </div>
-          </Field>
-
-          <Field label="Пробіг, км">
-            <div className="flex items-center gap-2">
+          <div>
+            <label className="mb-1.5 block text-[12px] font-semibold text-muted">Пробіг, км</label>
+            <div className="grid grid-cols-2 gap-2">
               <input
                 value={filters.mileageFrom}
                 onChange={e => update({ mileageFrom: formatPriceInput(e.target.value) })}
                 placeholder="0"
-                className="input-field w-full"
+                className="input-field"
                 inputMode="numeric"
               />
-              <span className="text-[12px] text-muted">—</span>
               <input
                 value={filters.mileageTo}
                 onChange={e => update({ mileageTo: formatPriceInput(e.target.value) })}
                 placeholder="200 000"
-                className="input-field w-full"
+                className="input-field"
                 inputMode="numeric"
               />
             </div>
-          </Field>
+          </div>
 
-          <Field label="Двигун">
-            <div className="flex flex-wrap gap-1.5">
-              {FUEL_OPTIONS.map(value => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => update({ fuels: toggleValue(filters.fuels, value) })}
-                  className={cn(
-                    "rounded border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                    filters.fuels.includes(value)
-                      ? "border-ink bg-ink text-white"
-                      : "border-border bg-white text-muted hover:border-ink/20",
-                  )}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          <Field label="КПП">
-            <div className="flex flex-wrap gap-1.5">
-              {TRANSMISSION_OPTIONS.map(value => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => update({ transmissions: toggleValue(filters.transmissions, value) })}
-                  className={cn(
-                    "rounded border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                    filters.transmissions.includes(value)
-                      ? "border-ink bg-ink text-white"
-                      : "border-border bg-white text-muted hover:border-ink/20",
-                  )}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          <Field label="Джерела">
-            <div className="space-y-2">
-              {SOURCE_OPTIONS.map(value => (
-                <label key={value} className="flex cursor-pointer items-center gap-2">
-                  <span
-                    onClick={() => update({ sources: toggleValue(filters.sources, value) })}
+          <div>
+            <label className="mb-2 block text-[12px] font-semibold text-muted">Джерела</label>
+            <div className="flex flex-wrap gap-2">
+              {SOURCE_OPTIONS.map(source => {
+                const active = filters.sources.includes(source);
+                return (
+                  <button
+                    key={source}
+                    type="button"
+                    onClick={() => update({ sources: toggleValue(filters.sources, source) })}
                     className={cn(
-                      "flex h-4 w-4 items-center justify-center rounded border transition-colors",
-                      filters.sources.includes(value) ? "border-ink bg-ink" : "border-border bg-white",
+                      "rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
+                      active
+                        ? "border-emerald bg-emerald text-white"
+                        : "border-border bg-white text-muted hover:border-emerald/40",
                     )}
                   >
-                    {filters.sources.includes(value) && (
-                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                        <path d="M2 5l2.5 2.5L8 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </span>
-                  <span className="text-[13px] text-ink">{value}</span>
-                </label>
-              ))}
+                    {source}
+                  </button>
+                );
+              })}
             </div>
-          </Field>
+          </div>
 
-          <p className="text-[10px] leading-relaxed text-muted">
-            Каталог: {TOTAL_BRANDS} марок · {TOTAL_MODELS} моделей · {UKRAINE_REGIONS.length - 1} регіонів
-          </p>
-        </div>
-
-        <div className="space-y-2 border-t border-border/60 px-5 py-4">
-          <Button
-            onClick={onSearch}
-            variant="primary"
-            size="md"
-            className="w-full gap-1.5"
-            loading={searching}
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-[12px] text-muted underline underline-offset-2 hover:text-ink"
           >
-            <IconPlay size={13} />
-            Запустити пошук
-          </Button>
-          <Button variant="secondary" size="md" className="w-full text-[12px]" disabled>
-            Зберегти шаблон
-          </Button>
+            Скинути всі фільтри
+          </button>
         </div>
-      </div>
-    </aside>
+      )}
+    </div>
   );
 }
