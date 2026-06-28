@@ -134,7 +134,7 @@ export default function AccountPage() {
     <AppPage title="Акаунт" description="Профіль, тариф і підключення Telegram">
       <div className="space-y-4">
         <AppSection className="!bg-white">
-          <div className="flex items-center gap-4">
+          <div className="flex items-start gap-4">
             <UserAvatar
               name={user.name}
               avatarUrl={user.avatar_url}
@@ -151,19 +151,19 @@ export default function AccountPage() {
                   </div>
                 </div>
               ) : (
-                <>
-                  <div className="text-[16px] font-bold text-ink">{user.name}</div>
-                  <div className="mt-0.5 text-[12px] text-muted">
-                    {user.email_verified ? user.email : "Email не вказано"}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
+                    <div className="text-[16px] font-bold text-ink">{user.name}</div>
+                    <div className="mt-0.5 text-[12px] text-muted">
+                      {user.email_verified ? user.email : "Email не вказано"}
+                    </div>
                   </div>
-                </>
+                  <Button variant="secondary" size="sm" className="w-fit shrink-0 gap-1.5" onClick={startEdit}>
+                    <IconGear size={13} /> Редагувати
+                  </Button>
+                </div>
               )}
             </div>
-            {!editing && (
-              <Button variant="secondary" size="sm" className="shrink-0 gap-1.5" onClick={startEdit}>
-                <IconGear size={13} /> Редагувати
-              </Button>
-            )}
           </div>
         </AppSection>
 
@@ -295,7 +295,15 @@ export default function AccountPage() {
 
         <AppSection className="!bg-white">
           <div className="text-[13px] font-semibold text-ink">Сесія</div>
-          <Button variant="secondary" size="sm" className="mt-3" onClick={logout}>Вийти</Button>
+          <p className="mt-1 text-[12px] text-muted">Завершити поточний вхід у кабінет</p>
+          <Button
+            variant="danger"
+            size="sm"
+            className="mt-3 border-red-200 bg-red-50 font-semibold text-red-600 hover:border-red-300 hover:bg-red-100 hover:text-red-700"
+            onClick={logout}
+          >
+            Вийти
+          </Button>
         </AppSection>
       </div>
     </AppPage>

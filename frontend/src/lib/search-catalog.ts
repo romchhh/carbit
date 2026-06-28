@@ -26,6 +26,18 @@ export type SearchFilterState = {
   fuels: string[];
   transmissions: string[];
   sources: string[];
+  engineVolumeFrom: string;
+  engineVolumeTo: string;
+  driveTypes: string[];
+  colors: string[];
+  fuelConsumptionFrom: string;
+  fuelConsumptionTo: string;
+  rangeFrom: string;
+  rangeTo: string;
+  batteryCapacityFrom: string;
+  batteryCapacityTo: string;
+  powerFrom: string;
+  powerTo: string;
 };
 
 export type SortOption = "price_asc" | "price_desc" | "year_desc" | "mileage_asc";
@@ -33,6 +45,11 @@ export type SortOption = "price_asc" | "price_desc" | "year_desc" | "mileage_asc
 export const FUEL_OPTIONS = ["Бензин", "Дизель", "Гібрид", "Електро", "Газ"] as const;
 export const TRANSMISSION_OPTIONS = ["Автомат", "Механіка", "Робот"] as const;
 export const SOURCE_OPTIONS = ["AUTO.RIA", "OLX", "Telegram"] as const;
+export const DRIVE_OPTIONS = ["Передній", "Задній", "Повний"] as const;
+export const COLOR_OPTIONS = [
+  "Білий", "Чорний", "Сірий", "Срібний", "Синій", "Червоний",
+  "Зелений", "Жовтий", "Помаранчевий", "Коричневий", "Бежевий", "Фіолетовий",
+] as const;
 
 export const VEHICLE_TYPE_OPTIONS = ["Легкові", "Мото", "Вантажні", "Причепи", "Автобуси", "Сільгосп", "Спецтехніка"] as const;
 
@@ -56,9 +73,21 @@ export const DEFAULT_FILTERS: SearchFilterState = {
   priceTo: "900 000",
   mileageFrom: "",
   mileageTo: "",
-  fuels: ["Бензин"],
-  transmissions: ["Автомат"],
+  fuels: [],
+  transmissions: [],
   sources: [...SOURCE_OPTIONS],
+  engineVolumeFrom: "",
+  engineVolumeTo: "",
+  driveTypes: [],
+  colors: [],
+  fuelConsumptionFrom: "",
+  fuelConsumptionTo: "",
+  rangeFrom: "",
+  rangeTo: "",
+  batteryCapacityFrom: "",
+  batteryCapacityTo: "",
+  powerFrom: "",
+  powerTo: "",
 };
 
 export const CATALOG_LISTINGS: SearchResult[] = [
@@ -86,6 +115,19 @@ export function parseNumberInput(value: string): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
+export function formatDecimalInput(value: string, maxDecimals = 1): string {
+  const cleaned = value.replace(",", ".").replace(/[^\d.]/g, "");
+  const [whole, ...rest] = cleaned.split(".");
+  if (rest.length === 0) return whole;
+  return `${whole}.${rest.join("").slice(0, maxDecimals)}`;
+}
+
+export function parseThousandsKm(value: string): number | null {
+  const num = parseNumberInput(value);
+  if (num == null) return null;
+  return num * 1000;
+}
+
 export function formatPriceInput(value: string): string {
   const num = parseNumberInput(value);
   if (num == null) return value.replace(/[^\d]/g, "");
@@ -101,8 +143,8 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
   const yearTo = parseNumberInput(filters.yearTo);
   const priceFrom = parseNumberInput(filters.priceFrom);
   const priceTo = parseNumberInput(filters.priceTo);
-  const mileageFrom = parseNumberInput(filters.mileageFrom);
-  const mileageTo = parseNumberInput(filters.mileageTo);
+  const mileageFrom = parseThousandsKm(filters.mileageFrom) ?? parseNumberInput(filters.mileageFrom);
+  const mileageTo = parseThousandsKm(filters.mileageTo) ?? parseNumberInput(filters.mileageTo);
 
   return items.filter(item => {
     if (filters.brand && item.brand !== filters.brand) return false;

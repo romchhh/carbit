@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { adminApi, AdminUser } from "@/lib/admin-api";
+import { getAdminToken } from "@/lib/admin-storage";
 import { PLAN_LABELS, cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 export default function AdminClientsPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -13,6 +15,7 @@ export default function AdminClientsPage() {
   const [search, setSearch] = useState("");
   const [plan, setPlan] = useState("");
   const [loading, setLoading] = useState(true);
+  const adminToken = getAdminToken();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,10 +74,20 @@ export default function AdminClientsPage() {
             ) : users.map(u => (
               <tr key={u.id} className="border-b border-border last:border-0 hover:bg-surface/50">
                 <td className="px-4 py-3">
-                  <Link href={`/admin/clients/${u.id}`} className="font-semibold text-ink hover:text-emerald-dark">
-                    {u.name}
-                  </Link>
-                  <div className="text-[11px] text-muted">{u.email}</div>
+                  <div className="flex items-center gap-3">
+                    <UserAvatar
+                      name={u.name}
+                      avatarUrl={u.avatar_url}
+                      accessToken={adminToken}
+                      className="h-9 w-9 shrink-0 text-[12px]"
+                    />
+                    <div>
+                      <Link href={`/admin/clients/${u.id}`} className="font-semibold text-ink hover:text-emerald-dark">
+                        {u.name}
+                      </Link>
+                      <div className="text-[11px] text-muted">{u.email}</div>
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <Badge variant="outline">{PLAN_LABELS[u.plan] ?? u.plan}</Badge>

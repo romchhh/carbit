@@ -77,6 +77,8 @@ async def complete_register(
 
     tg_existing = await db.scalar(select(User).where(User.telegram_id == data["telegram_id"]))
     if tg_existing:
+        await sync_telegram_avatar(tg_existing)
+        await db.flush()
         await tg_tokens.delete_registration_token(body.token)
         return TelegramRegisterCompleteOut(
             access_token=create_access_token(tg_existing.id),

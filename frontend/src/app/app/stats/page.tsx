@@ -5,6 +5,7 @@ import { users as usersApi } from "@/lib/api";
 import type { DashboardStats } from "@/types/api";
 import { PLAN_LABELS } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { AppLoading, AppPage, AppSection, AppStatCard, AppStatGrid } from "@/components/layout/AppPage";
 
 export default function StatsPage() {
@@ -37,9 +38,16 @@ export default function StatsPage() {
 
       <AppSection className="!bg-white">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wide text-muted">Акаунт</div>
-            <div className="mt-1 text-[15px] font-semibold text-ink">{user?.name}</div>
+          <div className="flex items-center gap-3">
+            <UserAvatar
+              name={user?.name ?? "?"}
+              avatarUrl={user?.avatar_url}
+              className="h-11 w-11 shrink-0 text-[14px]"
+            />
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wide text-muted">Акаунт</div>
+              <div className="mt-1 text-[15px] font-semibold text-ink">{user?.name}</div>
+            </div>
           </div>
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wide text-muted">Ліміт запитів</div>

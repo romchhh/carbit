@@ -2,14 +2,17 @@ from datetime import datetime, UTC, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import create_admin_token, get_current_admin
+from app.core.security import create_admin_token, get_current_admin, get_current_admin_flexible
 from app.models.models import User, SearchQuery, Notification, Favorite, PlanTier
 from app.services.billing.plans import PLANS, get_plan
+from app.services.telegram.client import telegram_client
+from app.services.user_avatar import admin_user_avatar_api_path, sync_telegram_avatar
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -49,8 +52,25 @@ class AdminUserOut(BaseModel):
     is_trial_active: bool
     searches_count: int
     created_at: datetime
+    avatar_url: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+def _admin_user_out(user: User, searches_count: int) -> AdminUserOut:
+    return AdminUserOut(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        plan=user.plan.value,
+        telegram_connected=user.telegram_connected,
+        telegram_username=user.telegram_username,
+        is_active=user.is_active,
+        is_trial_active=user.is_trial_active,
+        searches_count=searches_count,
+        created_at=user.created_at,
+        avatar_url=admin_user_avatar_api_path(user),
+    )
 
 
 class AdminUserDetailOut(AdminUserOut):
@@ -197,13 +217,7 @@ async def admin_list_users(
         sc = await db.scalar(
             select(func.count()).select_from(SearchQuery).where(SearchQuery.user_id == user.id)
         ) or 0
-        items.append(AdminUserOut(
-            id=user.id, email=user.email, name=user.name,
-            plan=user.plan.value, telegram_connected=user.telegram_connected,
-            telegram_username=user.telegram_username, is_active=user.is_active,
-            is_trial_active=user.is_trial_active, searches_count=sc,
-            created_at=user.created_at,
-        ))
+        items.append(_admin_user_out(user, sc))
 
     return PaginatedUsers(items=items, total=total or 0, page=page, per_page=per_page)
 
@@ -232,11 +246,7 @@ async def admin_user_detail(
     ) or 0
 
     return AdminUserDetailOut(
-        id=user.id, email=user.email, name=user.name,
-        plan=user.plan.value, telegram_connected=user.telegram_connected,
-        telegram_username=user.telegram_username, is_active=user.is_active,
-        is_trial_active=user.is_trial_active, searches_count=sc,
-        created_at=user.created_at,
+        **_admin_user_out(user, sc).model_dump(),
         trial_ends_at=user.trial_ends_at,
         plan_expires_at=user.plan_expires_at,
         notifications_count=notif_count,
@@ -273,12 +283,45 @@ async def admin_update_user(
     sc = await db.scalar(
         select(func.count()).select_from(SearchQuery).where(SearchQuery.user_id == user.id)
     ) or 0
-    return AdminUserOut(
-        id=user.id, email=user.email, name=user.name,
-        plan=user.plan.value, telegram_connected=user.telegram_connected,
-        telegram_username=user.telegram_username, is_active=user.is_active,
-        is_trial_active=user.is_trial_active, searches_count=sc,
-        created_at=user.created_at,
+    return _admin_user_out(user, sc)
+
+
+@router.get("/users/{user_id}/avatar")
+async def admin_user_avatar(
+    user_id: str,
+    _: str = Depends(get_current_admin_flexible),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+
+    if user.telegram_connected and user.telegram_id:
+        await sync_telegram_avatar(user)
+        await db.flush()
+
+    if not user.telegram_avatar_path:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+
+    content = await telegram_client.get_file_bytes(user.telegram_avatar_path)
+    if not content:
+        await sync_telegram_avatar(user)
+        await db.flush()
+        if user.telegram_avatar_path:
+            content = await telegram_client.get_file_bytes(user.telegram_avatar_path)
+    if not content:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+
+    media_type = "image/jpeg"
+    if user.telegram_avatar_path.lower().endswith(".png"):
+        media_type = "image/png"
+    elif user.telegram_avatar_path.lower().endswith(".webp"):
+        media_type = "image/webp"
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Cache-Control": "private, max-age=3600"},
     )
 
 

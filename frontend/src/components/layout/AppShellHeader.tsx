@@ -41,26 +41,25 @@ export function AppShellHeader({ unreadNotifications = 0 }: Props) {
       <div className="flex items-center gap-2">
         <Link
           href="/app/notifications"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-white text-muted transition-colors hover:text-ink"
+          className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white text-ink transition-colors hover:bg-surface"
         >
           <IconBell size={17} />
           {unreadNotifications > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-ink px-1 text-[9px] font-bold text-white">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-ink px-1 text-[9px] font-bold text-white">
               {unreadNotifications > 9 ? "9+" : unreadNotifications}
             </span>
           )}
         </Link>
 
-        <div className="relative" ref={menuRef}>
+        <div className="relative shrink-0" ref={menuRef}>
           <button
             type="button"
             onClick={() => setMenuOpen(v => !v)}
-            className="overflow-hidden"
+            className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full"
           >
             <UserAvatar
               name={user.name}
               avatarUrl={user.avatar_url}
-              rounded="xl"
               className="h-9 w-9 text-[12px] font-bold"
             />
           </button>

@@ -52,13 +52,13 @@ export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
                 key={href}
                 href={href}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-all",
+                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] text-ink transition-all",
                   active
-                    ? "bg-emerald/10 font-semibold text-emerald-dark shadow-sm"
-                    : "text-muted hover:bg-surface hover:text-ink",
+                    ? "bg-surface font-semibold shadow-sm"
+                    : "hover:bg-surface",
                 )}
               >
-                <Icon size={16} className={active ? "text-emerald-dark" : ""} />
+                <Icon size={16} className="text-ink" />
                 <span>{label}</span>
                 {badge > 0 && (
                   <span
@@ -83,13 +83,11 @@ export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
                 key={href}
                 href={href}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-all",
-                  active
-                    ? "bg-emerald/10 font-semibold text-emerald-dark"
-                    : "text-muted hover:bg-surface hover:text-ink",
+                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] text-ink transition-all",
+                  active ? "bg-surface font-semibold" : "hover:bg-surface",
                 )}
               >
-                <Icon size={16} />
+                <Icon size={16} className="text-ink" />
                 <span>{label}</span>
               </Link>
             );

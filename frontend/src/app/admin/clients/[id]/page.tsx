@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { adminApi, AdminUserDetail } from "@/lib/admin-api";
+import { getAdminToken } from "@/lib/admin-storage";
 import { PLAN_LABELS } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 export default function AdminClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const [user, setUser] = useState<AdminUserDetail | null>(null);
@@ -47,9 +49,17 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
     <div className="max-w-[800px]">
       <Link href="/admin/clients" className="text-[13px] text-muted hover:text-ink mb-4 inline-block">← Клієнти</Link>
       <div className="flex items-start justify-between mb-8">
-        <div>
-          <h1 className="text-[28px] font-black text-ink">{user.name}</h1>
-          <p className="text-[13px] text-muted">{user.email}</p>
+        <div className="flex items-center gap-4">
+          <UserAvatar
+            name={user.name}
+            avatarUrl={user.avatar_url}
+            accessToken={getAdminToken()}
+            className="h-14 w-14 shrink-0 text-[18px]"
+          />
+          <div>
+            <h1 className="text-[28px] font-black text-ink">{user.name}</h1>
+            <p className="text-[13px] text-muted">{user.email}</p>
+          </div>
         </div>
         <Badge variant={user.is_active ? "emerald" : "red"}>
           {user.is_active ? "Активний" : "Заблокований"}

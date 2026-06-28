@@ -78,6 +78,9 @@ async def bot_init_login(
     if not user.is_active:
         return {"error": "account_deactivated"}
 
+    await sync_telegram_avatar(user)
+    await db.flush()
+
     token = await tg_tokens.create_login_token(user.id)
     login_url = f"{settings.FRONTEND_URL}/auth/telegram/login?token={token}"
     return {
@@ -97,6 +100,9 @@ async def bot_init_register(
     if user:
         if not user.is_active:
             return {"error": "account_deactivated"}
+
+        await sync_telegram_avatar(user)
+        await db.flush()
 
         token = await tg_tokens.create_login_token(user.id)
         login_url = f"{settings.FRONTEND_URL}/auth/telegram/login?token={token}"

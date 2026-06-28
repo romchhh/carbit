@@ -68,11 +68,28 @@ def create_admin_token(expires_delta: Optional[timedelta] = None) -> str:
 admin_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/admin/auth/login")
 
 
+def _decode_admin(token: str) -> str:
+    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    if payload.get("role") != "admin":
+        raise JWTError()
+    return payload.get("sub", "admin")
+
+
 async def get_current_admin(token: str = Depends(admin_oauth2_scheme)) -> str:
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        if payload.get("role") != "admin":
-            raise JWTError()
-        return payload.get("sub", "admin")
+        return _decode_admin(token)
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin token")
+
+
+async def get_current_admin_flexible(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer),
+    access_token: str | None = Query(None),
+) -> str:
+    token = credentials.credentials if credentials else access_token
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    try:
+        return _decode_admin(token)
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin token")

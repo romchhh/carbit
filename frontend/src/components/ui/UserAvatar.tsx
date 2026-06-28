@@ -9,6 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1
 type Props = {
   name: string;
   avatarUrl?: string | null;
+  accessToken?: string | null;
   className?: string;
   textClassName?: string;
   rounded?: "full" | "xl";
@@ -17,6 +18,7 @@ type Props = {
 export function UserAvatar({
   name,
   avatarUrl,
+  accessToken,
   className,
   textClassName,
   rounded = "full",
@@ -32,11 +34,11 @@ export function UserAvatar({
 
   const src = useMemo(() => {
     if (!avatarUrl || failed) return null;
-    const token = getToken();
+    const token = accessToken ?? getToken();
     if (!token) return null;
     const path = avatarUrl.startsWith("/") ? avatarUrl : `/${avatarUrl}`;
     return `${API_URL}${path}?access_token=${encodeURIComponent(token)}`;
-  }, [avatarUrl, failed]);
+  }, [avatarUrl, accessToken, failed]);
 
   if (src) {
     return (

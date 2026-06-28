@@ -49,6 +49,7 @@ export interface AdminUser {
   is_trial_active: boolean;
   searches_count: number;
   created_at: string;
+  avatar_url?: string | null;
 }
 
 export interface AdminUserDetail extends AdminUser {

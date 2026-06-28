@@ -270,7 +270,7 @@ async def me(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user.telegram_connected and user.telegram_id and user.telegram_avatar_path is None:
+    if user.telegram_connected and user.telegram_id:
         await sync_telegram_avatar(user)
         await db.flush()
 
@@ -283,10 +283,22 @@ async def me_avatar(
     db: AsyncSession = Depends(get_db),
 ):
     user = await db.get(User, user_id)
-    if not user or not user.telegram_avatar_path:
+    if not user:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+
+    if user.telegram_connected and user.telegram_id:
+        await sync_telegram_avatar(user)
+        await db.flush()
+
+    if not user.telegram_avatar_path:
         raise HTTPException(status_code=404, detail="Avatar not found")
 
     content = await telegram_client.get_file_bytes(user.telegram_avatar_path)
+    if not content:
+        await sync_telegram_avatar(user)
+        await db.flush()
+        if user.telegram_avatar_path:
+            content = await telegram_client.get_file_bytes(user.telegram_avatar_path)
     if not content:
         raise HTTPException(status_code=404, detail="Avatar not found")
 

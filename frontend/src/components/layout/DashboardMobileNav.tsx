@@ -31,12 +31,12 @@ export function DashboardMobileNav({ badges }: Props) {
               key={href}
               href={href}
               className={cn(
-                "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-2 transition-colors",
-                active ? "bg-emerald/10 text-emerald-dark" : "text-muted hover:text-ink",
+                "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-2 text-ink transition-colors",
+                active ? "bg-surface" : "hover:bg-surface",
               )}
             >
               <span className="relative">
-                <Icon size={20} className={active ? "text-emerald-dark" : undefined} />
+                <Icon size={20} className="text-ink" />
                 {badge > 0 && (
                   <span
                     className={cn(
@@ -48,7 +48,7 @@ export function DashboardMobileNav({ badges }: Props) {
                   </span>
                 )}
               </span>
-              <span className={cn("text-[10px] font-semibold leading-none", active && "text-emerald-dark")}>
+              <span className={cn("text-[10px] font-semibold leading-none text-ink", active && "font-bold")}>
                 {text}
               </span>
             </Link>
