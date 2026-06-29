@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useAuth } from "@/contexts/AuthProvider";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
@@ -36,8 +37,11 @@ export function Header() {
   }, []);
 
   useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    if (menuOpen) {
+      lockBodyScroll();
+      return () => unlockBodyScroll();
+    }
+    unlockBodyScroll();
   }, [menuOpen]);
 
   useEffect(() => {
@@ -87,11 +91,11 @@ export function Header() {
     <>
       <header
         className={cn(
-          "top-0 z-50 w-full transition-all duration-500",
+          "top-0 z-50 w-full transition-[background-color,border-color,box-shadow] duration-300",
           onHero ? "fixed" : "sticky",
           transparent
             ? "bg-transparent border-b border-transparent"
-            : "bg-white/95 backdrop-blur-xl border-b border-border shadow-sm shadow-black/[0.03]"
+            : "bg-white border-b border-border shadow-sm shadow-black/[0.03]"
         )}
       >
         <div className={cn(
@@ -202,9 +206,13 @@ export function Header() {
               type="button"
               aria-label={menuOpen ? "Закрити меню" : "Відкрити меню"}
               aria-expanded={menuOpen}
-              onClick={() => setMenuOpen(v => !v)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setMenuOpen((v) => !v);
+              }}
               className={cn(
-                "lg:hidden relative w-10 h-10 rounded-full flex flex-col items-center justify-center gap-[4px]",
+                "lg:hidden relative z-10 w-10 h-10 rounded-full flex flex-col items-center justify-center gap-[4px] touch-manipulation select-none",
                 headerActionClass,
                 lightHeader
                   ? "bg-white/10 text-white"
@@ -230,103 +238,90 @@ export function Header() {
         </div>
       </header>
 
-      <div
-        className={cn(
-          "fixed inset-0 z-[60] lg:hidden transition-all duration-500",
-          menuOpen ? "visible pointer-events-auto" : "invisible pointer-events-none"
-        )}
-        aria-hidden={!menuOpen}
-      >
+      {menuOpen && (
         <div
-          className={cn(
-            "absolute inset-0 bg-ink/60 backdrop-blur-sm transition-opacity duration-500",
-            menuOpen ? "opacity-100" : "opacity-0"
-          )}
-          onClick={() => setMenuOpen(false)}
-        />
-        <div
-          className={cn(
-            "absolute inset-0 bg-ink flex flex-col transition-all duration-500 ease-out",
-            menuOpen ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
-          )}
+          className="fixed inset-0 z-[100] lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Навігація"
         >
-          <div className="flex items-center justify-between px-5 h-[72px] sm:h-[80px] border-b border-white/10">
-            <Link href="/" className="flex items-center" onClick={() => setMenuOpen(false)}>
-              <CarbitLogo variant="full" height={34} light />
-            </Link>
-            <button
-              type="button"
-              aria-label="Закрити меню"
-              onClick={() => setMenuOpen(false)}
-              className="w-10 h-10 rounded-full bg-white/10 hover:ring-1 hover:ring-white/35 text-white flex items-center justify-center transition-all"
-            >
-              <IconX size={22} />
-            </button>
-          </div>
-
-          <nav className="flex-1 flex flex-col justify-center px-5 py-8">
-            {navLinks.map(({ href, label }, i) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setMenuOpen(false)}
-                className={cn(
-                  "group flex items-center justify-between py-3.5 border-b border-white/10 transition-all duration-300",
-                  menuOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
-                )}
-                style={{ transitionDelay: menuOpen ? `${i * 60 + 100}ms` : "0ms" }}
-              >
-                <span className="text-[24px] sm:text-[28px] font-semibold text-white tracking-tight group-hover:text-emerald transition-colors">
-                  {label}
-                </span>
-                <span className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-white/60 group-hover:bg-emerald group-hover:border-emerald group-hover:text-white transition-all duration-300 group-hover:translate-x-1">
-                  <IconArrowRight size={16} />
-                </span>
-              </Link>
-            ))}
-          </nav>
-
-          {!isLoggedIn ? (
-            <div className="px-5 pb-6 pt-3 space-y-2 border-t border-white/10">
-              <Link
-                href="/auth/login"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-center w-full py-3 rounded-full border border-white/25 text-white text-[14px] font-medium hover:ring-1 hover:ring-white/35 hover:bg-white/10 transition-all"
-              >
-                Увійти
-              </Link>
-              <Link
-                href="/auth/login"
-                onClick={() => setMenuOpen(false)}
-                className="group flex items-center justify-center gap-2 w-full py-3 rounded-full bg-emerald text-white text-[14px] font-semibold hover:bg-emerald-dark hover:ring-1 hover:ring-emerald/50 shadow-lg shadow-emerald/30 transition-all"
-              >
-                Зареєструватися
-                <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
-                  <IconArrowRight size={12} />
-                </span>
-              </Link>
-            </div>
-          ) : (
-            <div className="px-5 pb-6 pt-3 space-y-2 border-t border-white/10">
-              <div className="text-white/60 text-[12px] px-2 mb-1">{user?.name}</div>
-              <Link
-                href="/app/account"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-center w-full py-2.5 rounded-full border border-white/25 text-white text-[13px] font-medium hover:bg-white/10 transition-colors"
-              >
-                Акаунт
+          <div
+            className="absolute inset-0 flex flex-col bg-ink"
+          >
+            <div className="flex items-center justify-between px-5 h-[72px] sm:h-[80px] border-b border-white/10 shrink-0">
+              <Link href="/" className="flex items-center" onClick={() => setMenuOpen(false)}>
+                <CarbitLogo variant="full" height={34} light />
               </Link>
               <button
                 type="button"
-                onClick={() => { setMenuOpen(false); logout(); }}
-                className="w-full py-2.5 rounded-full bg-white/10 text-white text-[13px] font-medium hover:bg-white/20 transition-colors"
+                aria-label="Закрити меню"
+                onClick={() => setMenuOpen(false)}
+                className="w-10 h-10 rounded-full bg-white/10 hover:ring-1 hover:ring-white/35 text-white flex items-center justify-center transition-all touch-manipulation"
               >
-                Вийти
+                <IconX size={22} />
               </button>
             </div>
-          )}
+
+            <nav className="flex-1 flex flex-col justify-center px-5 py-8 overflow-y-auto overscroll-contain">
+              {navLinks.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMenuOpen(false)}
+                  className="group flex items-center justify-between py-3.5 border-b border-white/10"
+                >
+                  <span className="text-[24px] sm:text-[28px] font-semibold text-white tracking-tight group-hover:text-emerald transition-colors">
+                    {label}
+                  </span>
+                  <span className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-white/60 group-hover:bg-emerald group-hover:border-emerald group-hover:text-white transition-colors">
+                    <IconArrowRight size={16} />
+                  </span>
+                </Link>
+              ))}
+            </nav>
+
+            {!isLoggedIn ? (
+              <div className="px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 space-y-2 border-t border-white/10 shrink-0">
+                <Link
+                  href="/auth/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center justify-center w-full py-3 rounded-full border border-white/25 text-white text-[14px] font-medium hover:ring-1 hover:ring-white/35 hover:bg-white/10 transition-all"
+                >
+                  Увійти
+                </Link>
+                <Link
+                  href="/auth/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="group flex items-center justify-center gap-2 w-full py-3 rounded-full bg-emerald text-white text-[14px] font-semibold hover:bg-emerald-dark hover:ring-1 hover:ring-emerald/50 shadow-lg shadow-emerald/30 transition-all"
+                >
+                  Зареєструватися
+                  <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                    <IconArrowRight size={12} />
+                  </span>
+                </Link>
+              </div>
+            ) : (
+              <div className="px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 space-y-2 border-t border-white/10 shrink-0">
+                <div className="text-white/60 text-[12px] px-2 mb-1">{user?.name}</div>
+                <Link
+                  href="/app/account"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center justify-center w-full py-2.5 rounded-full border border-white/25 text-white text-[13px] font-medium hover:bg-white/10 transition-colors"
+                >
+                  Акаунт
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); logout(); }}
+                  className="w-full py-2.5 rounded-full bg-white/10 text-white text-[13px] font-medium hover:bg-white/20 transition-colors touch-manipulation"
+                >
+                  Вийти
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }

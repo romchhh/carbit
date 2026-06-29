@@ -1,11 +1,14 @@
 import { getToken } from "@/lib/auth-storage";
+import type { BackendSearchFilters } from "@/lib/search-filters-api";
 import type {
   DashboardStats,
   Favorite,
   Listing,
   Notification,
+  PaginatedListings,
   PaginatedNotifications,
   Plan,
+  SearchLiveResults,
   SearchQuery,
   Subscription,
   TelegramConnectLink,
@@ -90,11 +93,35 @@ export const users = {
 // ── Searches ──────────────────────────────────────────
 export const searches = {
   list: () => request<SearchQuery[]>("/searches/"),
+  get: (id: string) => request<SearchQuery>(`/searches/${id}`),
+  results: (id: string, page = 1, perPage = 20, sortBy = "price_asc") =>
+    request<SearchLiveResults>(
+      `/searches/${id}/results?page=${page}&per_page=${perPage}&sort_by=${sortBy}`,
+    ),
+  create: (name: string, filters: BackendSearchFilters) =>
+    request<SearchQuery>("/searches/", {
+      method: "POST",
+      body: JSON.stringify({ name, filters }),
+    }),
 };
 
 // ── Listings ──────────────────────────────────────────
 export const listings = {
   get: (id: string) => request<Listing>(`/listings/${id}`),
+};
+
+// ── AUTO.RIA ──────────────────────────────────────────
+export const autoRia = {
+  search: (
+    filters: BackendSearchFilters,
+    page = 1,
+    perPage = 20,
+    sortBy = "price_asc",
+  ) =>
+    request<PaginatedListings>(
+      `/auto-ria/search?page=${page}&per_page=${perPage}&sort_by=${sortBy}`,
+      { method: "POST", body: JSON.stringify(filters) },
+    ),
 };
 
 // ── Favorites ─────────────────────────────────────────

@@ -49,7 +49,7 @@
   }
 
   .stat-pill {
-    @apply flex flex-col items-center justify-center text-center rounded-xl bg-white/10 backdrop-blur-md border border-white/15 px-3 py-3 w-full h-[72px] sm:h-[76px];
+    @apply flex flex-col items-center justify-center text-center rounded-xl bg-white/15 border border-white/15 px-3 py-3 w-full h-[72px] sm:h-[76px];
   }
 
   .auth-input {
@@ -75,5 +75,14 @@
 
   .shadow-island {
     box-shadow: 0 2px 8px rgba(10, 12, 14, 0.04), 0 12px 40px -12px rgba(10, 12, 14, 0.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

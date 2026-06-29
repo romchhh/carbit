@@ -1,0 +1,147 @@
+"use client";
+
+import Image from "next/image";
+import { Badge } from "@/components/ui/Badge";
+import { IconArrowRight } from "@/components/icons";
+import { cn } from "@/lib/utils";
+import type { Listing } from "@/types/api";
+
+type Props = {
+  listing: Listing;
+  onClick: () => void;
+  className?: string;
+};
+
+function shortRegion(region: string) {
+  const city = region.split(",")[0]?.trim();
+  return city || region;
+}
+
+export function ListingCard({ listing, onClick, className }: Props) {
+  const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={cn(
+        "group cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-white text-left shadow-[0_2px_12px_-6px_rgba(10,12,14,0.12)] transition-all",
+        "hover:border-emerald/30 hover:shadow-[0_8px_24px_-10px_rgba(10,12,14,0.16)]",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40",
+        "sm:flex sm:gap-4 sm:p-4",
+        className,
+      )}
+    >
+      {/* Mobile: full-width photo on top */}
+      <div className="relative aspect-[16/10] w-full bg-surface sm:hidden">
+        {listing.images[0] ? (
+          <Image
+            src={listing.images[0]}
+            alt={listing.title}
+            fill
+            className="object-cover"
+            sizes="100vw"
+            unoptimized
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-[13px] text-muted">
+            Без фото
+          </div>
+        )}
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
+          <Badge variant="gray" className="bg-white/95 text-[10px] shadow-sm">
+            AUTO.RIA
+          </Badge>
+          <span className="rounded-full bg-ink/75 px-2.5 py-1 text-[10px] font-medium text-white">
+            {sellerLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Desktop: thumbnail left */}
+      <div className="relative hidden h-36 w-52 shrink-0 overflow-hidden rounded-xl bg-surface sm:block">
+        {listing.images[0] ? (
+          <Image
+            src={listing.images[0]}
+            alt={listing.title}
+            fill
+            className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            sizes="208px"
+            unoptimized
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-[13px] text-muted">
+            Без фото
+          </div>
+        )}
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col p-4 pt-3.5 sm:p-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[15px] sm:line-clamp-1">
+              {listing.title}
+            </h3>
+            <p className="mt-2 text-[22px] font-black leading-none tracking-tight text-ink sm:hidden">
+              {listing.price.toLocaleString("uk-UA")}
+              <span className="ml-1 text-[13px] font-semibold text-muted">грн</span>
+            </p>
+          </div>
+          <div className="hidden shrink-0 text-right sm:block">
+            <div className="text-[20px] font-black leading-none text-ink">
+              {listing.price.toLocaleString("uk-UA")}
+            </div>
+            <div className="text-[11px] text-muted">грн</div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-2">
+          {listing.year > 0 && (
+            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+              {listing.year}
+            </span>
+          )}
+          {listing.mileage > 0 && (
+            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+              {listing.mileage.toLocaleString("uk-UA")} км
+            </span>
+          )}
+          {listing.transmission && (
+            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+              {listing.transmission}
+            </span>
+          )}
+          {listing.fuel && (
+            <span className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+              {listing.fuel.split(",")[0]?.trim()}
+            </span>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 sm:mt-auto sm:border-0 sm:pt-2.5">
+          <span className="min-w-0 flex-1 truncate text-[12px] text-muted">
+            {shortRegion(listing.region)}
+          </span>
+          <span className="hidden items-center gap-1.5 sm:flex">
+            <Badge variant="outline" className="text-[10px]">AUTO.RIA</Badge>
+            <span className="text-[11px] text-muted">{sellerLabel}</span>
+          </span>
+          <span className="flex items-center gap-0.5 text-[12px] font-semibold text-emerald-dark sm:ml-auto">
+            Деталі
+            <IconArrowRight
+              size={12}
+              className="transition-transform group-hover:translate-x-0.5"
+            />
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+}

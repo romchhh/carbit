@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, users, searches, listings, favorites, notifications, billing, telegram, internal, admin
+from app.api.v1 import auth, users, searches, listings, favorites, notifications, billing, telegram, internal, admin, auto_ria
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -13,3 +13,4 @@ api_router.include_router(billing.router)
 api_router.include_router(telegram.router)
 api_router.include_router(internal.router)
 api_router.include_router(admin.router)
+api_router.include_router(auto_ria.router)

@@ -13,7 +13,7 @@ export function Footer() {
       <div className="max-w-[1280px] mx-auto px-5 sm:px-6 py-10 sm:py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 text-center sm:text-left">
         <div className="flex flex-col items-center sm:items-start">
           <Link href="/" className="flex items-center w-fit group">
-            <CarbitLogo variant="full" height={36} light className="opacity-95 transition-opacity group-hover:opacity-100" />
+            <CarbitLogo variant="full" height={36} light className="transition-opacity group-hover:opacity-90" />
           </Link>
           <p className="mt-3 text-[12px] text-white/50 leading-snug max-w-[280px] sm:max-w-none">
             Агрегатор оголошень авторинку України для перекупників та підбірників.

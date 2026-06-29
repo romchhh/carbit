@@ -62,6 +62,11 @@ export interface PaginatedListings {
   pages: number;
 }
 
+export interface SearchLiveResults {
+  search: SearchQuery;
+  results: PaginatedListings;
+}
+
 export interface Favorite {
   id: string;
   listing_id: string;

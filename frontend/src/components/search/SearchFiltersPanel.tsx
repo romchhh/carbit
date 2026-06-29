@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
+import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
 import { cn } from "@/lib/utils";
 import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
 import { UKRAINE_REGIONS } from "@/lib/search-data/regions";
@@ -11,6 +12,7 @@ import {
   CATEGORY_OPTIONS,
   DEFAULT_FILTERS,
   VEHICLE_TYPE_OPTIONS,
+  formatPriceInput,
   type SearchFilterState,
 } from "@/lib/search-catalog";
 
@@ -19,11 +21,30 @@ type Props = {
   onChange: (filters: SearchFilterState) => void;
   onReset: () => void;
   onSearch: () => void;
+  onSave?: () => void;
   searching?: boolean;
+  saving?: boolean;
+  saveSuccess?: string | null;
+  saveError?: string | null;
+  saveLimitReached?: boolean;
+  telegramConnected?: boolean;
   wide?: boolean;
 };
 
-export function SearchFiltersPanel({ filters, onChange, onReset, onSearch, searching, wide }: Props) {
+export function SearchFiltersPanel({
+  filters,
+  onChange,
+  onReset,
+  onSearch,
+  onSave,
+  searching,
+  saving,
+  saveSuccess,
+  saveError,
+  saveLimitReached,
+  telegramConnected,
+  wide,
+}: Props) {
   const [advanced, setAdvanced] = useState(false);
   const models = filters.brand ? getModelsForBrand(filters.brand) : [];
 
@@ -106,15 +127,27 @@ export function SearchFiltersPanel({ filters, onChange, onReset, onSearch, searc
             </p>
           )}
 
-          <FilterRangePopover
-            label="Рік випуску"
-            from={filters.yearFrom}
-            to={filters.yearTo}
-            onChange={(yearFrom, yearTo) => update({ yearFrom, yearTo })}
-            format={v => v.replace(/[^\d]/g, "").slice(0, 4)}
-            placeholderFrom={DEFAULT_FILTERS.yearFrom}
-            placeholderTo={DEFAULT_FILTERS.yearTo}
-          />
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <FilterRangePopover
+              label="Рік випуску"
+              from={filters.yearFrom}
+              to={filters.yearTo}
+              onChange={(yearFrom, yearTo) => update({ yearFrom, yearTo })}
+              format={v => v.replace(/[^\d]/g, "").slice(0, 4)}
+              placeholderFrom={DEFAULT_FILTERS.yearFrom}
+              placeholderTo={DEFAULT_FILTERS.yearTo}
+            />
+            <FilterRangePopover
+              label="Ціна"
+              from={filters.priceFrom}
+              to={filters.priceTo}
+              onChange={(priceFrom, priceTo) => update({ priceFrom, priceTo })}
+              format={formatPriceInput}
+              placeholderFrom={DEFAULT_FILTERS.priceFrom}
+              placeholderTo={DEFAULT_FILTERS.priceTo}
+              suffix="грн"
+            />
+          </div>
 
           <FilterOptionsPopover
             label="Регіон"
@@ -125,6 +158,19 @@ export function SearchFiltersPanel({ filters, onChange, onReset, onSearch, searc
             emptyLabel="Вся Україна"
           />
         </div>
+
+        {onSave && (
+          <div className="border-t border-border/60 bg-white px-4 py-4 sm:px-5">
+            <SaveSearchCTA
+              onSave={onSave}
+              saving={saving}
+              successMessage={saveSuccess}
+              errorMessage={saveError}
+              limitReached={saveLimitReached}
+              telegramConnected={telegramConnected}
+            />
+          </div>
+        )}
 
         <div className="space-y-2 border-t border-border/60 bg-white px-4 py-4 sm:px-5">
           <button

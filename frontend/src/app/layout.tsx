@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthProvider";
+import { SafariSwCleanup } from "@/components/pwa/SafariSwCleanup";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="uk" className={montserrat.variable}>
       <body className={montserrat.className}>
+        <SafariSwCleanup />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

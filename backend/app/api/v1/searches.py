@@ -1,10 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.models import User, SearchQuery
-from app.schemas.schemas import SearchQueryCreate, SearchQueryUpdate, SearchQueryOut
+from app.schemas.schemas import (
+    SearchFilters,
+    SearchLiveResultsOut,
+    SearchQueryCreate,
+    SearchQueryOut,
+    SearchQueryUpdate,
+)
+from app.services.auto_ria.client import AutoRiaError
+from app.services.auto_ria.service import search_auto_ria
 
 router = APIRouter(prefix="/searches", tags=["searches"])
 
@@ -25,6 +35,45 @@ async def list_searches(
         select(SearchQuery).where(SearchQuery.user_id == user_id).order_by(SearchQuery.created_at.desc())
     )
     return result.all()
+
+
+@router.get("/{search_id}", response_model=SearchQueryOut)
+async def get_search(
+    search_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    sq = await db.get(SearchQuery, search_id)
+    if not sq or sq.user_id != user_id:
+        raise HTTPException(404, "Search not found")
+    return sq
+
+
+@router.get("/{search_id}/results", response_model=SearchLiveResultsOut)
+async def get_search_results(
+    search_id: str,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=50),
+    sort_by: str = Query("price_asc"),
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    sq = await db.get(SearchQuery, search_id)
+    if not sq or sq.user_id != user_id:
+        raise HTTPException(404, "Search not found")
+
+    filters = SearchFilters.model_validate(sq.filters)
+    try:
+        results = await search_auto_ria(filters, page=page, per_page=per_page, sort_by=sort_by)
+    except AutoRiaError as exc:
+        status = 400 if "не знайдено" in str(exc).lower() else 502
+        raise HTTPException(status, str(exc)) from exc
+
+    sq.total_count = results.total
+    sq.last_checked_at = datetime.now(UTC)
+    await db.flush()
+
+    return SearchLiveResultsOut(search=sq, results=results)
 
 
 @router.post("/", response_model=SearchQueryOut, status_code=201)

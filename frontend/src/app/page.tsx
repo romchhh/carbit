@@ -5,13 +5,12 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
 import { HowItWorksCards } from "@/components/landing/HowItWorksCards";
+import { VideoInstructions } from "@/components/landing/VideoInstructions";
 import { PricingPlans } from "@/components/pricing/PricingPlans";
 import { CtaLink } from "@/components/ui/CtaLink";
-import { IconCheck, IconSearch, IconShield, IconTelegram, IconZap } from "@/components/icons";
+import { IconCheck } from "@/components/icons";
 
-import { SOURCE_LOGOS } from "@/lib/brand-assets";
-
-const HERO_IMAGE = "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1920&q=80";
+import { LANDING_IMAGES, SOURCE_LOGOS } from "@/lib/brand-assets";
 
 const HERO_SOURCE_LOGOS = [
   { src: SOURCE_LOGOS.autoRia, alt: "AUTO.RIA" },
@@ -28,28 +27,28 @@ export default function HomePage() {
         {/* ── HERO ─────────────────────────────────────────── */}
         <section className="relative min-h-[100dvh] flex items-start sm:items-center overflow-hidden pt-[72px] sm:pt-[80px]">
           <Image
-            src={HERO_IMAGE}
+            src={LANDING_IMAGES.hero}
             alt=""
             fill
             priority
-            className="object-cover object-center scale-105"
+            className="object-cover object-center sm:scale-105"
             sizes="100vw"
           />
           <div className="absolute inset-0 bg-gradient-to-br from-ink/95 via-ink/80 to-ink/50" />
           <div className="absolute inset-0 bg-gradient-to-t from-ink/60 via-transparent to-transparent" />
 
-          <div className="absolute top-1/4 right-[15%] w-48 h-48 sm:w-72 sm:h-72 bg-emerald/20 rounded-full blur-[100px] pointer-events-none animate-float" />
-          <div className="absolute bottom-1/4 left-[10%] w-32 h-32 sm:w-48 sm:h-48 bg-emerald/10 rounded-full blur-[80px] pointer-events-none" />
+          <div className="absolute top-1/4 right-[15%] w-48 h-48 sm:w-72 sm:h-72 bg-emerald/20 rounded-full blur-[100px] pointer-events-none hidden sm:block motion-safe:animate-float" />
+          <div className="absolute bottom-1/4 left-[10%] w-32 h-32 sm:w-48 sm:h-48 bg-emerald/10 rounded-full blur-[80px] pointer-events-none hidden sm:block" />
 
           <div className="relative section-wrap pt-8 pb-12 sm:py-16 w-full">
-            <div className="max-w-[620px] flex flex-col min-h-[calc(100dvh-10rem)] sm:min-h-0 pt-6 sm:pt-0">
-              <h1 className="text-[clamp(1.75rem,4.2vw+1.1rem,3.75rem)] font-semibold leading-[1.05] tracking-[-0.02em] text-white animate-fade-up">
-                <span className="block whitespace-nowrap">Знайди авто раніше</span>
-                <span className="block whitespace-nowrap">конкурентів</span>
+            <div className="flex w-full flex-col min-h-[calc(100dvh-10rem)] sm:min-h-0 sm:max-w-[620px] pt-6 sm:pt-0">
+              <h1 className="w-full text-[clamp(2rem,6.5vw+0.5rem,3.75rem)] font-semibold leading-[1.05] tracking-[-0.02em] text-white animate-fade-up">
+                <span className="block sm:whitespace-nowrap">Знайди авто раніше</span>
+                <span className="block sm:whitespace-nowrap">конкурентів</span>
               </h1>
 
-              <div className="mt-5 sm:mt-6 max-w-[560px] animate-fade-up-delay">
-                <p className="flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[17px] sm:text-[20px] leading-snug text-white/90">
+              <div className="mt-5 sm:mt-6 w-full animate-fade-up-delay">
+                <p className="flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[18px] sm:text-[20px] leading-snug text-white/90">
                   <span>Усі джерела авто</span>
                   <span className="inline-flex items-center mx-1">
                     {HERO_SOURCE_LOGOS.map(({ src, alt }, index) => (
@@ -73,17 +72,17 @@ export default function HomePage() {
                   </span>
                   <span>в одному пошуку</span>
                 </p>
-                <p className="mt-2.5 sm:mt-3 text-[18px] sm:text-[22px] font-bold leading-snug text-white">
+                <p className="mt-2.5 sm:mt-3 text-[19px] sm:text-[22px] font-bold leading-snug text-white">
                   — тільки актуальні авто, миттєві сповіщення
                 </p>
               </div>
 
-              <div className="mt-8 sm:mt-8 flex justify-center sm:justify-start animate-fade-up-delay">
+              <div className="mt-16 sm:mt-8 flex justify-start animate-fade-up-delay">
                 <CtaLink
                   href="/auth/login"
                   variant="emerald"
                   size="lg"
-                  className="w-full max-w-[320px] justify-center !px-8 !py-3.5 !text-[15px] sm:w-auto sm:max-w-none sm:!px-4 sm:!py-2 sm:!text-[13px]"
+                  className="!px-8 !py-3.5 !text-[15px] sm:!px-4 sm:!py-2 sm:!text-[13px]"
                 >
                   Спробувати 7 днів
                 </CtaLink>
@@ -110,7 +109,7 @@ export default function HomePage() {
 
         <HowItWorksCards />
 
-        {/* ── PAIN / VALUE PROP ────────────────────────────── */}
+        {/* ── VIDEO INSTRUCTIONS ───────────────────────────── */}
         <section className="bg-white section-y">
           <div className="section-wrap">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
@@ -138,22 +137,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                {[
-                  { icon: <IconShield size={28}/>, title: "Анти-хлам", desc: "Оцінка ризиків по пробігу, власниках, джерелу" },
-                  { icon: <IconTelegram size={28}/>, title: "Telegram-бот", desc: "Сповіщення прямо в месенджер без зайвих кліків" },
-                  { icon: <IconSearch size={28}/>, title: "Анти-дубль", desc: "AUTO.RIA + OLX = одне оголошення, не два" },
-                  { icon: <IconZap size={28}/>, title: "5 хвилин", desc: "Нові авто у чаті через 5 хвилин після появи" },
-                ].map(({ icon, title, desc }) => (
-                  <div key={title} className="card-rounded p-5 group">
-                    <span className="text-emerald inline-block transition-transform duration-300 group-hover:scale-110">
-                      {icon}
-                    </span>
-                    <h4 className="mt-3 text-[16px] font-semibold text-ink">{title}</h4>
-                    <p className="mt-1.5 text-[12px] text-muted leading-snug">{desc}</p>
-                  </div>
-                ))}
-              </div>
+              <VideoInstructions />
             </div>
           </div>
         </section>

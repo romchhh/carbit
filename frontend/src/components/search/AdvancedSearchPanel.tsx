@@ -11,7 +11,6 @@ import {
   SOURCE_OPTIONS,
   TRANSMISSION_OPTIONS,
   formatDecimalInput,
-  formatPriceInput,
   toggleValue,
   type SearchFilterState,
 } from "@/lib/search-catalog";
@@ -40,20 +39,6 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
       </div>
 
       <div className="space-y-5 px-4 py-4 sm:px-5">
-        <section className="space-y-2">
-          <SectionTitle>Ціна</SectionTitle>
-          <FilterRangePopover
-            label="Ціна"
-            from={filters.priceFrom}
-            to={filters.priceTo}
-            onChange={(priceFrom, priceTo) => update({ priceFrom, priceTo })}
-            format={formatPriceInput}
-            placeholderFrom="400 000"
-            placeholderTo="900 000"
-            suffix="грн"
-          />
-        </section>
-
         <section className="space-y-2">
           <SectionTitle>Технічні характеристики</SectionTitle>
 

@@ -177,6 +177,11 @@ class PaginatedListings(BaseModel):
     pages: int
 
 
+class SearchLiveResultsOut(BaseModel):
+    search: SearchQueryOut
+    results: PaginatedListings
+
+
 # Dashboard
 class DashboardStats(BaseModel):
     active_searches: int

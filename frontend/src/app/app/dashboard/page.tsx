@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
+import { useSaveSearch } from "@/hooks/useSaveSearch";
 import { searches as searchesApi, users as usersApi } from "@/lib/api";
 import { DEFAULT_FILTERS, type SearchFilterState } from "@/lib/search-catalog";
 import { saveSearchDraft } from "@/lib/search-draft";
@@ -27,7 +28,11 @@ function formatSearchDesc(filters: Record<string, unknown>): string {
   if (filters.year_from || filters.year_to) {
     parts.push(`${filters.year_from ?? "…"}–${filters.year_to ?? "…"}`);
   }
-  if (filters.price_to) parts.push(`до ${Number(filters.price_to).toLocaleString("uk-UA")} грн`);
+  if (filters.price_from || filters.price_to) {
+    const from = filters.price_from ? Number(filters.price_from).toLocaleString("uk-UA") : "…";
+    const to = filters.price_to ? Number(filters.price_to).toLocaleString("uk-UA") : "…";
+    parts.push(`${from}–${to} грн`);
+  }
   if (filters.region) parts.push(String(filters.region));
   return parts.length > 0 ? parts.join(" · ") : "Без фільтрів";
 }
@@ -63,6 +68,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [filters, setFilters] = useState<SearchFilterState>({ ...DEFAULT_FILTERS });
+  const { saveSearch, saving, saveSuccess, saveError, saveLimitReached } = useSaveSearch(created => {
+    setSearches(prev => [created, ...prev]);
+  });
 
   useEffect(() => {
     searchesApi.list()
@@ -103,6 +111,10 @@ export default function DashboardPage() {
     setFilters({ ...DEFAULT_FILTERS });
   };
 
+  const handleSave = () => {
+    void saveSearch(filters);
+  };
+
   return (
     <AppPage
       wide
@@ -112,7 +124,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-[17px] font-bold text-ink">Новий пошук</h2>
         <p className="mt-1 text-[13px] text-muted">
-          Марка, модель, рік і регіон. Розширені фільтри — за потреби.
+          Марка, модель, рік, ціна і регіон. Розширені фільтри — за потреби.
         </p>
         <div className="mt-4">
           <SearchFiltersPanel
@@ -121,6 +133,12 @@ export default function DashboardPage() {
             onChange={setFilters}
             onReset={handleReset}
             onSearch={handleSearch}
+            onSave={handleSave}
+            saving={saving}
+            saveSuccess={saveSuccess}
+            saveError={saveError}
+            saveLimitReached={saveLimitReached}
+            telegramConnected={user.telegram_connected}
           />
         </div>
       </div>
@@ -146,7 +164,7 @@ export default function DashboardPage() {
           <AppEmpty>
             <p className="text-[15px] font-medium text-ink">Поки немає збережених запитів</p>
             <p className="mx-auto mt-2 max-w-sm text-[13px] text-muted">
-              Налаштуйте фільтри вище і натисніть «Шукати» — або додайте запит вручну.
+              Налаштуйте фільтри вище і натисніть «Зберегти пошук» — нові авто приходитимуть у Telegram.
             </p>
           </AppEmpty>
         ) : (

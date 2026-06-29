@@ -1,113 +1,198 @@
 "use client";
+
 import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
-import { IconArrowRight, IconHeart, IconFilter } from "@/components/icons";
-import { ExportMenu } from "@/components/search/ExportMenu";
-import { cn } from "@/lib/utils";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ListingCard } from "@/components/listings/ListingCard";
+import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
+import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
+import { ApiError, searches as searchesApi } from "@/lib/api";
+import type { SortOption } from "@/lib/search-catalog";
 import type { ExportListing } from "@/lib/export-listings";
+import type { Listing, SearchQuery } from "@/types/api";
 
-type ResultListing = ExportListing & {
-  id: string;
-  risk: string;
-  priceDown?: boolean;
-  oldPrice?: number;
-};
-
-const listings: ResultListing[] = [
-  { id:"1", title:"Toyota Camry 2.5 AT", year:2021, mileage:45000, price:780000, region:"Київ", src:"AUTO.RIA", time:"12 хв", risk:"low",  priceDown:true,  oldPrice:810000 },
-  { id:"2", title:"Toyota Camry 2.0 AT", year:2019, mileage:88000, price:610000, region:"Київ", src:"Telegram",time:"34 хв", risk:"medium",priceDown:false, oldPrice:0      },
-  { id:"3", title:"Toyota Camry 3.5 AT", year:2022, mileage:31000, price:890000, region:"Харків",src:"OLX",   time:"1 год", risk:"low",  priceDown:false, oldPrice:0      },
-  { id:"4", title:"Toyota Camry 2.5 AT", year:2020, mileage:62000, price:720000, region:"Одеса", src:"AUTO.RIA",time:"3 год",risk:"medium",priceDown:true, oldPrice:760000 },
-  { id:"5", title:"Toyota Camry 2.0 AT", year:2021, mileage:51000, price:690000, region:"Дніпро",src:"OLX",   time:"5 год",risk:"high",  priceDown:false, oldPrice:0      },
-];
-const riskMeta: Record<string,{label:string;cn:string}> = {
-  low:    { label:"Брати",       cn:"text-emerald-dark bg-emerald-light" },
-  medium: { label:"Торгуватись", cn:"text-yellow-700 bg-yellow-50" },
-  high:   { label:"Пропустити",  cn:"text-red-600 bg-red-50" },
-};
+function toExportItems(items: Listing[]): ExportListing[] {
+  return items.map(item => ({
+    id: item.id,
+    title: item.title,
+    year: item.year,
+    mileage: item.mileage,
+    price: item.price,
+    region: item.region,
+    src: "AUTO.RIA",
+    fuel: item.fuel,
+    trans: item.transmission,
+    desc: item.description ?? undefined,
+    url: item.url,
+  }));
+}
 
 export default function ResultsPage() {
+  const searchParams = useSearchParams();
+  const searchId = searchParams.get("search");
+
+  const [search, setSearch] = useState<SearchQuery | null>(null);
+  const [results, setResults] = useState<Listing[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(0);
+  const [sort, setSort] = useState<SortOption>("price_asc");
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+
+  const loadResults = useCallback(
+    async (id: string, nextPage: number, nextSort: SortOption, append: boolean) => {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+        setError(null);
+      }
+
+      try {
+        const data = await searchesApi.results(id, nextPage, 20, nextSort);
+        setSearch(data.search);
+        setTotal(data.results.total);
+        setPages(data.results.pages);
+        setPage(data.results.page);
+        setResults(prev =>
+          append ? [...prev, ...data.results.items] : data.results.items,
+        );
+      } catch (err) {
+        if (!append) {
+          setResults([]);
+          setTotal(0);
+          setSearch(null);
+        }
+        setError(err instanceof ApiError ? err.message : "Не вдалось завантажити результати");
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!searchId) {
+      setLoading(false);
+      return;
+    }
+    void loadResults(searchId, 1, sort, false);
+  }, [searchId, sort, loadResults]);
+
+  const exportItems = useMemo(() => toExportItems(results), [results]);
+  const exportName = (search?.name || "rezultaty").replace(/\s+/g, "-").toLowerCase();
+  const hasMore = page < pages;
+
+  const handleSortChange = (nextSort: SortOption) => {
+    setSort(nextSort);
+    setPage(1);
+  };
+
+  const handleLoadMore = () => {
+    if (!searchId || !hasMore || loadingMore) return;
+    void loadResults(searchId, page + 1, sort, true);
+  };
+
+  if (!searchId) {
+    return (
+      <div className="max-w-[860px] rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center">
+        <p className="text-[15px] font-semibold text-ink">Оберіть збережений пошук</p>
+        <p className="mt-2 text-[13px] text-muted">Перейдіть до дашборду і відкрийте «Результати»</p>
+        <Link
+          href="/app/dashboard"
+          className="mt-4 inline-flex rounded-full bg-emerald px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-emerald-dark"
+        >
+          Мої пошуки
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-[860px]">
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-[12px] text-muted mb-6">
-              <Link href="/app/dashboard" className="hover:text-ink">Мої пошуки</Link>
-              <span>/</span>
-              <span className="text-ink font-medium">Toyota Camry під перепродаж</span>
-            </div>
+      <div className="mb-5 flex items-center gap-2 text-[12px] text-muted sm:mb-6">
+        <Link href="/app/dashboard" className="hover:text-ink">
+          Мої пошуки
+        </Link>
+        <span>/</span>
+        <span className="truncate font-medium text-ink">
+          {search?.name ?? "Завантаження..."}
+        </span>
+      </div>
 
-            {/* Toolbar */}
-            <div className="bg-white border border-border rounded-xl px-5 py-3.5 flex items-center justify-between mb-5">
-              <div className="flex items-center gap-4 text-[13px]">
-                <span className="flex items-center gap-2 text-emerald-dark font-medium">
-                  <span className="w-2 h-2 rounded-full bg-emerald animate-pulse"/>Активний
-                </span>
-                <span className="text-muted">·</span>
-                <span className="text-muted">Знайдено <strong className="text-ink">{listings.length}</strong></span>
-                <span className="text-muted">·</span>
-                <span className="text-emerald-dark font-semibold">12 нових</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <button className="flex items-center gap-1.5 text-[12px] text-muted hover:text-ink transition-colors">
-                  <IconFilter size={12}/> Фільтри
-                </button>
-                <ExportMenu items={listings} filename="toyota-camry" iconSize={12} />
-                <select className="text-[12px] bg-white border border-border rounded-lg px-3 py-1.5 text-muted focus:outline-none">
-                  <option>Спочатку дешеві</option>
-                  <option>Спочатку нові</option>
-                </select>
-              </div>
-            </div>
+      <SearchResultsToolbar
+        running={!loading && !error && results.length > 0}
+        loading={loading}
+        total={total}
+        shown={results.length}
+        sort={sort}
+        onSortChange={handleSortChange}
+        exportItems={exportItems}
+        exportName={exportName}
+        isActive={search?.is_active}
+        newCount={search?.new_count}
+        idleLabel={loading ? "Завантаження..." : "Немає результатів"}
+      />
 
-            {/* Cards */}
-            <div className="space-y-3">
-              {listings.map(r => {
-                const risk = riskMeta[r.risk];
-                return (
-                  <article key={r.id} className="bg-white border border-border rounded-xl p-5 flex gap-4 hover:border-ink/15 transition-colors">
-                    <div className="w-44 h-28 bg-surface rounded-lg shrink-0 overflow-hidden flex items-center justify-center">
-                      <svg width="32" height="32" viewBox="0 0 28 28" fill="none" className="opacity-10">
-                        <rect x="12.5" y="0" width="3" height="28" fill="#0A0C0E"/>
-                        <rect x="0" y="12.5" width="28" height="3" fill="#0A0C0E"/>
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-[15px] font-bold text-ink">{r.title}</h3>
-                          <p className="text-[12px] text-muted mt-0.5">{r.year} · {r.mileage.toLocaleString("uk-UA")} км · {r.region}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className="text-[20px] font-black text-ink leading-none">{r.price.toLocaleString("uk-UA")} <span className="text-[13px] text-muted font-medium">грн</span></div>
-                          {r.priceDown && r.oldPrice != null && (
-                            <div className="text-[11px] text-red-500 line-through">{r.oldPrice.toLocaleString("uk-UA")}</div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-2.5 flex-wrap">
-                        <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded", risk.cn)}>{risk.label}</span>
-                        <Badge variant="outline">{r.src}</Badge>
-                        {r.priceDown && <Badge variant="red">↓ Ціна знижена</Badge>}
-                        <span className="text-[11px] text-muted">{r.time} тому</span>
-                        <div className="ml-auto flex items-center gap-2">
-                          <button className="w-7 h-7 rounded-lg border border-border flex items-center justify-center text-muted hover:text-ink transition-colors">
-                            <IconHeart size={12}/>
-                          </button>
-                          <Link href={`/app/listing/${r.id}`}
-                            className="text-[12px] font-semibold text-emerald-dark flex items-center gap-1 hover:underline">
-                            Деталі <IconArrowRight size={11}/>
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+      {error && (
+        <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          {error}
+        </div>
+      )}
 
-            <button className="mt-6 w-full py-3 border border-border rounded-xl text-[13px] text-muted hover:text-ink hover:border-ink/20 transition-colors">
-              Показати більше результатів
-            </button>
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
+        </div>
+      ) : results.length === 0 && !error ? (
+        <div className="rounded-2xl border border-border bg-white px-6 py-16 text-center">
+          <p className="text-[15px] font-semibold text-ink">Нічого не знайдено</p>
+          <p className="mt-2 text-[13px] text-muted">
+            Спробуйте змінити фільтри збереженого пошуку або перевірте пізніше
+          </p>
+        </div>
+      ) : (
+        <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:px-0">
+          {results.map(item => (
+            <ListingCard
+              key={item.id}
+              listing={item}
+              onClick={() => setSelectedListing(item)}
+            />
+          ))}
+        </div>
+      )}
+
+      {hasMore && !loading && (
+        <button
+          type="button"
+          onClick={handleLoadMore}
+          disabled={loadingMore}
+          className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[13px] font-semibold text-muted transition-colors hover:border-ink/20 hover:text-ink disabled:opacity-60"
+        >
+          {loadingMore ? "Завантаження..." : "Показати більше результатів"}
+        </button>
+      )}
+
+      {results.length > 0 && (
+        <p className="mt-4 pb-1 text-center text-[11px] text-muted">
+          Дані надано{" "}
+          <a
+            href="https://auto.ria.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-emerald-dark hover:underline"
+          >
+            AUTO.RIA
+          </a>
+        </p>
+      )}
+
+      <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} />
     </div>
   );
 }

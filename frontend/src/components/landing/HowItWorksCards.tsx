@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { CtaLink } from "@/components/ui/CtaLink";
+import { LANDING_IMAGES } from "@/lib/brand-assets";
 
 const STEPS = [
   {
@@ -7,21 +8,21 @@ const STEPS = [
     description: "Марка, модель, рік, ціна, регіон. До 10 запитів одночасно.",
     cta: "Створити запит",
     href: "/auth/login",
-    image: "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=900&q=80",
+    image: LANDING_IMAGES.howItWorksSetup,
   },
   {
     title: "Сканування скрізь",
     description: "AUTO.RIA, OLX і Telegram. Анти-дубль злипає однакові авто.",
     cta: "Спробувати",
     href: "/auth/login",
-    image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=900&q=80",
+    image: LANDING_IMAGES.howItWorksScan,
   },
   {
     title: "Сповіщення миттєво",
     description: "Нове авто в Telegram за 5 хвилин з оцінкою ризику.",
     cta: "Підключити Telegram",
     href: "/auth/login",
-    image: "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=900&q=80",
+    image: LANDING_IMAGES.howItWorksNotify,
   },
 ] as const;
 
@@ -48,7 +49,7 @@ export function HowItWorksCards() {
                 src={image}
                 alt=""
                 fill
-                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                className="object-cover transition-transform duration-700 motion-safe:group-hover:scale-105"
                 sizes="(max-width: 768px) 100vw, 33vw"
               />
               <div className="absolute inset-0 bg-gradient-to-b from-ink/90 via-ink/55 to-ink/25" />

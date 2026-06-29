@@ -25,7 +25,7 @@ export function FreshListingsCarousel() {
     const card = container.children[index] as HTMLElement | undefined;
     if (!card) return;
 
-    container.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
+    container.scrollTo({ left: card.offsetLeft });
     setActiveIndex(index);
   }, []);
 

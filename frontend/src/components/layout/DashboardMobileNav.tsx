@@ -20,7 +20,7 @@ export function DashboardMobileNav({ badges }: Props) {
       className="fixed inset-x-0 bottom-0 z-40 lg:hidden px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       aria-label="Навігація кабінету"
     >
-      <div className="mx-auto flex max-w-lg items-stretch justify-around gap-0.5 rounded-2xl border border-border/60 bg-white/95 px-1 py-1.5 shadow-[0_-4px_32px_-8px_rgba(10,12,14,0.12),0_8px_24px_-8px_rgba(10,12,14,0.08)] backdrop-blur-xl">
+      <div className="mx-auto flex max-w-lg items-stretch justify-around gap-0.5 rounded-2xl border border-border/60 bg-white px-1 py-1.5 shadow-[0_-4px_32px_-8px_rgba(10,12,14,0.12),0_8px_24px_-8px_rgba(10,12,14,0.08)]">
         {mobileNav.map(({ href, icon: Icon, shortLabel, label, badgeKey, badgeAccent }) => {
           const active = isActive(href);
           const badge = badgeKey ? badges[badgeKey] : 0;
