@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { LogoIcon } from "@/components/brand/LogoIcon";
+import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { IconLock, IconEye } from "@/components/icons";
 import { useAuth } from "@/contexts/AuthProvider";
 import { ApiError } from "@/lib/api";
@@ -110,11 +110,8 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen bg-white flex items-center justify-center p-6">
       <div className="w-full max-w-[420px]">
         <div className="mb-6 text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <span className="w-10 h-10 rounded-full bg-emerald-light ring-1 ring-emerald/20 flex items-center justify-center">
-              <LogoIcon size={22} />
-            </span>
-            <span className="text-[17px] font-bold text-ink">Carbit</span>
+          <Link href="/" className="inline-flex items-center justify-center">
+            <CarbitLogo variant="full" height={32} />
           </Link>
         </div>
         <div className="bg-white rounded-[1.5rem] border border-border/60 shadow-card p-6 sm:p-7">

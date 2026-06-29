@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { IconMail, IconLock, IconEye } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
-import { LogoIcon } from "@/components/brand/LogoIcon";
+import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
 import { ApiError, auth as authApi } from "@/lib/api";
@@ -245,11 +245,8 @@ function AuthForm() {
     return (
       <div className="w-full max-w-[420px]">
         <div className="lg:hidden mb-6">
-          <Link href="/" className="inline-flex items-center gap-3">
-            <span className="w-10 h-10 rounded-full bg-emerald-light ring-1 ring-emerald/20 flex items-center justify-center">
-              <LogoIcon size={22} />
-            </span>
-            <span className="text-[17px] font-bold tracking-tight text-ink">Carbit</span>
+          <Link href="/" className="inline-flex items-center">
+            <CarbitLogo variant="full" height={32} />
           </Link>
         </div>
 
@@ -309,11 +306,8 @@ function AuthForm() {
     return (
       <div className="w-full max-w-[420px]">
         <div className="lg:hidden mb-6">
-          <Link href="/" className="inline-flex items-center gap-3">
-            <span className="w-10 h-10 rounded-full bg-emerald-light ring-1 ring-emerald/20 flex items-center justify-center">
-              <LogoIcon size={22} />
-            </span>
-            <span className="text-[17px] font-bold tracking-tight text-ink">Carbit</span>
+          <Link href="/" className="inline-flex items-center">
+            <CarbitLogo variant="full" height={32} />
           </Link>
         </div>
 
@@ -383,11 +377,8 @@ function AuthForm() {
   return (
     <div className="w-full max-w-[420px]">
       <div className="lg:hidden mb-6">
-        <Link href="/" className="inline-flex items-center gap-3">
-          <span className="w-10 h-10 rounded-full bg-emerald-light ring-1 ring-emerald/20 flex items-center justify-center">
-            <LogoIcon size={22} />
-          </span>
-          <span className="text-[17px] font-bold tracking-tight text-ink">Carbit</span>
+        <Link href="/" className="inline-flex items-center">
+          <CarbitLogo variant="full" height={32} />
         </Link>
       </div>
 
@@ -558,11 +549,8 @@ export default function AuthPage() {
         <div className="absolute top-1/3 right-0 w-64 h-64 bg-emerald/20 rounded-full blur-[100px] pointer-events-none" />
 
         <div className="relative z-10 flex flex-col justify-between p-12 xl:p-14 w-full">
-          <Link href="/" className="flex items-center gap-3 group w-fit">
-            <span className="w-11 h-11 rounded-full bg-white/10 ring-1 ring-white/20 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <LogoIcon size={24} light />
-            </span>
-            <span className="text-white text-[18px] font-bold tracking-tight">Carbit</span>
+          <Link href="/" className="flex items-center group w-fit">
+            <CarbitLogo variant="full" height={36} light className="transition-transform group-hover:scale-[1.02]" />
           </Link>
 
           <div className="rounded-3xl bg-white/10 backdrop-blur-xl border border-white/15 p-8">

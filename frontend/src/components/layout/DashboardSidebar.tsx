@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { LogoIcon } from "@/components/brand/LogoIcon";
+import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { primaryNav, secondaryNav, type NavBadgeKey } from "@/lib/dashboard-nav";
 import { notifications as notificationsApi, favorites as favoritesApi } from "@/lib/api";
 
@@ -32,14 +32,9 @@ export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
     <aside className="hidden w-[252px] shrink-0 lg:sticky lg:top-0 lg:block lg:self-start">
       <div className="flex h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-[28px] border border-border/50 bg-white shadow-island sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] lg:h-[calc(100vh-2.5rem)] lg:max-h-[calc(100vh-2.5rem)]">
         <div className="border-b border-border/50 px-5 py-5">
-          <Link href="/app/dashboard" className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-ink text-white shadow-sm">
-              <LogoIcon size={20} light />
-            </span>
-            <div>
-              <div className="text-[16px] font-bold tracking-tight text-ink">Carbit</div>
-              <div className="text-[11px] text-muted">Особистий кабінет</div>
-            </div>
+          <Link href="/app/dashboard" className="block">
+            <CarbitLogo variant="full" height={32} />
+            <div className="mt-2 text-[11px] text-muted">Особистий кабінет</div>
           </Link>
         </div>
 

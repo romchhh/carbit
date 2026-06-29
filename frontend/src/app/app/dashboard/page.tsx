@@ -2,19 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { IconPlus, IconZap, IconArrowRight } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
 import { searches as searchesApi, users as usersApi } from "@/lib/api";
+import { DEFAULT_FILTERS, type SearchFilterState } from "@/lib/search-catalog";
+import { saveSearchDraft } from "@/lib/search-draft";
 import {
   AppEmpty,
   AppLoading,
   AppPage,
   AppSection,
-  AppStatCard,
-  AppStatGrid,
 } from "@/components/layout/AppPage";
 import type { SearchQuery, DashboardStats } from "@/types/api";
 
@@ -30,11 +32,37 @@ function formatSearchDesc(filters: Record<string, unknown>): string {
   return parts.length > 0 ? parts.join(" · ") : "Без фільтрів";
 }
 
+function CompactStat({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-border/40 bg-white px-3 py-3 sm:px-4 sm:py-3.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+      <div className="mt-1 text-[20px] font-bold leading-none text-ink sm:text-[22px]">{value}</div>
+      {sub && (
+        <div className={cn("mt-1 text-[11px]", accent ? "font-medium text-emerald-dark" : "text-muted")}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [searches, setSearches] = useState<SearchQuery[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [filters, setFilters] = useState<SearchFilterState>({ ...DEFAULT_FILTERS });
 
   useEffect(() => {
     searchesApi.list()
@@ -46,109 +74,135 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
+  const firstName = user.name.split(" ")[0];
   const activeCount = searches.filter(s => s.is_active).length;
   const limit = user.searches_limit;
   const remaining = Math.max(0, limit - activeCount);
   const totalNew = searches.reduce((sum, s) => sum + s.new_count, 0);
 
-  const statsCards = stats ? [
-    { label: "Активних", value: stats.active_searches, sub: `з ${stats.searches_limit}`, accent: false },
-    { label: "Нових сьогодні", value: stats.new_listings_today, sub: `${stats.new_listings_yesterday} вчора`, accent: stats.new_listings_today > 0 },
-    { label: "В обраному", value: stats.favorites_count, sub: "авто", accent: false },
-    { label: "Сповіщень", value: stats.unread_notifications, sub: "непрочитаних", accent: stats.unread_notifications > 0 },
-  ] : [
-    { label: "Активних", value: activeCount, sub: `з ${limit}`, accent: false },
-    { label: "Нових", value: totalNew, sub: "за добу", accent: totalNew > 0 },
-    { label: "Запитів", value: searches.length, sub: "всього", accent: false },
-    { label: "Джерел", value: "3", sub: "AUTO.RIA · OLX · TG", accent: false },
-  ];
+  const statsCards = stats
+    ? [
+        { label: "Активних", value: stats.active_searches, sub: `з ${stats.searches_limit}` },
+        { label: "Нових сьогодні", value: stats.new_listings_today, sub: `${stats.new_listings_yesterday} вчора`, accent: stats.new_listings_today > 0 },
+        { label: "В обраному", value: stats.favorites_count, sub: "авто" },
+        { label: "Сповіщень", value: stats.unread_notifications, sub: "непрочитаних", accent: stats.unread_notifications > 0 },
+      ]
+    : [
+        { label: "Активних", value: activeCount, sub: `з ${limit}` },
+        { label: "Нових", value: totalNew, sub: "за добу", accent: totalNew > 0 },
+        { label: "Запитів", value: searches.length, sub: "всього" },
+        { label: "Джерел", value: "3", sub: "AUTO.RIA · OLX · TG" },
+      ];
+
+  const handleSearch = () => {
+    saveSearchDraft(filters);
+    router.push("/app/search");
+  };
+
+  const handleReset = () => {
+    setFilters({ ...DEFAULT_FILTERS });
+  };
 
   return (
     <AppPage
       wide
-      title="Мої пошуки"
-      description={`Привіт, ${user.name.split(" ")[0]}! До ${limit} активних запитів одночасно.`}
-      action={
-        <Link href="/app/search">
-          <Button variant="primary" size="md" className="gap-1.5">
-            <IconPlus size={14} /> Новий запит
+      title={`Привіт, ${firstName}`}
+      description="Обери параметри — Carbit шукатиме на AUTO.RIA, OLX і в Telegram"
+    >
+      <div className="mb-8">
+        <h2 className="text-[17px] font-bold text-ink">Новий пошук</h2>
+        <p className="mt-1 text-[13px] text-muted">
+          Марка, модель, рік і регіон. Розширені фільтри — за потреби.
+        </p>
+        <div className="mt-4">
+          <SearchFiltersPanel
+            wide
+            filters={filters}
+            onChange={setFilters}
+            onReset={handleReset}
+            onSearch={handleSearch}
+          />
+        </div>
+      </div>
+
+      <div className="mt-8 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-[17px] font-bold text-ink">Мої запити</h2>
+          <p className="mt-1 text-[13px] text-muted">
+            {activeCount} активних · {remaining > 0 ? `ще ${remaining} доступно` : "ліміт використано"}
+          </p>
+        </div>
+        <Link href="/app/search" className="shrink-0">
+          <Button variant="secondary" size="sm" className="gap-1.5">
+            <IconPlus size={13} /> Додати
           </Button>
         </Link>
-      }
-    >
-      <AppStatGrid className="mb-6">
-        {statsCards.map(card => (
-          <AppStatCard key={card.label} {...card} />
-        ))}
-      </AppStatGrid>
+      </div>
 
-      {loading ? (
-        <AppLoading />
-      ) : searches.length === 0 ? (
-        <AppEmpty>
-          <p className="text-[15px] text-muted">Ще немає пошукових запитів</p>
-          <p className="mx-auto mt-2 max-w-sm text-[13px] text-muted/80">
-            Створіть перший — Carbit почне моніторити AUTO.RIA, OLX і Telegram.
-          </p>
-          <Link href="/app/search" className="mt-5 inline-block">
-            <Button variant="primary" size="md" className="gap-1.5">
-              <IconPlus size={14} /> Створити запит
-            </Button>
-          </Link>
-        </AppEmpty>
-      ) : (
-        <div className="space-y-3">
-          {searches.map(s => (
-            <AppSection
-              key={s.id}
-              className={cn("!bg-white p-4 sm:p-5", !s.is_active && "opacity-60")}
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", s.is_active ? "bg-emerald" : "bg-border")} />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate text-[15px] font-semibold text-ink">{s.name}</span>
-                      {s.new_count > 0 && (
-                        <Badge variant="ink" className="gap-1">
-                          <IconZap size={9} /> {s.new_count}
-                        </Badge>
-                      )}
+      <div className="mt-4">
+        {loading ? (
+          <AppLoading />
+        ) : searches.length === 0 ? (
+          <AppEmpty>
+            <p className="text-[15px] font-medium text-ink">Поки немає збережених запитів</p>
+            <p className="mx-auto mt-2 max-w-sm text-[13px] text-muted">
+              Налаштуйте фільтри вище і натисніть «Шукати» — або додайте запит вручну.
+            </p>
+          </AppEmpty>
+        ) : (
+          <div className="space-y-3">
+            {searches.map(s => (
+              <AppSection
+                key={s.id}
+                className={cn("!bg-white p-4 sm:p-5", !s.is_active && "opacity-60")}
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", s.is_active ? "bg-emerald" : "bg-border")} />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-[15px] font-semibold text-ink">{s.name}</span>
+                        {s.new_count > 0 && (
+                          <Badge variant="ink" className="gap-1">
+                            <IconZap size={9} /> {s.new_count}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 truncate text-[12px] text-muted">{formatSearchDesc(s.filters)}</p>
                     </div>
-                    <p className="mt-1 truncate text-[12px] text-muted">{formatSearchDesc(s.filters)}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 sm:justify-end">
+                    <div className="text-left sm:text-right">
+                      <div className={cn("text-[20px] font-black leading-none", s.is_active ? "text-emerald-dark" : "text-muted")}>
+                        {s.is_active ? s.total_count : "—"}
+                      </div>
+                      <div className="mt-1 text-[10px] uppercase tracking-wide text-muted">знайдено</div>
+                    </div>
+                    {s.is_active && (
+                      <Link
+                        href={`/app/results?search=${s.id}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-emerald/10 px-3 py-2 text-[12px] font-semibold text-emerald-dark transition-colors hover:bg-emerald/15"
+                      >
+                        Результати <IconArrowRight size={11} />
+                      </Link>
+                    )}
                   </div>
                 </div>
+              </AppSection>
+            ))}
+          </div>
+        )}
+      </div>
 
-                <div className="flex items-center justify-between gap-4 sm:justify-end">
-                  <div className="text-left sm:text-right">
-                    <div className={cn("text-[20px] font-black leading-none", s.is_active ? "text-emerald-dark" : "text-muted")}>
-                      {s.is_active ? s.total_count : "—"}
-                    </div>
-                    <div className="mt-1 text-[10px] uppercase tracking-wide text-muted">знайдено</div>
-                  </div>
-                  {s.is_active && (
-                    <Link
-                      href={`/app/results?search=${s.id}`}
-                      className="inline-flex items-center gap-1 rounded-xl bg-emerald/10 px-3 py-2 text-[12px] font-semibold text-emerald-dark transition-colors hover:bg-emerald/15"
-                    >
-                      Результати <IconArrowRight size={11} />
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </AppSection>
+      <AppSection className="!bg-surface/50 mt-10">
+        <h3 className="text-[11px] font-bold uppercase tracking-wide text-muted mb-3">Огляд</h3>
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+          {statsCards.map(card => (
+            <CompactStat key={card.label} {...card} />
           ))}
         </div>
-      )}
-
-      {!loading && remaining > 0 && (
-        <Link
-          href="/app/search"
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border/70 py-4 text-[13px] text-muted transition-colors hover:border-emerald/30 hover:bg-emerald/5 hover:text-ink"
-        >
-          <IconPlus size={14} /> Ще {remaining} {remaining === 1 ? "запит" : "запити"} доступно
-        </Link>
-      )}
+      </AppSection>
     </AppPage>
   );
 }

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { LogoIcon } from "@/components/brand/LogoIcon";
+import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { auth as authApi, ApiError } from "@/lib/api";
 import { setToken } from "@/lib/auth-storage";
 
@@ -47,9 +47,7 @@ function TelegramLoginForm() {
 
   return (
     <div className="text-center py-8">
-      <div className="w-14 h-14 rounded-full bg-emerald-light mx-auto mb-4 flex items-center justify-center">
-        <LogoIcon size={28} />
-      </div>
+      <CarbitLogo variant="icon" height={40} className="mx-auto mb-4" />
       <p className="text-[15px] text-muted">Вхід через Telegram...</p>
       <div className="w-8 h-8 border-2 border-emerald border-t-transparent rounded-full animate-spin mx-auto mt-6" />
     </div>

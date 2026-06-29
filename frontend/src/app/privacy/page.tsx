@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal/LegalPage";
+import { OperatorRequisites } from "@/components/legal/OperatorRequisites";
 
 export const metadata: Metadata = {
   title: "Політика конфіденційності — Carbit",
@@ -20,6 +21,10 @@ const sections = [
           Користуючись сайтом, реєструючись або підключаючи Telegram-бот, ви погоджуєтесь з цією
           Політикою. Якщо ви не згодні — не надавайте нам свої дані та не користуйтесь Сервісом.
         </p>
+        <p>
+          Володільцем персональних даних (оператором) є:
+        </p>
+        <OperatorRequisites />
       </>
     ),
   },
@@ -230,6 +235,8 @@ const sections = [
             Умови використання: <a href="/terms">carbit.telebots.site/terms</a>
           </li>
         </ul>
+        <p className="mt-3">Реквізити ФОП:</p>
+        <OperatorRequisites />
       </>
     ),
   },
@@ -240,7 +247,7 @@ export default function PrivacyPage() {
     <LegalPage
       title="Політика конфіденційності"
       subtitle="Як ми збираємо, використовуємо та захищаємо ваші персональні дані в Carbit."
-      updated="26 червня 2026"
+      updated="29 червня 2026"
       sections={sections}
     />
   );

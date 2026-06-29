@@ -1,13 +1,23 @@
 import Image from "next/image";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
+import { HowItWorksCards } from "@/components/landing/HowItWorksCards";
 import { PricingPlans } from "@/components/pricing/PricingPlans";
 import { CtaLink } from "@/components/ui/CtaLink";
-import { IconCheck, IconArrowDown, IconSearch, IconBell, IconShield, IconTelegram, IconGlobe, IconZap } from "@/components/icons";
+import { IconCheck, IconSearch, IconShield, IconTelegram, IconZap } from "@/components/icons";
+
+import { SOURCE_LOGOS } from "@/lib/brand-assets";
 
 const HERO_IMAGE = "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1920&q=80";
+
+const HERO_SOURCE_LOGOS = [
+  { src: SOURCE_LOGOS.autoRia, alt: "AUTO.RIA" },
+  { src: SOURCE_LOGOS.olx, alt: "OLX" },
+  { src: SOURCE_LOGOS.telegram, alt: "Telegram" },
+] as const;
 
 export default function HomePage() {
   return (
@@ -16,7 +26,7 @@ export default function HomePage() {
       <main className="bg-white">
 
         {/* ── HERO ─────────────────────────────────────────── */}
-        <section className="relative min-h-[100dvh] flex items-center overflow-hidden pt-[64px] sm:pt-[72px]">
+        <section className="relative min-h-[100dvh] flex items-start sm:items-center overflow-hidden pt-[72px] sm:pt-[80px]">
           <Image
             src={HERO_IMAGE}
             alt=""
@@ -31,30 +41,55 @@ export default function HomePage() {
           <div className="absolute top-1/4 right-[15%] w-48 h-48 sm:w-72 sm:h-72 bg-emerald/20 rounded-full blur-[100px] pointer-events-none animate-float" />
           <div className="absolute bottom-1/4 left-[10%] w-32 h-32 sm:w-48 sm:h-48 bg-emerald/10 rounded-full blur-[80px] pointer-events-none" />
 
-          <div className="relative section-wrap py-12 sm:py-16 w-full">
-            <div className="max-w-[620px]">
-              <h1 className="text-[36px] sm:text-[52px] lg:text-[60px] font-semibold leading-[1.05] tracking-[-0.02em] text-white animate-fade-up">
-                Знайди авто раніше{" "}
-                <span className="text-emerald">конкурентів</span>
+          <div className="relative section-wrap pt-8 pb-12 sm:py-16 w-full">
+            <div className="max-w-[620px] flex flex-col min-h-[calc(100dvh-10rem)] sm:min-h-0 pt-6 sm:pt-0">
+              <h1 className="text-[clamp(1.75rem,4.2vw+1.1rem,3.75rem)] font-semibold leading-[1.05] tracking-[-0.02em] text-white animate-fade-up">
+                <span className="block whitespace-nowrap">Знайди авто раніше</span>
+                <span className="block whitespace-nowrap">конкурентів</span>
               </h1>
 
-              <p className="mt-4 sm:mt-5 text-[14px] sm:text-[16px] text-white leading-snug max-w-[480px] animate-fade-up-delay">
-                AUTO.RIA, OLX і Telegram в одному пошуку — анти-дубль і сигнал «брати / торгуватись».
-              </p>
-
-              <div className="mt-6 sm:mt-8 flex flex-wrap items-center gap-3 sm:gap-4 animate-fade-up-delay">
-                <CtaLink href="/auth/login" variant="emerald" size="lg">
-                  Спробувати 7 днів
-                </CtaLink>
-                <Link href="#how-it-works" className="text-link group">
-                  Як це працює
-                  <span className="text-link-arrow">
-                    <IconArrowDown size={12} />
+              <div className="mt-5 sm:mt-6 max-w-[560px] animate-fade-up-delay">
+                <p className="flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[17px] sm:text-[20px] leading-snug text-white/90">
+                  <span>Усі джерела авто</span>
+                  <span className="inline-flex items-center mx-1">
+                    {HERO_SOURCE_LOGOS.map(({ src, alt }, index) => (
+                      <span
+                        key={alt}
+                        className={cn(
+                          "relative inline-flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 overflow-hidden rounded-full bg-white shadow-sm ring-2 ring-ink/30",
+                          index > 0 && "-ml-2.5 sm:-ml-3",
+                        )}
+                        style={{ zIndex: index + 1 }}
+                      >
+                        <Image
+                          src={src}
+                          alt={alt}
+                          width={36}
+                          height={36}
+                          className="h-full w-full object-cover"
+                        />
+                      </span>
+                    ))}
                   </span>
-                </Link>
+                  <span>в одному пошуку</span>
+                </p>
+                <p className="mt-2.5 sm:mt-3 text-[18px] sm:text-[22px] font-bold leading-snug text-white">
+                  — тільки актуальні авто, миттєві сповіщення
+                </p>
               </div>
 
-              <div className="mt-8 sm:mt-10 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 pt-6 sm:pt-8 border-t border-white/10">
+              <div className="mt-8 sm:mt-8 flex justify-center sm:justify-start animate-fade-up-delay">
+                <CtaLink
+                  href="/auth/login"
+                  variant="emerald"
+                  size="lg"
+                  className="w-full max-w-[320px] justify-center !px-8 !py-3.5 !text-[15px] sm:w-auto sm:max-w-none sm:!px-4 sm:!py-2 sm:!text-[13px]"
+                >
+                  Спробувати 7 днів
+                </CtaLink>
+              </div>
+
+              <div className="mt-auto pt-14 pb-2 sm:mt-10 sm:pt-8 sm:pb-0 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 border-t border-white/10">
                 {[
                   { value: "3", label: "джерела" },
                   { value: "1 200+", label: "оголошень/день" },
@@ -73,40 +108,7 @@ export default function HomePage() {
 
         <FreshListingsCarousel />
 
-        {/* ── HOW IT WORKS ─────────────────────────────────── */}
-        <section id="how-it-works" className="bg-white section-y">
-          <div className="section-wrap">
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 mb-8 sm:mb-10">
-              <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.02em] text-ink leading-tight">
-                Три кроки до угоди
-              </h2>
-              <p className="text-muted text-[13px] sm:text-[14px] max-w-[300px] leading-snug">
-                Від реєстрації до першого сповіщення — менше 10 хвилин
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-              {[
-                { n: "01", icon: <IconSearch size={36}/>, title: "Налаштуй пошук", desc: "Марка, модель, рік, ціна, регіон. До 10 запитів одночасно." },
-                { n: "02", icon: <IconGlobe size={36}/>, title: "Сканування скрізь", desc: "AUTO.RIA, OLX і Telegram. Анти-дубль злипає однакові авто." },
-                { n: "03", icon: <IconBell size={36}/>, title: "Сповіщення миттєво", desc: "Нове авто в Telegram за 5 хвилин з оцінкою ризику." },
-              ].map(({ n, icon, title, desc }) => (
-                <article key={n} className="card-rounded p-5 sm:p-6 group">
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-[40px] sm:text-[48px] font-semibold leading-none tracking-tighter text-emerald/25 group-hover:text-emerald/40 transition-colors duration-300">
-                      {n}
-                    </span>
-                    <span className="text-emerald shrink-0 transition-transform duration-300 group-hover:scale-110">
-                      {icon}
-                    </span>
-                  </div>
-                  <h3 className="mt-4 text-[18px] sm:text-[20px] font-semibold tracking-tight text-ink">{title}</h3>
-                  <p className="mt-2 text-[13px] text-muted leading-snug">{desc}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
+        <HowItWorksCards />
 
         {/* ── PAIN / VALUE PROP ────────────────────────────── */}
         <section className="bg-white section-y">

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useAuth } from "@/contexts/AuthProvider";
-import { LogoIcon } from "@/components/brand/LogoIcon";
+import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { IconBell, IconArrowRight, IconX } from "@/components/icons";
 
 const navLinks = [
@@ -62,12 +62,25 @@ export function Header() {
   };
 
   const navLinkClass = (href: string) => cn(
-    "px-3 py-1.5 rounded-full text-[13px] transition-all duration-200",
+    "px-3.5 py-2 rounded-full text-[14px] transition-all duration-200",
     lightHeader
-      ? isActive(href) ? "text-white font-semibold" : "text-white font-medium hover:text-white/80"
+      ? isActive(href)
+        ? "text-white font-semibold ring-1 ring-white/30 bg-white/10"
+        : "text-white font-medium hover:text-white hover:ring-1 hover:ring-white/35 hover:bg-white/10"
       : menuOpen
-        ? isActive(href) ? "text-emerald font-semibold" : "text-white hover:text-white/80"
-        : isActive(href) ? "text-ink font-semibold" : "text-muted hover:text-ink"
+        ? isActive(href)
+          ? "text-emerald font-semibold ring-1 ring-emerald/40 bg-emerald/10"
+          : "text-white hover:text-white hover:ring-1 hover:ring-white/35 hover:bg-white/10"
+        : isActive(href)
+          ? "text-ink font-semibold ring-1 ring-border bg-surface"
+          : "text-muted hover:text-ink hover:ring-1 hover:ring-border hover:bg-surface/80"
+  );
+
+  const headerActionClass = cn(
+    "inline-flex items-center justify-center rounded-full transition-all duration-200",
+    lightHeader
+      ? "hover:ring-1 hover:ring-white/35 hover:bg-white/10"
+      : "hover:ring-1 hover:ring-border hover:bg-surface/80",
   );
 
   return (
@@ -82,22 +95,14 @@ export function Header() {
         )}
       >
         <div className={cn(
-          "max-w-[1280px] mx-auto px-5 sm:px-6 h-[64px] sm:h-[72px] flex items-center lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-4 transition-colors duration-500",
+          "max-w-[1280px] mx-auto px-4 sm:px-6 h-[72px] sm:h-[80px] flex items-center lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-4 transition-colors duration-500",
           lightHeader && "text-white"
         )}>
-          <Link href="/" className="flex items-center gap-3 group shrink-0">
-            <span className={cn(
-              "w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-105",
-              lightHeader ? "bg-white/10 ring-1 ring-white/20" : "bg-emerald-light ring-1 ring-emerald/20"
-            )}>
-              <LogoIcon size={22} light={lightHeader} />
-            </span>
-            <span className={cn("text-[15px] font-semibold tracking-tight", lightHeader ? "text-white" : "text-ink")}>
-              Carbit
-            </span>
+          <Link href="/" className="inline-flex items-center shrink-0 justify-self-start">
+            <CarbitLogo variant="full" height={32} light={lightHeader} />
           </Link>
 
-          <nav className="hidden lg:flex items-center justify-center gap-1">
+          <nav className="hidden lg:flex items-center justify-center gap-1.5">
             {navLinks.map(({ href, label }) => (
               <Link key={href} href={href} className={navLinkClass(href)}>
                 {label}
@@ -105,30 +110,34 @@ export function Header() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 ml-auto lg:ml-0 justify-self-end">
+          <div className="flex items-center gap-2.5 ml-auto lg:ml-0 justify-self-end">
             {isLoggedIn && user ? (
               <>
                 <Link href="/app/notifications" className={cn(
-                  "relative w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200",
-                  lightHeader ? "hover:bg-white/10 text-white" : "hover:bg-surface text-muted hover:text-ink"
+                  "relative flex w-11 h-11 items-center justify-center",
+                  headerActionClass,
+                  lightHeader ? "text-white" : "text-muted hover:text-ink"
                 )}>
-                  <IconBell size={20} />
+                  <IconBell size={21} />
                 </Link>
                 <div className="relative" ref={userMenuRef}>
                   <button
                     type="button"
                     onClick={() => setUserMenuOpen(v => !v)}
-                    className="flex items-center gap-2 rounded-full hover:opacity-90 transition-opacity"
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-full px-1.5 py-1",
+                      headerActionClass,
+                    )}
                     aria-expanded={userMenuOpen}
                     aria-haspopup="menu"
                   >
-                    <span className="hidden sm:block text-[13px] font-medium max-w-[120px] truncate text-right">
+                    <span className="hidden sm:block text-[14px] font-medium max-w-[140px] truncate text-right">
                       <span className={lightHeader ? "text-white" : "text-ink"}>{user.name.split(" ")[0]}</span>
                     </span>
                     <UserAvatar
                       name={user.name}
                       avatarUrl={user.avatar_url}
-                      className="h-10 w-10 text-[12px] font-bold tracking-wide shadow-md shadow-emerald/30"
+                      className="h-11 w-11 text-[13px] font-bold tracking-wide shadow-md shadow-emerald/30"
                     />
                   </button>
                   {userMenuOpen && (
@@ -165,23 +174,25 @@ export function Header() {
             ) : (
               <>
                 <Link href="/auth/login" className={cn(
-                  "hidden sm:inline-flex text-[12px] px-3 py-1.5 rounded-full transition-all duration-200",
-                  lightHeader ? "text-white hover:bg-white/10" : "text-muted hover:text-ink hover:bg-surface"
+                  "hidden sm:inline-flex text-[13px] px-4 py-2 font-medium",
+                  headerActionClass,
+                  lightHeader ? "text-white" : "text-muted hover:text-ink"
                 )}>
                   Увійти
                 </Link>
                 <Link href="/auth/login" className={cn(
-                  "hidden sm:inline-flex group items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-full transition-all duration-300 hover:-translate-y-0.5",
+                  "hidden sm:inline-flex group items-center gap-2 text-[13px] font-semibold px-4 py-2 transition-all duration-300 hover:-translate-y-0.5",
                   lightHeader
-                    ? "bg-white text-ink hover:bg-white/90 shadow-lg shadow-black/20"
-                    : "bg-ink text-white hover:bg-ink-2 shadow-md shadow-ink/15"
+                    ? "bg-white text-ink hover:bg-white/90 shadow-lg shadow-black/20 hover:ring-1 hover:ring-white/50"
+                    : "bg-ink text-white hover:bg-ink-2 shadow-md shadow-ink/15 hover:ring-1 hover:ring-ink/25",
+                  "rounded-full"
                 )}>
-                  Спробувати
+                  Зареєструватися
                   <span className={cn(
                     "w-5 h-5 rounded-full flex items-center justify-center group-hover:translate-x-0.5 transition-transform",
                     lightHeader ? "bg-ink/10" : "bg-white/15"
                   )}>
-                    <IconArrowRight size={11} />
+                    <IconArrowRight size={12} />
                   </span>
                 </Link>
               </>
@@ -193,12 +204,13 @@ export function Header() {
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen(v => !v)}
               className={cn(
-                "lg:hidden relative w-9 h-9 rounded-full flex flex-col items-center justify-center gap-[4px] transition-all duration-300",
+                "lg:hidden relative w-10 h-10 rounded-full flex flex-col items-center justify-center gap-[4px]",
+                headerActionClass,
                 lightHeader
-                  ? "bg-white/10 hover:bg-white/20 text-white"
+                  ? "bg-white/10 text-white"
                   : menuOpen
                     ? "bg-white/10 text-white"
-                    : "bg-surface hover:bg-border/60 text-ink"
+                    : "bg-surface text-ink"
               )}
             >
               <span className={cn(
@@ -238,18 +250,15 @@ export function Header() {
             menuOpen ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
           )}
         >
-          <div className="flex items-center justify-between px-5 h-[64px] sm:h-[72px] border-b border-white/10">
-            <Link href="/" className="flex items-center gap-2.5" onClick={() => setMenuOpen(false)}>
-              <span className="w-8 h-8 rounded-full bg-white/10 ring-1 ring-white/20 flex items-center justify-center">
-                <LogoIcon size={22} light />
-              </span>
-              <span className="text-[15px] font-semibold text-white">Carbit</span>
+          <div className="flex items-center justify-between px-5 h-[72px] sm:h-[80px] border-b border-white/10">
+            <Link href="/" className="flex items-center" onClick={() => setMenuOpen(false)}>
+              <CarbitLogo variant="full" height={34} light />
             </Link>
             <button
               type="button"
               aria-label="Закрити меню"
               onClick={() => setMenuOpen(false)}
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+              className="w-10 h-10 rounded-full bg-white/10 hover:ring-1 hover:ring-white/35 text-white flex items-center justify-center transition-all"
             >
               <IconX size={22} />
             </button>
@@ -282,16 +291,16 @@ export function Header() {
               <Link
                 href="/auth/login"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-center w-full py-2.5 rounded-full border border-white/25 text-white text-[13px] font-medium hover:bg-white/10 transition-colors"
+                className="flex items-center justify-center w-full py-3 rounded-full border border-white/25 text-white text-[14px] font-medium hover:ring-1 hover:ring-white/35 hover:bg-white/10 transition-all"
               >
                 Увійти
               </Link>
               <Link
                 href="/auth/login"
                 onClick={() => setMenuOpen(false)}
-                className="group flex items-center justify-center gap-2 w-full py-2.5 rounded-full bg-emerald text-white text-[13px] font-medium hover:bg-emerald-dark shadow-lg shadow-emerald/30 transition-all"
+                className="group flex items-center justify-center gap-2 w-full py-3 rounded-full bg-emerald text-white text-[14px] font-semibold hover:bg-emerald-dark hover:ring-1 hover:ring-emerald/50 shadow-lg shadow-emerald/30 transition-all"
               >
-                Спробувати безкоштовно
+                Зареєструватися
                 <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
                   <IconArrowRight size={12} />
                 </span>

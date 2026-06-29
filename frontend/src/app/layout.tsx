@@ -20,8 +20,8 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
   },
   icons: {
-    icon: "/icons/icon.svg",
-    apple: "/icons/icon.svg",
+    icon: "/icons/app-icon.svg",
+    apple: "/icons/app-icon.svg",
   },
 };
 export const viewport: Viewport = { themeColor: "#00C896" };

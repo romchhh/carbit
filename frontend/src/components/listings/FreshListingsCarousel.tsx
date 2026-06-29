@@ -63,10 +63,10 @@ export function FreshListingsCarousel() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-5">
           <div>
             <h2 className="text-[26px] sm:text-[32px] font-semibold tracking-[-0.02em] text-ink leading-tight">
-              Свіжі пропозиції
+              Найвигідніші пропозиції
             </h2>
             <p className="mt-1 text-[13px] sm:text-[14px] text-muted leading-snug max-w-[360px]">
-              Оголошення, знайдені платформою за останню годину
+              Оголошення, знайдені платформою за останню годину, з найнижчими цінами
             </p>
           </div>
           <Link

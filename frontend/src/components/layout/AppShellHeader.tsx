@@ -5,7 +5,7 @@ import { useRef, useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useAuth } from "@/contexts/AuthProvider";
-import { LogoIcon } from "@/components/brand/LogoIcon";
+import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { IconBell } from "@/components/icons";
 
 type Props = {
@@ -31,11 +31,8 @@ export function AppShellHeader({ unreadNotifications = 0 }: Props) {
 
   return (
     <header className="mb-4 flex items-center justify-between lg:hidden">
-      <Link href="/app/dashboard" className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink text-white shadow-sm">
-          <LogoIcon size={18} light />
-        </span>
-        <span className="text-[17px] font-bold tracking-tight text-ink">Carbit</span>
+      <Link href="/app/dashboard" className="flex items-center">
+        <CarbitLogo variant="full" height={30} />
       </Link>
 
       <div className="flex items-center gap-2">

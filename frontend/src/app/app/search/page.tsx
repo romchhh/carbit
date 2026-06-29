@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { IconArrowRight } from "@/components/icons";
 import { Badge } from "@/components/ui/Badge";
 import { ExportMenu } from "@/components/search/ExportMenu";
@@ -15,6 +15,7 @@ import {
   type SearchFilterState,
   type SortOption,
 } from "@/lib/search-catalog";
+import { clearSearchDraft, loadSearchDraft } from "@/lib/search-draft";
 
 const riskLabel: Record<string, { label: string; color: string }> = {
   low: { label: "Брати", color: "text-emerald-dark bg-emerald-light" },
@@ -42,6 +43,14 @@ export default function SearchPage() {
   const [sort, setSort] = useState<SortOption>("price_asc");
   const [running, setRunning] = useState(false);
   const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    const draft = loadSearchDraft();
+    if (draft) {
+      setFilters(draft);
+      clearSearchDraft();
+    }
+  }, []);
 
   const results = useMemo(() => {
     if (!appliedFilters) return [];
@@ -78,13 +87,16 @@ export default function SearchPage() {
         </span>
       </div>
 
-      <SearchFiltersPanel
-        filters={filters}
-        onChange={setFilters}
-        onReset={handleReset}
-        onSearch={handleSearch}
-        searching={searching}
-      />
+      <div className="mb-6">
+        <SearchFiltersPanel
+          wide
+          filters={filters}
+          onChange={setFilters}
+          onReset={handleReset}
+          onSearch={handleSearch}
+          searching={searching}
+        />
+      </div>
 
       <div className="mt-8">
         <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-white px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { useAdminAuth } from "@/contexts/AdminAuthProvider";
 
 const links = [
@@ -19,8 +20,8 @@ export function AdminSidebar() {
   return (
     <aside className="w-[220px] shrink-0 bg-ink text-white min-h-screen flex flex-col">
       <div className="p-5 border-b border-white/10">
-        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/40">Carbit</div>
-        <div className="text-[16px] font-bold mt-0.5">Admin</div>
+        <CarbitLogo variant="full" height={28} light />
+        <div className="text-[12px] font-semibold text-white/50 mt-2">Admin</div>
       </div>
       <nav className="flex-1 p-3 space-y-0.5">
         {links.map(({ href, label, exact }) => (

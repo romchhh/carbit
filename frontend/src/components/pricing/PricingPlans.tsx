@@ -29,7 +29,7 @@ export function PricingPlans({ variant = "page" }: PricingPlansProps) {
               ? isHome
                 ? "bg-ink text-white shadow-xl shadow-ink/30 ring-2 ring-emerald/50 xl:scale-[1.02]"
                 : "bg-ink text-white shadow-xl shadow-ink/25 ring-2 ring-emerald/50 xl:scale-[1.03] xl:-mt-2 xl:mb-2"
-              : "card-rounded",
+              : "bg-surface border border-border/60 shadow-sm hover:shadow-card",
           )}
         >
           {popular && (
@@ -69,13 +69,11 @@ export function PricingPlans({ variant = "page" }: PricingPlansProps) {
           <Link
             href={href}
             className={cn(
-              "group flex items-center justify-center gap-1.5 text-center font-medium rounded-full transition-all duration-300 hover:-translate-y-0.5",
-              isHome ? "mt-5 text-[12px] py-2" : "text-[15px] font-semibold py-3.5 mb-8",
+              "group flex items-center justify-center gap-1.5 text-center font-semibold rounded-full transition-all duration-300 hover:-translate-y-0.5",
+              isHome ? "mt-5 text-[12px] py-2" : "text-[15px] py-3.5 mb-8",
               accent
-                ? "bg-emerald text-white hover:bg-emerald-dark shadow-lg shadow-emerald/30"
-                : isHome
-                  ? "bg-surface border border-border text-ink hover:bg-emerald hover:text-white hover:border-emerald"
-                  : "border border-border text-ink hover:bg-emerald hover:text-white hover:border-emerald",
+                ? "bg-emerald text-white shadow-lg shadow-emerald/30 hover:bg-white hover:text-ink hover:shadow-lg hover:shadow-white/20"
+                : "bg-ink text-white shadow-lg shadow-ink/15 hover:bg-emerald hover:shadow-lg hover:shadow-emerald/30",
             )}
           >
             {cta}
@@ -83,7 +81,7 @@ export function PricingPlans({ variant = "page" }: PricingPlansProps) {
               className={cn(
                 "rounded-full flex items-center justify-center transition-all group-hover:translate-x-0.5",
                 isHome ? "w-5 h-5 text-[10px]" : "w-7 h-7 text-[13px]",
-                accent ? "bg-white/20" : "bg-ink/5 group-hover:bg-white/20",
+                accent ? "bg-white/20 group-hover:bg-ink/10" : "bg-white/20",
               )}
             >
               →

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { LogoIcon } from "@/components/brand/LogoIcon";
+import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { IconSearch, IconBell, IconZap } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -62,11 +62,8 @@ export default function OnboardingPage() {
       </div>
 
       <div className="relative w-full max-w-[480px]">
-        <div className="flex items-center justify-center gap-2.5 mb-8">
-          <span className="w-10 h-10 rounded-full bg-white/10 ring-1 ring-white/20 flex items-center justify-center">
-            <LogoIcon size={22} light />
-          </span>
-          <span className="text-white text-[17px] font-bold tracking-tight">Carbit</span>
+        <div className="flex items-center justify-center mb-8">
+          <CarbitLogo variant="full" height={34} light />
         </div>
 
         <div className="bg-white rounded-[1.75rem] p-8 sm:p-10 shadow-2xl shadow-black/40">

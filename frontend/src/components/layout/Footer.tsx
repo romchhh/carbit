@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogoIcon } from "@/components/brand/LogoIcon";
+import { CarbitLogo } from "@/components/brand/CarbitLogo";
 
 const columns = [
   { title: "Продукт", links: [{ label: "Пошук", href: "/app/search" }, { label: "Тарифи", href: "/pricing" }, { label: "API", href: "#" }] },
@@ -12,11 +12,8 @@ export function Footer() {
     <footer className="bg-ink text-white">
       <div className="max-w-[1280px] mx-auto px-5 sm:px-6 py-10 sm:py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 text-center sm:text-left">
         <div className="flex flex-col items-center sm:items-start">
-          <Link href="/" className="flex items-center gap-2.5 w-fit group">
-            <span className="w-10 h-10 rounded-full bg-white/10 ring-1 ring-white/20 flex items-center justify-center">
-              <LogoIcon size={18} light />
-            </span>
-            <span className="text-[15px] font-semibold tracking-tight text-white group-hover:text-emerald transition-colors">Carbit</span>
+          <Link href="/" className="flex items-center w-fit group">
+            <CarbitLogo variant="full" height={36} light className="opacity-95 transition-opacity group-hover:opacity-100" />
           </Link>
           <p className="mt-3 text-[12px] text-white/50 leading-snug max-w-[280px] sm:max-w-none">
             Агрегатор оголошень авторинку України для перекупників та підбірників.
