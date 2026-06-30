@@ -24,7 +24,7 @@ export function useListingFavorites(listingIds: string[]) {
 
     favoritesApi
       .checkMany(listingIds)
-      .then(ids => setFavoriteIds(new Set(ids)))
+      .then(({ ids }) => setFavoriteIds(new Set(ids)))
       .catch(() => setFavoriteIds(new Set()));
   }, [idsKey, listingIds]);
 
