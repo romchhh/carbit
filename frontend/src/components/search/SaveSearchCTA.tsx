@@ -42,11 +42,11 @@ export function SaveSearchCTA({
           <div className="flex items-center gap-2">
             <IconZap size={14} className="shrink-0 text-emerald-dark" />
             <p className="text-[13px] font-bold leading-snug text-ink sm:text-[14px]">
-              Збережіть пошук — отримуйте нові пропозиції прямо в Telegram
+              Збережіть моніторинг — нові авто приходитимуть у Telegram
             </p>
           </div>
           <p className="mt-1.5 text-[12px] leading-relaxed text-muted sm:text-[13px]">
-            Carbit моніторит AUTO.RIA за вашими фільтрами і надсилає свіжі авто в бот, щоб ви не пропустили вигідну угоду.
+            Carbit відстежує AUTO.RIA за вашими фільтрами 24/7 і надсилає сповіщення, коли з&apos;являється нова пропозиція — без ручного перегляду каталогу.
           </p>
 
           {!telegramConnected && (

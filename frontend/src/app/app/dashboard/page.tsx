@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { IconPlus, IconZap, IconArrowRight } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
+import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -119,12 +121,12 @@ export default function DashboardPage() {
     <AppPage
       wide
       title={`Привіт, ${firstName}`}
-      description="Обери параметри — Carbit шукатиме на AUTO.RIA, OLX і в Telegram"
+      description="Налаштуйте фільтри — Carbit моніторит AUTO.RIA і надсилає нові авто в Telegram"
     >
       <div className="mb-8">
-        <h2 className="text-[17px] font-bold text-ink">Новий пошук</h2>
+        <h2 className="text-[17px] font-bold text-ink">Новий моніторинг</h2>
         <p className="mt-1 text-[13px] text-muted">
-          Марка, модель, рік, ціна і регіон. Розширені фільтри — за потреби.
+          Перегляньте кілька прикладів і збережіть пошук — далі нові пропозиції приходитимуть автоматично.
         </p>
         <div className="mt-4">
           <SearchFiltersPanel
@@ -211,6 +213,12 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
+      </div>
+
+      <RecentListingsSection className="mb-10" />
+
+      <div className="-mx-4 mt-10 sm:-mx-6">
+        <FreshListingsCarousel variant="dashboard" />
       </div>
 
       <AppSection className="!bg-surface/50 mt-10">

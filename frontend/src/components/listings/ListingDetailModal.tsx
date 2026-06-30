@@ -6,6 +6,11 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { IconGlobe, IconX } from "@/components/icons";
+import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
+import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
+import { VinCheckButton } from "@/components/listings/VinCheckButton";
+import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
+import { hasVinCheck } from "@/lib/vin-check";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import { formatMileage, formatPrice } from "@/lib/utils";
 import type { Listing } from "@/types/api";
@@ -13,9 +18,18 @@ import type { Listing } from "@/types/api";
 type Props = {
   listing: Listing | null;
   onClose: () => void;
+  isFavorite?: boolean;
+  favoriteLoading?: boolean;
+  onToggleFavorite?: () => void;
 };
 
-export function ListingDetailModal({ listing, onClose }: Props) {
+export function ListingDetailModal({
+  listing,
+  onClose,
+  isFavorite = false,
+  favoriteLoading = false,
+  onToggleFavorite,
+}: Props) {
   const [photoIndex, setPhotoIndex] = useState(0);
 
   useEffect(() => {
@@ -37,6 +51,11 @@ export function ListingDetailModal({ listing, onClose }: Props) {
   const photos = listing.images.length ? listing.images : [];
   const activePhoto = photos[photoIndex] ?? photos[0];
 
+  const highlights = getAutoRiaHighlights(listing.source_data);
+  const source = listing.source_data ?? {};
+  const priceUsd = typeof source.USD === "number" ? source.USD : null;
+  const priceEur = typeof source.EUR === "number" ? source.EUR : null;
+
   const specs = [
     { label: "Рік", value: listing.year ? String(listing.year) : "—" },
     { label: "Пробіг", value: listing.mileage ? formatMileage(listing.mileage) : "—" },
@@ -47,6 +66,9 @@ export function ListingDetailModal({ listing, onClose }: Props) {
       label: "Продавець",
       value: listing.seller_type === "dealer" ? "Автосалон" : "Приват",
     },
+    ...(listing.vin ? [{ label: "VIN", value: listing.vin }] : []),
+    ...(priceUsd ? [{ label: "Ціна USD", value: priceUsd.toLocaleString("uk-UA") }] : []),
+    ...(priceEur ? [{ label: "Ціна EUR", value: priceEur.toLocaleString("uk-UA") }] : []),
   ];
 
   return (
@@ -63,7 +85,7 @@ export function ListingDetailModal({ listing, onClose }: Props) {
         onClick={onClose}
       />
 
-      <div className="relative z-10 flex max-h-[92dvh] w-full max-w-[720px] flex-col overflow-hidden rounded-t-[1.5rem] border border-border bg-white shadow-[0_24px_80px_-20px_rgba(10,12,14,0.35)] sm:rounded-[1.5rem]">
+      <div className="relative z-10 flex max-h-[92dvh] w-full max-w-[880px] flex-col overflow-hidden rounded-t-[1.5rem] border border-border bg-white shadow-[0_24px_80px_-20px_rgba(10,12,14,0.35)] sm:rounded-[1.5rem]">
         <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
           <div className="min-w-0 pr-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">AUTO.RIA</p>
@@ -71,14 +93,24 @@ export function ListingDetailModal({ listing, onClose }: Props) {
               {listing.title}
             </h2>
           </div>
-          <button
-            type="button"
-            aria-label="Закрити"
-            onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:bg-surface hover:text-ink"
-          >
-            <IconX size={18} />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {onToggleFavorite && (
+              <ListingFavoriteButton
+                active={isFavorite}
+                loading={favoriteLoading}
+                onToggle={onToggleFavorite}
+                size="md"
+              />
+            )}
+            <button
+              type="button"
+              aria-label="Закрити"
+              onClick={onClose}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <IconX size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="overflow-y-auto overscroll-contain">
@@ -134,10 +166,23 @@ export function ListingDetailModal({ listing, onClose }: Props) {
               {specs.map(({ label, value }) => (
                 <div key={label} className="rounded-xl border border-border/70 bg-surface/60 px-3 py-2.5">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{label}</div>
-                  <div className="mt-1 text-[13px] font-semibold text-ink">{value}</div>
+                  <div className="mt-1 break-all text-[13px] font-semibold text-ink">{value}</div>
                 </div>
               ))}
             </div>
+
+            {highlights.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {highlights.map(item => (
+                  <span
+                    key={item}
+                    className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {listing.description && (
               <div>
@@ -146,17 +191,28 @@ export function ListingDetailModal({ listing, onClose }: Props) {
               </div>
             )}
 
-            <div className="flex flex-col gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:flex-row sm:pb-0">
-              <Link href={listing.url} target="_blank" rel="noopener noreferrer" className="flex-1">
+            <AutoRiaListingDetails listing={listing} />
+
+            <div className="flex flex-col gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:flex-row sm:flex-wrap sm:pb-0">
+              <Link href={listing.url} target="_blank" rel="noopener noreferrer" className="flex-1 sm:min-w-[200px]">
                 <Button variant="primary" size="md" className="w-full gap-1.5">
                   <IconGlobe size={14} />
                   Відкрити на AUTO.RIA
                 </Button>
               </Link>
+              {hasVinCheck(listing) && (
+                <VinCheckButton listing={listing} size="md" className="w-full sm:w-auto sm:min-w-[180px]" />
+              )}
               <Button variant="secondary" size="md" className="sm:w-auto" onClick={onClose}>
                 Закрити
               </Button>
             </div>
+
+            {listing.vin_checked && (
+              <p className="text-center text-[12px] font-medium text-emerald-dark">
+                VIN-код перевірено на AUTO.RIA
+              </p>
+            )}
 
             <p className="text-center text-[11px] text-muted">
               Дані надано{" "}

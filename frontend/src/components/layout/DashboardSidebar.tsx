@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { primaryNav, secondaryNav, type NavBadgeKey } from "@/lib/dashboard-nav";
+import { FAVORITES_CHANGED_EVENT } from "@/hooks/useListingFavorite";
 import { notifications as notificationsApi, favorites as favoritesApi } from "@/lib/api";
 
 type Props = {
@@ -19,10 +20,16 @@ export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
   const [badges, setBadges] = useState<Record<NavBadgeKey, number>>({ favorites: 0, notifications: 0 });
 
   useEffect(() => {
-    Promise.all([
-      favoritesApi.list().then(f => f.length).catch(() => 0),
-      notificationsApi.stats().then(s => s.unread).catch(() => 0),
-    ]).then(([favorites, notifications]) => setBadges({ favorites, notifications }));
+    const refreshBadges = () => {
+      Promise.all([
+        favoritesApi.list().then(f => f.length).catch(() => 0),
+        notificationsApi.stats().then(s => s.unread).catch(() => 0),
+      ]).then(([favorites, notifications]) => setBadges({ favorites, notifications }));
+    };
+
+    refreshBadges();
+    window.addEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
+    return () => window.removeEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
   }, [pathname]);
 
   const isActive = (href: string) =>
@@ -121,10 +128,16 @@ export function useDashboardBadges() {
   const [badges, setBadges] = useState<Record<NavBadgeKey, number>>({ favorites: 0, notifications: 0 });
 
   useEffect(() => {
-    Promise.all([
-      favoritesApi.list().then(f => f.length).catch(() => 0),
-      notificationsApi.stats().then(s => s.unread).catch(() => 0),
-    ]).then(([favorites, notifications]) => setBadges({ favorites, notifications }));
+    const refreshBadges = () => {
+      Promise.all([
+        favoritesApi.list().then(f => f.length).catch(() => 0),
+        notificationsApi.stats().then(s => s.unread).catch(() => 0),
+      ]).then(([favorites, notifications]) => setBadges({ favorites, notifications }));
+    };
+
+    refreshBadges();
+    window.addEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
+    return () => window.removeEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
   }, [pathname]);
 
   return badges;

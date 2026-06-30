@@ -1,4 +1,6 @@
 import { getToken } from "@/lib/auth-storage";
+import { cachedAutoRiaSearch } from "@/lib/auto-ria-search-cache";
+import type { AutoRiaSearchMode } from "@/lib/search-preview";
 import type { BackendSearchFilters } from "@/lib/search-filters-api";
 import type {
   DashboardStats,
@@ -115,22 +117,35 @@ export const autoRia = {
   search: (
     filters: BackendSearchFilters,
     page = 1,
-    perPage = 20,
+    perPage = 5,
     sortBy = "price_asc",
+    mode: AutoRiaSearchMode = "preview",
   ) =>
-    request<PaginatedListings>(
-      `/auto-ria/search?page=${page}&per_page=${perPage}&sort_by=${sortBy}`,
-      { method: "POST", body: JSON.stringify(filters) },
+    cachedAutoRiaSearch(
+      { filters, page, perPage, sortBy, mode },
+      () =>
+        request<PaginatedListings>(
+          `/auto-ria/search?page=${page}&per_page=${perPage}&sort_by=${sortBy}&mode=${mode}`,
+          { method: "POST", body: JSON.stringify(filters) },
+        ),
     ),
 };
 
 // ── Favorites ─────────────────────────────────────────
 export const favorites = {
   list: () => request<Favorite[]>("/favorites/"),
-  add: (listingId: string) =>
-    request<Favorite>("/favorites/", { method: "POST", body: JSON.stringify({ listing_id: listingId }) }),
+  add: (listingId: string, listing?: Listing) =>
+    request<Favorite>("/favorites/", {
+      method: "POST",
+      body: JSON.stringify(listing ? { listing_id: listingId, listing } : { listing_id: listingId }),
+    }),
   remove: (listingId: string) => request<void>(`/favorites/${listingId}`, { method: "DELETE" }),
   check: (listingId: string) => request<{ is_favorite: boolean }>(`/favorites/check/${listingId}`),
+  checkMany: (listingIds: string[]) =>
+    request<{ ids: string[] }>("/favorites/check", {
+      method: "POST",
+      body: JSON.stringify({ listing_ids: listingIds }),
+    }),
 };
 
 // ── Notifications ─────────────────────────────────────

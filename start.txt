@@ -12,3 +12,18 @@ npm run dev
 
 git pull
 docker compose up -d --build backend bot frontend
+
+
+# 1. Зупинити контейнери
+docker compose down
+
+# 2. Перезібрати frontend
+docker compose build frontend
+
+# 3. Запустити заново
+docker compose up -d
+
+
+git add .
+git commit -m "some updates"
+git push

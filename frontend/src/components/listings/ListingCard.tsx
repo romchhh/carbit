@@ -3,6 +3,10 @@
 import Image from "next/image";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowRight } from "@/components/icons";
+import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
+import { VinCheckButton } from "@/components/listings/VinCheckButton";
+import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
+import { hasVinCheck } from "@/lib/vin-check";
 import { cn } from "@/lib/utils";
 import type { Listing } from "@/types/api";
 
@@ -10,6 +14,9 @@ type Props = {
   listing: Listing;
   onClick: () => void;
   className?: string;
+  isFavorite?: boolean;
+  favoriteLoading?: boolean;
+  onToggleFavorite?: () => void;
 };
 
 function shortRegion(region: string) {
@@ -17,8 +24,17 @@ function shortRegion(region: string) {
   return city || region;
 }
 
-export function ListingCard({ listing, onClick, className }: Props) {
+export function ListingCard({
+  listing,
+  onClick,
+  className,
+  isFavorite = false,
+  favoriteLoading = false,
+  onToggleFavorite,
+}: Props) {
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
+  const showVinBlock = Boolean(listing.vin) || hasVinCheck(listing);
+  const highlights = getAutoRiaHighlights(listing.source_data).slice(0, 3);
 
   return (
     <article
@@ -59,9 +75,18 @@ export function ListingCard({ listing, onClick, className }: Props) {
           <Badge variant="gray" className="bg-white/95 text-[10px] shadow-sm">
             AUTO.RIA
           </Badge>
-          <span className="rounded-full bg-ink/75 px-2.5 py-1 text-[10px] font-medium text-white">
-            {sellerLabel}
-          </span>
+          <div className="flex items-center gap-2">
+            {onToggleFavorite && (
+              <ListingFavoriteButton
+                active={isFavorite}
+                loading={favoriteLoading}
+                onToggle={onToggleFavorite}
+              />
+            )}
+            <span className="rounded-full bg-ink/75 px-2.5 py-1 text-[10px] font-medium text-white">
+              {sellerLabel}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -79,6 +104,15 @@ export function ListingCard({ listing, onClick, className }: Props) {
         ) : (
           <div className="flex h-full items-center justify-center text-[13px] text-muted">
             Без фото
+          </div>
+        )}
+        {onToggleFavorite && (
+          <div className="absolute right-2 top-2">
+            <ListingFavoriteButton
+              active={isFavorite}
+              loading={favoriteLoading}
+              onToggle={onToggleFavorite}
+            />
           </div>
         )}
       </div>
@@ -123,7 +157,35 @@ export function ListingCard({ listing, onClick, className }: Props) {
               {listing.fuel.split(",")[0]?.trim()}
             </span>
           )}
+          {highlights.map(item => (
+            <span
+              key={item}
+              className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink"
+            >
+              {item}
+            </span>
+          ))}
         </div>
+
+        {showVinBlock && (
+          <div
+            className="mt-3 flex flex-wrap items-center gap-2"
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => e.stopPropagation()}
+          >
+            {listing.vin && (
+              <span className="rounded-full bg-surface px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide text-ink">
+                VIN: {listing.vin}
+              </span>
+            )}
+            {listing.vin_checked && (
+              <Badge variant="emerald" className="text-[10px]">
+                VIN перевірено
+              </Badge>
+            )}
+            <VinCheckButton listing={listing} />
+          </div>
+        )}
 
         <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 sm:mt-auto sm:border-0 sm:pt-2.5">
           <span className="min-w-0 flex-1 truncate text-[12px] text-muted">

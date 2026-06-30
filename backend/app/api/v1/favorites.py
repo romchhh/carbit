@@ -5,7 +5,8 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.models import Favorite, Listing
-from app.schemas.schemas import FavoriteOut, FavoriteCreate
+from app.schemas.schemas import FavoriteOut, FavoriteCreate, FavoriteCheckBatch
+from app.services.listings.upsert import upsert_listing
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
 
@@ -34,6 +35,24 @@ async def list_favorites(
     return out
 
 
+@router.post("/check", response_model=dict)
+async def check_favorites_batch(
+    body: FavoriteCheckBatch,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    if not body.listing_ids:
+        return {"ids": []}
+
+    result = await db.scalars(
+        select(Favorite.listing_id).where(
+            Favorite.user_id == user_id,
+            Favorite.listing_id.in_(body.listing_ids),
+        )
+    )
+    return {"ids": list(result.all())}
+
+
 @router.post("/", response_model=FavoriteOut, status_code=status.HTTP_201_CREATED)
 async def add_favorite(
     body: FavoriteCreate,
@@ -42,7 +61,10 @@ async def add_favorite(
 ):
     listing = await db.get(Listing, body.listing_id)
     if not listing:
-        raise HTTPException(404, "Listing not found")
+        if body.listing:
+            listing = await upsert_listing(db, body.listing)
+        else:
+            raise HTTPException(404, "Listing not found")
 
     existing = await db.scalar(
         select(Favorite).where(

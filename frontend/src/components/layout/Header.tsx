@@ -11,7 +11,7 @@ import { IconBell, IconArrowRight, IconX } from "@/components/icons";
 
 const navLinks = [
   { href: "/", label: "Головна" },
-  { href: "/app/search", label: "Пошук" },
+  { href: "/#search", label: "Пошук" },
   { href: "/pricing", label: "Тарифи" },
   { href: "/#how-it-works", label: "Як це працює" },
 ];
@@ -58,6 +58,24 @@ export function Header() {
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
+
+  const scrollToSearch = () => {
+    setMenuOpen(false);
+    if (pathname === "/") {
+      document.getElementById("search")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.history.replaceState(null, "", "#search");
+      return true;
+    }
+    return false;
+  };
+
+  const handleNavClick = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (href === "/#search" && scrollToSearch()) {
+      e.preventDefault();
+    } else if (menuOpen) {
+      setMenuOpen(false);
+    }
+  };
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -108,7 +126,7 @@ export function Header() {
 
           <nav className="hidden lg:flex items-center justify-center gap-1.5">
             {navLinks.map(({ href, label }) => (
-              <Link key={href} href={href} className={navLinkClass(href)}>
+              <Link key={href} href={href} className={navLinkClass(href)} onClick={handleNavClick(href)}>
                 {label}
               </Link>
             ))}
@@ -267,7 +285,7 @@ export function Header() {
                 <Link
                   key={href}
                   href={href}
-                  onClick={() => setMenuOpen(false)}
+                  onClick={handleNavClick(href)}
                   className="group flex items-center justify-between py-3.5 border-b border-white/10"
                 >
                   <span className="text-[24px] sm:text-[28px] font-semibold text-white tracking-tight group-hover:text-emerald transition-colors">

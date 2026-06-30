@@ -48,6 +48,10 @@ export interface Listing {
   images: string[];
   url: string;
   seller_type: string;
+  vin?: string | null;
+  vin_checked?: boolean | null;
+  vin_check_url?: string | null;
+  source_data?: Record<string, unknown> | null;
   price_history: Record<string, unknown>[];
   is_duplicate: boolean;
   published_at: string;

@@ -6,6 +6,7 @@ from typing import Any
 from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.auto_ria.catalog import resolve_mark_id, resolve_model_id
 from app.services.auto_ria.client import AutoRiaClient
+from app.services.auto_ria.details import extract_image_urls, sanitize_source_data
 from app.services.auto_ria.constants import (
     AUTO_RIA_SITE_URL,
     CURRENCY_UAH,
@@ -99,24 +100,56 @@ def _parse_datetime(value: Any) -> datetime:
     return datetime.now(UTC)
 
 
-def info_to_listing(info: dict[str, Any]) -> ListingOut:
+def _pick_vin_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().upper()
+    return text or None
+
+
+def _extract_vin(info: dict[str, Any]) -> str | None:
+    for source in (info, info.get("autoData") or {}):
+        if not isinstance(source, dict):
+            continue
+        for key in ("VIN", "vin"):
+            vin = _pick_vin_value(source.get(key))
+            if vin:
+                return vin
+
+    for key in ("checkedVin", "infotechReport"):
+        block = info.get(key)
+        if not isinstance(block, dict):
+            continue
+        vin = _pick_vin_value(block.get("vin") or block.get("VIN"))
+        if vin:
+            return vin
+
+    return None
+
+
+def _extract_vin_check_url(info: dict[str, Any], auto_id: str) -> str | None:
+    checked = info.get("checkedVin")
+    if isinstance(checked, dict):
+        link = str(checked.get("linkToReport") or "").strip()
+        if link:
+            return link if link.startswith("http") else f"{AUTO_RIA_SITE_URL}{link}"
+
+    if auto_id:
+        return f"{AUTO_RIA_SITE_URL}/vin-check/auto/{auto_id}/"
+
+    return None
+
+
+def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> ListingOut:
     auto_data = info.get("autoData") or {}
     state_data = info.get("stateData") or {}
-    photo_data = info.get("photoData") or {}
 
     auto_id = str(auto_data.get("autoId") or "")
 
     link = str(info.get("linkToView") or "")
     url = link if link.startswith("http") else f"{AUTO_RIA_SITE_URL}{link}"
 
-    images: list[str] = []
-    for key in ("seoLinkF", "seoLinkM", "seoLinkB"):
-        if photo_data.get(key):
-            images.append(str(photo_data[key]))
-    if not images and isinstance(photo_data.get("all"), list) and photo_data["all"]:
-        first = photo_data["all"][0]
-        if isinstance(first, str) and first.startswith("http"):
-            images.append(first)
+    images = extract_image_urls(info, fotos)
 
     region_parts = [
         str(state_data.get("name") or info.get("locationCityName") or ""),
@@ -138,7 +171,13 @@ def info_to_listing(info: dict[str, Any]) -> ListingOut:
     fuel = fuel_raw.split(",")[0].strip() if fuel_raw else ""
     transmission = str(auto_data.get("gearboxName") or "")
 
-    seller_type = "dealer" if info.get("dealer") else "private"
+    dealer = info.get("dealer") if isinstance(info.get("dealer"), dict) else {}
+    seller_type = "dealer" if dealer.get("id") or dealer.get("name") else "private"
+
+    checked_vin = info.get("checkedVin")
+    vin_checked = bool(checked_vin.get("isChecked")) if isinstance(checked_vin, dict) else None
+
+    description = str(auto_data.get("description") or info.get("infoBarText") or "").strip() or None
 
     return ListingOut(
         id=f"auto_ria_{auto_id}",
@@ -153,10 +192,14 @@ def info_to_listing(info: dict[str, Any]) -> ListingOut:
         fuel=fuel,
         transmission=transmission,
         region=region,
-        description=str(info.get("infoBarText") or "") or None,
+        description=description,
         images=images,
         url=url,
         seller_type=seller_type,
+        vin=_extract_vin(info),
+        vin_checked=vin_checked,
+        vin_check_url=_extract_vin_check_url(info, auto_id),
+        source_data=sanitize_source_data(info, fotos),
         price_history=[],
         is_duplicate=False,
         published_at=_parse_datetime(info.get("addDate")),
@@ -165,6 +208,8 @@ def info_to_listing(info: dict[str, Any]) -> ListingOut:
 
 
 def sort_listings(items: list[ListingOut], sort_by: str) -> list[ListingOut]:
+    if sort_by == "published_desc":
+        return sorted(items, key=lambda x: x.published_at, reverse=True)
     if sort_by == "price_desc":
         return sorted(items, key=lambda x: x.price, reverse=True)
     if sort_by == "year_desc":

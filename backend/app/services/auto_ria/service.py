@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
+from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
 from app.services.auto_ria.mapper import filters_to_search_params, info_to_listing, sort_listings
 
 
-async def search_auto_ria(
+def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
+    payload = {
+        "filters": filters.model_dump(mode="json"),
+        "page": page,
+        "per_page": per_page,
+        "sort_by": sort_by,
+    }
+    return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+
+
+async def _search_auto_ria_uncached(
     filters: SearchFilters,
     *,
     page: int = 1,
@@ -27,7 +39,7 @@ async def search_auto_ria(
     raw_ids = search_result.get("ids") or []
     auto_ids = [str(item) for item in raw_ids if item]
 
-    sem = asyncio.Semaphore(5)
+    sem = asyncio.Semaphore(4)
 
     async def fetch_one(auto_id: str) -> ListingOut | None:
         async with sem:
@@ -47,4 +59,36 @@ async def search_auto_ria(
         page=page,
         per_page=per_page,
         pages=pages,
+    )
+
+
+async def search_auto_ria(
+    filters: SearchFilters,
+    *,
+    page: int = 1,
+    per_page: int = 20,
+    sort_by: str = "price_asc",
+    use_cache: bool = True,
+    cache_ttl_seconds: int = 120,
+) -> PaginatedListings:
+    if not use_cache:
+        return await _search_auto_ria_uncached(
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+        )
+
+    key = _cache_key(filters, page=page, per_page=per_page, sort_by=sort_by)
+    is_browse = not filters.model_dump(exclude_none=True)
+    ttl = 180 if is_browse else cache_ttl_seconds
+    return await get_or_fetch(
+        key,
+        lambda: _search_auto_ria_uncached(
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+        ),
+        ttl_seconds=ttl,
     )

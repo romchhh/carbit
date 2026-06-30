@@ -20,6 +20,8 @@ type Props = {
   filters: SearchFilterState;
   onChange: (filters: SearchFilterState) => void;
   onReset: () => void;
+  searchButtonLabel?: string;
+  searchingButtonLabel?: string;
   onSearch: () => void;
   onSave?: () => void;
   searching?: boolean;
@@ -38,6 +40,8 @@ export function SearchFiltersPanel({
   onSearch,
   onSave,
   searching,
+  searchButtonLabel = "Шукати",
+  searchingButtonLabel = "Шукаємо...",
   saving,
   saveSuccess,
   saveError,
@@ -67,7 +71,7 @@ export function SearchFiltersPanel({
 
   return (
     <div className={cn("w-full", wide ? "max-w-none" : "max-w-[640px]")}>
-      <div className="overflow-hidden rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04]">
+      <div className="overflow-hidden rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] transition-shadow duration-300">
         <div className="border-b border-border/60 bg-surface/70 px-4 py-3.5 sm:px-5">
           <div className="overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex min-w-max gap-2">
@@ -177,9 +181,17 @@ export function SearchFiltersPanel({
             type="button"
             onClick={onSearch}
             disabled={searching}
-            className="w-full rounded-full bg-emerald py-3.5 text-[16px] font-semibold text-white shadow-md shadow-emerald/25 transition-colors hover:bg-emerald-dark disabled:opacity-60"
+            className={cn(
+              "relative w-full overflow-hidden rounded-full bg-emerald py-3.5 text-[16px] font-semibold text-white shadow-md shadow-emerald/25 transition-all duration-300 hover:bg-emerald-dark disabled:cursor-wait",
+              searching && "animate-pulse shadow-[0_0_0_4px_rgba(16,185,129,0.25)]",
+            )}
           >
-            {searching ? "Шукаємо..." : "Шукати"}
+            <span className={cn("inline-flex items-center justify-center gap-2", searching && "opacity-90")}>
+              {searching && (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              )}
+              {searching ? searchingButtonLabel : searchButtonLabel}
+            </span>
           </button>
           <button
             type="button"

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
@@ -161,6 +161,10 @@ class ListingOut(BaseModel):
     images: list[str]
     url: str
     seller_type: str
+    vin: Optional[str] = None
+    vin_checked: Optional[bool] = None
+    vin_check_url: Optional[str] = None
+    source_data: Optional[dict[str, Any]] = None
     price_history: list[dict]
     is_duplicate: bool
     published_at: datetime
@@ -207,6 +211,11 @@ class FavoriteOut(BaseModel):
 
 class FavoriteCreate(BaseModel):
     listing_id: str
+    listing: Optional[ListingOut] = None
+
+
+class FavoriteCheckBatch(BaseModel):
+    listing_ids: list[str] = Field(default_factory=list)
 
 
 # Notifications

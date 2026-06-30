@@ -6,7 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
-import { ApiError, searches as searchesApi } from "@/lib/api";
+import { useListingFavorites } from "@/hooks/useListingFavorite";
+import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import type { ExportListing } from "@/lib/export-listings";
 import type { Listing, SearchQuery } from "@/types/api";
@@ -86,6 +87,12 @@ export default function ResultsPage() {
   const exportItems = useMemo(() => toExportItems(results), [results]);
   const exportName = (search?.name || "rezultaty").replace(/\s+/g, "-").toLowerCase();
   const hasMore = page < pages;
+  const { favoriteIds, loadingIds, toggleFavorite } = useListingFavorites(results.map(item => item.id));
+
+  const openListing = (listing: Listing) => {
+    saveRecentListing(listing);
+    setSelectedListing(listing);
+  };
 
   const handleSortChange = (nextSort: SortOption) => {
     setSort(nextSort);
@@ -161,7 +168,10 @@ export default function ResultsPage() {
             <ListingCard
               key={item.id}
               listing={item}
-              onClick={() => setSelectedListing(item)}
+              onClick={() => openListing(item)}
+              isFavorite={favoriteIds.has(item.id)}
+              favoriteLoading={loadingIds.has(item.id)}
+              onToggleFavorite={() => toggleFavorite(item)}
             />
           ))}
         </div>
@@ -192,7 +202,13 @@ export default function ResultsPage() {
         </p>
       )}
 
-      <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} />
+      <ListingDetailModal
+        listing={selectedListing}
+        onClose={() => setSelectedListing(null)}
+        isFavorite={selectedListing ? favoriteIds.has(selectedListing.id) : false}
+        favoriteLoading={selectedListing ? loadingIds.has(selectedListing.id) : false}
+        onToggleFavorite={selectedListing ? () => toggleFavorite(selectedListing) : undefined}
+      />
     </div>
   );
 }

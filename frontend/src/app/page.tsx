@@ -3,7 +3,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
-import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
+import { HomeSearchSection } from "@/components/landing/HomeSearchSection";
 import { HowItWorksCards } from "@/components/landing/HowItWorksCards";
 import { VideoInstructions } from "@/components/landing/VideoInstructions";
 import { PricingPlans } from "@/components/pricing/PricingPlans";
@@ -40,17 +40,17 @@ export default function HomePage() {
           <div className="absolute top-1/4 right-[15%] w-48 h-48 sm:w-72 sm:h-72 bg-emerald/20 rounded-full blur-[100px] pointer-events-none hidden sm:block motion-safe:animate-float" />
           <div className="absolute bottom-1/4 left-[10%] w-32 h-32 sm:w-48 sm:h-48 bg-emerald/10 rounded-full blur-[80px] pointer-events-none hidden sm:block" />
 
-          <div className="relative section-wrap pt-8 pb-12 sm:py-16 w-full">
-            <div className="flex w-full flex-col min-h-[calc(100dvh-10rem)] sm:min-h-0 sm:max-w-[620px] pt-6 sm:pt-0">
-              <h1 className="w-full text-[clamp(2rem,6.5vw+0.5rem,3.75rem)] font-semibold leading-[1.05] tracking-[-0.02em] text-white animate-fade-up">
+          <div className="relative section-wrap w-full pt-10 pb-14 sm:py-20">
+            <div className="flex w-full max-w-[720px] flex-col min-h-[calc(100dvh-10rem)] sm:min-h-0 pt-4 sm:pt-0">
+              <h1 className="w-full text-[clamp(2.05rem,6.8vw+0.4rem,4rem)] font-semibold leading-[1.12] tracking-[-0.015em] text-white animate-fade-up">
                 <span className="block sm:whitespace-nowrap">Знайди авто раніше</span>
                 <span className="block sm:whitespace-nowrap">конкурентів</span>
               </h1>
 
-              <div className="mt-5 sm:mt-6 w-full animate-fade-up-delay">
-                <p className="flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[18px] sm:text-[20px] leading-snug text-white/90">
+              <div className="mt-7 w-full animate-fade-up-delay sm:mt-8">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-2.5 text-[18px] leading-relaxed text-white/90 sm:text-[21px]">
                   <span>Усі джерела авто</span>
-                  <span className="inline-flex items-center mx-1">
+                  <span className="inline-flex items-center mx-0.5 sm:mx-1">
                     {HERO_SOURCE_LOGOS.map(({ src, alt }, index) => (
                       <span
                         key={alt}
@@ -72,12 +72,12 @@ export default function HomePage() {
                   </span>
                   <span>в одному пошуку</span>
                 </p>
-                <p className="mt-2.5 sm:mt-3 text-[19px] sm:text-[22px] font-bold leading-snug text-white">
+                <p className="mt-3.5 text-[19px] font-bold leading-relaxed text-white sm:mt-4 sm:text-[23px] sm:leading-snug">
                   — тільки актуальні авто, миттєві сповіщення
                 </p>
               </div>
 
-              <div className="mt-16 sm:mt-8 flex justify-start animate-fade-up-delay">
+              <div className="mt-12 flex justify-start animate-fade-up-delay sm:mt-10">
                 <CtaLink
                   href="/auth/login"
                   variant="emerald"
@@ -88,24 +88,30 @@ export default function HomePage() {
                 </CtaLink>
               </div>
 
-              <div className="mt-auto pt-14 pb-2 sm:mt-10 sm:pt-8 sm:pb-0 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 border-t border-white/10">
-                {[
-                  { value: "3", label: "джерела" },
-                  { value: "1 200+", label: "оголошень/день" },
-                  { value: "< 5 хв", label: "до сповіщення" },
-                  { value: "72%", label: "готові платити" },
-                ].map(({ value, label }) => (
-                  <div key={label} className="stat-pill">
-                    <div className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-none">{value}</div>
-                    <div className="text-[10px] sm:text-[11px] text-white/50 mt-1.5 uppercase tracking-wider font-medium leading-snug">{label}</div>
-                  </div>
-                ))}
+              <div className="mt-auto border-t border-white/10 pt-5 pb-2 sm:mt-12 sm:pt-7 sm:pb-0">
+                <div className="grid grid-cols-4 gap-1.5 sm:gap-4">
+                  {[
+                    { value: "3", label: "джерела" },
+                    { value: "1 200+", label: "оголошень/день" },
+                    { value: "< 5 хв", label: "до сповіщення" },
+                    { value: "72%", label: "готові платити" },
+                  ].map(({ value, label }) => (
+                    <div key={label} className="min-w-0 text-center">
+                      <div className="text-[13px] font-semibold leading-none text-white/60 sm:text-xl sm:text-white/80">
+                        {value}
+                      </div>
+                      <div className="mt-1 text-[10px] leading-tight text-white/40 sm:mt-1.5 sm:text-[11px] sm:text-white/45">
+                        {label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <FreshListingsCarousel />
+        <HomeSearchSection />
 
         <HowItWorksCards />
 

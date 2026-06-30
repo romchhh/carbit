@@ -46,10 +46,13 @@ class AutoRiaClient:
         return data
 
     async def get_info(self, auto_id: int | str) -> dict[str, Any]:
+        from app.services.auto_ria.details import normalize_info_response
+
         data = await self.get("/auto/info", {"auto_id": str(auto_id)})
-        if not isinstance(data, dict):
-            raise AutoRiaError(f"Не вдалось отримати оголошення {auto_id}")
-        return data
+        return normalize_info_response(data)
+
+    async def get_fotos(self, auto_id: int | str) -> Any:
+        return await self.get(f"/auto/fotos/{auto_id}")
 
     async def get_marks(self, category_id: int = 1) -> list[dict[str, Any]]:
         data = await self.get(f"/auto/categories/{category_id}/marks")
