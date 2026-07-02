@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { IconHeart, IconGlobe, IconArrowRight } from "@/components/icons";
 import { formatPrice, formatMileage } from "@/lib/utils";
 import { favorites as favoritesApi } from "@/lib/api";
+import { normalizeListingForFavorite } from "@/lib/listing-favorite-payload";
 
 export default function ListingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const [listing, setListing] = useState<Listing | null>(null);
@@ -29,7 +30,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       await favoritesApi.remove(listing.id);
       setIsFavorite(false);
     } else {
-      await favoritesApi.add(listing.id, listing);
+      await favoritesApi.add(listing.id, normalizeListingForFavorite(listing));
       setIsFavorite(true);
     }
   };

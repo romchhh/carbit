@@ -29,7 +29,7 @@ async def _get_user(user_id: str, db: AsyncSession) -> User:
     return user
 
 
-@router.get("/", response_model=list[SearchQueryOut])
+@router.get("", response_model=list[SearchQueryOut])
 async def list_searches(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
@@ -98,7 +98,7 @@ async def get_search_results(
     return SearchLiveResultsOut(search=sq, results=results)
 
 
-@router.post("/", response_model=SearchQueryOut, status_code=201)
+@router.post("", response_model=SearchQueryOut, status_code=201)
 async def create_search(
     body: SearchQueryCreate,
     user_id: str = Depends(get_current_user_id),

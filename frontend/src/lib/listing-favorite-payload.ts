@@ -1,6 +1,6 @@
 import type { Listing } from "@/types/api";
 
-/** Нормалізує listing перед POST /favorites/ (Pydantic на backend очікує повний об'єкт). */
+/** Нормалізує listing перед POST /favorites (Pydantic на backend очікує повний об'єкт). */
 export function normalizeListingForFavorite(listing: Listing): Listing {
   return {
     ...listing,

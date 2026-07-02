@@ -103,14 +103,14 @@ export const users = {
 
 // ── Searches ──────────────────────────────────────────
 export const searches = {
-  list: () => request<SearchQuery[]>("/searches/"),
+  list: () => request<SearchQuery[]>("/searches"),
   get: (id: string) => request<SearchQuery>(`/searches/${id}`),
   results: (id: string, page = 1, perPage = 20, sortBy = "price_asc") =>
     request<SearchLiveResults>(
       `/searches/${id}/results?page=${page}&per_page=${perPage}&sort_by=${sortBy}`,
     ),
   create: (name: string, filters: BackendSearchFilters) =>
-    request<SearchQuery>("/searches/", {
+    request<SearchQuery>("/searches", {
       method: "POST",
       body: JSON.stringify({ name, filters }),
     }),
@@ -142,9 +142,9 @@ export const autoRia = {
 
 // ── Favorites ─────────────────────────────────────────
 export const favorites = {
-  list: () => request<Favorite[]>("/favorites/"),
+  list: () => request<Favorite[]>("/favorites"),
   add: (listingId: string, listing?: Listing) =>
-    request<Favorite>("/favorites/", {
+    request<Favorite>("/favorites", {
       method: "POST",
       body: JSON.stringify(
         listing
@@ -164,7 +164,7 @@ export const favorites = {
 // ── Notifications ─────────────────────────────────────
 export const notifications = {
   list: (page = 1, unreadOnly = false) =>
-    request<PaginatedNotifications>(`/notifications/?page=${page}&unread_only=${unreadOnly}`),
+    request<PaginatedNotifications>(`/notifications?page=${page}&unread_only=${unreadOnly}`),
   stats: () => request<{ unread: number; total: number }>("/notifications/stats"),
   markRead: (id: string) => request<Notification>(`/notifications/${id}/read`, { method: "PATCH" }),
   markAllRead: () => request<{ marked: number }>("/notifications/read-all", { method: "POST" }),

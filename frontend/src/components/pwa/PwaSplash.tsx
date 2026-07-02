@@ -28,12 +28,16 @@ export function PwaSplash() {
   if (!mounted) return null;
 
   return (
-    <PwaLoadingScreen
-      className={cn(
-        "transition-opacity duration-300 ease-out",
-        hidden && "pointer-events-none opacity-0",
-      )}
-      aria-hidden={hidden}
-    />
+    <div className="app-pwa-root fixed inset-0 z-[9999] flex flex-col">
+      <div className="app-pwa-statusbar lg:hidden" aria-hidden />
+      <PwaLoadingScreen
+        fixed={false}
+        className={cn(
+          "min-h-0 flex-1 transition-opacity duration-300 ease-out",
+          hidden && "pointer-events-none opacity-0",
+        )}
+        aria-hidden={hidden}
+      />
+    </div>
   );
 }

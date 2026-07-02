@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Carbit",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
   },
   icons: {
     icon: [
@@ -29,12 +29,17 @@ export const metadata: Metadata = {
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
-export const viewport: Viewport = { themeColor: "#00C896" };
+export const viewport: Viewport = {
+  themeColor: "#00C896",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="uk" className={montserrat.variable}>
-      <body className={`${montserrat.className} bg-[#EEF0F4]`}>
+    <html lang="uk" className={`${montserrat.variable} h-full`}>
+      <body className={`${montserrat.className} h-full min-h-[100dvh] bg-[#EEF0F4]`}>
         <PwaSplash />
         <PwaServiceWorker />
         <AuthProvider>{children}</AuthProvider>

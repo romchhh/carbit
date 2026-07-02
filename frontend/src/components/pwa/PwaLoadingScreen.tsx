@@ -17,8 +17,8 @@ export function PwaLoadingScreen({
   return (
     <div
       className={cn(
-        "flex min-h-[100dvh] items-center justify-center bg-[#EEF0F4]",
-        fixed && "fixed inset-0 z-[9999]",
+        "flex items-center justify-center bg-[#EEF0F4]",
+        fixed ? "app-pwa-root fixed inset-0 z-[9999]" : "min-h-0 flex-1",
         className,
       )}
       role="status"

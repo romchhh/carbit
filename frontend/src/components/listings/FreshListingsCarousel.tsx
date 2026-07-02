@@ -113,7 +113,7 @@ export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props)
     <>
       <section
         id="latest-listings"
-        className={cn(embedded ? "py-0" : "bg-white py-10 sm:py-12")}
+        className={cn("overflow-x-hidden", embedded ? "py-0" : "bg-white py-10 sm:py-12")}
       >
         <div className={cn(embedded ? "px-0" : "max-w-[1280px] mx-auto px-5 sm:px-6")}>
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

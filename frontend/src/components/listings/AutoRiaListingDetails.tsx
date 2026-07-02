@@ -13,7 +13,14 @@ type Props = {
 export function AutoRiaListingDetails({ listing }: Props) {
   if (!listing.source_data || listing.source !== "auto_ria") return null;
 
-  const sections = buildAutoRiaDetailSections(listing.source_data, listing.url);
+  const sourceData = {
+    ...listing.source_data,
+    ...(listing.description && !listing.source_data.description
+      ? { description: listing.description }
+      : {}),
+  };
+
+  const sections = buildAutoRiaDetailSections(sourceData, listing.url);
   if (!sections.length) return null;
 
   return (

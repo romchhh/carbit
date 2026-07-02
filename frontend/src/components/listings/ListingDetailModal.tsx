@@ -52,26 +52,32 @@ export function ListingDetailModal({
 
   const photos = listing.images.length ? listing.images : [];
   const activePhoto = photos[photoIndex] ?? photos[0];
+  const hasAutoRiaDetails =
+    listing.source === "auto_ria" &&
+    listing.source_data &&
+    Object.keys(listing.source_data).length > 0;
 
-  const highlights = getAutoRiaHighlights(listing.source_data);
+  const highlights = hasAutoRiaDetails ? [] : getAutoRiaHighlights(listing.source_data);
   const source = listing.source_data ?? {};
   const priceUsd = typeof source.USD === "number" ? source.USD : null;
   const priceEur = typeof source.EUR === "number" ? source.EUR : null;
 
-  const specs = [
-    { label: "Рік", value: listing.year ? String(listing.year) : "—" },
-    { label: "Пробіг", value: listing.mileage ? formatMileage(listing.mileage) : "—" },
-    { label: "Паливо", value: listing.fuel || "—" },
-    { label: "КПП", value: listing.transmission || "—" },
-    { label: "Регіон", value: listing.region || "—" },
-    {
-      label: "Продавець",
-      value: listing.seller_type === "dealer" ? "Автосалон" : "Приват",
-    },
-    ...(listing.vin ? [{ label: "VIN", value: listing.vin }] : []),
-    ...(priceUsd ? [{ label: "Ціна USD", value: priceUsd.toLocaleString("uk-UA") }] : []),
-    ...(priceEur ? [{ label: "Ціна EUR", value: priceEur.toLocaleString("uk-UA") }] : []),
-  ];
+  const specs = hasAutoRiaDetails
+    ? []
+    : [
+        { label: "Рік", value: listing.year ? String(listing.year) : "—" },
+        { label: "Пробіг", value: listing.mileage ? formatMileage(listing.mileage) : "—" },
+        { label: "Паливо", value: listing.fuel || "—" },
+        { label: "КПП", value: listing.transmission || "—" },
+        { label: "Регіон", value: listing.region || "—" },
+        {
+          label: "Продавець",
+          value: listing.seller_type === "dealer" ? "Автосалон" : "Приват",
+        },
+        ...(listing.vin ? [{ label: "VIN", value: listing.vin }] : []),
+        ...(priceUsd ? [{ label: "Ціна USD", value: priceUsd.toLocaleString("uk-UA") }] : []),
+        ...(priceEur ? [{ label: "Ціна EUR", value: priceEur.toLocaleString("uk-UA") }] : []),
+      ];
 
   return (
     <div
@@ -164,14 +170,16 @@ export function ListingDetailModal({
               <Badge variant="outline">AUTO.RIA</Badge>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-              {specs.map(({ label, value }) => (
-                <div key={label} className="rounded-xl border border-border/70 bg-surface/60 px-3 py-2.5">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{label}</div>
-                  <div className="mt-1 break-all text-[13px] font-semibold text-ink">{value}</div>
-                </div>
-              ))}
-            </div>
+            {specs.length > 0 && (
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {specs.map(({ label, value }) => (
+                  <div key={label} className="rounded-xl border border-border/70 bg-surface/60 px-3 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+                    <div className="mt-1 break-all text-[13px] font-semibold text-ink">{value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {highlights.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
@@ -186,14 +194,14 @@ export function ListingDetailModal({
               </div>
             )}
 
-            {listing.description && (
+            {!hasAutoRiaDetails && listing.description && (
               <div>
                 <h3 className="text-[13px] font-bold text-ink">Опис</h3>
                 <p className="mt-2 text-[13px] leading-relaxed text-muted">{listing.description}</p>
               </div>
             )}
 
-            <AutoRiaListingDetails listing={listing} />
+            {hasAutoRiaDetails && <AutoRiaListingDetails listing={listing} />}
 
             {listing.vin_checked && (
               <p className="text-center text-[12px] font-medium text-emerald-dark">

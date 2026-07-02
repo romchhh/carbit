@@ -12,7 +12,7 @@ from app.services.demo.seed import seed_demo_listings
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
-@router.get("/", response_model=PaginatedNotifications)
+@router.get("", response_model=PaginatedNotifications)
 async def list_notifications(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),

@@ -10,9 +10,10 @@ import { IconBell } from "@/components/icons";
 
 type Props = {
   unreadNotifications?: number;
+  className?: string;
 };
 
-export function AppShellHeader({ unreadNotifications = 0 }: Props) {
+export function AppShellHeader({ unreadNotifications = 0, className }: Props) {
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -30,7 +31,12 @@ export function AppShellHeader({ unreadNotifications = 0 }: Props) {
   if (!user) return null;
 
   return (
-    <header className="mb-4 flex items-center justify-between lg:hidden">
+    <header
+      className={cn(
+        "sticky top-0 z-30 -mx-4 mb-4 flex items-center justify-between bg-white px-4 pb-1 pt-0.5 lg:hidden",
+        className,
+      )}
+    >
       <Link href="/app/dashboard" className="flex items-center">
         <CarbitLogo variant="full" height={30} />
       </Link>

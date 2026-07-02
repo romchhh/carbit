@@ -253,12 +253,16 @@ function rowsFromPricesArray(prices: unknown): AutoRiaDetailRow[] {
   return rows;
 }
 
-function rowsFromObject(obj: Record<string, unknown>, order: string[] = []): AutoRiaDetailRow[] {
+function rowsFromObject(
+  obj: Record<string, unknown>,
+  order: string[] = [],
+  skipKeys: Set<string> = new Set(),
+): AutoRiaDetailRow[] {
   const rows: AutoRiaDetailRow[] = [];
   const keys = [...order, ...Object.keys(obj).filter(key => !order.includes(key))];
 
   for (const key of keys) {
-    if (isHiddenField(key)) continue;
+    if (isHiddenField(key) || skipKeys.has(key)) continue;
     const value = obj[key];
     if (value === null || value === undefined || value === "") continue;
 
@@ -329,9 +333,42 @@ export function buildAutoRiaDetailSections(
     sections.push({ title: "Посилання", rows: [linkRow] });
   }
 
-  const generalRows = rowsFromObject(enriched, TOP_LEVEL_ORDER);
+  const nestedKeys = new Set<string>();
+  for (const sectionKey of Object.keys(SECTION_TITLES)) {
+    if (sectionKey === "color") continue;
+    const block = enriched[sectionKey];
+    if (block && typeof block === "object" && !Array.isArray(block)) {
+      Object.keys(block as Record<string, unknown>).forEach(key => nestedKeys.add(key));
+    }
+  }
+
+  const generalSkip = new Set([
+    "title",
+    "markName",
+    "modelName",
+    "description",
+    ...PRICE_FIELD_ORDER,
+    ...nestedKeys,
+  ]);
+  if (priceRows.length) {
+    PRICE_FIELD_ORDER.forEach(key => generalSkip.add(key));
+  }
+  if (enriched.checkedVin) {
+    generalSkip.add("VIN");
+  }
+  if (enriched.stateData) {
+    generalSkip.add("locationCityName");
+    generalSkip.add("regionName");
+  }
+
+  const generalRows = rowsFromObject(enriched, TOP_LEVEL_ORDER, generalSkip);
   if (generalRows.length) {
     sections.push({ title: "Загальне", rows: generalRows });
+  }
+
+  const descriptionText = formatPrimitive(enriched.description);
+  if (descriptionText) {
+    sections.push({ title: "Опис", rows: [{ label: "Текст оголошення", value: descriptionText }] });
   }
 
   for (const [key, title] of Object.entries(SECTION_TITLES)) {
@@ -346,7 +383,7 @@ export function buildAutoRiaDetailSections(
       continue;
     }
 
-    const rows = rowsFromObject(block as Record<string, unknown>);
+    const rows = rowsFromObject(block as Record<string, unknown>, [], new Set(["description"]));
     if (rows.length) sections.push({ title, rows });
   }
 
