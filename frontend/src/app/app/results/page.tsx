@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
@@ -30,6 +30,20 @@ function toExportItems(items: Listing[]): ExportListing[] {
 }
 
 export default function ResultsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
+        </div>
+      }
+    >
+      <ResultsPageContent />
+    </Suspense>
+  );
+}
+
+function ResultsPageContent() {
   const searchParams = useSearchParams();
   const searchId = searchParams.get("search");
 
@@ -88,7 +102,7 @@ export default function ResultsPage() {
   const exportItems = useMemo(() => toExportItems(results), [results]);
   const exportName = (search?.name || "rezultaty").replace(/\s+/g, "-").toLowerCase();
   const hasMore = page < pages;
-  const { favoriteIds, loadingIds, toggleFavorite } = useListingFavorites(results.map(item => item.id));
+  const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } = useListingFavorites(results.map(item => item.id));
 
   const openListing = (listing: Listing) => {
     saveRecentListing(listing);
@@ -205,10 +219,14 @@ export default function ResultsPage() {
 
       <ListingDetailModal
         listing={selectedListing}
-        onClose={() => setSelectedListing(null)}
+        onClose={() => {
+          clearError();
+          setSelectedListing(null);
+        }}
         isFavorite={selectedListing ? favoriteIds.has(selectedListing.id) : false}
         favoriteLoading={selectedListing ? loadingIds.has(selectedListing.id) : false}
         onToggleFavorite={selectedListing ? () => toggleFavorite(selectedListing) : undefined}
+        favoriteError={favoriteError}
       />
     </div>
   );

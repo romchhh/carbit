@@ -64,7 +64,10 @@ async def add_favorite(
         if body.listing:
             listing = await upsert_listing(db, body.listing)
         else:
-            raise HTTPException(404, "Listing not found")
+            raise HTTPException(
+                400,
+                "Оголошення ще не в базі. Передайте дані listing для збереження з AUTO.RIA.",
+            )
 
     existing = await db.scalar(
         select(Favorite).where(

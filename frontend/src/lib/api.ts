@@ -1,5 +1,6 @@
 import { getToken } from "@/lib/auth-storage";
 import { getApiUrl } from "@/lib/api-url";
+import { normalizeListingForFavorite } from "@/lib/listing-favorite-payload";
 import { cachedAutoRiaSearch } from "@/lib/auto-ria-search-cache";
 import type { AutoRiaSearchMode } from "@/lib/search-preview";
 import type { BackendSearchFilters } from "@/lib/search-filters-api";
@@ -145,7 +146,11 @@ export const favorites = {
   add: (listingId: string, listing?: Listing) =>
     request<Favorite>("/favorites/", {
       method: "POST",
-      body: JSON.stringify(listing ? { listing_id: listingId, listing } : { listing_id: listingId }),
+      body: JSON.stringify(
+        listing
+          ? { listing_id: listingId, listing: normalizeListingForFavorite(listing) }
+          : { listing_id: listingId },
+      ),
     }),
   remove: (listingId: string) => request<void>(`/favorites/${listingId}`, { method: "DELETE" }),
   check: (listingId: string) => request<{ is_favorite: boolean }>(`/favorites/check/${listingId}`),

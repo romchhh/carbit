@@ -44,8 +44,13 @@ async def _search_auto_ria_uncached(
     async def fetch_one(auto_id: str) -> ListingOut | None:
         async with sem:
             try:
-                info = await client.get_info(auto_id)
-                return info_to_listing(info)
+                info_task = client.get_info(auto_id)
+                fotos_task = client.get_fotos(auto_id)
+                info, fotos_result = await asyncio.gather(info_task, fotos_task, return_exceptions=True)
+                if isinstance(info, BaseException):
+                    return None
+                fotos = None if isinstance(fotos_result, BaseException) else fotos_result
+                return info_to_listing(info, fotos=fotos)
             except AutoRiaError:
                 return None
 

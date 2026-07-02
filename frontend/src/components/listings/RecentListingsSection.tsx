@@ -16,7 +16,7 @@ type Props = {
 export function RecentListingsSection({ limit = 6, className }: Props) {
   const [items, setItems] = useState<Listing[]>([]);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
-  const { favoriteIds, loadingIds, toggleFavorite } = useListingFavorites(items.map(item => item.id));
+  const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } = useListingFavorites(items.map(item => item.id));
 
   useEffect(() => {
     const sync = () => setItems(loadRecentListings().slice(0, limit));
@@ -61,10 +61,14 @@ export function RecentListingsSection({ limit = 6, className }: Props) {
 
       <ListingDetailModal
         listing={selectedListing}
-        onClose={() => setSelectedListing(null)}
+        onClose={() => {
+          clearError();
+          setSelectedListing(null);
+        }}
         isFavorite={selectedListing ? favoriteIds.has(selectedListing.id) : false}
         favoriteLoading={selectedListing ? loadingIds.has(selectedListing.id) : false}
         onToggleFavorite={selectedListing ? () => toggleFavorite(selectedListing) : undefined}
+        favoriteError={favoriteError}
       />
     </>
   );

@@ -32,6 +32,10 @@ export function ListingCard({
   favoriteLoading = false,
   onToggleFavorite,
 }: Props) {
+  const images = Array.isArray(listing.images) ? listing.images : [];
+  const price = Number(listing.price) || 0;
+  const fuel = typeof listing.fuel === "string" ? listing.fuel : "";
+  const region = typeof listing.region === "string" ? listing.region : "";
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
   const showVinBlock = Boolean(listing.vin) || hasVinCheck(listing);
   const highlights = getAutoRiaHighlights(listing.source_data).slice(0, 3);
@@ -57,9 +61,9 @@ export function ListingCard({
     >
       {/* Mobile: full-width photo on top */}
       <div className="relative aspect-[16/10] w-full bg-surface sm:hidden">
-        {listing.images[0] ? (
+        {images[0] ? (
           <Image
-            src={listing.images[0]}
+            src={images[0]}
             alt={listing.title}
             fill
             className="object-cover"
@@ -92,9 +96,9 @@ export function ListingCard({
 
       {/* Desktop: thumbnail left */}
       <div className="relative hidden h-36 w-52 shrink-0 overflow-hidden rounded-xl bg-surface sm:block">
-        {listing.images[0] ? (
+        {images[0] ? (
           <Image
-            src={listing.images[0]}
+            src={images[0]}
             alt={listing.title}
             fill
             className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
@@ -124,13 +128,13 @@ export function ListingCard({
               {listing.title}
             </h3>
             <p className="mt-2 text-[22px] font-black leading-none tracking-tight text-ink sm:hidden">
-              {listing.price.toLocaleString("uk-UA")}
+              {price.toLocaleString("uk-UA")}
               <span className="ml-1 text-[13px] font-semibold text-muted">грн</span>
             </p>
           </div>
           <div className="hidden shrink-0 text-right sm:block">
             <div className="text-[20px] font-black leading-none text-ink">
-              {listing.price.toLocaleString("uk-UA")}
+              {price.toLocaleString("uk-UA")}
             </div>
             <div className="text-[11px] text-muted">грн</div>
           </div>
@@ -152,9 +156,9 @@ export function ListingCard({
               {listing.transmission}
             </span>
           )}
-          {listing.fuel && (
+          {fuel && (
             <span className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
-              {listing.fuel.split(",")[0]?.trim()}
+              {fuel.split(",")[0]?.trim()}
             </span>
           )}
           {highlights.map(item => (
@@ -189,7 +193,7 @@ export function ListingCard({
 
         <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 sm:mt-auto sm:border-0 sm:pt-2.5">
           <span className="min-w-0 flex-1 truncate text-[12px] text-muted">
-            {shortRegion(listing.region)}
+            {shortRegion(region)}
           </span>
           <span className="hidden items-center gap-1.5 sm:flex">
             <Badge variant="outline" className="text-[10px]">AUTO.RIA</Badge>

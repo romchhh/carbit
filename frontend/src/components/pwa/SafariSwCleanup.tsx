@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { isStandalonePwa } from "@/lib/pwa";
 
+const CLEANUP_KEY = "carbit:safari-sw-cleanup";
+
 function isAppleBrowser() {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
@@ -13,20 +15,20 @@ function isAppleBrowser() {
   );
 }
 
-/** In Safari tabs SW often causes stale cache — but keep it for installed PWA. */
+/** У Safari (не PWA) один раз знімаємо старий SW — без wipe всього cache (ламає перший перехід у /app). */
 export function SafariSwCleanup() {
   useEffect(() => {
     if (isStandalonePwa() || !isAppleBrowser() || !("serviceWorker" in navigator)) return;
+    if (sessionStorage.getItem(CLEANUP_KEY)) return;
+
+    sessionStorage.setItem(CLEANUP_KEY, "1");
 
     void navigator.serviceWorker.getRegistrations().then(regs => {
-      void Promise.all(regs.map(r => r.unregister()));
-    });
-
-    if ("caches" in window) {
-      void caches.keys().then(keys => {
-        void Promise.all(keys.map(k => caches.delete(k)));
+      if (!regs.length) return;
+      void Promise.all(regs.map(r => r.unregister())).then(() => {
+        window.location.reload();
       });
-    }
+    });
   }, []);
 
   return null;

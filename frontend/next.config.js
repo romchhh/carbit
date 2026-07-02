@@ -36,9 +36,11 @@ const withPWA = require("next-pwa")({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development",
-  dynamicStartUrl: true,
-  fallbacks: {
-    document: "/",
+  // Не підміняти HTML на "/" — ламає client-side перехід у /app/* (помилка до F5).
+  dynamicStartUrl: false,
+  workboxOptions: {
+    navigateFallback: null,
+    navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/admin/],
   },
 });
 

@@ -21,6 +21,7 @@ type Props = {
   isFavorite?: boolean;
   favoriteLoading?: boolean;
   onToggleFavorite?: () => void;
+  favoriteError?: string | null;
 };
 
 export function ListingDetailModal({
@@ -29,6 +30,7 @@ export function ListingDetailModal({
   isFavorite = false,
   favoriteLoading = false,
   onToggleFavorite,
+  favoriteError,
 }: Props) {
   const [photoIndex, setPhotoIndex] = useState(0);
 
@@ -86,7 +88,7 @@ export function ListingDetailModal({
       />
 
       <div className="relative z-10 flex max-h-[92dvh] w-full max-w-[880px] flex-col overflow-hidden rounded-t-[1.5rem] border border-border bg-white shadow-[0_24px_80px_-20px_rgba(10,12,14,0.35)] sm:rounded-[1.5rem]">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-5">
           <div className="min-w-0 pr-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">AUTO.RIA</p>
             <h2 id="listing-modal-title" className="truncate text-[16px] font-bold text-ink sm:text-[18px]">
@@ -113,7 +115,7 @@ export function ListingDetailModal({
           </div>
         </div>
 
-        <div className="overflow-y-auto overscroll-contain">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="relative aspect-[16/10] w-full bg-surface">
             {activePhoto ? (
               <Image
@@ -193,28 +195,13 @@ export function ListingDetailModal({
 
             <AutoRiaListingDetails listing={listing} />
 
-            <div className="flex flex-col gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:flex-row sm:flex-wrap sm:pb-0">
-              <Link href={listing.url} target="_blank" rel="noopener noreferrer" className="flex-1 sm:min-w-[200px]">
-                <Button variant="primary" size="md" className="w-full gap-1.5">
-                  <IconGlobe size={14} />
-                  Відкрити на AUTO.RIA
-                </Button>
-              </Link>
-              {hasVinCheck(listing) && (
-                <VinCheckButton listing={listing} size="md" className="w-full sm:w-auto sm:min-w-[180px]" />
-              )}
-              <Button variant="secondary" size="md" className="sm:w-auto" onClick={onClose}>
-                Закрити
-              </Button>
-            </div>
-
             {listing.vin_checked && (
               <p className="text-center text-[12px] font-medium text-emerald-dark">
                 VIN-код перевірено на AUTO.RIA
               </p>
             )}
 
-            <p className="text-center text-[11px] text-muted">
+            <p className="pb-2 text-center text-[11px] text-muted">
               Дані надано{" "}
               <a
                 href="https://auto.ria.com"
@@ -225,6 +212,29 @@ export function ListingDetailModal({
                 AUTO.RIA
               </a>
             </p>
+          </div>
+        </div>
+
+        <div className="shrink-0 border-t border-border bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+          {favoriteError && (
+            <p role="alert" className="mb-2 text-center text-[12px] font-medium text-red-600">
+              {favoriteError}
+            </p>
+          )}
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <Link href={listing.url} target="_blank" rel="noopener noreferrer" className="flex-1 sm:min-w-[200px]">
+              <Button variant="primary" size="md" className="w-full gap-1.5">
+                <IconGlobe size={14} />
+                Відкрити на AUTO.RIA
+              </Button>
+            </Link>
+            {hasVinCheck(listing) && (
+              <VinCheckButton listing={listing} size="md" className="w-full sm:w-auto sm:min-w-[180px]" />
+            )}
+            <Button variant="secondary" size="md" className="w-full sm:w-auto" onClick={onClose}>
+              Закрити
+            </Button>
           </div>
         </div>
       </div>

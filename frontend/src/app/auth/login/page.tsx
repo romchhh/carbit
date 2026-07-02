@@ -139,7 +139,7 @@ function AuthForm() {
     try {
       if (tab === "login") {
         await login(email.trim(), password, rememberMe);
-        router.push(destination);
+        router.replace(destination);
       } else {
         await sendRegisterCode(email.trim(), name.trim(), password);
         setRegisterStep("verify");
@@ -171,7 +171,7 @@ function AuthForm() {
     setLoading(true);
     try {
       await verifyRegisterCode(email.trim(), code);
-      router.push("/app/onboarding");
+      router.replace("/app/onboarding");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Помилка підтвердження");
     } finally {

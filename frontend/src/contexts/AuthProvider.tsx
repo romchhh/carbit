@@ -11,6 +11,7 @@ import type { User } from "@/types/api";
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
+  initialized: boolean;
   login: (email: string, password: string, remember?: boolean) => Promise<void>;
   sendRegisterCode: (email: string, name: string, password: string) => Promise<void>;
   verifyRegisterCode: (email: string, code: string) => Promise<void>;
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const router = useRouter();
 
   const refreshUser = useCallback(async () => {
@@ -47,7 +49,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshUser().finally(() => setLoading(false));
+    refreshUser()
+      .finally(() => {
+        setLoading(false);
+        setInitialized(true);
+      });
   }, [refreshUser]);
 
   const login = async (email: string, password: string, remember = true) => {
@@ -99,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, login, sendRegisterCode, verifyRegisterCode,
+      user, loading, initialized, login, sendRegisterCode, verifyRegisterCode,
       resendRegisterCode, logout, refreshUser, updateProfile,
       loginWithToken, forgotPassword, resetPassword,
     }}>

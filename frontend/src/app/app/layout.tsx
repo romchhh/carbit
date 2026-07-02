@@ -13,16 +13,16 @@ import * as api from "@/lib/api";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading } = useAuth();
+  const { user, loading, initialized } = useAuth();
   const [searchesUsed, setSearchesUsed] = useState(0);
   const badges = useDashboardBadges();
   const isOnboarding = pathname === "/app/onboarding";
 
   useEffect(() => {
-    if (loading || user) return;
+    if (!initialized || loading || user) return;
     const redirect = pathname.startsWith("/app") ? pathname : "/app/dashboard";
     router.replace(`/auth/login?redirect=${encodeURIComponent(redirect)}`);
-  }, [loading, user, pathname, router]);
+  }, [initialized, loading, user, pathname, router]);
 
   useEffect(() => {
     if (!user || isOnboarding) return;
@@ -31,7 +31,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       .catch(() => setSearchesUsed(0));
   }, [user, isOnboarding]);
 
-  if (loading || !user) {
+  if (!initialized || loading || !user) {
     return <PwaLoadingScreen />;
   }
 

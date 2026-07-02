@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { IconHeart, IconArrowRight } from "@/components/icons";
+import { FAVORITES_CHANGED_EVENT } from "@/hooks/useListingFavorite";
 import { favorites as favoritesApi, ApiError } from "@/lib/api";
 import { AppEmpty, AppLoading, AppPage, AppSection } from "@/components/layout/AppPage";
 import type { Favorite } from "@/types/api";
@@ -25,6 +26,12 @@ export default function FavoritesPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const onChange = () => { void load(); };
+    window.addEventListener(FAVORITES_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(FAVORITES_CHANGED_EVENT, onChange);
+  }, [load]);
 
   const remove = async (listingId: string) => {
     try {

@@ -38,7 +38,7 @@ export function SearchPreviewResults({
     () => results.slice(0, PREVIEW_RESULTS_LIMIT),
     [results],
   );
-  const { favoriteIds, loadingIds, toggleFavorite } = useListingFavorites(
+  const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } = useListingFavorites(
     previewResults.map(item => item.id),
   );
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -122,10 +122,14 @@ export function SearchPreviewResults({
 
       <ListingDetailModal
         listing={selectedListing}
-        onClose={() => setSelectedListing(null)}
+        onClose={() => {
+          clearError();
+          setSelectedListing(null);
+        }}
         isFavorite={selectedListing ? favoriteIds.has(selectedListing.id) : false}
         favoriteLoading={selectedListing ? loadingIds.has(selectedListing.id) : false}
         onToggleFavorite={selectedListing ? () => toggleFavorite(selectedListing) : undefined}
+        favoriteError={favoriteError}
       />
     </>
   );

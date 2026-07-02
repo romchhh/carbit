@@ -7,6 +7,7 @@ import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight } from "@/components/icons";
+import { useAuth } from "@/contexts/AuthProvider";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { autoRia, getApiErrorMessage } from "@/lib/api";
 import { saveRecentListing } from "@/lib/recent-listings";
@@ -26,13 +27,17 @@ function isRecentListing(listing: Listing) {
 
 export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props) {
   const embedded = variant === "dashboard";
+  const { user } = useAuth();
+  const canFavorite = embedded || Boolean(user);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
-  const { favoriteIds, loadingIds, toggleFavorite } = useListingFavorites(listings.map(item => item.id));
+  const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } = useListingFavorites(
+    canFavorite ? listings.map(item => item.id) : [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -204,11 +209,13 @@ export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props)
                               </Badge>
                             )}
                           </div>
-                          <ListingFavoriteButton
-                            active={favoriteIds.has(listing.id)}
-                            loading={loadingIds.has(listing.id)}
-                            onToggle={() => toggleFavorite(listing)}
-                          />
+                          {canFavorite && (
+                            <ListingFavoriteButton
+                              active={favoriteIds.has(listing.id)}
+                              loading={loadingIds.has(listing.id)}
+                              onToggle={() => toggleFavorite(listing)}
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -298,10 +305,16 @@ export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props)
 
       <ListingDetailModal
         listing={selectedListing}
-        onClose={() => setSelectedListing(null)}
+        onClose={() => {
+          clearError();
+          setSelectedListing(null);
+        }}
         isFavorite={selectedListing ? favoriteIds.has(selectedListing.id) : false}
         favoriteLoading={selectedListing ? loadingIds.has(selectedListing.id) : false}
-        onToggleFavorite={selectedListing ? () => toggleFavorite(selectedListing) : undefined}
+        onToggleFavorite={
+          selectedListing && canFavorite ? () => toggleFavorite(selectedListing) : undefined
+        }
+        favoriteError={favoriteError}
       />
     </>
   );

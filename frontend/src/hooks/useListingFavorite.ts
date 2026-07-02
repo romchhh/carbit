@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { favorites as favoritesApi } from "@/lib/api";
+import { ApiError, favorites as favoritesApi, getApiErrorMessage } from "@/lib/api";
+import { normalizeListingForFavorite } from "@/lib/listing-favorite-payload";
 import type { Listing } from "@/types/api";
 
 export const FAVORITES_CHANGED_EVENT = "carbit:favorites-changed";
@@ -13,6 +14,7 @@ export function notifyFavoritesChanged() {
 export function useListingFavorites(listingIds: string[]) {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   const idsKey = listingIds.join("|");
 
@@ -30,10 +32,17 @@ export function useListingFavorites(listingIds: string[]) {
 
   const toggleFavorite = useCallback(async (listing: Listing) => {
     const id = listing.id;
+    setError(null);
     setLoadingIds(prev => new Set(prev).add(id));
 
+    let removing = false;
+    setFavoriteIds(prev => {
+      removing = prev.has(id);
+      return prev;
+    });
+
     try {
-      if (favoriteIds.has(id)) {
+      if (removing) {
         await favoritesApi.remove(id);
         setFavoriteIds(prev => {
           const next = new Set(prev);
@@ -41,10 +50,15 @@ export function useListingFavorites(listingIds: string[]) {
           return next;
         });
       } else {
-        await favoritesApi.add(id, listing);
+        await favoritesApi.add(id, normalizeListingForFavorite(listing));
         setFavoriteIds(prev => new Set(prev).add(id));
       }
       notifyFavoritesChanged();
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Не вдалось оновити обране"));
+      if (err instanceof ApiError && err.status === 401) {
+        setError("Увійдіть, щоб зберігати авто в обране");
+      }
     } finally {
       setLoadingIds(prev => {
         const next = new Set(prev);
@@ -52,11 +66,13 @@ export function useListingFavorites(listingIds: string[]) {
         return next;
       });
     }
-  }, [favoriteIds]);
+  }, []);
 
   return {
     favoriteIds,
     loadingIds,
+    error,
+    clearError: () => setError(null),
     isFavorite: (id: string) => favoriteIds.has(id),
     isLoading: (id: string) => loadingIds.has(id),
     toggleFavorite,
