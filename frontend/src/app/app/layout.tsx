@@ -32,7 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [user, isOnboarding]);
 
   if (!initialized || loading || !user) {
-    return <PwaLoadingScreen />;
+    return <PwaLoadingScreen fixed={false} />;
   }
 
   if (isOnboarding) {
@@ -40,13 +40,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-canvas lg:h-screen lg:overflow-hidden">
-      <div className="mx-auto h-full max-w-[1440px] px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-5">
+    <div className="min-h-[100dvh] bg-white lg:min-h-screen lg:bg-canvas lg:h-screen lg:overflow-hidden">
+      <div className="mx-auto h-full max-w-[1440px] lg:px-6 lg:py-5">
         <div className="flex h-full gap-4 lg:gap-5 lg:items-start">
           <DashboardSidebar searchesUsed={searchesUsed} searchesLimit={user.searches_limit} />
 
           <div className="min-h-0 min-w-0 flex-1 lg:h-[calc(100vh-2.5rem)]">
-            <div className="flex h-full min-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-[28px] border border-border/50 bg-white shadow-island sm:min-h-[calc(100dvh-2rem)] lg:min-h-0">
+            <div className="flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden bg-white lg:h-full lg:min-h-0 lg:rounded-[28px] lg:border lg:border-border/50 lg:shadow-island">
               <div className="flex flex-1 flex-col overflow-y-auto px-4 py-4 pb-28 sm:px-6 sm:py-6 lg:px-12 lg:py-8 lg:pb-8">
                 <div className="mx-auto flex w-full max-w-[980px] flex-col">
                   <AppShellHeader unreadNotifications={badges.notifications} />

@@ -19,16 +19,27 @@ export function useListingFavorites(listingIds: string[]) {
   const idsKey = listingIds.join("|");
 
   useEffect(() => {
-    if (!listingIds.length) {
-      setFavoriteIds(new Set());
+    if (!idsKey) {
+      setFavoriteIds(prev => (prev.size === 0 ? prev : new Set()));
       return;
     }
 
+    let cancelled = false;
+    const ids = idsKey.split("|");
+
     favoritesApi
-      .checkMany(listingIds)
-      .then(({ ids }) => setFavoriteIds(new Set(ids)))
-      .catch(() => setFavoriteIds(new Set()));
-  }, [idsKey, listingIds]);
+      .checkMany(ids)
+      .then(({ ids: favoriteIdList }) => {
+        if (!cancelled) setFavoriteIds(new Set(favoriteIdList));
+      })
+      .catch(() => {
+        if (!cancelled) setFavoriteIds(prev => (prev.size === 0 ? prev : new Set()));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [idsKey]);
 
   const toggleFavorite = useCallback(async (listing: Listing) => {
     const id = listing.id;

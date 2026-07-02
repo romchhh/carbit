@@ -2,14 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { PwaLoadingScreen } from "@/components/pwa/PwaLoadingScreen";
+import { cn } from "@/lib/utils";
 
+/** Splash лише на першому завантаженні — без manual DOM .remove() (ламає React при навігації). */
 export function PwaSplash() {
-  const [visible, setVisible] = useState(true);
+  const [hidden, setHidden] = useState(false);
+  const [mounted, setMounted] = useState(true);
 
   useEffect(() => {
-    document.getElementById("pwa-boot-splash")?.remove();
-
-    const hide = () => setVisible(false);
+    const hide = () => {
+      setHidden(true);
+      window.setTimeout(() => setMounted(false), 320);
+    };
 
     if (document.readyState === "complete") {
       requestAnimationFrame(hide);
@@ -17,10 +21,19 @@ export function PwaSplash() {
       window.addEventListener("load", hide, { once: true });
     }
 
-    const fallback = window.setTimeout(hide, 2800);
+    const fallback = window.setTimeout(hide, 2200);
     return () => window.clearTimeout(fallback);
   }, []);
 
-  if (!visible) return null;
-  return <PwaLoadingScreen />;
+  if (!mounted) return null;
+
+  return (
+    <PwaLoadingScreen
+      className={cn(
+        "transition-opacity duration-300 ease-out",
+        hidden && "pointer-events-none opacity-0",
+      )}
+      aria-hidden={hidden}
+    />
+  );
 }

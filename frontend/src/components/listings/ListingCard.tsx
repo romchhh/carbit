@@ -161,9 +161,9 @@ export function ListingCard({
               {fuel.split(",")[0]?.trim()}
             </span>
           )}
-          {highlights.map(item => (
+          {highlights.map((item, index) => (
             <span
-              key={item}
+              key={`${item}-${index}`}
               className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink"
             >
               {item}

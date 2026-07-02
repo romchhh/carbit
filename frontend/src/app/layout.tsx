@@ -35,19 +35,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="uk" className={montserrat.variable}>
       <body className={`${montserrat.className} bg-[#EEF0F4]`}>
-        <div
-          id="pwa-boot-splash"
-          suppressHydrationWarning
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#EEF0F4]"
-          aria-hidden="true"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/icons/icon-512.png"
-            alt=""
-            className="h-28 w-28 object-contain sm:h-32 sm:w-32"
-          />
-        </div>
         <PwaSplash />
         <PwaServiceWorker />
         <AuthProvider>{children}</AuthProvider>

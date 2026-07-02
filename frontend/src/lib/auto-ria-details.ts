@@ -397,5 +397,6 @@ export function getAutoRiaHighlights(sourceData: Record<string, unknown> | null 
 
   return items
     .map(item => (typeof item === "string" ? item.trim() : item))
-    .filter((item): item is string => Boolean(item));
+    .filter((item): item is string => Boolean(item))
+    .filter((item, index, arr) => arr.indexOf(item) === index);
 }

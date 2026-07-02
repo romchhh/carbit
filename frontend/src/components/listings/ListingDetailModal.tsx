@@ -175,9 +175,9 @@ export function ListingDetailModal({
 
             {highlights.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
-                {highlights.map(item => (
+                {highlights.map((item, index) => (
                   <span
-                    key={item}
+                    key={`${item}-${index}`}
                     className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink"
                   >
                     {item}

@@ -5,9 +5,15 @@ type Props = {
   size?: number;
   className?: string;
   fixed?: boolean;
+  "aria-hidden"?: boolean;
 };
 
-export function PwaLoadingScreen({ size = 128, className, fixed = true }: Props) {
+export function PwaLoadingScreen({
+  size = 128,
+  className,
+  fixed = true,
+  "aria-hidden": ariaHidden,
+}: Props) {
   return (
     <div
       className={cn(
@@ -17,6 +23,7 @@ export function PwaLoadingScreen({ size = 128, className, fixed = true }: Props)
       )}
       role="status"
       aria-label="Завантаження Carbit"
+      aria-hidden={ariaHidden}
     >
       <CarbitLogo variant="icon" height={size} priority className="drop-shadow-sm" />
     </div>
