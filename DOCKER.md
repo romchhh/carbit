@@ -23,6 +23,45 @@
 
 ---
 
+## 0. Ліміт build cache (один раз на сервері)
+
+BuildKit накопичує шари з кожного білда і сам їх не чистить — через це диск може забитися, і `docker compose build` почне падати.
+
+**Один раз після встановлення Docker** на production-хості:
+
+```bash
+sudo ./scripts/setup-docker-cache-limits.sh
+```
+
+Скрипт:
+
+- вмикає автоматичний GC BuildKit з лімітом **2GB** (`/etc/docker/daemon.json`);
+- обмежує розмір логів контейнерів (`max-size: 10m`, `max-file: 3`);
+- додає cron — щонеділі о 04:00 чистить build cache старіший за 7 днів;
+- одразу прибирає старий reclaimable cache.
+
+Інший ліміт (наприклад 4GB):
+
+```bash
+sudo DOCKER_BUILD_CACHE_LIMIT=4GB ./scripts/setup-docker-cache-limits.sh
+```
+
+Перевірка:
+
+```bash
+docker builder du
+```
+
+Ручна чистка (якщо потрібно):
+
+```bash
+docker builder prune -af --filter "until=168h"
+```
+
+> **Не використовуйте `--no-cache`** для звичайних деплоїв — це будує з нуля і додає зайві шари поверх старого кешу. `--no-cache` лише якщо підозра на зіпсований кеш.
+
+---
+
 ## 1. Перше встановлення
 
 ```bash
@@ -36,6 +75,9 @@ nano .env   # обов'язково змініть SECRET_KEY, ADMIN_PASSWORD, I
 
 # Створити папку для БД
 mkdir -p database
+
+# Ліміт build cache (один раз)
+sudo ./scripts/setup-docker-cache-limits.sh
 
 # Зібрати і запустити
 docker compose up -d --build
@@ -120,14 +162,15 @@ docker compose restart bot
 
 ```bash
 cd carbit
+./scripts/docker-deploy.sh
+```
 
-# Отримати новий код
+Або вручну:
+
+```bash
 git pull
-
-# Перезібрати образи і застосувати
-docker compose up -d --build
-
-# Перевірити статус
+docker compose build
+docker compose up -d
 docker compose ps
 ```
 
@@ -213,7 +256,9 @@ GOOGLE_REDIRECT_URI=https://your-domain.com/api/v1/auth/google/callback
 |---------|---------|
 | Backend unhealthy / Restarting | `docker compose logs backend --tail=50` — часто бракує `storage/` в образі (оновіть код і `--build`) |
 | `ModuleNotFoundError: storage` | `git pull && docker compose up -d --build backend bot` |
-| `POST .../auto-ria/search` → 404 | Старий backend-образ. `git pull && docker compose build --no-cache backend && docker compose up -d backend`. Перевірка: `curl -s localhost:8000/health` → `auto_ria_live_route: true` |
+| `POST .../auto-ria/search` → 404 | Старий backend-образ. `git pull && docker compose build backend && docker compose up -d backend`. Перевірка: `curl -s localhost:8000/health` → `auto_ria_live_route: true` |
+| Build падає / «no space left» | `docker builder du` — якщо кеш великий: `sudo ./scripts/setup-docker-cache-limits.sh` або `docker builder prune -af --filter "until=168h"` |
+| Повільний або «зіпсований» білд | Лише тоді: `docker compose build --no-cache <service>` |
 | Mixed Content / `http://backend:8000` у консолі | Неправильний `NEXT_PUBLIC_API_URL` у `.env`. Має бути `/api/v1` або `https://ваш-домен/api/v1`. Потім `docker compose up -d --build frontend` |
 | Кабінет не завантажується без F5 | Часто через Mixed Content вище — виправте URL і перезберіть frontend |
 | Frontend не бачить API | Перевірте `NEXT_PUBLIC_API_URL`, перезберіть frontend |
@@ -226,7 +271,9 @@ GOOGLE_REDIRECT_URI=https://your-domain.com/api/v1/auth/google/callback
 ## Корисні команди (шпаргалка)
 
 ```bash
-docker compose up -d --build    # перша збірка / повне оновлення
+./scripts/docker-deploy.sh        # git pull + build + up (без --no-cache)
+docker compose up -d --build      # перша збірка / повне оновлення
+docker builder du                 # розмір build cache
 docker compose ps                 # статус
 docker compose restart            # перезапуск
 docker compose logs -f backend    # логи

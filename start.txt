@@ -12,8 +12,10 @@ npm run dev
 
 git pull
 # після змін backend (AUTO.RIA) або frontend (API URL, PWA):
-docker compose build --no-cache backend frontend
+# без --no-cache — BuildKit використовує кеш; ліміт на сервері: scripts/setup-docker-cache-limits.sh
+docker compose build backend frontend
 docker compose up -d backend frontend
+# або: ./scripts/docker-deploy.sh backend frontend
 # перевірка: curl -s http://localhost:8000/health
 # у .env для production: NEXT_PUBLIC_API_URL=/api/v1  (НЕ http://backend:8000)
 # якщо кабінет падає до F5 — старий Service Worker; після rebuild один раз hard refresh (Cmd+Shift+R)
