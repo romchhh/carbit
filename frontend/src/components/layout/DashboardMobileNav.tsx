@@ -17,11 +17,10 @@ export function DashboardMobileNav({ badges }: Props) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/50 bg-white lg:hidden"
-      style={{ paddingBottom: "var(--safe-bottom)" }}
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.35rem,env(safe-area-inset-bottom,0px))] lg:hidden"
       aria-label="Навігація кабінету"
     >
-      <div className="mx-auto flex h-[3.75rem] max-w-lg items-stretch justify-around gap-0.5 px-1">
+      <div className="glass-liquid pointer-events-auto mx-auto flex h-[3.75rem] max-w-lg items-stretch justify-around gap-0.5 rounded-[28px] px-2 py-1.5">
         {mobileNav.map(({ href, icon: Icon, shortLabel, label, badgeKey, badgeAccent }) => {
           const active = isActive(href);
           const badge = badgeKey ? badges[badgeKey] : 0;
@@ -31,13 +30,16 @@ export function DashboardMobileNav({ badges }: Props) {
             <Link
               key={href}
               href={href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-ink transition-colors",
-                active ? "bg-surface" : "hover:bg-surface",
+                "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[18px] px-1 py-1.5 transition-all",
+                active
+                  ? "bg-emerald/15 text-emerald-dark shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ring-1 ring-emerald/30"
+                  : "text-muted hover:bg-white/25 hover:text-ink",
               )}
             >
               <span className="relative">
-                <Icon size={20} className="text-ink" />
+                <Icon size={21} className={cn(active ? "text-emerald-dark" : "text-current")} />
                 {badge > 0 && (
                   <span
                     className={cn(
@@ -49,7 +51,7 @@ export function DashboardMobileNav({ badges }: Props) {
                   </span>
                 )}
               </span>
-              <span className={cn("text-[10px] font-semibold leading-none text-ink", active && "font-bold")}>
+              <span className={cn("text-[10px] font-semibold leading-none", active && "font-bold text-emerald-dark")}>
                 {text}
               </span>
             </Link>

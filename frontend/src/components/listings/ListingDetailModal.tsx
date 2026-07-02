@@ -5,9 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { IconGlobe, IconX } from "@/components/icons";
+import { IconGlobe, IconHeart, IconX } from "@/components/icons";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
-import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import { hasVinCheck } from "@/lib/vin-check";
@@ -24,6 +23,9 @@ type Props = {
   favoriteError?: string | null;
 };
 
+const MODAL_ACTION_CLASS =
+  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface active:bg-surface";
+
 export function ListingDetailModal({
   listing,
   onClose,
@@ -35,6 +37,7 @@ export function ListingDetailModal({
   const [photoIndex, setPhotoIndex] = useState(0);
   const galleryRef = useRef<HTMLDivElement>(null);
   const photoIndexRef = useRef(photoIndex);
+  const dragStartY = useRef<number | null>(null);
   photoIndexRef.current = photoIndex;
 
   const scrollToPhoto = useCallback((index: number) => {
@@ -47,6 +50,20 @@ export function ListingDetailModal({
     container.scrollTo({ left: slide.offsetLeft, behavior: "smooth" });
     setPhotoIndex(index);
   }, []);
+
+  const handleDragStart = useCallback((clientY: number) => {
+    dragStartY.current = clientY;
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (clientY: number) => {
+      if (dragStartY.current === null) return;
+      const delta = clientY - dragStartY.current;
+      dragStartY.current = null;
+      if (delta > 48) onClose();
+    },
+    [onClose],
+  );
 
   useEffect(() => {
     if (!listing) return;
@@ -125,7 +142,7 @@ export function ListingDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-[120] flex items-end justify-center p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="listing-modal-title"
@@ -138,14 +155,57 @@ export function ListingDetailModal({
       />
 
       <div className="relative z-10 flex max-h-[92dvh] w-full max-w-[880px] flex-col overflow-hidden rounded-t-[1.5rem] border border-border bg-white shadow-[0_24px_80px_-20px_rgba(10,12,14,0.35)] sm:rounded-[1.5rem]">
-        <button
-          type="button"
-          aria-label="Згорнути"
-          onClick={onClose}
-          className="flex shrink-0 justify-center border-b border-border/60 px-4 pb-2.5 pt-3 sm:hidden"
-        >
-          <span className="h-1 w-10 rounded-full bg-border" />
-        </button>
+        <div className="z-30 shrink-0 border-b border-border/60 bg-white/95 backdrop-blur-md">
+          <button
+            type="button"
+            aria-label="Згорнути"
+            onClick={onClose}
+            onTouchStart={e => handleDragStart(e.touches[0].clientY)}
+            onTouchEnd={e => handleDragEnd(e.changedTouches[0].clientY)}
+            onPointerDown={e => {
+              if (e.pointerType === "mouse") handleDragStart(e.clientY);
+            }}
+            onPointerUp={e => {
+              if (e.pointerType === "mouse") handleDragEnd(e.clientY);
+            }}
+            className="flex w-full touch-none justify-center px-4 pb-1 pt-2.5 sm:hidden"
+          >
+            <span className="h-1 w-10 rounded-full bg-border" />
+          </button>
+
+          <div className="flex items-center gap-3 px-3 pb-2.5 sm:px-4 sm:pb-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">AUTO.RIA</p>
+              <h2
+                id="listing-modal-title"
+                className="truncate text-[15px] font-bold leading-snug text-ink sm:text-[16px]"
+              >
+                {listing.title}
+              </h2>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {onToggleFavorite && (
+                <button
+                  type="button"
+                  aria-label={isFavorite ? "Прибрати з обраного" : "Додати в обране"}
+                  aria-pressed={isFavorite}
+                  disabled={favoriteLoading}
+                  onClick={onToggleFavorite}
+                  className={cn(
+                    MODAL_ACTION_CLASS,
+                    isFavorite ? "text-emerald" : "text-muted hover:text-emerald-dark",
+                    favoriteLoading && "opacity-60",
+                  )}
+                >
+                  <IconHeart size={18} className={cn(isFavorite && "fill-current")} />
+                </button>
+              )}
+              <button type="button" aria-label="Закрити" onClick={onClose} className={MODAL_ACTION_CLASS}>
+                <IconX size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="relative aspect-[16/10] w-full bg-surface">
@@ -176,42 +236,6 @@ export function ListingDetailModal({
                 Фото відсутнє
               </div>
             )}
-
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/55 to-transparent" />
-            {photos.length > 1 && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent" />
-            )}
-
-            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-4">
-              <div className="min-w-0 flex-1 pt-0.5 sm:pt-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/80">AUTO.RIA</p>
-                <h2
-                  id="listing-modal-title"
-                  className="mt-0.5 line-clamp-2 text-[15px] font-bold leading-snug text-white drop-shadow-sm sm:text-[17px]"
-                >
-                  {listing.title}
-                </h2>
-              </div>
-              <div className="pointer-events-auto flex shrink-0 items-center gap-2">
-                {onToggleFavorite && (
-                  <ListingFavoriteButton
-                    active={isFavorite}
-                    loading={favoriteLoading}
-                    onToggle={onToggleFavorite}
-                    size="md"
-                    variant="overlay"
-                  />
-                )}
-                <button
-                  type="button"
-                  aria-label="Закрити"
-                  onClick={onClose}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-md backdrop-blur-md transition-colors hover:bg-black/55 active:bg-black/60"
-                >
-                  <IconX size={18} />
-                </button>
-              </div>
-            </div>
 
             {photos.length > 1 && (
               <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">

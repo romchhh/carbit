@@ -47,17 +47,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
       <div className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white lg:relative lg:min-h-screen lg:h-screen lg:bg-canvas">
       <div className="app-pwa-statusbar lg:hidden" aria-hidden />
+      <AppShellHeader unreadNotifications={badges.notifications} />
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden lg:px-6 lg:py-5">
         <div className="flex min-h-0 flex-1 gap-4 overflow-hidden lg:items-start lg:gap-5">
           <DashboardSidebar searchesUsed={searchesUsed} searchesLimit={user.searches_limit} />
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:h-[calc(100vh-2.5rem)]">
-            <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-white lg:rounded-[28px] lg:border lg:border-border/50 lg:shadow-island">
-              <div className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-[var(--mobile-nav-height)] sm:px-6 sm:py-6 lg:px-12 lg:py-8 lg:pb-8">
+            <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eef0f4] lg:rounded-[28px] lg:border lg:border-border/50 lg:bg-white lg:shadow-island">
+              <div className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-6 lg:px-12 lg:py-8 lg:pb-8 lg:pt-0">
                 <div className="app-mobile-content mx-auto flex w-full max-w-[980px] flex-col">
-                  <AppShellHeader unreadNotifications={badges.notifications} />
-
                   <div className="mb-5 lg:mb-6">
                     <PwaInstallPrompt />
                   </div>

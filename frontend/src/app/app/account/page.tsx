@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { IconGear, IconCreditCard, IconTelegram, IconArrowRight, IconZap } from "@/components/icons";
+import { IconGear, IconCreditCard, IconTelegram, IconArrowRight, IconZap, IconLogOut, IconPlus } from "@/components/icons";
 import { useAuth } from "@/contexts/AuthProvider";
 import { ApiError, telegram as telegramApi, billing as billingApi, users as usersApi } from "@/lib/api";
 import { CodeInput } from "@/components/auth/CodeInput";
@@ -236,48 +236,49 @@ export default function AccountPage() {
           </AppSection>
         )}
 
-        <AppSection className="!bg-white">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E8F4FD]">
-                <IconTelegram size={18} className="text-[#229ED9]" />
+        <AppSection className="!bg-white !p-5 sm:!p-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#E8F4FD]">
+                <IconTelegram size={22} className="text-[#229ED9]" />
               </div>
               <div>
-                <div className="text-[14px] font-semibold text-ink">Telegram-бот</div>
-                <div className="text-[12px] text-muted">
+                <div className="text-[16px] font-bold text-ink sm:text-[17px]">Telegram-бот</div>
+                <div className="mt-1 text-[14px] leading-snug text-muted">
                   {user.telegram_connected
                     ? `@${user.telegram_username ?? "підключено"} · сповіщення увімкнено`
                     : "Нові авто прямо в месенджер"}
                 </div>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-3">
               {user.telegram_connected ? (
                 <>
-                  <span className="flex items-center gap-1.5 text-[12px] font-medium text-emerald-dark">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald" />Підключено
+                  <span className="flex items-center gap-2 text-[14px] font-semibold text-emerald-dark">
+                    <span className="h-2 w-2 rounded-full bg-emerald" />
+                    Підключено
                   </span>
-                  <button onClick={disconnectTelegram} className="text-[12px] text-muted underline-offset-2 hover:text-red-500 hover:underline">
+                  <Button variant="secondary" size="md" onClick={disconnectTelegram}>
                     Відключити
-                  </button>
+                  </Button>
                 </>
               ) : (
-                <Button variant="primary" size="sm" loading={tgLoading || polling} onClick={connectTelegram}>
+                <Button variant="primary" size="md" loading={tgLoading || polling} onClick={connectTelegram}>
                   {polling ? "Очікуємо..." : "Підключити"}
                 </Button>
               )}
             </div>
           </div>
           {connectUrl && polling && (
-            <p className="mt-4 rounded-xl bg-surface px-3 py-2 text-[12px] text-muted">
+            <p className="mt-5 rounded-xl bg-surface px-4 py-3 text-[14px] text-muted">
               Натисніть <strong>Start</strong> у боті — сторінка оновиться автоматично.
             </p>
           )}
           {!user.telegram_connected && (
-            <p className="mt-3 text-[12px] text-muted">
+            <p className="mt-4 text-[14px] text-muted">
               Або /start у{" "}
               {getTelegramBotUrl() ? (
-                <a href={getTelegramBotUrl()} target="_blank" rel="noopener noreferrer" className="text-emerald-dark hover:underline">
+                <a href={getTelegramBotUrl()} target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-dark hover:underline">
                   {getTelegramBotMention()}
                 </a>
               ) : (
@@ -287,21 +288,31 @@ export default function AccountPage() {
           )}
         </AppSection>
 
-        <AppSection className="!bg-white">
-          <Link href="/app/search" className="flex items-center gap-1 text-[13px] font-semibold text-emerald-dark hover:underline">
-            Додати пошуковий запит <IconArrowRight size={11} />
+        <AppSection className="!bg-white !p-5 sm:!p-6">
+          <Link
+            href="/app/search"
+            className="flex items-center justify-between gap-3 rounded-xl bg-surface/60 px-4 py-4 transition-colors hover:bg-surface"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white shadow-sm">
+                <IconPlus size={20} className="text-emerald-dark" />
+              </span>
+              <span className="text-[15px] font-semibold text-ink sm:text-[16px]">Додати пошуковий запит</span>
+            </span>
+            <IconArrowRight size={18} className="shrink-0 text-muted" />
           </Link>
         </AppSection>
 
-        <AppSection className="!bg-white">
-          <div className="text-[13px] font-semibold text-ink">Сесія</div>
-          <p className="mt-1 text-[12px] text-muted">Завершити поточний вхід у кабінет</p>
+        <AppSection className="!bg-white !p-5 sm:!p-6">
+          <div className="text-[16px] font-bold text-ink">Сесія</div>
+          <p className="mt-1.5 text-[14px] text-muted">Завершити поточний вхід у кабінет</p>
           <Button
             variant="danger"
-            size="sm"
-            className="mt-3 border-red-200 bg-red-50 font-semibold text-red-600 hover:border-red-300 hover:bg-red-100 hover:text-red-700"
+            size="md"
+            className="mt-4 gap-2 border-red-200 bg-red-50 px-5 py-2.5 text-[14px] font-semibold text-red-600 hover:border-red-300 hover:bg-red-100 hover:text-red-700"
             onClick={logout}
           >
+            <IconLogOut size={16} />
             Вийти
           </Button>
         </AppSection>

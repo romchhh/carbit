@@ -42,9 +42,6 @@ export function DashboardWelcomeHero({
       />
 
       <div className="relative">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-dark">
-          Ваш кабінет
-        </p>
         <h1 className="mt-1.5 text-[24px] font-black leading-tight tracking-tight text-ink sm:text-[30px]">
           Привіт,{" "}
           <span className="bg-gradient-to-r from-emerald-dark to-emerald bg-clip-text text-transparent">
