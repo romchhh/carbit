@@ -4,10 +4,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.security import get_current_user_id
 from app.schemas.schemas import PaginatedListings, SearchFilters
-from app.services.auto_ria.client import AutoRiaError
-from app.services.auto_ria.errors import raise_auto_ria_http
-from app.services.auto_ria.preview_limits import clamp_preview_request, consume_preview_quota, is_preview_mode
-from app.services.auto_ria.service import search_auto_ria
+from app.services.auto_ria.search_endpoint import run_auto_ria_search
 
 router = APIRouter(prefix="/auto-ria", tags=["auto-ria"])
 
@@ -21,12 +18,11 @@ async def search_used_cars(
     mode: str = Query("preview", pattern="^(preview|browse)$"),
     user_id: str = Depends(get_current_user_id),
 ):
-    if is_preview_mode(mode):
-        await consume_preview_quota(user_id)
-
-    page, per_page = clamp_preview_request(page=page, per_page=per_page, mode=mode)
-
-    try:
-        return await search_auto_ria(filters, page=page, per_page=per_page, sort_by=sort_by)
-    except AutoRiaError as exc:
-        raise_auto_ria_http(exc)
+    return await run_auto_ria_search(
+        filters,
+        user_id=user_id,
+        page=page,
+        per_page=per_page,
+        sort_by=sort_by,
+        mode=mode,
+    )

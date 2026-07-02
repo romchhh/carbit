@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.models import User, SearchQuery
 from app.schemas.schemas import (
+    PaginatedListings,
     SearchFilters,
     SearchLiveResultsOut,
     SearchQueryCreate,
@@ -15,6 +16,7 @@ from app.schemas.schemas import (
 )
 from app.services.auto_ria.client import AutoRiaError
 from app.services.auto_ria.errors import raise_auto_ria_http
+from app.services.auto_ria.search_endpoint import run_auto_ria_search
 from app.services.auto_ria.service import search_auto_ria
 
 router = APIRouter(prefix="/searches", tags=["searches"])
@@ -36,6 +38,26 @@ async def list_searches(
         select(SearchQuery).where(SearchQuery.user_id == user_id).order_by(SearchQuery.created_at.desc())
     )
     return result.all()
+
+
+@router.post("/live", response_model=PaginatedListings)
+async def live_auto_ria_search(
+    filters: SearchFilters,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(5, ge=1, le=50),
+    sort_by: str = Query("price_asc"),
+    mode: str = Query("preview", pattern="^(preview|browse)$"),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Live AUTO.RIA search (preview/browse). Also exposed as POST /auto-ria/search."""
+    return await run_auto_ria_search(
+        filters,
+        user_id=user_id,
+        page=page,
+        per_page=per_page,
+        sort_by=sort_by,
+        mode=mode,
+    )
 
 
 @router.get("/{search_id}", response_model=SearchQueryOut)

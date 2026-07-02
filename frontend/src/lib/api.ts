@@ -133,7 +133,7 @@ export const autoRia = {
       { filters, page, perPage, sortBy, mode },
       () =>
         request<PaginatedListings>(
-          `/auto-ria/search?page=${page}&per_page=${perPage}&sort_by=${sortBy}&mode=${mode}`,
+          `/searches/live?page=${page}&per_page=${perPage}&sort_by=${sortBy}&mode=${mode}`,
           { method: "POST", body: JSON.stringify(filters) },
         ),
     ),

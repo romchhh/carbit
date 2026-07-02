@@ -213,7 +213,7 @@ GOOGLE_REDIRECT_URI=https://your-domain.com/api/v1/auth/google/callback
 |---------|---------|
 | Backend unhealthy / Restarting | `docker compose logs backend --tail=50` — часто бракує `storage/` в образі (оновіть код і `--build`) |
 | `ModuleNotFoundError: storage` | `git pull && docker compose up -d --build backend bot` |
-| `POST /api/v1/auto-ria/search` → 404 `{"detail":"Not Found"}` | Backend без нового коду: `git pull && docker compose up -d --build backend`. Перевірка: `curl http://localhost:8000/health` → `auto_ria_search_route: true` |
+| `POST .../auto-ria/search` → 404 | Старий backend-образ. `git pull && docker compose build --no-cache backend && docker compose up -d backend`. Перевірка: `curl -s localhost:8000/health` → `auto_ria_live_route: true` |
 | Mixed Content / `http://backend:8000` у консолі | Неправильний `NEXT_PUBLIC_API_URL` у `.env`. Має бути `/api/v1` або `https://ваш-домен/api/v1`. Потім `docker compose up -d --build frontend` |
 | Кабінет не завантажується без F5 | Часто через Mixed Content вище — виправте URL і перезберіть frontend |
 | Frontend не бачить API | Перевірте `NEXT_PUBLIC_API_URL`, перезберіть frontend |
