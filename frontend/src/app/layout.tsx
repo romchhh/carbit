@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthProvider";
 import { PwaSplash } from "@/components/pwa/PwaSplash";
-import { SafariSwCleanup } from "@/components/pwa/SafariSwCleanup";
+import { PwaServiceWorker } from "@/components/pwa/PwaServiceWorker";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -41,17 +41,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#EEF0F4]"
           aria-hidden="true"
         >
-          <div className="flex items-center justify-center rounded-[28px] bg-white px-8 py-6 shadow-[0_12px_40px_-8px_rgba(10,12,14,0.22)] ring-1 ring-black/[0.06]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/icons/logo-carbit.png"
-              alt=""
-              className="h-9 w-auto object-contain sm:h-10"
-            />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icons/icon-512.png"
+            alt=""
+            className="h-28 w-28 object-contain sm:h-32 sm:w-32"
+          />
         </div>
         <PwaSplash />
-        <SafariSwCleanup />
+        <PwaServiceWorker />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

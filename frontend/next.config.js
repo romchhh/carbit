@@ -30,18 +30,39 @@ const backendInternal =
   process.env.BACKEND_INTERNAL_URL?.trim() ||
   (process.env.NODE_ENV === "production" ? "http://backend:8000" : "http://localhost:8000");
 
+const defaultCache = require("next-pwa/cache");
+
+// Без кешування HTML/RSC — інакше на телефоні «через раз» кнопки та падіння Next.js.
+const runtimeCaching = [
+  ...defaultCache.filter(entry => {
+    const cacheName = entry.options?.cacheName;
+    return cacheName !== "others" && cacheName !== "next-data";
+  }),
+  {
+    urlPattern: /\/_next\/data\/.+\/.+\.json$/i,
+    handler: "NetworkOnly",
+  },
+  {
+    urlPattern: ({ request }) => request.destination === "document",
+    handler: "NetworkOnly",
+  },
+];
+
 /** @type {import('next').NextConfig} */
 const withPWA = require("next-pwa")({
   dest: "public",
-  register: true,
+  register: false,
   skipWaiting: true,
+  clientsClaim: true,
+  cleanupOutdatedCaches: true,
+  cacheStartUrl: false,
+  cacheOnFrontEndNav: false,
+  reloadOnOnline: false,
   disable: process.env.NODE_ENV === "development",
-  // Не підміняти HTML на "/" — ламає client-side перехід у /app/* (помилка до F5).
   dynamicStartUrl: false,
-  workboxOptions: {
-    navigateFallback: null,
-    navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/admin/],
-  },
+  navigateFallback: null,
+  navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/admin/, /^\/app\//],
+  runtimeCaching,
 });
 
 const nextConfig = {

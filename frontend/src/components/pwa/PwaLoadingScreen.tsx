@@ -7,9 +7,7 @@ type Props = {
   fixed?: boolean;
 };
 
-export function PwaLoadingScreen({ size = 96, className, fixed = true }: Props) {
-  const logoHeight = Math.max(Math.round(size * 0.38), 28);
-
+export function PwaLoadingScreen({ size = 128, className, fixed = true }: Props) {
   return (
     <div
       className={cn(
@@ -20,12 +18,7 @@ export function PwaLoadingScreen({ size = 96, className, fixed = true }: Props) 
       role="status"
       aria-label="Завантаження Carbit"
     >
-      <div
-        className="rounded-[28px] bg-white shadow-[0_12px_40px_-8px_rgba(10,12,14,0.22)] ring-1 ring-black/[0.06]"
-        style={{ padding: Math.round(size * 0.28) }}
-      >
-        <CarbitLogo variant="full" height={logoHeight} priority />
-      </div>
+      <CarbitLogo variant="icon" height={size} priority className="drop-shadow-sm" />
     </div>
   );
 }
