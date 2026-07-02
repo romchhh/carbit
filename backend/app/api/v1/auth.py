@@ -7,9 +7,11 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.core.auth_cookies import attach_auth_cookie
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token, get_current_user_id, get_current_user_id_flexible
+from app.core.token_response import token_json_response
 from app.models.models import User
 from app.schemas.schemas import (
     RegisterRequest,
@@ -111,7 +113,7 @@ async def register_verify(body: VerifyCodeRequest, db: AsyncSession = Depends(ge
     except Exception:
         logger.exception("Failed to send welcome email to %s", body.email)
 
-    return TokenResponse(access_token=create_access_token(user.id))
+    return token_json_response(create_access_token(user.id), status_code=status.HTTP_201_CREATED)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -123,7 +125,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
 
-    return TokenResponse(access_token=create_access_token(user.id))
+    return token_json_response(create_access_token(user.id))
 
 
 @router.post("/password/forgot", response_model=MessageResponse)
@@ -158,7 +160,7 @@ async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(
 
     user.hashed_password = hash_password(body.password)
     await db.flush()
-    return TokenResponse(access_token=create_access_token(user.id))
+    return token_json_response(create_access_token(user.id))
 
 
 @router.get("/google")
@@ -221,7 +223,9 @@ async def google_callback(
 
     token = create_access_token(user.id)
     params = urlencode({"token": token})
-    return RedirectResponse(f"{settings.FRONTEND_URL}/auth/oauth/callback?{params}")
+    response = RedirectResponse(f"{settings.FRONTEND_URL}/auth/oauth/callback?{params}")
+    attach_auth_cookie(response, token)
+    return response
 
 
 @router.get("/telegram/login-url", response_model=TelegramLoginUrlOut)
@@ -258,7 +262,7 @@ async def telegram_login(body: TelegramLoginRequest, db: AsyncSession = Depends(
     if not user or not user.is_active:
         raise HTTPException(status_code=400, detail="Акаунт не знайдено")
 
-    return TokenResponse(access_token=create_access_token(user.id))
+    return token_json_response(create_access_token(user.id))
 
 
 @router.get("/me", response_model=UserOut)

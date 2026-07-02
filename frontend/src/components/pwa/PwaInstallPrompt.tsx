@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { IconDownload, IconShare, IconX } from "@/components/icons";
 import { PwaAppIcon } from "@/components/pwa/PwaAppIcon";
+import { isStandalonePwa } from "@/lib/pwa";
 import { cn } from "@/lib/utils";
 
 const DISMISS_KEY = "carbit_pwa_install_dismissed";
@@ -21,13 +22,6 @@ function isDismissedRecently() {
   return Date.now() - ts < DISMISS_DAYS * 24 * 60 * 60 * 1000;
 }
 
-function isStandaloneMode() {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
-
 function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent);
 }
@@ -38,7 +32,7 @@ export function PwaInstallPrompt({ className }: { className?: string }) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    if (isDismissedRecently() || isStandaloneMode()) return;
+    if (isDismissedRecently() || isStandalonePwa()) return;
 
     const onIos = isIOSDevice();
     setIos(onIos);

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthProvider";
+import { PwaSplash } from "@/components/pwa/PwaSplash";
 import { SafariSwCleanup } from "@/components/pwa/SafariSwCleanup";
 import "./globals.css";
 
@@ -21,8 +22,11 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
   },
   icons: {
-    icon: "/icons/app-icon.svg",
-    apple: "/icons/app-icon.svg",
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 export const viewport: Viewport = { themeColor: "#00C896" };
@@ -30,7 +34,23 @@ export const viewport: Viewport = { themeColor: "#00C896" };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="uk" className={montserrat.variable}>
-      <body className={montserrat.className}>
+      <body className={`${montserrat.className} bg-[#EEF0F4]`}>
+        <div
+          id="pwa-boot-splash"
+          suppressHydrationWarning
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#EEF0F4]"
+          aria-hidden="true"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icons/icon-192.png"
+            alt=""
+            width={96}
+            height={96}
+            className="rounded-[28px] shadow-[0_12px_40px_-8px_rgba(10,12,14,0.22)]"
+          />
+        </div>
+        <PwaSplash />
         <SafariSwCleanup />
         <AuthProvider>{children}</AuthProvider>
       </body>

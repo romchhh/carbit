@@ -1,20 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { DashboardSidebar, useDashboardBadges } from "@/components/layout/DashboardSidebar";
 import { DashboardMobileNav } from "@/components/layout/DashboardMobileNav";
 import { AppShellHeader } from "@/components/layout/AppShellHeader";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
+import { PwaLoadingScreen } from "@/components/pwa/PwaLoadingScreen";
 import { useAuth } from "@/contexts/AuthProvider";
 import * as api from "@/lib/api";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const [searchesUsed, setSearchesUsed] = useState(0);
   const badges = useDashboardBadges();
   const isOnboarding = pathname === "/app/onboarding";
+
+  useEffect(() => {
+    if (loading || user) return;
+    const redirect = pathname.startsWith("/app") ? pathname : "/app/dashboard";
+    router.replace(`/auth/login?redirect=${encodeURIComponent(redirect)}`);
+  }, [loading, user, pathname, router]);
 
   useEffect(() => {
     if (!user || isOnboarding) return;
@@ -23,15 +31,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       .catch(() => setSearchesUsed(0));
   }, [user, isOnboarding]);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
-      </div>
-    );
+  if (loading || !user) {
+    return <PwaLoadingScreen />;
   }
-
-  if (!user) return null;
 
   if (isOnboarding) {
     return <>{children}</>;

@@ -2,19 +2,18 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { IconPlus, IconZap, IconArrowRight } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
 import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
+import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
+import { usePreviewSearch } from "@/hooks/usePreviewSearch";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
 import { searches as searchesApi, users as usersApi } from "@/lib/api";
-import { DEFAULT_FILTERS, type SearchFilterState } from "@/lib/search-catalog";
-import { saveSearchDraft } from "@/lib/search-draft";
 import {
   AppEmpty,
   AppLoading,
@@ -64,13 +63,24 @@ function CompactStat({
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
   const { user } = useAuth();
   const [searches, setSearches] = useState<SearchQuery[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [filters, setFilters] = useState<SearchFilterState>({ ...DEFAULT_FILTERS });
-  const { saveSearch, saving, saveSuccess, saveError, saveLimitReached } = useSaveSearch(created => {
+  const {
+    filters,
+    setFilters,
+    results,
+    total,
+    running,
+    searching,
+    error,
+    resultsRef,
+    runSearch,
+    reset,
+    clearError,
+  } = usePreviewSearch();
+  const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } = useSaveSearch(created => {
     setSearches(prev => [created, ...prev]);
   });
 
@@ -105,12 +115,14 @@ export default function DashboardPage() {
       ];
 
   const handleSearch = () => {
-    saveSearchDraft(filters);
-    router.push("/app/search");
+    clearSaveMessages();
+    clearError();
+    void runSearch(filters);
   };
 
   const handleReset = () => {
-    setFilters({ ...DEFAULT_FILTERS });
+    clearSaveMessages();
+    reset();
   };
 
   const handleSave = () => {
@@ -136,6 +148,8 @@ export default function DashboardPage() {
             onReset={handleReset}
             onSearch={handleSearch}
             onSave={handleSave}
+            searching={searching}
+            searchError={error}
             saving={saving}
             saveSuccess={saveSuccess}
             saveError={saveError}
@@ -143,6 +157,17 @@ export default function DashboardPage() {
             telegramConnected={user.telegram_connected}
           />
         </div>
+
+        <SearchPreviewResults
+          resultsRef={resultsRef}
+          running={running}
+          searching={searching}
+          total={total}
+          results={results}
+          onSave={handleSave}
+          saving={saving}
+          telegramConnected={user.telegram_connected}
+        />
       </div>
 
       <div className="mt-8 flex items-end justify-between gap-3">

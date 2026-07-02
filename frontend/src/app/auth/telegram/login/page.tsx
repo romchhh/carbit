@@ -5,12 +5,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
-import { auth as authApi, ApiError } from "@/lib/api";
-import { setToken } from "@/lib/auth-storage";
+import { useAuth } from "@/contexts/AuthProvider";
+import { auth as authApi } from "@/lib/api";
 
 function TelegramLoginForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { loginWithToken } = useAuth();
   const token = searchParams.get("token") ?? "";
   const [error, setError] = useState("");
 
@@ -18,14 +19,10 @@ function TelegramLoginForm() {
     if (!token) return;
 
     authApi.telegramLogin(token)
-      .then(({ access_token }) => {
-        setToken(access_token);
-        router.replace("/app/dashboard");
-      })
-      .catch(err => {
-        setError(err instanceof ApiError ? err.message : "Не вдалося увійти");
-      });
-  }, [token, router]);
+      .then(({ access_token }) => loginWithToken(access_token))
+      .then(() => router.replace("/app/dashboard"))
+      .catch(() => setError("Не вдалося увійти. Спробуйте отримати нове посилання в Telegram."));
+  }, [token, router, loginWithToken]);
 
   if (!token) {
     return (

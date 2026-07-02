@@ -2,10 +2,14 @@ const TOKEN_KEY = "autoradar_token";
 const COOKIE_NAME = "autoradar_token";
 const REMEMBER_ME_KEY = "autoradar_remember_me";
 const SAVED_EMAIL_KEY = "autoradar_saved_email";
-const REMEMBER_MAX_AGE = 7 * 24 * 60 * 60;
+const REMEMBER_MAX_AGE = 30 * 24 * 60 * 60;
 
 function writeCookie(token: string, remember: boolean) {
-  const base = `${COOKIE_NAME}=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:";
+  const base = `${COOKIE_NAME}=${encodeURIComponent(token)}; path=/; SameSite=Lax${
+    secure ? "; Secure" : ""
+  }`;
   document.cookie = remember ? `${base}; max-age=${REMEMBER_MAX_AGE}` : base;
 }
 
@@ -15,16 +19,39 @@ export function setToken(token: string, remember = true) {
 
   if (remember) {
     localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(REMEMBER_ME_KEY, "1");
   } else {
     sessionStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(REMEMBER_ME_KEY, "0");
   }
 
   writeCookie(token, remember);
 }
 
+function getTokenFromCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${COOKIE_NAME}=([^;]*)`));
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
+
+  const fromStorage = localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
+  if (fromStorage) return fromStorage;
+
+  const fromCookie = getTokenFromCookie();
+  if (!fromCookie) return null;
+
+  localStorage.setItem(TOKEN_KEY, fromCookie);
+  localStorage.setItem(REMEMBER_ME_KEY, "1");
+  writeCookie(fromCookie, true);
+  return fromCookie;
 }
 
 export function clearToken() {

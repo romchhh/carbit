@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as api from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { clearToken, getToken, saveLoginCredentials, setToken } from "@/lib/auth-storage";
 import { markOnboardingPending } from "@/lib/onboarding";
 import type { User } from "@/types/api";
@@ -17,7 +18,7 @@ interface AuthContextValue {
   logout: () => void;
   refreshUser: () => Promise<void>;
   updateProfile: (name: string) => Promise<void>;
-  loginWithToken: (token: string) => Promise<void>;
+  loginWithToken: (token: string, remember?: boolean) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
 }
@@ -37,9 +38,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setUser(await api.auth.me());
-    } catch {
-      clearToken();
-      setUser(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        clearToken();
+        setUser(null);
+      }
     }
   }, []);
 
@@ -60,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifyRegisterCode = async (email: string, code: string) => {
     const { access_token } = await api.auth.registerVerify({ email, code });
-    setToken(access_token);
+    setToken(access_token, true);
     setUser(await api.auth.me());
     markOnboardingPending();
   };
@@ -79,8 +82,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(await api.auth.updateProfile(name));
   };
 
-  const loginWithToken = async (token: string) => {
-    setToken(token);
+  const loginWithToken = async (token: string, remember = true) => {
+    setToken(token, remember);
     setUser(await api.auth.me());
   };
 
@@ -90,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (token: string, password: string) => {
     const { access_token } = await api.auth.resetPassword(token, password);
-    setToken(access_token);
+    setToken(access_token, true);
     setUser(await api.auth.me());
   };
 

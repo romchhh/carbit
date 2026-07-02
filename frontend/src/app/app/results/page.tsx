@@ -7,7 +7,7 @@ import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
-import { ApiError, searches as searchesApi } from "@/lib/api";
+import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
 import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import type { ExportListing } from "@/lib/export-listings";
@@ -68,7 +68,7 @@ export default function ResultsPage() {
           setTotal(0);
           setSearch(null);
         }
-        setError(err instanceof ApiError ? err.message : "Не вдалось завантажити результати");
+        setError(getApiErrorMessage(err, "Не вдалось завантажити результати"));
       } finally {
         setLoading(false);
         setLoadingMore(false);

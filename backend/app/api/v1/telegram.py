@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+
+from app.core.auth_cookies import attach_auth_cookie
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -20,6 +23,17 @@ from app.services.user_avatar import sync_telegram_avatar
 from app.schemas.user import user_out
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
+
+
+def _register_complete_response(access_token: str, user: User) -> JSONResponse:
+    response = JSONResponse(
+        content={
+            "access_token": access_token,
+            "user": user_out(user).model_dump(mode="json"),
+        },
+    )
+    attach_auth_cookie(response, access_token)
+    return response
 
 
 @router.get("/connect-link", response_model=TelegramConnectLinkOut)
@@ -80,10 +94,8 @@ async def complete_register(
         await sync_telegram_avatar(tg_existing)
         await db.flush()
         await tg_tokens.delete_registration_token(body.token)
-        return TelegramRegisterCompleteOut(
-            access_token=create_access_token(tg_existing.id),
-            user=user_out(tg_existing),
-        )
+        token = create_access_token(tg_existing.id)
+        return _register_complete_response(token, tg_existing)
 
     email = data["email"]
 
@@ -110,7 +122,5 @@ async def complete_register(
             f"Кабінет → {settings.FRONTEND_URL}/app/dashboard",
         )
 
-    return TelegramRegisterCompleteOut(
-        access_token=create_access_token(user.id),
-        user=user_out(user),
-    )
+    token = create_access_token(user.id)
+    return _register_complete_response(token, user)

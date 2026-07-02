@@ -22,6 +22,7 @@ type Props = {
   onReset: () => void;
   searchButtonLabel?: string;
   searchingButtonLabel?: string;
+  searchError?: string | null;
   onSearch: () => void;
   onSave?: () => void;
   searching?: boolean;
@@ -46,6 +47,7 @@ export function SearchFiltersPanel({
   saveSuccess,
   saveError,
   saveLimitReached,
+  searchError,
   telegramConnected,
   wide,
 }: Props) {
@@ -177,6 +179,14 @@ export function SearchFiltersPanel({
         )}
 
         <div className="space-y-2 border-t border-border/60 bg-white px-4 py-4 sm:px-5">
+          {searchError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-[13px] leading-relaxed text-red-700"
+            >
+              {searchError}
+            </div>
+          )}
           <button
             type="button"
             onClick={onSearch}

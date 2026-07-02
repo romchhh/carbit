@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
+import { useAuth } from "@/contexts/AuthProvider";
 import { telegram as telegramApi, ApiError } from "@/lib/api";
-import { setToken } from "@/lib/auth-storage";
 import { markOnboardingPending } from "@/lib/onboarding";
 
 function TelegramRegisterForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { loginWithToken } = useAuth();
   const token = searchParams.get("token") ?? "";
   const [error, setError] = useState("");
 
@@ -19,15 +20,15 @@ function TelegramRegisterForm() {
     if (!token) return;
 
     telegramApi.registerComplete(token)
-      .then(({ access_token }) => {
-        setToken(access_token);
+      .then(async ({ access_token }) => {
+        await loginWithToken(access_token);
         markOnboardingPending();
         router.replace("/app/onboarding");
       })
       .catch(err => {
-        setError(err instanceof ApiError ? err.message : "Не вдалося зареєструватись");
+        setError(err instanceof ApiError ? err.message : "Не вдалось зареєструватись");
       });
-  }, [token, router]);
+  }, [token, router, loginWithToken]);
 
   if (!token) {
     return (

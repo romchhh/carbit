@@ -28,6 +28,11 @@ export class ApiError extends Error {
   }
 }
 
+export function getApiErrorMessage(err: unknown, fallback = "Помилка запиту"): string {
+  if (err instanceof ApiError) return err.message;
+  return fallback;
+}
+
 async function parseError(res: Response): Promise<string> {
   try {
     const body = await res.json();

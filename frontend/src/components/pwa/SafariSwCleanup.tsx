@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { isStandalonePwa } from "@/lib/pwa";
 
 function isAppleBrowser() {
   if (typeof navigator === "undefined") return false;
@@ -12,18 +13,18 @@ function isAppleBrowser() {
   );
 }
 
-/** Safari service workers often cause stale cache and UI jank — unregister on load. */
+/** In Safari tabs SW often causes stale cache — but keep it for installed PWA. */
 export function SafariSwCleanup() {
   useEffect(() => {
-    if (!isAppleBrowser() || !("serviceWorker" in navigator)) return;
+    if (isStandalonePwa() || !isAppleBrowser() || !("serviceWorker" in navigator)) return;
 
-    void navigator.serviceWorker.getRegistrations().then((regs) => {
-      void Promise.all(regs.map((r) => r.unregister()));
+    void navigator.serviceWorker.getRegistrations().then(regs => {
+      void Promise.all(regs.map(r => r.unregister()));
     });
 
     if ("caches" in window) {
-      void caches.keys().then((keys) => {
-        void Promise.all(keys.map((k) => caches.delete(k)));
+      void caches.keys().then(keys => {
+        void Promise.all(keys.map(k => caches.delete(k)));
       });
     }
   }, []);

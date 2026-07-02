@@ -14,6 +14,7 @@ from app.schemas.schemas import (
     SearchQueryUpdate,
 )
 from app.services.auto_ria.client import AutoRiaError
+from app.services.auto_ria.errors import raise_auto_ria_http
 from app.services.auto_ria.service import search_auto_ria
 
 router = APIRouter(prefix="/searches", tags=["searches"])
@@ -66,8 +67,7 @@ async def get_search_results(
     try:
         results = await search_auto_ria(filters, page=page, per_page=per_page, sort_by=sort_by)
     except AutoRiaError as exc:
-        status = 400 if "не знайдено" in str(exc).lower() else 502
-        raise HTTPException(status, str(exc)) from exc
+        raise_auto_ria_http(exc)
 
     sq.total_count = results.total
     sq.last_checked_at = datetime.now(UTC)

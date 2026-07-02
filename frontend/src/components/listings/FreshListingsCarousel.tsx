@@ -8,7 +8,7 @@ import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButt
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
-import { ApiError, autoRia } from "@/lib/api";
+import { autoRia, getApiErrorMessage } from "@/lib/api";
 import { saveRecentListing } from "@/lib/recent-listings";
 import { cn, formatMileage, formatPrice } from "@/lib/utils";
 import type { Listing } from "@/types/api";
@@ -47,7 +47,7 @@ export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props)
       .catch(err => {
         if (cancelled) return;
         setListings([]);
-        setError(err instanceof ApiError ? err.message : "Не вдалось завантажити оголошення");
+        setError(getApiErrorMessage(err, "Не вдалось завантажити оголошення"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -100,7 +100,7 @@ export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props)
   const canPrev = activeIndex > 0;
   const canNext = activeIndex < listings.length - 1;
 
-  if (!loading && (error || listings.length === 0)) {
+  if (!loading && !error && listings.length === 0) {
     return null;
   }
 
@@ -130,13 +130,15 @@ export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props)
                 Свіжі оголошення з AUTO.RIA — оновлюються в реальному часі
               </p>
             </div>
-            <Link
-              href="/app/search"
-              className="inline-flex shrink-0 items-center gap-1.5 text-[12px] font-medium text-muted transition-colors hover:text-emerald-dark"
-            >
-              Усі результати
-              <span className="text-emerald">→</span>
-            </Link>
+            {!error && (
+              <Link
+                href="/app/search"
+                className="inline-flex shrink-0 items-center gap-1.5 text-[12px] font-medium text-muted transition-colors hover:text-emerald-dark"
+              >
+                Усі результати
+                <span className="text-emerald">→</span>
+              </Link>
+            )}
           </div>
 
           {loading ? (
@@ -147,6 +149,10 @@ export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props)
                   className="h-[280px] w-[272px] shrink-0 animate-pulse rounded-2xl border border-border/70 bg-surface sm:w-[300px]"
                 />
               ))}
+            </div>
+          ) : error ? (
+            <div className="rounded-2xl border border-border/70 bg-surface/50 px-5 py-10 text-center sm:px-6 sm:py-12">
+              <p className="text-[15px] font-semibold text-ink">{error}</p>
             </div>
           ) : (
             <>
