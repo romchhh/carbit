@@ -11,7 +11,9 @@ from app.services.listings.upsert import upsert_listing
 router = APIRouter(prefix="/favorites", tags=["favorites"])
 
 
-@router.get("", response_model=list[FavoriteOut])
+@router.get("/list", response_model=list[FavoriteOut])
+@router.get("", response_model=list[FavoriteOut], include_in_schema=False)
+@router.get("/", response_model=list[FavoriteOut], include_in_schema=False)
 async def list_favorites(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
@@ -53,7 +55,9 @@ async def check_favorites_batch(
     return {"ids": list(result.all())}
 
 
-@router.post("", response_model=FavoriteOut, status_code=status.HTTP_201_CREATED)
+@router.post("/add", response_model=FavoriteOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=FavoriteOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/", response_model=FavoriteOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def add_favorite(
     body: FavoriteCreate,
     user_id: str = Depends(get_current_user_id),

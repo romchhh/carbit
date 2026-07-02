@@ -35,4 +35,5 @@ async def health():
         "auto_ria_search_route": "/api/v1/auto-ria/search" in paths,
         "auto_ria_live_route": "/api/v1/searches/live" in paths,
         "auto_ria_api_key": bool(settings.AUTO_RIA_API_KEY.strip()),
+        "favorites_add_route": "/api/v1/favorites/add" in paths,
     }

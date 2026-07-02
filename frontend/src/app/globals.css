@@ -43,6 +43,16 @@
   html, body {
     touch-action: pan-y pinch-zoom;
   }
+
+  :root {
+    --mobile-nav-height: calc(3.75rem + var(--safe-bottom));
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --mobile-nav-height: 0px;
+  }
 }
 
 @media (display-mode: standalone) {
@@ -50,6 +60,10 @@
     background: #ffffff;
     height: 100%;
     overflow: hidden;
+  }
+
+  body {
+    overscroll-behavior: none;
   }
 }
 
@@ -116,6 +130,18 @@
       position: fixed;
       inset: 0;
       width: 100%;
+      background: #ffffff;
+    }
+
+    .app-mobile-scroll {
+      padding-left: 0;
+      padding-right: 0;
+      overscroll-behavior-y: contain;
+    }
+
+    .app-mobile-content {
+      padding-left: max(1rem, var(--safe-left));
+      padding-right: max(1rem, var(--safe-right));
     }
   }
 
@@ -129,18 +155,6 @@
   .app-mobile-shell {
     padding-left: var(--safe-left);
     padding-right: var(--safe-right);
-  }
-
-  @media (display-mode: standalone) and (max-width: 1023px) {
-    .app-mobile-scroll {
-      padding-left: 0;
-      padding-right: 0;
-    }
-
-    .app-mobile-content {
-      padding-left: max(1rem, var(--safe-left));
-      padding-right: max(1rem, var(--safe-right));
-    }
   }
 }
 

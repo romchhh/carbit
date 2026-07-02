@@ -33,9 +33,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!initialized || loading || !user) {
     return (
-      <div className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-[#EEF0F4]">
+      <div className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white">
         <div className="app-pwa-statusbar lg:hidden" aria-hidden />
-        <PwaLoadingScreen fixed={false} className="relative min-h-0 flex-1" />
+        <PwaLoadingScreen fixed={false} className="relative min-h-0 flex-1 bg-white" />
       </div>
     );
   }
@@ -45,7 +45,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white lg:relative lg:min-h-screen lg:h-screen lg:bg-canvas">
+      <div className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white lg:relative lg:min-h-screen lg:h-screen lg:bg-canvas">
       <div className="app-pwa-statusbar lg:hidden" aria-hidden />
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden lg:px-6 lg:py-5">
@@ -54,7 +54,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:h-[calc(100vh-2.5rem)]">
             <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-white lg:rounded-[28px] lg:border lg:border-border/50 lg:shadow-island">
-              <div className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-[calc(5.5rem+var(--safe-bottom))] sm:px-6 sm:py-6 lg:px-12 lg:py-8 lg:pb-8">
+              <div className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-[var(--mobile-nav-height)] sm:px-6 sm:py-6 lg:px-12 lg:py-8 lg:pb-8">
                 <div className="app-mobile-content mx-auto flex w-full max-w-[980px] flex-col">
                   <AppShellHeader unreadNotifications={badges.notifications} />
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { IconHeart } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +9,7 @@ type Props = {
   onToggle: () => void;
   className?: string;
   size?: "sm" | "md";
+  variant?: "default" | "overlay";
 };
 
 export function ListingFavoriteButton({
@@ -18,6 +18,7 @@ export function ListingFavoriteButton({
   onToggle,
   className,
   size = "sm",
+  variant = "default",
 }: Props) {
   return (
     <button
@@ -31,17 +32,21 @@ export function ListingFavoriteButton({
         onToggle();
       }}
       className={cn(
-        "inline-flex items-center justify-center rounded-full border transition-all",
-        "bg-white/95 shadow-sm backdrop-blur-sm",
+        "inline-flex items-center justify-center rounded-full border-0 bg-transparent p-0 shadow-none transition-colors",
         active
-          ? "border-red-200 text-red-500 hover:bg-red-50"
-          : "border-border/80 text-muted hover:border-emerald/40 hover:text-emerald-dark",
+          ? "text-emerald"
+          : variant === "overlay"
+            ? "text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] hover:text-emerald"
+            : "text-muted/75 hover:text-emerald-dark",
         loading && "opacity-60",
         size === "sm" ? "h-8 w-8" : "h-9 w-9",
         className,
       )}
     >
-      <IconHeart size={size === "sm" ? 15 : 17} className={active ? "fill-current" : undefined} />
+      <IconHeart
+        size={size === "sm" ? 15 : 17}
+        className={cn("transition-colors", active && "fill-current")}
+      />
     </button>
   );
 }

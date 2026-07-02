@@ -6,6 +6,7 @@ import { IconPlus, IconZap, IconArrowRight } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
+import { FavoriteListingsSection } from "@/components/listings/FavoriteListingsSection";
 import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
@@ -20,6 +21,7 @@ import {
   AppPage,
   AppSection,
 } from "@/components/layout/AppPage";
+import { DashboardWelcomeHero } from "@/components/layout/DashboardWelcomeHero";
 import type { SearchQuery, DashboardStats } from "@/types/api";
 
 function formatSearchDesc(filters: Record<string, unknown>): string {
@@ -130,11 +132,15 @@ export default function DashboardPage() {
   };
 
   return (
-    <AppPage
-      wide
-      title={`Привіт, ${firstName}`}
-      description="Налаштуйте фільтри — Carbit моніторит AUTO.RIA і надсилає нові авто в Telegram"
-    >
+    <AppPage wide>
+      <DashboardWelcomeHero
+        firstName={firstName}
+        activeSearches={activeCount}
+        searchesLimit={limit}
+        telegramConnected={user.telegram_connected}
+        unreadNotifications={stats?.unread_notifications ?? 0}
+      />
+
       <div className="mb-8">
         <h2 className="text-[17px] font-bold text-ink">Новий моніторинг</h2>
         <p className="mt-1 text-[13px] text-muted">
@@ -242,7 +248,9 @@ export default function DashboardPage() {
 
       <RecentListingsSection className="mb-10" />
 
-      <div className="-mx-4 mt-10 sm:-mx-6">
+      <FavoriteListingsSection className="mb-10" />
+
+      <div className="mt-10">
         <FreshListingsCarousel variant="dashboard" />
       </div>
 

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { IconGlobe, IconX } from "@/components/icons";
@@ -12,7 +12,7 @@ import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import { hasVinCheck } from "@/lib/vin-check";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
-import { formatMileage, formatPrice } from "@/lib/utils";
+import { cn, formatMileage, formatPrice } from "@/lib/utils";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -33,6 +33,20 @@ export function ListingDetailModal({
   favoriteError,
 }: Props) {
   const [photoIndex, setPhotoIndex] = useState(0);
+  const galleryRef = useRef<HTMLDivElement>(null);
+  const photoIndexRef = useRef(photoIndex);
+  photoIndexRef.current = photoIndex;
+
+  const scrollToPhoto = useCallback((index: number) => {
+    const container = galleryRef.current;
+    if (!container) return;
+
+    const slide = container.children[index] as HTMLElement | undefined;
+    if (!slide) return;
+
+    container.scrollTo({ left: slide.offsetLeft, behavior: "smooth" });
+    setPhotoIndex(index);
+  }, []);
 
   useEffect(() => {
     if (!listing) return;
@@ -40,18 +54,48 @@ export function ListingDetailModal({
     lockBodyScroll();
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      const lastIndex = Math.max(0, listing.images.length - 1);
+      if (e.key === "ArrowLeft") scrollToPhoto(Math.max(0, photoIndexRef.current - 1));
+      if (e.key === "ArrowRight") scrollToPhoto(Math.min(lastIndex, photoIndexRef.current + 1));
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
       unlockBodyScroll();
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [listing, onClose]);
+  }, [listing, onClose, scrollToPhoto]);
+
+  useEffect(() => {
+    const container = galleryRef.current;
+    if (!container || !listing || listing.images.length <= 1) return;
+
+    const slides = Array.from(container.children) as HTMLElement[];
+    const observer = new IntersectionObserver(
+      entries => {
+        const visible = entries
+          .filter(entry => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+        if (!visible.length) return;
+
+        const index = slides.indexOf(visible[0].target as HTMLElement);
+        if (index >= 0) setPhotoIndex(index);
+      },
+      { root: container, threshold: 0.6 },
+    );
+
+    slides.forEach(slide => observer.observe(slide));
+    return () => observer.disconnect();
+  }, [listing]);
+
+  useEffect(() => {
+    if (!listing) return;
+    galleryRef.current?.scrollTo({ left: 0 });
+  }, [listing?.id]);
 
   if (!listing) return null;
 
   const photos = listing.images.length ? listing.images : [];
-  const activePhoto = photos[photoIndex] ?? photos[0];
   const hasAutoRiaDetails =
     listing.source === "auto_ria" &&
     listing.source_data &&
@@ -94,62 +138,99 @@ export function ListingDetailModal({
       />
 
       <div className="relative z-10 flex max-h-[92dvh] w-full max-w-[880px] flex-col overflow-hidden rounded-t-[1.5rem] border border-border bg-white shadow-[0_24px_80px_-20px_rgba(10,12,14,0.35)] sm:rounded-[1.5rem]">
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-5">
-          <div className="min-w-0 pr-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">AUTO.RIA</p>
-            <h2 id="listing-modal-title" className="truncate text-[16px] font-bold text-ink sm:text-[18px]">
-              {listing.title}
-            </h2>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {onToggleFavorite && (
-              <ListingFavoriteButton
-                active={isFavorite}
-                loading={favoriteLoading}
-                onToggle={onToggleFavorite}
-                size="md"
-              />
-            )}
-            <button
-              type="button"
-              aria-label="Закрити"
-              onClick={onClose}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:bg-surface hover:text-ink"
-            >
-              <IconX size={18} />
-            </button>
-          </div>
-        </div>
+        <button
+          type="button"
+          aria-label="Згорнути"
+          onClick={onClose}
+          className="flex shrink-0 justify-center border-b border-border/60 px-4 pb-2.5 pt-3 sm:hidden"
+        >
+          <span className="h-1 w-10 rounded-full bg-border" />
+        </button>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="relative aspect-[16/10] w-full bg-surface">
-            {activePhoto ? (
-              <Image
-                src={activePhoto}
-                alt={listing.title}
-                fill
-                className="object-cover"
-                sizes="720px"
-                unoptimized
-                priority
-              />
+            {photos.length > 0 ? (
+              <div
+                ref={galleryRef}
+                className="flex h-full w-full snap-x snap-mandatory overflow-x-auto scroll-smooth scrollbar-hide touch-pan-x"
+              >
+                {photos.map((src, index) => (
+                  <div
+                    key={`${src}-${index}`}
+                    className="relative h-full w-full shrink-0 snap-start snap-always"
+                  >
+                    <Image
+                      src={src}
+                      alt={`${listing.title} — фото ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      sizes="720px"
+                      unoptimized
+                      priority={index === 0}
+                    />
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center text-[13px] text-muted">
                 Фото відсутнє
               </div>
             )}
+
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/55 to-transparent" />
+            {photos.length > 1 && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent" />
+            )}
+
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-4">
+              <div className="min-w-0 flex-1 pt-0.5 sm:pt-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/80">AUTO.RIA</p>
+                <h2
+                  id="listing-modal-title"
+                  className="mt-0.5 line-clamp-2 text-[15px] font-bold leading-snug text-white drop-shadow-sm sm:text-[17px]"
+                >
+                  {listing.title}
+                </h2>
+              </div>
+              <div className="pointer-events-auto flex shrink-0 items-center gap-2">
+                {onToggleFavorite && (
+                  <ListingFavoriteButton
+                    active={isFavorite}
+                    loading={favoriteLoading}
+                    onToggle={onToggleFavorite}
+                    size="md"
+                    variant="overlay"
+                  />
+                )}
+                <button
+                  type="button"
+                  aria-label="Закрити"
+                  onClick={onClose}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-md backdrop-blur-md transition-colors hover:bg-black/55 active:bg-black/60"
+                >
+                  <IconX size={18} />
+                </button>
+              </div>
+            </div>
+
+            {photos.length > 1 && (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">
+                {photoIndex + 1} / {photos.length}
+              </div>
+            )}
           </div>
 
           {photos.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto border-b border-border px-4 py-3 sm:px-5">
+            <div className="flex gap-2 overflow-x-auto border-b border-border px-4 py-3 scrollbar-hide sm:px-5">
               {photos.map((src, index) => (
                 <button
-                  key={`${src}-${index}`}
+                  key={`${src}-${index}-thumb`}
                   type="button"
-                  onClick={() => setPhotoIndex(index)}
-                  className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${
-                    index === photoIndex ? "border-emerald" : "border-transparent"
-                  }`}
+                  onClick={() => scrollToPhoto(index)}
+                  className={cn(
+                    "relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-colors",
+                    index === photoIndex ? "border-emerald" : "border-transparent opacity-70 hover:opacity-100",
+                  )}
                 >
                   <Image src={src} alt="" fill className="object-cover" sizes="80px" unoptimized />
                 </button>
@@ -240,9 +321,6 @@ export function ListingDetailModal({
             {hasVinCheck(listing) && (
               <VinCheckButton listing={listing} size="md" className="w-full sm:w-auto sm:min-w-[180px]" />
             )}
-            <Button variant="secondary" size="md" className="w-full sm:w-auto" onClick={onClose}>
-              Закрити
-            </Button>
           </div>
         </div>
       </div>

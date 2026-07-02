@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 type AppPageProps = {
-  title: string;
+  title?: string;
   description?: string;
   action?: React.ReactNode;
   wide?: boolean;
@@ -12,13 +12,19 @@ type AppPageProps = {
 export function AppPage({ title, description, action, wide, children, className }: AppPageProps) {
   return (
     <div className={cn("mx-auto w-full", wide ? "max-w-[920px]" : "max-w-[760px]", className)}>
-      <header className="mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-[22px] font-black tracking-tight text-ink sm:text-[26px]">{title}</h1>
-          {description && <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{description}</p>}
-        </div>
-        {action && <div className="shrink-0">{action}</div>}
-      </header>
+      {(title || action) && (
+        <header className="mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            {title && (
+              <h1 className="text-[22px] font-black tracking-tight text-ink sm:text-[26px]">{title}</h1>
+            )}
+            {description && (
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{description}</p>
+            )}
+          </div>
+          {action && <div className="shrink-0">{action}</div>}
+        </header>
+      )}
       {children}
     </div>
   );

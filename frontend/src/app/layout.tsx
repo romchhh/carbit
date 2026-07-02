@@ -39,7 +39,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="uk" className={`${montserrat.variable} h-full`}>
-      <body className={`${montserrat.className} h-full min-h-[100dvh] bg-[#EEF0F4]`}>
+      <body className={`${montserrat.className} h-full min-h-[100dvh] bg-white`}>
         <PwaSplash />
         <PwaServiceWorker />
         <AuthProvider>{children}</AuthProvider>

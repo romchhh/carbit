@@ -7,7 +7,7 @@ import type { Listing } from "@/types/api";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { IconHeart, IconGlobe, IconArrowRight } from "@/components/icons";
-import { formatPrice, formatMileage } from "@/lib/utils";
+import { formatPrice, formatMileage, cn } from "@/lib/utils";
 import { favorites as favoritesApi } from "@/lib/api";
 import { normalizeListingForFavorite } from "@/lib/listing-favorite-payload";
 
@@ -70,8 +70,16 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           <div className="bg-white border border-border rounded-xl p-6 sticky top-[80px]">
             <div className="flex items-start justify-between mb-1">
               <h1 className="text-[16px] font-bold text-ink">{listing.title}</h1>
-              <button onClick={toggleFavorite} className="w-8 h-8 rounded-lg border border-border flex items-center justify-center">
-                <IconHeart size={14} className={isFavorite ? "text-red-500" : "text-muted"} />
+              <button
+                type="button"
+                aria-label={isFavorite ? "Прибрати з обраного" : "Додати в обране"}
+                onClick={toggleFavorite}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-transparent"
+              >
+                <IconHeart
+                  size={16}
+                  className={cn("transition-colors", isFavorite ? "fill-current text-emerald" : "text-muted/75")}
+                />
               </button>
             </div>
             <p className="text-[12px] text-muted mb-4">

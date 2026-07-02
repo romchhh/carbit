@@ -54,7 +54,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${apiUrl()}${path}`, { ...options, headers });
+  const method = (options.method ?? "GET").toUpperCase();
+  const res = await fetch(`${apiUrl()}${path}`, {
+    ...options,
+    headers,
+    redirect: method === "GET" || method === "HEAD" ? "follow" : "manual",
+  });
+
+  if (res.status >= 300 && res.status < 400) {
+    throw new ApiError(res.status, "Некоректне перенаправлення API. Перезберіть backend і frontend.");
+  }
+
   if (!res.ok) throw new ApiError(res.status, await parseError(res));
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -142,9 +152,9 @@ export const autoRia = {
 
 // ── Favorites ─────────────────────────────────────────
 export const favorites = {
-  list: () => request<Favorite[]>("/favorites"),
+  list: () => request<Favorite[]>("/favorites/list"),
   add: (listingId: string, listing?: Listing) =>
-    request<Favorite>("/favorites", {
+    request<Favorite>("/favorites/add", {
       method: "POST",
       body: JSON.stringify(
         listing
