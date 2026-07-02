@@ -85,7 +85,7 @@ export function PwaInstallPrompt({ className }: { className?: string }) {
       </button>
 
       <div className="flex items-start gap-4 pr-6">
-        <div className="shrink-0 rounded-[18px] shadow-[0_8px_24px_-6px_rgba(0,0,0,0.35)] ring-1 ring-black/5">
+        <div className="shrink-0 overflow-hidden rounded-[18px] bg-white shadow-[0_8px_24px_-6px_rgba(0,0,0,0.2)] ring-1 ring-black/5">
           <PwaAppIcon size={56} />
         </div>
 

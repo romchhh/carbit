@@ -60,8 +60,8 @@ SECRET_KEY=<довгий-випадковий-ключ>
 FRONTEND_URL=https://your-domain.com
 
 NEXT_PUBLIC_API_URL=https://your-domain.com/api/v1
-# або якщо API на окремому піддомені:
-# NEXT_PUBLIC_API_URL=https://api.your-domain.com/api/v1
+# або відносний шлях (рекомендовано, якщо API на тому ж домені):
+# NEXT_PUBLIC_API_URL=/api/v1
 
 GOOGLE_REDIRECT_URI=https://your-domain.com/api/v1/auth/google/callback
 
@@ -213,6 +213,9 @@ GOOGLE_REDIRECT_URI=https://your-domain.com/api/v1/auth/google/callback
 |---------|---------|
 | Backend unhealthy / Restarting | `docker compose logs backend --tail=50` — часто бракує `storage/` в образі (оновіть код і `--build`) |
 | `ModuleNotFoundError: storage` | `git pull && docker compose up -d --build backend bot` |
+| `POST /api/v1/auto-ria/search` → 404 `{"detail":"Not Found"}` | Backend без нового коду: `git pull && docker compose up -d --build backend`. Перевірка: `curl http://localhost:8000/health` → `auto_ria_search_route: true` |
+| Mixed Content / `http://backend:8000` у консолі | Неправильний `NEXT_PUBLIC_API_URL` у `.env`. Має бути `/api/v1` або `https://ваш-домен/api/v1`. Потім `docker compose up -d --build frontend` |
+| Кабінет не завантажується без F5 | Часто через Mixed Content вище — виправте URL і перезберіть frontend |
 | Frontend не бачить API | Перевірте `NEXT_PUBLIC_API_URL`, перезберіть frontend |
 | Bot не підключається до backend | `INTERNAL_API_SECRET` однаковий у `.env`; bot використовує `BACKEND_URL` з compose |
 | CORS помилки | Додайте домен у `ALLOWED_ORIGINS` у `backend/app/core/config.py` |

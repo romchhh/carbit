@@ -13,8 +13,14 @@ def raise_auto_ria_http(exc: AutoRiaError) -> None:
 
     if "не налаштовано" in message.lower():
         status = 503
+        message = "AUTO.RIA не налаштовано на сервері. Додайте AUTO_RIA_API_KEY у .env і перезберіть backend."
     elif "не знайдено" in message.lower():
         status = 400
+    elif status == 403:
+        message = "Невалідний ключ AUTO.RIA. Перевірте AUTO_RIA_API_KEY у .env."
+    elif status == 404:
+        status = 502
+        message = "AUTO.RIA тимчасово недоступний. Спробуйте пізніше."
     elif status == 429:
         message = RATE_LIMIT_MESSAGE
 

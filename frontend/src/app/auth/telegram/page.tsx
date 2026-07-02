@@ -50,7 +50,7 @@ function TelegramRegisterForm() {
 
   return (
     <div className="text-center py-8">
-      <CarbitLogo variant="icon" height={40} className="mx-auto mb-4" />
+      <CarbitLogo variant="full" height={32} className="mx-auto mb-4" />
       <p className="text-[15px] text-muted">Реєстрація через Telegram...</p>
       <div className="w-8 h-8 border-2 border-emerald border-t-transparent rounded-full animate-spin mx-auto mt-6" />
     </div>

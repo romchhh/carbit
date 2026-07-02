@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getToken } from "@/lib/auth-storage";
+import { getApiUrl } from "@/lib/api-url";
 import { avatarColorClass, cn, getInitials } from "@/lib/utils";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
 type Props = {
   name: string;
@@ -37,7 +36,7 @@ export function UserAvatar({
     const token = accessToken ?? getToken();
     if (!token) return null;
     const path = avatarUrl.startsWith("/") ? avatarUrl : `/${avatarUrl}`;
-    return `${API_URL}${path}?access_token=${encodeURIComponent(token)}`;
+    return `${getApiUrl()}${path}?access_token=${encodeURIComponent(token)}`;
   }, [avatarUrl, accessToken, failed]);
 
   if (src) {

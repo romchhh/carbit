@@ -11,7 +11,10 @@ npm run dev
 
 
 git pull
-docker compose up -d --build backend bot frontend
+# після змін backend (AUTO.RIA) або frontend (API URL):
+docker compose up -d --build backend frontend
+# перевірка AUTO.RIA: curl -s http://localhost:8000/health | grep auto_ria
+# у .env для production: NEXT_PUBLIC_API_URL=/api/v1  (НЕ http://backend:8000)
 
 
 # 1. Зупинити контейнери

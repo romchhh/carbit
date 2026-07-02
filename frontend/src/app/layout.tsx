@@ -41,14 +41,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#EEF0F4]"
           aria-hidden="true"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/icons/icon-192.png"
-            alt=""
-            width={96}
-            height={96}
-            className="rounded-[28px] shadow-[0_12px_40px_-8px_rgba(10,12,14,0.22)]"
-          />
+          <div className="flex items-center justify-center rounded-[28px] bg-white px-8 py-6 shadow-[0_12px_40px_-8px_rgba(10,12,14,0.22)] ring-1 ring-black/[0.06]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/icons/logo-carbit.png"
+              alt=""
+              className="h-9 w-auto object-contain sm:h-10"
+            />
+          </div>
         </div>
         <PwaSplash />
         <SafariSwCleanup />

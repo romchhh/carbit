@@ -1,4 +1,5 @@
 import { getToken } from "@/lib/auth-storage";
+import { getApiUrl } from "@/lib/api-url";
 import { cachedAutoRiaSearch } from "@/lib/auto-ria-search-cache";
 import type { AutoRiaSearchMode } from "@/lib/search-preview";
 import type { BackendSearchFilters } from "@/lib/search-filters-api";
@@ -19,7 +20,9 @@ import type {
   User,
 } from "@/types/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+function apiUrl(): string {
+  return getApiUrl();
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -50,7 +53,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const res = await fetch(`${apiUrl()}${path}`, { ...options, headers });
   if (!res.ok) throw new ApiError(res.status, await parseError(res));
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -74,7 +77,7 @@ export const auth = {
     request<TokenResponse>("/auth/telegram/login", { method: "POST", body: JSON.stringify({ token }) }),
   telegramLoginUrl: () => request<{ bot_url: string; bot_username: string }>("/auth/telegram/login-url"),
   telegramRegisterUrl: () => request<{ bot_url: string; bot_username: string }>("/auth/telegram/register-url"),
-  googleLoginUrl: () => `${API_URL}/auth/google`,
+  googleLoginUrl: () => `${apiUrl()}/auth/google`,
   me: () => request<User>("/auth/me"),
   updateProfile: (name: string) =>
     request<User>("/auth/me", { method: "PATCH", body: JSON.stringify({ name }) }),

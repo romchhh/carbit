@@ -15,11 +15,16 @@ const telegramBotUrl =
   process.env.TELEGRAM_BOT_URL?.trim() ||
   "";
 
-const apiUrl =
-  process.env.NEXT_PUBLIC_API_URL?.trim() ||
-  (process.env.NODE_ENV === "production" ? "/api/v1" : "") ||
-  process.env.BACKEND_URL?.trim() ||
-  "http://localhost:8000/api/v1";
+function isInternalBackendUrl(url) {
+  return /:\/\/backend(?::|\/|$)/i.test(url) || /^backend:/i.test(url);
+}
+
+const apiUrl = (() => {
+  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (fromEnv && !isInternalBackendUrl(fromEnv)) return fromEnv;
+  if (process.env.NODE_ENV === "production") return "/api/v1";
+  return "http://localhost:8000/api/v1";
+})();
 
 const backendInternal =
   process.env.BACKEND_INTERNAL_URL?.trim() ||

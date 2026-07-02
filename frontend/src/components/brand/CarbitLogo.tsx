@@ -3,8 +3,6 @@ import { cn } from "@/lib/utils";
 
 import { APP_ICON_SRC, FULL_LOGO_SRC, FULL_LOGO_WHITE_SRC } from "@/lib/brand-assets";
 
-export { APP_ICON_SRC, FULL_LOGO_SRC, FULL_LOGO_WHITE_SRC };
-
 type CarbitLogoProps = {
   variant?: "icon" | "full";
   height?: number;
@@ -36,8 +34,7 @@ export function CarbitLogo({
       priority={priority}
       className={cn(
         "w-auto shrink-0 object-contain",
-        variant === "icon" ? "aspect-square" : "",
-        light && variant === "icon" && "brightness-0 invert",
+        variant === "icon" ? "aspect-square object-center" : "",
         className,
       )}
       style={{ height }}

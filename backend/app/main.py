@@ -21,6 +21,16 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 
+def _route_paths() -> set[str]:
+    return {getattr(route, "path", "") for route in app.routes if hasattr(route, "path")}
+
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "1.0.0"}
+    paths = _route_paths()
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "auto_ria_search_route": "/api/v1/auto-ria/search" in paths,
+        "auto_ria_api_key": bool(settings.AUTO_RIA_API_KEY.strip()),
+    }

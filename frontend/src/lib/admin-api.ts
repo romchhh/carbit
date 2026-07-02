@@ -1,6 +1,5 @@
 import { getAdminToken } from "@/lib/admin-storage";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+import { getApiUrl } from "@/lib/api-url";
 
 export class AdminApiError extends Error {
   constructor(public status: number, message: string) {
@@ -14,7 +13,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const res = await fetch(`${getApiUrl()}${path}`, { ...options, headers });
   if (!res.ok) {
     let msg = "Помилка запиту";
     try { const b = await res.json(); if (b.detail) msg = b.detail; } catch { /* */ }

@@ -1,6 +1,8 @@
 export const APP_ICON_SRC = "/icons/app-icon.svg";
 export const FULL_LOGO_SRC = "/icons/logo-carbit.png";
 export const FULL_LOGO_WHITE_SRC = "/icons/logo-carbit-white.png";
+export const PWA_ICON_192_SRC = "/icons/icon-192.png";
+export const PWA_ICON_512_SRC = "/icons/icon-512.png";
 
 export const SOURCE_LOGOS = {
   autoRia: "/icons/source-auto-ria.png",
