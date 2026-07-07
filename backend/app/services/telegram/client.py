@@ -1,12 +1,14 @@
 import html
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
+from app.core.timezone import as_kyiv, format_time_ago
 from app.services.telegram.media_urls import (
     is_public_http_url,
     resolve_listing_image_url,
@@ -16,6 +18,21 @@ from app.services.telegram.media_urls import (
 logger = logging.getLogger(__name__)
 
 SOURCE_LABELS = {"auto_ria": "AUTO.RIA", "olx": "OLX", "telegram": "Telegram"}
+
+
+def _published_caption_line(listing: dict) -> str | None:
+    raw = listing.get("published_at")
+    if not raw:
+        return None
+    if isinstance(raw, datetime):
+        dt = raw
+    else:
+        try:
+            dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    ago = format_time_ago(as_kyiv(dt))
+    return f"🕐 Опубліковано {ago}" if ago else None
 
 
 def _valid_photo_url(url: str | None) -> str | None:
@@ -97,7 +114,7 @@ class TelegramClient:
         result = await self._call("sendPhoto", payload)
         if result and result.get("ok"):
             return result
-        return await self.send_message(chat_id, caption, reply_markup=reply_markup, parse_mode=parse_mode)
+        return None
 
     async def send_photo_file(
         self,
@@ -123,7 +140,7 @@ class TelegramClient:
             )
         if result and result.get("ok"):
             return result
-        return await self.send_message(chat_id, caption, reply_markup=reply_markup, parse_mode=parse_mode)
+        return None
 
     async def send_listing_card(
         self,
@@ -139,6 +156,8 @@ class TelegramClient:
         price = f"{listing['price']:,}".replace(",", " ")
         currency = listing.get("currency") or "грн"
 
+        published_line = _published_caption_line(listing)
+
         lines = [
             f"🚗 <b>{html.escape(str(listing.get('title', 'Авто')))}</b>",
             "",
@@ -147,9 +166,10 @@ class TelegramClient:
             f"📍 {html.escape(str(listing.get('region') or 'Україна'))}",
             f"💰 <b>{price} {html.escape(str(currency))}</b>",
             f"📡 {html.escape(source_label)}",
-            "",
-            f"🔍 <i>{html.escape(search_name)}</i>",
         ]
+        if published_line:
+            lines.append(published_line)
+        lines.extend(["", f"🔍 <i>{html.escape(search_name)}</i>"])
 
         description = (listing.get("description") or "").strip()
         if description:
@@ -186,9 +206,13 @@ class TelegramClient:
             result = await self.send_photo(chat_id, public_url, caption, reply_markup=markup)
             if result:
                 return result
+            logger.warning("Telegram sendPhoto by URL failed, trying local file: %s", public_url)
 
         if local_path:
-            return await self.send_photo_file(chat_id, local_path, caption, reply_markup=markup)
+            result = await self.send_photo_file(chat_id, local_path, caption, reply_markup=markup)
+            if result:
+                return result
+            logger.warning("Telegram sendPhoto by file failed: %s", local_path)
 
         return await self.send_message(chat_id, caption, reply_markup=markup)
 

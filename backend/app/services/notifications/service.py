@@ -53,6 +53,7 @@ async def create_listing_notification(
             "transmission": listing.transmission,
             "description": listing.description,
             "images": list(listing.images or []),
+            "published_at": listing.published_at.isoformat() if listing.published_at else None,
             "source": source,
             "source_label": SOURCE_LABELS.get(source, source),
             "url": listing.url,

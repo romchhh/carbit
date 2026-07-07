@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { IconGlobe, IconHeart, IconX } from "@/components/icons";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SourceBadge } from "@/components/listings/SourceBadge";
+import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
@@ -17,7 +18,7 @@ import {
 } from "@/lib/listing-source";
 import { hasVinCheck } from "@/lib/vin-check";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
-import { cn, formatMileage, formatPrice } from "@/lib/utils";
+import { cn, formatMileage, formatPrice, publishedAgoLabel } from "@/lib/utils";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -250,6 +251,9 @@ export function ListingDetailModal({
                 {photoIndex + 1} / {photos.length}
               </div>
             )}
+            <div className="pointer-events-none absolute bottom-3 left-3">
+              <PublishedTimeBadge date={listing.published_at} short />
+            </div>
           </div>
 
           {photos.length > 1 && (
@@ -295,6 +299,9 @@ export function ListingDetailModal({
                       {photoIndex + 1} / {photos.length}
                     </div>
                   )}
+                  <div className="absolute bottom-2 left-2">
+                    <PublishedTimeBadge date={listing.published_at} short />
+                  </div>
                 </div>
 
                 {photos.length > 1 && (
@@ -328,6 +335,11 @@ export function ListingDetailModal({
                     <p className="mt-1 text-[13px] text-muted">
                       {listing.brand} {listing.model}
                     </p>
+                    {publishedAgoLabel(listing.published_at) && (
+                      <p className="mt-1 text-[12px] text-muted/80">
+                        {publishedAgoLabel(listing.published_at)}
+                      </p>
+                    )}
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-[26px] font-black leading-none text-ink">
@@ -393,6 +405,11 @@ export function ListingDetailModal({
                 <p className="mt-1.5 text-[12px] text-muted">
                   {listing.brand} {listing.model}
                 </p>
+                {publishedAgoLabel(listing.published_at) && (
+                  <p className="mt-1 text-[12px] text-muted/80">
+                    {publishedAgoLabel(listing.published_at)}
+                  </p>
+                )}
               </div>
               <SourceBadge source={listing.source} variant="outline" />
             </div>

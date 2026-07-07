@@ -7,8 +7,9 @@ import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButt
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import { SourceBadge } from "@/components/listings/SourceBadge";
+import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { hasVinCheck } from "@/lib/vin-check";
-import { cn } from "@/lib/utils";
+import { cn, publishedAgoLabel } from "@/lib/utils";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -40,6 +41,7 @@ export function ListingCard({
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
   const showVinBlock = Boolean(listing.vin) || hasVinCheck(listing);
   const highlights = getAutoRiaHighlights(listing.source_data).slice(0, 3);
+  const publishedLabel = publishedAgoLabel(listing.published_at);
 
   return (
     <article
@@ -91,6 +93,9 @@ export function ListingCard({
             </span>
           </div>
         </div>
+        <div className="absolute bottom-2 left-2">
+          <PublishedTimeBadge date={listing.published_at} short />
+        </div>
       </div>
 
       {/* Desktop: thumbnail left */}
@@ -118,6 +123,9 @@ export function ListingCard({
             />
           </div>
         )}
+        <div className="absolute bottom-2 left-2">
+          <PublishedTimeBadge date={listing.published_at} short />
+        </div>
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col p-4 pt-3.5 sm:p-0">
@@ -191,9 +199,12 @@ export function ListingCard({
         )}
 
         <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 sm:mt-auto sm:border-0 sm:pt-2.5">
-          <span className="min-w-0 flex-1 truncate text-[12px] text-muted">
-            {shortRegion(region)}
-          </span>
+          <div className="min-w-0 flex-1">
+            <span className="block truncate text-[12px] text-muted">{shortRegion(region)}</span>
+            {publishedLabel && (
+              <span className="mt-0.5 block truncate text-[11px] text-muted/80">{publishedLabel}</span>
+            )}
+          </div>
           <span className="hidden items-center gap-1.5 sm:flex">
             <SourceBadge source={listing.source} variant="outline" />
             <span className="text-[11px] text-muted">{sellerLabel}</span>

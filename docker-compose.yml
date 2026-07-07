@@ -13,11 +13,13 @@ services:
       TZ: Europe/Kyiv
       DATABASE_URL: sqlite+aiosqlite:///database/autoradar.db
       REDIS_URL: sqlite://database/kv.db
+      TELEGRAM_MEDIA_DIR: /app/media
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./database:/app/database
+      - ./media:/app/media
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

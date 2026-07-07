@@ -46,11 +46,28 @@ export const PLAN_LABELS: Record<string, string> = {
   pro: "Про",
 };
 
-export function timeAgo(date: string) {
+export function timeAgo(date: string | null | undefined) {
+  if (!date) return "";
   const diff = Date.now() - new Date(date).getTime();
+  if (Number.isNaN(diff) || diff < 0) return "";
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "щойно";
   if (mins < 60) return `${mins} хв тому`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours} год тому`;
-  return `${Math.floor(hours / 24)} дн тому`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} дн тому`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks} тиж тому`;
+  return new Intl.DateTimeFormat("uk-UA", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Europe/Kyiv",
+  }).format(new Date(date));
+}
+
+export function publishedAgoLabel(date: string | null | undefined) {
+  const label = timeAgo(date);
+  return label ? `Опубліковано ${label}` : "";
 }

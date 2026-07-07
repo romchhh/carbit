@@ -10,7 +10,8 @@ import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { saveRecentListing } from "@/lib/recent-listings";
 import { SourceBadge } from "@/components/listings/SourceBadge";
-import { cn, formatMileage, formatPrice } from "@/lib/utils";
+import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
+import { cn, formatMileage, formatPrice, publishedAgoLabel } from "@/lib/utils";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -225,6 +226,9 @@ export function ListingsHorizontalCarousel({
                           />
                         )}
                       </div>
+                      <div className="absolute bottom-2 left-2">
+                        <PublishedTimeBadge date={listing.published_at} short />
+                      </div>
                     </div>
 
                     <div className="p-4">
@@ -245,7 +249,14 @@ export function ListingsHorizontalCarousel({
                           .join(" · ")}
                       </p>
                       <div className="mt-3 flex items-center justify-between gap-2">
-                        <span className="truncate text-[12px] text-muted">{city}</span>
+                        <div className="min-w-0">
+                          <span className="block truncate text-[12px] text-muted">{city}</span>
+                          {publishedAgoLabel(listing.published_at) && (
+                            <span className="mt-0.5 block truncate text-[11px] text-muted/80">
+                              {publishedAgoLabel(listing.published_at)}
+                            </span>
+                          )}
+                        </div>
                         <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" />
                       </div>
                     </div>
