@@ -34,3 +34,220 @@ docker compose up -d
 git add .
 git commit -m "some updates"
 git push
+
+
+
+
+
+
+Ось покрокова інструкція для оновлення **carbit.telebots.site** (або будь-якого production-сервера).
+
+## 1. Підключення до сервера
+
+```bash
+ssh user@your-server
+cd /path/to/carbit   # папка з docker-compose.yml
+```
+
+---
+
+## 2. Оновити код
+
+```bash
+git pull
+```
+
+Якщо є локальні зміни на сервері — спочатку збережи або скинь їх (`git stash` / `git checkout .`).
+
+---
+
+## 3. Перевір `.env` (один раз або після нових фіч)
+
+Мінімум для поточної версії:
+
+```env
+FRONTEND_URL=https://carbit.telebots.site
+NEXT_PUBLIC_API_URL=/api/v1
+GOOGLE_REDIRECT_URI=https://carbit.telebots.site/api/v1/auth/google/callback
+
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=Car_Bit_Bot
+INTERNAL_API_SECRET=...
+
+# Telegram parser
+TELEGRAM_ENABLED=true
+TELETHON_API_ID=...
+TELETHON_API_HASH=...
+TELETHON_NUMBER=+380...
+TELEGRAM_CHANNELS=@ua_autobazar,@auto_amerika_europa,...
+```
+
+**Важливо:**
+- `NEXT_PUBLIC_API_URL` підставляється **під час збірки frontend** — після зміни потрібен rebuild frontend.
+- `BACKEND_URL` у `.env` для браузера може бути публічним URL; всередині Docker bot/worker отримують `http://backend:8000/api/v1` автоматично з `docker-compose.yml`.
+
+---
+
+## 4. Підготувати папки на хості
+
+```bash
+mkdir -p database media
+```
+
+| Папка | Що зберігає |
+|-------|-------------|
+| `database/` | SQLite (`autoradar.db`, `kv.db`), Telethon session, dedupe |
+| `media/` | Фото з Telegram-каналів (volume для worker і telegram-worker) |
+
+**Telegram-сесія** (якщо ще немає на сервері):
+
+```bash
+# один раз — локально або на сервері з Python
+python -m parser.auth
+# файл має з’явитись: database/carbit_parser.session
+```
+
+Скопіюй `carbit_parser.session` на сервер у `database/`, якщо авторизувався локально.
+
+---
+
+## 5. Повний rebuild усіх модулів
+
+### Варіант A — скрипт (рекомендовано)
+
+```bash
+./scripts/docker-deploy.sh
+```
+
+Це робить: `git pull` → `docker compose build` → `docker compose up -d`.
+
+### Варіант B — вручну (всі 5 сервісів)
+
+```bash
+git pull
+
+docker compose build backend bot worker telegram-worker frontend
+docker compose up -d
+```
+
+### Варіант C — тільки певні сервіси
+
+```bash
+# Python (backend + bot + workers + parser)
+./scripts/docker-deploy.sh backend bot worker telegram-worker
+
+# Frontend (адмінка, кнопки парсера, PWA)
+./scripts/docker-deploy.sh frontend
+```
+
+> **Не використовуй `--no-cache`** для звичайного деплою — лише якщо підозра на зіпсований кеш.
+
+---
+
+## 6. Перевірка після деплою
+
+```bash
+docker compose ps
+```
+
+Мають бути **healthy/running**:
+- `carbit-backend`
+- `carbit-frontend`
+- `carbit-bot`
+- `carbit-worker`
+- `carbit-telegram-worker`
+
+```bash
+curl -s http://localhost:8000/health
+curl -I http://localhost:3000
+```
+
+Логи:
+
+```bash
+docker compose logs -f backend --tail=50
+docker compose logs -f worker --tail=50
+docker compose logs -f telegram-worker --tail=50
+docker compose logs -f bot --tail=30
+```
+
+У backend при старті має бути:
+
+```
+→ Running database migrations...
+→ Starting backend...
+```
+
+Міграції Alembic запускаються автоматично — окремо `alembic upgrade` не потрібен.
+
+---
+
+## 7. Nginx (якщо reverse proxy)
+
+Переконайся, що проксуються:
+
+- `/` → `http://127.0.0.1:3000` (frontend)
+- `/api/` → `http://127.0.0.1:8000/api/` (backend)
+
+Для фото в Telegram-сповіщеннях потрібен доступ до:
+
+- `/api/v1/telegram-media/...` → backend
+
+Після змін nginx:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+---
+
+## 8. Після оновлення frontend
+
+У браузері один раз **hard refresh** (Cmd+Shift+R / Ctrl+Shift+R) — через Service Worker може показуватись стара версія.
+
+---
+
+## 9. Швидка шпаргалка «що перебілдити»
+
+| Що змінилось | Команда |
+|--------------|---------|
+| Усе (повний реліз) | `./scripts/docker-deploy.sh` |
+| Backend, parser, worker, bot | `./scripts/docker-deploy.sh backend bot worker telegram-worker` |
+| Frontend / адмінка | `./scripts/docker-deploy.sh frontend` |
+| Тільки `.env` runtime (без build args) | `docker compose up -d` або `docker compose restart worker telegram-worker` |
+| Змінився `NEXT_PUBLIC_API_URL` | обов’язково `docker compose build frontend && docker compose up -d frontend` |
+
+---
+
+## 10. Резервна копія перед великим оновленням
+
+```bash
+docker compose stop backend bot worker telegram-worker
+
+cp database/autoradar.db "database/autoradar.db.bak.$(date +%F)"
+cp database/kv.db "database/kv.db.bak.$(date +%F)"
+
+docker compose start backend bot worker telegram-worker
+```
+
+---
+
+## 11. Типові проблеми
+
+| Симптом | Що робити |
+|---------|-----------|
+| `telegram-worker` падає | Перевір `database/carbit_parser.session` і `TELETHON_*` у `.env` |
+| 0 оголошень з Telegram | Логи worker; перевір `TELEGRAM_CHANNELS`, `TELEGRAM_ENABLED=true` |
+| Сповіщення без фото | Перевір `./media` на хості і nginx для `/api/v1/telegram-media/` |
+| Build «no space left» | `docker builder prune -af --filter "until=168h"` |
+| Старий UI в адмінці | Rebuild frontend + hard refresh |
+
+---
+
+**Один рядок для повного оновлення всього:**
+
+```bash
+cd /path/to/carbit && mkdir -p database media && ./scripts/docker-deploy.sh
+```
+
+Якщо потрібно — можу оновити `start.txt` і `DOCKER.md` під worker/telegram-worker/media, щоб це було в репозиторії.
