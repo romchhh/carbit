@@ -40,7 +40,7 @@ export type SearchFilterState = {
   powerTo: string;
 };
 
-export type SortOption = "price_asc" | "price_desc" | "year_desc" | "mileage_asc";
+export type SortOption = "newest" | "price_asc" | "price_desc" | "year_desc" | "mileage_asc";
 
 export const FUEL_OPTIONS = ["Бензин", "Дизель", "Гібрид", "Електро", "Газ"] as const;
 export const TRANSMISSION_OPTIONS = ["Автомат", "Механіка", "Робот"] as const;

@@ -7,8 +7,14 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { IconGlobe, IconHeart, IconX } from "@/components/icons";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
+import { SourceBadge } from "@/components/listings/SourceBadge";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
+import {
+  listingAttributionUrl,
+  listingOpenLabel,
+  listingSourceSiteName,
+} from "@/lib/listing-source";
 import { hasVinCheck } from "@/lib/vin-check";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import { cn, formatMileage, formatPrice } from "@/lib/utils";
@@ -174,14 +180,15 @@ export function ListingDetailModal({
           </button>
 
           <div className="flex items-center gap-3 px-3 pb-2.5 sm:px-4 sm:pb-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">AUTO.RIA</p>
-              <h2
-                id="listing-modal-title"
-                className="truncate text-[15px] font-bold leading-snug text-ink sm:text-[16px]"
-              >
+            <div className="min-w-0 flex-1 sm:hidden">
+              <SourceBadge source={listing.source} className="mb-1 bg-transparent px-0 shadow-none" />
+              <h2 className="truncate text-[15px] font-bold leading-snug text-ink">
                 {listing.title}
               </h2>
+            </div>
+            <div className="hidden min-w-0 flex-1 sm:block">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Деталі авто</p>
+              <p className="truncate text-[15px] font-bold leading-snug text-ink">{listing.title}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {onToggleFavorite && (
@@ -208,7 +215,8 @@ export function ListingDetailModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="relative aspect-[16/10] w-full bg-surface">
+          {/* Mobile gallery */}
+          <div className="relative aspect-[16/10] w-full bg-surface sm:hidden">
             {photos.length > 0 ? (
               <div
                 ref={galleryRef}
@@ -224,7 +232,7 @@ export function ListingDetailModal({
                       alt={`${listing.title} — фото ${index + 1}`}
                       fill
                       className="object-cover"
-                      sizes="720px"
+                      sizes="100vw"
                       unoptimized
                       priority={index === 0}
                     />
@@ -245,10 +253,10 @@ export function ListingDetailModal({
           </div>
 
           {photos.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto border-b border-border px-4 py-3 scrollbar-hide sm:px-5">
+            <div className="flex gap-2 overflow-x-auto border-b border-border px-4 py-3 scrollbar-hide sm:hidden">
               {photos.map((src, index) => (
                 <button
-                  key={`${src}-${index}-thumb`}
+                  key={`${src}-${index}-thumb-mobile`}
                   type="button"
                   onClick={() => scrollToPhoto(index)}
                   className={cn(
@@ -262,17 +270,131 @@ export function ListingDetailModal({
             </div>
           )}
 
+          {/* Desktop: photo left, summary right */}
+          <div className="hidden border-b border-border/60 sm:block">
+            <div className="flex gap-5 p-5">
+              <div className="w-1/2 min-w-0">
+                <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-surface">
+                  {photos.length > 0 ? (
+                    <Image
+                      src={photos[photoIndex] ?? photos[0]}
+                      alt={listing.title}
+                      fill
+                      className="object-cover"
+                      sizes="50vw"
+                      unoptimized
+                      priority
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-[13px] text-muted">
+                      Фото відсутнє
+                    </div>
+                  )}
+                  {photos.length > 1 && (
+                    <div className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      {photoIndex + 1} / {photos.length}
+                    </div>
+                  )}
+                </div>
+
+                {photos.length > 1 && (
+                  <div className="mt-2.5 flex gap-1.5 overflow-x-auto scrollbar-hide">
+                    {photos.map((src, index) => (
+                      <button
+                        key={`${src}-${index}-thumb-desktop`}
+                        type="button"
+                        onClick={() => setPhotoIndex(index)}
+                        className={cn(
+                          "relative h-12 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-colors",
+                          index === photoIndex
+                            ? "border-emerald"
+                            : "border-transparent opacity-70 hover:opacity-100",
+                        )}
+                      >
+                        <Image src={src} alt="" fill className="object-cover" sizes="64px" unoptimized />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="w-1/2 min-w-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <SourceBadge source={listing.source} variant="outline" className="mb-2" />
+                    <h2 id="listing-modal-title" className="text-[20px] font-bold leading-snug text-ink">
+                      {listing.title}
+                    </h2>
+                    <p className="mt-1 text-[13px] text-muted">
+                      {listing.brand} {listing.model}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-[26px] font-black leading-none text-ink">
+                      {formatPrice(listing.price, listing.currency)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {listing.year > 0 && (
+                    <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+                      {listing.year}
+                    </span>
+                  )}
+                  {listing.mileage > 0 && (
+                    <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+                      {formatMileage(listing.mileage)}
+                    </span>
+                  )}
+                  {listing.transmission && (
+                    <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+                      {listing.transmission}
+                    </span>
+                  )}
+                  {listing.fuel && (
+                    <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+                      {listing.fuel.split(",")[0]?.trim()}
+                    </span>
+                  )}
+                  {listing.region && (
+                    <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+                      {listing.region.split(",")[0]?.trim()}
+                    </span>
+                  )}
+                  <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+                    {listing.seller_type === "dealer" ? "Автосалон" : "Приват"}
+                  </span>
+                </div>
+
+                {highlights.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {highlights.map((item, index) => (
+                      <span
+                        key={`${item}-${index}`}
+                        className="rounded-full bg-emerald-light/50 px-2.5 py-1 text-[11px] font-medium text-emerald-dark"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">
-            <div className="flex flex-wrap items-end justify-between gap-3">
+            {/* Mobile-only price block (desktop shows it in top row) */}
+            <div className="flex flex-wrap items-end justify-between gap-3 sm:hidden">
               <div>
-                <div className="text-[28px] font-black leading-none text-ink sm:text-[32px]">
+                <div className="text-[28px] font-black leading-none text-ink">
                   {formatPrice(listing.price, listing.currency)}
                 </div>
                 <p className="mt-1.5 text-[12px] text-muted">
                   {listing.brand} {listing.model}
                 </p>
               </div>
-              <Badge variant="outline">AUTO.RIA</Badge>
+              <SourceBadge source={listing.source} variant="outline" />
             </div>
 
             {specs.length > 0 && (
@@ -287,7 +409,7 @@ export function ListingDetailModal({
             )}
 
             {highlights.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 sm:hidden">
                 {highlights.map((item, index) => (
                   <span
                     key={`${item}-${index}`}
@@ -308,7 +430,7 @@ export function ListingDetailModal({
 
             {hasAutoRiaDetails && <AutoRiaListingDetails listing={listing} />}
 
-            {listing.vin_checked && (
+            {listing.vin_checked && listing.source === "auto_ria" && (
               <p className="text-center text-[12px] font-medium text-emerald-dark">
                 VIN-код перевірено на AUTO.RIA
               </p>
@@ -317,12 +439,12 @@ export function ListingDetailModal({
             <p className="pb-2 text-center text-[11px] text-muted">
               Дані надано{" "}
               <a
-                href="https://auto.ria.com"
+                href={listingAttributionUrl(listing.source, listing.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-emerald-dark hover:underline"
               >
-                AUTO.RIA
+                {listingSourceSiteName(listing.source)}
               </a>
             </p>
           </div>
@@ -339,7 +461,7 @@ export function ListingDetailModal({
             <Link href={listing.url} target="_blank" rel="noopener noreferrer" className="flex-1 sm:min-w-[200px]">
               <Button variant="primary" size="md" className="w-full gap-1.5">
                 <IconGlobe size={14} />
-                Відкрити на AUTO.RIA
+                {listingOpenLabel(listing.source)}
               </Button>
             </Link>
             {hasVinCheck(listing) && (

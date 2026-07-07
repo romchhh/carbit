@@ -1,4 +1,6 @@
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, timedelta
+
+from app.core.timezone import as_kyiv, now_kyiv, start_of_kyiv_day
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -51,7 +53,7 @@ async def dashboard_stats(
     if not user:
         raise HTTPException(404, "User not found")
 
-    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = start_of_kyiv_day()
     yesterday_start = today_start - timedelta(days=1)
 
     active_searches = await db.scalar(

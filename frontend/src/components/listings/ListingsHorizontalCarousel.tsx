@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { saveRecentListing } from "@/lib/recent-listings";
+import { SourceBadge } from "@/components/listings/SourceBadge";
 import { cn, formatMileage, formatPrice } from "@/lib/utils";
 import type { Listing } from "@/types/api";
 
@@ -245,9 +246,7 @@ export function ListingsHorizontalCarousel({
                       </p>
                       <div className="mt-3 flex items-center justify-between gap-2">
                         <span className="truncate text-[12px] text-muted">{city}</span>
-                        <Badge variant="gray" className="shrink-0 px-2 py-0.5 text-[10px]">
-                          AUTO.RIA
-                        </Badge>
+                        <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" />
                       </div>
                     </div>
                   </article>

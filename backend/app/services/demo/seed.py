@@ -1,5 +1,5 @@
 """Seed demo listings for development without live API monitoring."""
-from datetime import datetime, UTC
+from app.core.timezone import now_kyiv
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,7 +62,7 @@ async def seed_demo_listings(db: AsyncSession, user_id: str) -> dict:
                 images=[],
                 seller_type="private",
                 price_history=[],
-                published_at=datetime.now(UTC),
+                published_at=now_kyiv(),
             )
             db.add(listing)
             await db.flush()
@@ -75,7 +75,7 @@ async def seed_demo_listings(db: AsyncSession, user_id: str) -> dict:
     if search:
         search.new_count += notifications
         search.total_count += created
-        search.last_checked_at = datetime.now(UTC)
+        search.last_checked_at = now_kyiv()
 
     await db.flush()
     return {"listings_created": created, "notifications_sent": notifications}

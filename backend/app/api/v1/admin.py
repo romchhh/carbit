@@ -1,4 +1,6 @@
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, timedelta
+
+from app.core.timezone import now_kyiv, start_of_kyiv_day
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -121,8 +123,8 @@ async def admin_dashboard(
     _: str = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    now = datetime.now(UTC)
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    now = now_kyiv()
+    today = start_of_kyiv_day(now)
     week_ago = today - timedelta(days=7)
 
     total_users = await db.scalar(select(func.count()).select_from(User)) or 0
@@ -273,7 +275,7 @@ async def admin_update_user(
     if body.plan is not None:
         try:
             user.plan = PlanTier(body.plan)
-            user.plan_expires_at = datetime.now(UTC) + timedelta(days=30)
+            user.plan_expires_at = now_kyiv() + timedelta(days=30)
         except ValueError:
             raise HTTPException(400, "Invalid plan")
     if body.is_active is not None:

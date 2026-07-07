@@ -46,7 +46,7 @@ export function SaveSearchCTA({
             </p>
           </div>
           <p className="mt-1.5 text-[12px] leading-relaxed text-muted sm:text-[13px]">
-            Carbit відстежує AUTO.RIA за вашими фільтрами 24/7 і надсилає сповіщення, коли з&apos;являється нова пропозиція — без ручного перегляду каталогу.
+            Carbit відстежує AUTO.RIA та OLX за вашими фільтрами 24/7 і надсилає сповіщення, коли з&apos;являється нова пропозиція — без ручного перегляду каталогу.
           </p>
 
           {!telegramConnected && (

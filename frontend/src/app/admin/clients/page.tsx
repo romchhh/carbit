@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { adminApi, AdminUser } from "@/lib/admin-api";
 import { getAdminToken } from "@/lib/admin-storage";
+import { formatKyivDate } from "@/lib/datetime";
 import { PLAN_LABELS, cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -101,7 +102,7 @@ export default function AdminClientsPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-muted">
-                  {new Date(u.created_at).toLocaleDateString("uk-UA")}
+                  {formatKyivDate(u.created_at)}
                 </td>
               </tr>
             ))}

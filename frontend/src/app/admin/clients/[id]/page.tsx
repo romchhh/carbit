@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { adminApi, AdminUserDetail } from "@/lib/admin-api";
 import { getAdminToken } from "@/lib/admin-storage";
+import { formatKyivDate } from "@/lib/datetime";
 import { PLAN_LABELS } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -96,7 +97,7 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
           ))}
         </div>
         {user.is_trial_active && (
-          <p className="text-[12px] text-emerald-dark">Trial до {user.trial_ends_at ? new Date(user.trial_ends_at).toLocaleDateString("uk-UA") : "—"}</p>
+          <p className="text-[12px] text-emerald-dark">Trial до {formatKyivDate(user.trial_ends_at)}</p>
         )}
       </section>
 

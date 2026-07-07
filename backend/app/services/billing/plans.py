@@ -1,4 +1,6 @@
-from datetime import datetime, UTC, timedelta
+from datetime import timedelta
+
+from app.core.timezone import now_kyiv
 
 PLANS: dict[str, dict] = {
     "free": {
@@ -58,4 +60,4 @@ def activate_plan(user, plan_id: str) -> None:
     if plan_id not in PLANS:
         raise ValueError("Unknown plan")
     user.plan = PlanTier(plan_id)
-    user.plan_expires_at = datetime.now(UTC) + timedelta(days=30)
+    user.plan_expires_at = now_kyiv() + timedelta(days=30)

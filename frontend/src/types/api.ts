@@ -89,6 +89,7 @@ export interface Notification {
   is_read: boolean;
   sent_telegram: boolean;
   created_at: string;
+  listing?: Listing | null;
 }
 
 export interface PaginatedNotifications {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { autoRia, getApiErrorMessage } from "@/lib/api";
+import { listingSearch, getApiErrorMessage } from "@/lib/api";
 import { DEFAULT_FILTERS, type SearchFilterState } from "@/lib/search-catalog";
 import { PREVIEW_RESULTS_LIMIT } from "@/lib/search-preview";
 import { toBackendSearchFilters } from "@/lib/search-filters-api";
@@ -25,7 +25,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     });
 
     try {
-      const data = await autoRia.search(
+      const data = await listingSearch.search(
         toBackendSearchFilters(nextFilters),
         1,
         PREVIEW_RESULTS_LIMIT,

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { primaryNav, secondaryNav, type NavBadgeKey } from "@/lib/dashboard-nav";
 import { FAVORITES_CHANGED_EVENT } from "@/hooks/useListingFavorite";
+import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notifications-events";
 import { notifications as notificationsApi, favorites as favoritesApi } from "@/lib/api";
 
 type Props = {
@@ -29,7 +30,11 @@ export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
 
     refreshBadges();
     window.addEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
-    return () => window.removeEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshBadges);
+    return () => {
+      window.removeEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshBadges);
+    };
   }, [pathname]);
 
   const isActive = (href: string) =>
@@ -137,7 +142,11 @@ export function useDashboardBadges() {
 
     refreshBadges();
     window.addEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
-    return () => window.removeEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshBadges);
+    return () => {
+      window.removeEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshBadges);
+    };
   }, [pathname]);
 
   return badges;

@@ -21,20 +21,34 @@ export function Header() {
   const isLoggedIn = !!user;
   const pathname = usePathname();
   const onHero = pathname === "/";
-  const [scrolled, setScrolled] = useState(false);
+  const [heroInView, setHeroInView] = useState(onHero);
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const transparent = onHero && !scrolled;
+  const transparent = onHero && heroInView;
   const lightHeader = transparent && !menuOpen;
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 48);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+    if (!onHero) {
+      setHeroInView(false);
+      return;
+    }
+
+    const hero = document.getElementById("landing-hero");
+    if (!hero) {
+      setHeroInView(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeroInView(entry.isIntersecting),
+      { threshold: 0 },
+    );
+
+    observer.observe(hero);
+    return () => observer.disconnect();
+  }, [onHero, pathname]);
 
   useEffect(() => {
     if (menuOpen) {

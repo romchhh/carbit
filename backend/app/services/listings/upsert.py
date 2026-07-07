@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from app.core.timezone import now_kyiv
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +16,9 @@ def _parse_source(value: str) -> Source:
 
 
 def _external_id(listing_id: str) -> str:
-    if listing_id.startswith("auto_ria_"):
-        return listing_id.removeprefix("auto_ria_")
+    for prefix in ("auto_ria_", "olx_", "telegram_"):
+        if listing_id.startswith(prefix):
+            return listing_id.removeprefix(prefix)
     return listing_id
 
 
@@ -43,7 +44,7 @@ async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
         "price_history": data.price_history or [],
         "is_duplicate": data.is_duplicate,
         "published_at": data.published_at,
-        "found_at": data.found_at or datetime.now(UTC),
+        "found_at": data.found_at or now_kyiv(),
     }
 
     if listing:

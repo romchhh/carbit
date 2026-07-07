@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from pydantic import model_validator
@@ -49,6 +50,7 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_BOT_USERNAME: str = ""
     TELEGRAM_BOT_URL: str = ""
+    TELEGRAM_ADMIN_CHAT_ID: str = "585621771"
 
     # External APIs (reserved for future scrapers)
     AUTO_RIA_API_KEY: str = ""
@@ -62,6 +64,7 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "Carbit <info@13vplus.com>"
     FRONTEND_URL: str = "http://localhost:3000"
+    PUBLIC_API_BASE: str = ""
 
     # Admin
     ADMIN_USERNAME: str = "admin"
@@ -70,9 +73,27 @@ class Settings(BaseSettings):
     # Internal service-to-service auth (bot → backend)
     INTERNAL_API_SECRET: str = "change-me-internal"
 
+    # Telegram channel parser (Telethon user client)
+    TELETHON_API_ID: int = 0
+    TELETHON_API_HASH: str = ""
+    TELETHON_NUMBER: str = ""
+    TELETHON_SESSION_NAME: str = "carbit_parser"
+    TELEGRAM_CHANNELS: str = ""
+    TELEGRAM_MEDIA_DIR: str = "media"
+    TELEGRAM_ENABLED: bool = True
+    TELEGRAM_MAX_PHOTOS: int = 5
+
     @model_validator(mode="after")
     def resolve_paths(self) -> "Settings":
         self.DATABASE_URL = resolve_database_url(self.DATABASE_URL)
+        media_path = Path(self.TELEGRAM_MEDIA_DIR)
+        if not media_path.is_absolute():
+            media_path = ROOT_DIR / media_path
+        media_path.mkdir(parents=True, exist_ok=True)
+        self.TELEGRAM_MEDIA_DIR = str(media_path.resolve())
+        if not self.PUBLIC_API_BASE:
+            backend = os.getenv("BACKEND_URL", "").strip().rstrip("/")
+            self.PUBLIC_API_BASE = backend or f"{self.FRONTEND_URL.rstrip('/')}/api/v1"
         return self
 
 

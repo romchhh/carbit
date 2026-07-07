@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend ./backend
 COPY bot ./bot
+COPY worker ./worker
+COPY telegram_worker ./telegram_worker
+COPY parser ./parser
 COPY storage ./storage
 COPY docker/python/entrypoint-backend.sh /entrypoint-backend.sh
 

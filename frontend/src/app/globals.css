@@ -48,6 +48,13 @@
     --mobile-header-offset: calc(var(--safe-top) + 4.75rem);
     --mobile-nav-height: calc(4.75rem + max(0.35rem, env(safe-area-inset-bottom, 0px)));
   }
+
+  /* iOS Safari zooms focused inputs when font-size is below 16px */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -79,7 +86,7 @@
   }
 
   .input-field {
-    @apply w-full bg-white border border-border rounded-xl px-3 py-2 text-[13px] text-ink focus:outline-none focus:border-emerald/50 focus:ring-2 focus:ring-emerald/10 transition-all;
+    @apply w-full bg-white border border-border rounded-xl px-3 py-2.5 text-base text-ink focus:outline-none focus:border-emerald/50 focus:ring-2 focus:ring-emerald/10 transition-all lg:py-2 lg:text-[13px];
   }
 
   .card-rounded {
@@ -95,15 +102,15 @@
   }
 
   .auth-input {
-    @apply w-full h-[40px] bg-surface border border-border rounded-lg px-3 text-[13px] text-ink placeholder:text-muted/50 focus:outline-none focus:border-emerald/50 focus:ring-2 focus:ring-emerald/10 transition-all;
+    @apply w-full h-[44px] bg-surface border border-border rounded-lg px-3 text-base text-ink placeholder:text-muted/50 focus:outline-none focus:border-emerald/50 focus:ring-2 focus:ring-emerald/10 transition-all lg:h-[40px] lg:text-[13px];
   }
 
   .auth-input-wrap {
-    @apply flex items-center gap-2 h-[40px] bg-surface border border-border rounded-lg px-3 focus-within:border-emerald/50 focus-within:ring-2 focus-within:ring-emerald/10 transition-all;
+    @apply flex items-center gap-2 h-[44px] bg-surface border border-border rounded-lg px-3 focus-within:border-emerald/50 focus-within:ring-2 focus-within:ring-emerald/10 transition-all lg:h-[40px];
   }
 
   .auth-input-inner {
-    @apply flex-1 bg-transparent outline-none text-[13px] text-ink placeholder:text-muted/50;
+    @apply flex-1 bg-transparent outline-none text-base text-ink placeholder:text-muted/50 lg:text-[13px];
   }
 
   .scrollbar-hide {

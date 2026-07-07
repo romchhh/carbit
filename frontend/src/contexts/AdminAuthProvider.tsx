@@ -1,12 +1,13 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { adminApi, AdminApiError } from "@/lib/admin-api";
 import { clearAdminToken, getAdminToken, setAdminToken } from "@/lib/admin-storage";
 
 interface AdminAuthContextValue {
   isAuthenticated: boolean;
+  isReady: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -14,8 +15,14 @@ interface AdminAuthContextValue {
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getAdminToken());
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    setIsAuthenticated(!!getAdminToken());
+    setIsReady(true);
+  }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     const { access_token } = await adminApi.login(username, password);
@@ -31,7 +38,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <AdminAuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AdminAuthContext.Provider value={{ isAuthenticated, isReady, login, logout }}>
       {children}
     </AdminAuthContext.Provider>
   );

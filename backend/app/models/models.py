@@ -1,8 +1,11 @@
 import uuid
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, timedelta
+
 from sqlalchemy import String, Boolean, DateTime, Integer, JSON, ForeignKey, Enum as SAEnum, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
+from app.core.timezone import as_kyiv, now_kyiv
 import enum
 
 
@@ -25,14 +28,15 @@ class NotificationType(str, enum.Enum):
     system = "system"
 
 
+class ParseRunStatus(str, enum.Enum):
+    running = "running"
+    success = "success"
+    partial = "partial"
+    failed = "failed"
+
+
 def new_uuid() -> str:
     return str(uuid.uuid4())
-
-
-def _as_utc(dt: datetime) -> datetime:
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
 
 
 class User(Base):
@@ -52,7 +56,7 @@ class User(Base):
     telegram_connected: Mapped[bool] = mapped_column(Boolean, default=False)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
 
     searches: Mapped[list["SearchQuery"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -67,11 +71,11 @@ class User(Base):
     def is_trial_active(self) -> bool:
         if self.trial_ends_at is None:
             return False
-        return datetime.now(UTC) < _as_utc(self.trial_ends_at)
+        return now_kyiv() < as_kyiv(self.trial_ends_at)
 
     @staticmethod
     def default_trial_end() -> datetime:
-        return datetime.now(UTC) + timedelta(days=3)
+        return now_kyiv() + timedelta(days=3)
 
 
 class SearchQuery(Base):
@@ -85,9 +89,45 @@ class SearchQuery(Base):
     new_count: Mapped[int] = mapped_column(Integer, default=0)
     total_count: Mapped[int] = mapped_column(Integer, default=0)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
 
     user: Mapped["User"] = relationship(back_populates="searches")
+    search_listings: Mapped[list["SearchListing"]] = relationship(
+        back_populates="search",
+        cascade="all, delete-orphan",
+    )
+
+
+class SearchListing(Base):
+    __tablename__ = "search_listings"
+    __table_args__ = (UniqueConstraint("search_id", "listing_id", name="uq_search_listings_search_listing"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    search_id: Mapped[str] = mapped_column(String, ForeignKey("search_queries.id", ondelete="CASCADE"), index=True)
+    listing_id: Mapped[str] = mapped_column(String, ForeignKey("listings.id", ondelete="CASCADE"), index=True)
+    is_new: Mapped[bool] = mapped_column(Boolean, default=True)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
+
+    search: Mapped["SearchQuery"] = relationship(back_populates="search_listings")
+    listing: Mapped["Listing"] = relationship(back_populates="search_listings")
+
+
+class ParseRun(Base):
+    __tablename__ = "parse_runs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    status: Mapped[ParseRunStatus] = mapped_column(SAEnum(ParseRunStatus), default=ParseRunStatus.running)
+    triggered_by: Mapped[str] = mapped_column(String, default="scheduler")
+    filter_groups: Mapped[int] = mapped_column(Integer, default=0)
+    searches_processed: Mapped[int] = mapped_column(Integer, default=0)
+    listings_found: Mapped[int] = mapped_column(Integer, default=0)
+    listings_new: Mapped[int] = mapped_column(Integer, default=0)
+    notifications_sent: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    log: Mapped[list] = mapped_column(JSON, default=list)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Listing(Base):
@@ -115,9 +155,10 @@ class Listing(Base):
     is_duplicate: Mapped[bool] = mapped_column(Boolean, default=False)
     duplicate_of: Mapped[str | None] = mapped_column(String, ForeignKey("listings.id"), nullable=True)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    found_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    found_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
 
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="listing")
+    search_listings: Mapped[list["SearchListing"]] = relationship(back_populates="listing")
 
 
 class Favorite(Base):
@@ -127,7 +168,7 @@ class Favorite(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"))
     listing_id: Mapped[str] = mapped_column(String, ForeignKey("listings.id", ondelete="CASCADE"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
 
     user: Mapped["User"] = relationship(back_populates="favorites")
     listing: Mapped["Listing"] = relationship(back_populates="favorites")
@@ -146,6 +187,6 @@ class Notification(Base):
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     sent_telegram: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
 
     user: Mapped["User"] = relationship(back_populates="notifications")

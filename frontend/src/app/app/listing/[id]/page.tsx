@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { listings as listingsApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
-import { Badge } from "@/components/ui/Badge";
+import { SourceBadge } from "@/components/listings/SourceBadge";
 import { Button } from "@/components/ui/Button";
 import { IconHeart, IconGlobe, IconArrowRight } from "@/components/icons";
 import { formatPrice, formatMileage, cn } from "@/lib/utils";
@@ -86,7 +86,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               {listing.year} · {formatMileage(listing.mileage)} · {listing.region}
             </p>
             <div className="text-[32px] font-black text-ink mb-4">{formatPrice(listing.price, listing.currency)}</div>
-            <Badge variant="outline" className="mb-4">{listing.source}</Badge>
+            <SourceBadge source={listing.source} variant="outline" className="mb-4" />
             <div className="space-y-2">
               <a href={listing.url} target="_blank" rel="noopener noreferrer">
                 <Button variant="primary" size="md" className="w-full gap-1.5">

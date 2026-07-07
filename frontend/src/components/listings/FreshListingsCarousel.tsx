@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ListingsHorizontalCarousel } from "@/components/listings/ListingsHorizontalCarousel";
 import { useAuth } from "@/contexts/AuthProvider";
-import { autoRia, getApiErrorMessage } from "@/lib/api";
+import { listingSearch, getApiErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Listing } from "@/types/api";
 
@@ -22,8 +22,8 @@ export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props)
   useEffect(() => {
     let cancelled = false;
 
-    autoRia
-      .search({}, 1, limit, "published_desc", "browse")
+    listingSearch
+      .search({ sources: ["auto_ria", "olx"] }, 1, limit, "published_desc", "browse")
       .then(data => {
         if (cancelled) return;
         setListings(data.items);

@@ -117,6 +117,19 @@ class SearchFilters(BaseModel):
     transmission: Optional[list[str]] = None
     region: Optional[str] = None
     sources: Optional[list[str]] = None
+    category: Optional[str] = None
+    engine_volume_from: Optional[float] = None
+    engine_volume_to: Optional[float] = None
+    drivetrain: Optional[list[str]] = None
+    colors: Optional[list[str]] = None
+    fuel_consumption_from: Optional[float] = None
+    fuel_consumption_to: Optional[float] = None
+    ev_range_from: Optional[int] = None
+    ev_range_to: Optional[int] = None
+    battery_capacity_from: Optional[float] = None
+    battery_capacity_to: Optional[float] = None
+    power_from: Optional[int] = None
+    power_to: Optional[int] = None
 
 
 class SearchQueryCreate(BaseModel):
@@ -230,8 +243,7 @@ class NotificationOut(BaseModel):
     is_read: bool
     sent_telegram: bool
     created_at: datetime
-
-    model_config = {"from_attributes": True}
+    listing: ListingOut | None = None
 
 
 class PaginatedNotifications(BaseModel):

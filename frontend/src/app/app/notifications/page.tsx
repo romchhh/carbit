@@ -1,50 +1,89 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { ListingCard } from "@/components/listings/ListingCard";
+import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
+import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { notifications as notificationsApi } from "@/lib/api";
-import { AppEmpty, AppLoading, AppPage, AppSection } from "@/components/layout/AppPage";
-import type { Notification } from "@/types/api";
-import { timeAgo, cn } from "@/lib/utils";
+import { notifyNotificationsChanged } from "@/lib/notifications-events";
+import { saveRecentListing } from "@/lib/recent-listings";
+import type { SortOption } from "@/lib/search-catalog";
+import { AppEmpty, AppLoading, AppPage } from "@/components/layout/AppPage";
+import type { Listing, Notification } from "@/types/api";
+import { cn, timeAgo } from "@/lib/utils";
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "newest", label: "Спочатку нові" },
+  { value: "price_asc", label: "Спочатку дешеві" },
+  { value: "price_desc", label: "Спочатку дорогі" },
+  { value: "year_desc", label: "За роком випуску" },
+  { value: "mileage_asc", label: "За пробігом" },
+];
 
 export default function NotificationsPage() {
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [sort, setSort] = useState<SortOption>("newest");
   const [loading, setLoading] = useState(true);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
-  const load = useCallback(async () => {
+  const listingItems = useMemo(
+    () => items.filter((item): item is Notification & { listing: Listing } => Boolean(item.listing)),
+    [items],
+  );
+  const otherItems = useMemo(() => items.filter(item => !item.listing), [items]);
+  const listingIds = useMemo(() => listingItems.map(item => item.listing.id), [listingItems]);
+  const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } =
+    useListingFavorites(listingIds);
+
+  const load = useCallback(async (nextSort: SortOption) => {
+    setLoading(true);
     try {
-      const data = await notificationsApi.list();
+      const data = await notificationsApi.list(1, false, nextSort, 100);
       setItems(data.items);
       setUnread(data.unread);
+      setTotal(data.total);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
-  const markAll = async () => {
-    await notificationsApi.markAllRead();
-    setItems(prev => prev.map(n => ({ ...n, is_read: true })));
-    setUnread(0);
-  };
+  useEffect(() => {
+    void load(sort);
+  }, [load, sort]);
 
   const markOne = async (id: string) => {
     await notificationsApi.markRead(id);
-    setItems(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    setItems(prev => prev.map(item => (item.id === id ? { ...item, is_read: true } : item)));
     setUnread(prev => Math.max(0, prev - 1));
+    notifyNotificationsChanged();
+  };
+
+  const markAll = async () => {
+    await notificationsApi.markAllRead();
+    setItems(prev => prev.map(item => ({ ...item, is_read: true })));
+    setUnread(0);
+    notifyNotificationsChanged();
+  };
+
+  const openListing = async (notification: Notification, listing: Listing) => {
+    saveRecentListing(listing);
+    setSelectedListing(listing);
+    if (!notification.is_read) {
+      await markOne(notification.id);
+    }
   };
 
   const seedDemo = async () => {
     setLoading(true);
     await notificationsApi.seedDemo();
-    await load();
+    await load(sort);
   };
 
-  if (loading) return <AppLoading />;
+  if (loading && items.length === 0) return <AppLoading />;
 
   return (
     <AppPage
@@ -52,8 +91,16 @@ export default function NotificationsPage() {
       description={unread > 0 ? `${unread} непрочитаних` : "Всі прочитані"}
       action={
         <div className="flex gap-2">
-          {unread > 0 && <Button variant="secondary" size="sm" onClick={markAll}>Прочитати все</Button>}
-          {items.length === 0 && <Button variant="primary" size="sm" onClick={seedDemo}>Демо</Button>}
+          {unread > 0 && (
+            <Button variant="secondary" size="sm" onClick={() => void markAll()}>
+              Прочитати все
+            </Button>
+          )}
+          {items.length === 0 && (
+            <Button variant="primary" size="sm" onClick={() => void seedDemo()}>
+              Демо
+            </Button>
+          )}
         </div>
       }
     >
@@ -65,38 +112,105 @@ export default function NotificationsPage() {
           </p>
         </AppEmpty>
       ) : (
-        <div className="space-y-2">
-          {items.map(n => (
-            <AppSection
-              key={n.id}
-              className={cn(
-                "cursor-pointer !p-4 transition-colors",
-                n.is_read ? "!bg-white opacity-80" : "!bg-emerald-light/20 border-emerald/20",
-              )}
-              onClick={() => !n.is_read && markOne(n.id)}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-semibold text-ink">{n.title}</span>
-                    {!n.is_read && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald" />}
-                  </div>
-                  <p className="mt-1 text-[12px] leading-relaxed text-muted">{n.body}</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    {n.sent_telegram && <Badge variant="outline">Telegram</Badge>}
-                    <span className="text-[11px] text-muted">{timeAgo(n.created_at)}</span>
-                  </div>
-                </div>
-                {n.listing_id && (
-                  <Link href={`/app/listing/${n.listing_id}`} className="shrink-0 text-[12px] font-semibold text-emerald-dark hover:underline">
-                    →
-                  </Link>
+        <>
+          <div className="mb-4 rounded-2xl border border-border bg-white p-3.5 sm:px-5 sm:py-3.5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-[13px] text-muted">
+                {total} {total === 1 ? "сповіщення" : total < 5 ? "сповіщення" : "сповіщень"}
+                {unread > 0 && (
+                  <span className="ml-2 font-semibold text-emerald-dark">{unread} нових</span>
                 )}
               </div>
-            </AppSection>
-          ))}
-        </div>
+              <label className="flex items-center gap-2 text-[13px]">
+                <span className="text-muted">Сортування</span>
+                <select
+                  value={sort}
+                  onChange={e => setSort(e.target.value as SortOption)}
+                  className="rounded-lg border border-border bg-white px-3 py-2 text-[13px] font-medium text-ink"
+                >
+                  {SORT_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:px-0">
+            {listingItems.map(item => (
+              <div key={item.id} className="relative">
+                {!item.is_read && (
+                  <span
+                    className="absolute left-3 top-3 z-10 h-2.5 w-2.5 rounded-full bg-emerald ring-2 ring-white sm:left-[calc(13rem+1rem)]"
+                    aria-hidden
+                  />
+                )}
+                <ListingCard
+                  listing={item.listing}
+                  onClick={() => void openListing(item, item.listing)}
+                  className={cn(!item.is_read && "border-emerald/30 shadow-[0_4px_20px_-8px_rgba(16,185,129,0.35)]")}
+                  isFavorite={favoriteIds.has(item.listing.id)}
+                  favoriteLoading={loadingIds.has(item.listing.id)}
+                  onToggleFavorite={() => void toggleFavorite(item.listing)}
+                />
+                <div className="mt-1 flex flex-wrap items-center gap-2 px-1 text-[11px] text-muted">
+                  {item.sent_telegram && <Badge variant="outline">Telegram</Badge>}
+                  <span>{timeAgo(item.created_at)}</span>
+                </div>
+              </div>
+            ))}
+
+            {otherItems.map(item => (
+              <div
+                key={item.id}
+                className={cn(
+                  "rounded-2xl border bg-white p-4",
+                  item.is_read ? "border-border opacity-80" : "border-emerald/20 bg-emerald-light/10",
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-semibold text-ink">{item.title}</span>
+                      {!item.is_read && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald" />}
+                    </div>
+                    <p className="mt-1 text-[12px] leading-relaxed text-muted">{item.body}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      {item.sent_telegram && <Badge variant="outline">Telegram</Badge>}
+                      <span className="text-[11px] text-muted">{timeAgo(item.created_at)}</span>
+                    </div>
+                  </div>
+                  {!item.is_read && (
+                    <button
+                      type="button"
+                      onClick={() => void markOne(item.id)}
+                      className="shrink-0 text-[12px] font-semibold text-emerald-dark hover:underline"
+                    >
+                      Прочитати
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
+
+      <ListingDetailModal
+        listing={selectedListing}
+        onClose={() => {
+          clearError();
+          setSelectedListing(null);
+        }}
+        isFavorite={selectedListing ? favoriteIds.has(selectedListing.id) : false}
+        favoriteLoading={selectedListing ? loadingIds.has(selectedListing.id) : false}
+        onToggleFavorite={
+          selectedListing ? () => void toggleFavorite(selectedListing) : undefined
+        }
+        favoriteError={favoriteError}
+      />
     </AppPage>
   );
 }

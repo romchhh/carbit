@@ -3,6 +3,7 @@ import { getApiUrl } from "@/lib/api-url";
 import { normalizeListingForFavorite } from "@/lib/listing-favorite-payload";
 import { cachedAutoRiaSearch } from "@/lib/auto-ria-search-cache";
 import type { AutoRiaSearchMode } from "@/lib/search-preview";
+import type { SortOption } from "@/lib/search-catalog";
 import type { BackendSearchFilters } from "@/lib/search-filters-api";
 import type {
   DashboardStats,
@@ -131,8 +132,8 @@ export const listings = {
   get: (id: string) => request<Listing>(`/listings/${id}`),
 };
 
-// ── AUTO.RIA ──────────────────────────────────────────
-export const autoRia = {
+// ── Live search (AUTO.RIA + OLX) ──────────────────────
+export const listingSearch = {
   search: (
     filters: BackendSearchFilters,
     page = 1,
@@ -149,6 +150,9 @@ export const autoRia = {
         ),
     ),
 };
+
+/** @deprecated Use listingSearch.search */
+export const autoRia = listingSearch;
 
 // ── Favorites ─────────────────────────────────────────
 export const favorites = {
@@ -173,8 +177,10 @@ export const favorites = {
 
 // ── Notifications ─────────────────────────────────────
 export const notifications = {
-  list: (page = 1, unreadOnly = false) =>
-    request<PaginatedNotifications>(`/notifications?page=${page}&unread_only=${unreadOnly}`),
+  list: (page = 1, unreadOnly = false, sortBy: SortOption = "newest", perPage = 50) =>
+    request<PaginatedNotifications>(
+      `/notifications?page=${page}&per_page=${perPage}&unread_only=${unreadOnly}&sort_by=${sortBy}`,
+    ),
   stats: () => request<{ unread: number; total: number }>("/notifications/stats"),
   markRead: (id: string) => request<Notification>(`/notifications/${id}/read`, { method: "PATCH" }),
   markAllRead: () => request<{ marked: number }>("/notifications/read-all", { method: "POST" }),

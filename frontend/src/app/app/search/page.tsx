@@ -54,12 +54,12 @@ export default function SearchPage() {
       <div className="mb-5 flex flex-col gap-2 sm:mb-7 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div>
           <h1 className="text-[22px] font-black tracking-[-0.02em] text-ink sm:text-[26px]">
-            Моніторинг AUTO.RIA
+            Пошук авто
           </h1>
           <p className="mt-1 max-w-[560px] text-[12px] leading-relaxed text-muted sm:text-[13px]">
-            Налаштуйте фільтри, перегляньте кілька прикладів і збережіть пошук — Carbit
-            надсилатиме <strong className="font-medium text-ink">нові</strong> авто за цими
-            параметрами прямо в Telegram.
+            AUTO.RIA та OLX в одному місці. Налаштуйте фільтри, перегляньте кілька прикладів і
+            збережіть пошук — Carbit надсилатиме <strong className="font-medium text-ink">нові</strong>{" "}
+            авто за цими параметрами прямо в Telegram.
           </p>
         </div>
         <span className="w-fit rounded-lg border border-border bg-surface px-3 py-1.5 text-[11px] text-muted sm:bg-white sm:text-[12px]">

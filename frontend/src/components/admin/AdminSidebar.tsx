@@ -11,6 +11,7 @@ const links = [
   { href: "/admin/clients", label: "Клієнти" },
   { href: "/admin/subscriptions", label: "Підписки" },
   { href: "/admin/finance", label: "Фінанси" },
+  { href: "/admin/parsing", label: "Парсинг" },
 ];
 
 export function AdminSidebar() {

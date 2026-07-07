@@ -25,7 +25,7 @@ export default function HomePage() {
       <main className="bg-white">
 
         {/* ── HERO ─────────────────────────────────────────── */}
-        <section className="relative min-h-[100dvh] flex items-start sm:items-center overflow-hidden pt-[72px] sm:pt-[80px]">
+        <section id="landing-hero" className="relative min-h-[100dvh] flex items-start sm:items-center overflow-hidden pt-[72px] sm:pt-[80px]">
           <Image
             src={LANDING_IMAGES.hero}
             alt=""

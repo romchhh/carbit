@@ -4,9 +4,14 @@ from sqlalchemy import select, func
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
-from app.models.models import Notification
+from app.models.models import Listing, Notification
 from app.schemas.schemas import PaginatedNotifications, NotificationOut, NotificationStats
-from app.services.notifications.service import get_unread_count, mark_all_read
+from app.services.notifications.service import (
+    get_unread_count,
+    list_user_notifications,
+    mark_all_read,
+    notification_to_out,
+)
 from app.services.demo.seed import seed_demo_listings
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -17,29 +22,21 @@ async def list_notifications(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     unread_only: bool = False,
+    sort_by: str = Query("newest"),
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    base = select(Notification).where(Notification.user_id == user_id)
-    if unread_only:
-        base = base.where(Notification.is_read.is_(False))
-
-    total = await db.scalar(
-        select(func.count()).select_from(Notification).where(
-            Notification.user_id == user_id,
-            *( [Notification.is_read.is_(False)] if unread_only else [] ),
-        )
-    )
-    unread = await get_unread_count(db, user_id)
-
-    result = await db.scalars(
-        base.order_by(Notification.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
+    items, total, unread = await list_user_notifications(
+        db,
+        user_id,
+        page=page,
+        per_page=per_page,
+        unread_only=unread_only,
+        sort_by=sort_by,
     )
     return PaginatedNotifications(
-        items=result.all(),
-        total=total or 0,
+        items=items,
+        total=total,
         unread=unread,
         page=page,
         per_page=per_page,
@@ -69,7 +66,8 @@ async def mark_read(
         raise HTTPException(404, "Notification not found")
     n.is_read = True
     await db.flush()
-    return n
+    listing = await db.get(Listing, n.listing_id) if n.listing_id else None
+    return notification_to_out(n, listing)
 
 
 @router.post("/read-all")

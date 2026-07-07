@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+
+from app.core.timezone import KYIV_TZ, as_kyiv, now_kyiv
 from typing import Any
 
 from app.schemas.schemas import ListingOut, SearchFilters
@@ -88,16 +90,16 @@ async def filters_to_search_params(
 
 def _parse_datetime(value: Any) -> datetime:
     if not value:
-        return datetime.now(UTC)
+        return now_kyiv()
     if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(value, tz=UTC)
+        return as_kyiv(datetime.fromtimestamp(value, tz=UTC))
     if isinstance(value, str):
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
             try:
-                return datetime.strptime(value, fmt).replace(tzinfo=UTC)
+                return datetime.strptime(value, fmt).replace(tzinfo=KYIV_TZ)
             except ValueError:
                 continue
-    return datetime.now(UTC)
+    return now_kyiv()
 
 
 def _pick_vin_value(value: Any) -> str | None:
@@ -203,7 +205,7 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
         price_history=[],
         is_duplicate=False,
         published_at=_parse_datetime(info.get("addDate")),
-        found_at=datetime.now(UTC),
+        found_at=now_kyiv(),
     )
 
 

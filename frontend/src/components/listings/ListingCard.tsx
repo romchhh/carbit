@@ -6,6 +6,7 @@ import { IconArrowRight } from "@/components/icons";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
+import { SourceBadge } from "@/components/listings/SourceBadge";
 import { hasVinCheck } from "@/lib/vin-check";
 import { cn } from "@/lib/utils";
 import type { Listing } from "@/types/api";
@@ -76,9 +77,7 @@ export function ListingCard({
           </div>
         )}
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
-          <Badge variant="gray" className="bg-white/95 text-[10px] shadow-sm">
-            AUTO.RIA
-          </Badge>
+          <SourceBadge source={listing.source} />
           <div className="flex items-center gap-2">
             {onToggleFavorite && (
               <ListingFavoriteButton
@@ -196,7 +195,7 @@ export function ListingCard({
             {shortRegion(region)}
           </span>
           <span className="hidden items-center gap-1.5 sm:flex">
-            <Badge variant="outline" className="text-[10px]">AUTO.RIA</Badge>
+            <SourceBadge source={listing.source} variant="outline" />
             <span className="text-[11px] text-muted">{sellerLabel}</span>
           </span>
           <span className="flex items-center gap-0.5 text-[12px] font-semibold text-emerald-dark sm:ml-auto">

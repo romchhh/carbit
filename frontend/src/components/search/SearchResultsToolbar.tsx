@@ -5,9 +5,10 @@ import type { ExportListing } from "@/lib/export-listings";
 import type { SortOption } from "@/lib/search-catalog";
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "newest", label: "Спочатку нові" },
   { value: "price_asc", label: "Спочатку дешеві" },
   { value: "price_desc", label: "Спочатку дорогі" },
-  { value: "year_desc", label: "Спочатку нові" },
+  { value: "year_desc", label: "За роком випуску" },
   { value: "mileage_asc", label: "За пробігом" },
 ];
 

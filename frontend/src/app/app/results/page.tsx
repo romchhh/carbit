@@ -13,6 +13,12 @@ import type { SortOption } from "@/lib/search-catalog";
 import type { ExportListing } from "@/lib/export-listings";
 import type { Listing, SearchQuery } from "@/types/api";
 
+function sourceLabel(source: string): string {
+  if (source === "olx") return "OLX";
+  if (source === "auto_ria") return "AUTO.RIA";
+  return source.toUpperCase();
+}
+
 function toExportItems(items: Listing[]): ExportListing[] {
   return items.map(item => ({
     id: item.id,
@@ -21,7 +27,7 @@ function toExportItems(items: Listing[]): ExportListing[] {
     mileage: item.mileage,
     price: item.price,
     region: item.region,
-    src: "AUTO.RIA",
+    src: sourceLabel(item.source),
     fuel: item.fuel,
     trans: item.transmission,
     desc: item.description ?? undefined,
@@ -52,7 +58,7 @@ function ResultsPageContent() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
-  const [sort, setSort] = useState<SortOption>("price_asc");
+  const [sort, setSort] = useState<SortOption>("newest");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -213,6 +219,15 @@ function ResultsPageContent() {
             className="text-emerald-dark hover:underline"
           >
             AUTO.RIA
+          </a>
+          {" "}та{" "}
+          <a
+            href="https://www.olx.ua"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-emerald-dark hover:underline"
+          >
+            OLX
           </a>
         </p>
       )}
