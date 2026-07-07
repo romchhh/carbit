@@ -13,5 +13,5 @@ httpx==0.28.1
 beautifulsoup4==4.13.4
 python-multipart==0.0.32
 aiogram==3.29.0
-telethon==1.42.0
+telethon==1.44.0
 python-dotenv==1.1.1
