@@ -3,16 +3,13 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from app.core.text import norm_text
 from app.services.auto_ria.client import AutoRiaClient
 from app.services.auto_ria.constants import DEFAULT_CATEGORY_ID
 
 _lock = asyncio.Lock()
 _marks_cache: list[dict[str, Any]] | None = None
 _models_cache: dict[int, list[dict[str, Any]]] = {}
-
-
-def _norm(value: str) -> str:
-    return " ".join(value.strip().lower().split())
 
 
 async def _load_marks(client: AutoRiaClient) -> list[dict[str, Any]]:
@@ -37,13 +34,13 @@ async def _load_models(client: AutoRiaClient, mark_id: int) -> list[dict[str, An
 async def resolve_mark_id(client: AutoRiaClient, brand: str) -> int | None:
     if not brand:
         return None
-    target = _norm(brand)
+    target = norm_text(brand)
     marks = await _load_marks(client)
     for item in marks:
-        if _norm(str(item.get("name", ""))) == target:
+        if norm_text(str(item.get("name", ""))) == target:
             return int(item["value"])
     for item in marks:
-        name = _norm(str(item.get("name", "")))
+        name = norm_text(str(item.get("name", "")))
         if target in name or name in target:
             return int(item["value"])
     return None
@@ -52,13 +49,13 @@ async def resolve_mark_id(client: AutoRiaClient, brand: str) -> int | None:
 async def resolve_model_id(client: AutoRiaClient, mark_id: int, model: str) -> int | None:
     if not model:
         return None
-    target = _norm(model)
+    target = norm_text(model)
     models = await _load_models(client, mark_id)
     for item in models:
-        if _norm(str(item.get("name", ""))) == target:
+        if norm_text(str(item.get("name", ""))) == target:
             return int(item["value"])
     for item in models:
-        name = _norm(str(item.get("name", "")))
+        name = norm_text(str(item.get("name", "")))
         if target in name or name in target:
             return int(item["value"])
     return None

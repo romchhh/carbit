@@ -27,6 +27,7 @@ export default function StatsPage() {
 
   return (
     <AppPage
+      tourId="tour-section-stats"
       title="Статистика"
       description={`Тариф: ${PLAN_LABELS[stats.plan] ?? stats.plan}${stats.is_trial_active ? " · Trial" : ""}`}
     >

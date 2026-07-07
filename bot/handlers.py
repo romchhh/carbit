@@ -1,20 +1,14 @@
 import logging
-import re
 
 from aiogram import Router
 from aiogram.filters import CommandObject, CommandStart
-from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from backend_api import init_telegram_login, init_telegram_register, link_telegram_account
 from config import settings
-from states import Registration
-import tokens as tg_tokens
 
 logger = logging.getLogger(__name__)
 router = Router()
-
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _user_meta(message: Message) -> tuple[str, str | None]:
@@ -25,7 +19,7 @@ def _user_meta(message: Message) -> tuple[str, str | None]:
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, command: CommandObject, state: FSMContext) -> None:
+async def cmd_start(message: Message, command: CommandObject) -> None:
     if command.args and command.args.startswith("connect_"):
         token = command.args.removeprefix("connect_")
         telegram_id, username = _user_meta(message)
@@ -43,56 +37,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
         return
 
     telegram_id, username = _user_meta(message)
-    await state.clear()
     await _handle_register(message, telegram_id, username)
-
-
-@router.message(Registration.name)
-async def process_name(message: Message, state: FSMContext) -> None:
-    name = (message.text or "").strip()
-    if len(name) < 2:
-        await message.answer("Введіть ім'я (мінімум 2 символи):")
-        return
-
-    await state.update_data(name=name)
-    await state.set_state(Registration.email)
-    await message.answer(
-        f"Приємно познайомитись, <b>{name}</b>! 👋\n\n"
-        "Тепер вкажіть email — він потрібен для входу в кабінет на сайті:",
-    )
-
-
-@router.message(Registration.email)
-async def process_email(message: Message, state: FSMContext) -> None:
-    email = (message.text or "").strip().lower()
-    if not EMAIL_RE.match(email):
-        await message.answer("Введіть коректний email:")
-        return
-
-    data = await state.get_data()
-    name = data["name"]
-    telegram_id = data["telegram_id"]
-    username = data.get("username")
-
-    token = await tg_tokens.create_registration_token(
-        telegram_id=telegram_id,
-        chat_id=str(message.chat.id),
-        name=name,
-        email=email,
-        username=username,
-    )
-    await state.clear()
-
-    reg_url = f"{settings.FRONTEND_URL}/auth/telegram?token={token}"
-    markup = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="🚀 Відкрити кабінет", url=reg_url)]],
-    )
-    await message.answer(
-        f"✅ <b>Майже готово!</b>\n\n"
-        f"Email: <code>{email}</code>\n\n"
-        "Натисніть кнопку нижче, щоб відкрити кабінет.",
-        reply_markup=markup,
-    )
 
 
 @router.message()

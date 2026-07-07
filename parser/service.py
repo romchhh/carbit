@@ -24,6 +24,9 @@ from typing import Callable, Awaitable, Optional
 
 from telethon import events
 from telethon.tl.types import Message
+from telethon.utils import get_peer_id
+
+from .channel_links import is_numeric_channel_id, public_telegram_message_url
 
 from .config import settings
 from .telegram_client import build_client, ensure_joined
@@ -44,6 +47,7 @@ class CarParserService:
             self.dedupe.clear()
         self.skip_dedupe = skip_dedupe
         self._joined_cache = set()
+        self._slug_cache: dict[str, str] = {}
         self.last_parse_stats: dict = {}
 
     async def start(self):
@@ -63,9 +67,35 @@ class CarParserService:
             self._joined_cache.add(channel)
         return ok
 
-    def _build_source_link(self, channel: str, message_id: int) -> str:
-        uname = channel.strip("@")
-        return f"https://t.me/{uname}/{message_id}"
+    async def _channel_public_slug(self, channel: str) -> str:
+        """Повертає публічний username каналу (без @) для t.me/посилань."""
+        key = channel.strip()
+        if key in self._slug_cache:
+            return self._slug_cache[key]
+
+        slug = key.lstrip("@")
+        if not is_numeric_channel_id(slug):
+            self._slug_cache[key] = slug
+            return slug
+
+        try:
+            entity = await self.client.get_entity(int(slug) if slug.startswith("-") else slug)
+            username = getattr(entity, "username", None)
+            if username:
+                slug = username
+        except Exception as exc:
+            log.warning("Не вдалось отримати username для %s: %s", channel, exc)
+
+        self._slug_cache[key] = slug
+        return slug
+
+    async def _normalize_channel(self, channel: str) -> str:
+        slug = await self._channel_public_slug(channel)
+        return f"@{slug}"
+
+    async def _build_source_link(self, channel: str, message_id: int) -> str:
+        slug = await self._channel_public_slug(channel)
+        return public_telegram_message_url(slug, message_id)
 
     def _merge_group_text(self, group_messages: list) -> str:
         parts: list[str] = []
@@ -77,6 +107,7 @@ class CarParserService:
 
     async def _process_group(self, channel: str, group_messages: list) -> Optional[CarListing]:
         """group_messages - список Message з однаковим grouped_id (або 1 повідомлення)."""
+        channel = await self._normalize_channel(channel)
         group_messages = sorted(group_messages, key=lambda m: m.id)
         primary = next((m for m in group_messages if (m.text or "").strip()), group_messages[0])
         text = self._merge_group_text(group_messages)
@@ -95,7 +126,7 @@ class CarParserService:
             channel=channel,
             message_id=primary.id,
             group_message_ids=ids,
-            source_link=self._build_source_link(channel, primary.id),
+            source_link=await self._build_source_link(channel, primary.id),
             posted_at=primary.date,
             photos=[],
         )
@@ -121,6 +152,8 @@ class CarParserService:
             return []
 
         entity = await self.client.get_entity(channel)
+        if getattr(entity, "username", None):
+            self._slug_cache[channel.strip()] = entity.username
 
         raw_messages = []
         async for msg in self.client.iter_messages(entity, limit=limit):
@@ -172,11 +205,20 @@ class CarParserService:
             await self._ensure_joined_cached(ch)
 
         entities = [await self.client.get_entity(ch) for ch in channels]
-        channel_by_entity_id = {e.id: ch for ch, e in zip(channels, entities)}
+        channel_by_peer_id: dict[int, str] = {}
+        for ch, entity in zip(channels, entities):
+            label = f"@{entity.username}" if getattr(entity, "username", None) else ch
+            channel_by_peer_id[get_peer_id(entity)] = label
+            if getattr(entity, "username", None):
+                self._slug_cache[ch.strip()] = entity.username
+                self._slug_cache[label] = entity.username
+
+        def _channel_from_event(chat_id: int) -> str:
+            return channel_by_peer_id.get(chat_id, str(chat_id))
 
         @self.client.on(events.Album(chats=entities))
         async def _album_handler(event):
-            channel = channel_by_entity_id.get(event.chat_id, str(event.chat_id))
+            channel = _channel_from_event(event.chat_id)
             listing = await self._process_group(channel, event.messages)
             if listing:
                 await on_new_listing(listing)
@@ -185,7 +227,7 @@ class CarParserService:
         async def _single_handler(event: events.NewMessage.Event):
             if event.message.grouped_id:
                 return  # альбоми обробляються окремим хендлером вище
-            channel = channel_by_entity_id.get(event.chat_id, str(event.chat_id))
+            channel = _channel_from_event(event.chat_id)
             listing = await self._process_group(channel, [event.message])
             if listing:
                 await on_new_listing(listing)

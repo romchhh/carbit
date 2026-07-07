@@ -87,6 +87,7 @@ export default function NotificationsPage() {
 
   return (
     <AppPage
+      tourId="tour-section-notifications"
       title="Сповіщення"
       description={unread > 0 ? `${unread} непрочитаних` : "Всі прочитані"}
       action={

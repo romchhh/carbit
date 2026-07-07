@@ -100,6 +100,17 @@ export const adminApi = {
   triggerParserRun: () => request<AdminParseRun>("/admin/parser/run", { method: "POST" }),
   triggerParserRunSource: (source: "auto_ria" | "olx" | "telegram") =>
     request<AdminParseRun>(`/admin/parser/run/${source}`, { method: "POST" }),
+  analytics: () => request<AdminAnalytics>("/admin/analytics"),
+  system: () => request<AdminSystem>("/admin/system"),
+  listingsBrowse: (page = 1, opts: { source?: string; search?: string; duplicates_only?: boolean } = {}) => {
+    const params = new URLSearchParams({ page: String(page), per_page: "30" });
+    if (opts.source) params.set("source", opts.source);
+    if (opts.search) params.set("search", opts.search);
+    if (opts.duplicates_only) params.set("duplicates_only", "true");
+    return request<{ items: AdminListingRow[]; total: number; page: number; per_page: number }>(
+      `/admin/listings?${params}`,
+    );
+  },
 };
 
 export interface AdminParserSettings {
@@ -155,4 +166,66 @@ export interface AdminParserNotification {
   listing_source: string | null;
   listing_url: string | null;
   listing_image: string | null;
+}
+
+export interface AdminAnalytics {
+  listings_by_source: Record<string, number>;
+  total_listings: number;
+  duplicate_listings: number;
+  listings_today: number;
+  listings_week: number;
+  notifications_today: number;
+  notifications_week: number;
+  active_searches: number;
+  inactive_searches: number;
+  favorites_count: number;
+  listings_chart: { date: string; count: number }[];
+  notifications_chart: { date: string; count: number }[];
+  parse_runs_chart: {
+    date: string;
+    runs: number;
+    success: number;
+    failed: number;
+    partial: number;
+    listings_found: number;
+    listings_new: number;
+  }[];
+}
+
+export interface AdminSystem {
+  database_ok: boolean;
+  kv_store_ok: boolean;
+  integrations: { key: string; name: string; ok: boolean; detail: string }[];
+  parser_settings: AdminParserSettings;
+  telegram_channels: number;
+  last_run: {
+    id: string;
+    status: string;
+    started_at: string;
+    finished_at: string | null;
+    listings_found: number;
+    listings_new: number;
+    notifications_sent: number;
+    error: string | null;
+  } | null;
+  scheduler_status: string;
+  seconds_since_last_run: number | null;
+  running_parse_jobs: number;
+  frontend_url: string;
+  debug_mode: boolean;
+}
+
+export interface AdminListingRow {
+  id: string;
+  external_id: string;
+  source: string;
+  title: string;
+  brand: string;
+  model: string;
+  year: number;
+  price: number;
+  region: string;
+  url: string;
+  is_duplicate: boolean;
+  found_at: string;
 }

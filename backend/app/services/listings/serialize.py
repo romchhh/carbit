@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from app.models.models import Listing
 from app.schemas.schemas import ListingOut
+from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
 
 def listing_to_out(listing: Listing) -> ListingOut:
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
+    url = listing.url
+    if source == "telegram":
+        url = fix_telegram_listing_url(listing.id, url, images=listing.images)
     return ListingOut(
         id=listing.id,
         source=source,
@@ -21,7 +25,7 @@ def listing_to_out(listing: Listing) -> ListingOut:
         region=listing.region,
         description=listing.description,
         images=listing.images or [],
-        url=listing.url,
+        url=url,
         seller_type=listing.seller_type,
         vin=None,
         vin_checked=None,

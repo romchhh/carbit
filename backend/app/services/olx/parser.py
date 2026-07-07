@@ -161,6 +161,142 @@ def _extract_id_from_url(url: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def _price_from_embedded(raw: dict) -> tuple[Optional[str], Optional[str]]:
+    price_obj = raw.get("price")
+    if isinstance(price_obj, dict):
+        regular = price_obj.get("regularPrice") or price_obj.get("displayValue") or price_obj
+        if isinstance(regular, dict):
+            amount = regular.get("value") or regular.get("amount")
+            currency = regular.get("currency") or regular.get("currencyCode") or regular.get("currencySymbol")
+        else:
+            amount = price_obj.get("value") or price_obj.get("amount")
+            currency = price_obj.get("currency") or price_obj.get("currencyCode")
+        if amount is not None:
+            return str(int(float(amount))), _normalize_currency(currency)
+    return None, None
+
+
+def _normalize_currency(value: object) -> Optional[str]:
+    if not value:
+        return None
+    text = str(value).upper()
+    if text in ("UAH", "ГРН", "₴"):
+        return "UAH"
+    if text in ("USD", "$"):
+        return "USD"
+    if text in ("EUR", "€"):
+        return "EUR"
+    return None
+
+
+def _city_from_embedded(raw: dict) -> Optional[str]:
+    location = raw.get("location")
+    if not isinstance(location, dict):
+        return None
+    city = location.get("city")
+    if isinstance(city, dict):
+        return city.get("name") or city.get("normalizedName")
+    region = location.get("region")
+    if isinstance(region, dict):
+        return region.get("name")
+    return location.get("name")
+
+
+def _photo_from_embedded(raw: dict) -> Optional[str]:
+    photos = raw.get("photos") or raw.get("images") or []
+    if isinstance(photos, list):
+        for item in photos:
+            if isinstance(item, str) and is_valid_image_url(item):
+                return item
+            if isinstance(item, dict):
+                for key in ("link", "url", "src", "original"):
+                    candidate = item.get(key)
+                    if is_valid_image_url(candidate):
+                        return candidate
+    return None
+
+
+def _params_from_embedded(params: object) -> tuple[Optional[str], Optional[str], dict[str, str]]:
+    year: Optional[str] = None
+    mileage: Optional[str] = None
+    specs: dict[str, str] = {}
+    if not isinstance(params, list):
+        return year, mileage, specs
+
+    for item in params:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("key") or "").strip()
+        value = str(item.get("value") or item.get("normalizedValue") or "").strip()
+        if not name or not value:
+            continue
+        specs[name] = value
+        name_low = name.lower()
+        if year is None and ("рік" in name_low or name_low == "year"):
+            match = re.search(r"(19[5-9]\d|20[0-4]\d)", value)
+            if match:
+                year = match.group(1)
+        if mileage is None and ("пробіг" in name_low or "mileage" in name_low):
+            mileage = value
+    return year, mileage, specs
+
+
+def _listing_from_embedded(raw: dict) -> Optional[OlxListing]:
+    listing_id = raw.get("id")
+    url = raw.get("url")
+    if listing_id is None or not url:
+        return None
+
+    listing_id = str(listing_id)
+    full_url = urljoin(BASE_URL, url) if str(url).startswith("/") else str(url)
+    if "olx.ua" not in full_url and not str(url).startswith("/"):
+        return None
+
+    price, currency = _price_from_embedded(raw)
+    year, mileage, specs = _params_from_embedded(raw.get("params"))
+    created = (
+        raw.get("createdTime")
+        or raw.get("lastRefreshTime")
+        or raw.get("created_time")
+        or raw.get("last_refresh_time")
+    )
+
+    title = raw.get("title")
+    if not year and title:
+        match = re.search(r"(19[5-9]\d|20[0-4]\d)", str(title))
+        if match:
+            year = match.group(1)
+
+    return OlxListing(
+        listing_id=listing_id,
+        title=str(title) if title else None,
+        url=full_url,
+        price=price,
+        currency=currency,
+        year=year,
+        mileage=mileage,
+        city=_city_from_embedded(raw),
+        published=str(created) if created else None,
+        photo_url=_photo_from_embedded(raw),
+        promoted=bool(raw.get("isHighlighted") or raw.get("promoted")),
+        specs=specs,
+        raw_params=raw if isinstance(raw, dict) else {},
+    )
+
+
+def _parse_mileage_text(params_text: str) -> Optional[str]:
+    if not params_text:
+        return None
+    match = re.search(r"([\d\s]+)\s*тис\.?\s*км", params_text, re.IGNORECASE)
+    if match:
+        return match.group(1).replace(" ", "") + " тис.км"
+    match = re.search(r"([\d\s]{4,7})\s*км", params_text, re.IGNORECASE)
+    if match:
+        digits = re.sub(r"\s", "", match.group(1))
+        return f"{digits} км"
+    return None
+
+
 def _try_extract_embedded_json(html: str) -> list[dict]:
     results: list[dict] = []
     match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
@@ -192,21 +328,11 @@ def parse_listing_page(html: str) -> list[OlxListing]:
 
     embedded = _try_extract_embedded_json(html)
     for raw in embedded:
-        listing_id = str(raw.get("id")) if raw.get("id") is not None else None
-        url = raw.get("url")
-        if not url or not listing_id or listing_id in seen_ids:
+        listing = _listing_from_embedded(raw)
+        if not listing or not listing.listing_id or listing.listing_id in seen_ids:
             continue
-        if "olx.ua" not in str(url) and not str(url).startswith("/"):
-            continue
-        seen_ids.add(listing_id)
-        listings.append(
-            OlxListing(
-                listing_id=listing_id,
-                title=raw.get("title"),
-                url=urljoin(BASE_URL, url) if str(url).startswith("/") else str(url),
-                raw_params=raw if isinstance(raw, dict) else {},
-            )
-        )
+        seen_ids.add(listing.listing_id)
+        listings.append(listing)
 
     if listings:
         return listings
@@ -274,8 +400,7 @@ def _parse_single_card(card) -> Optional[OlxListing]:
     year_match = re.search(r"(19[5-9]\d|20[0-4]\d)", params_text or title or "")
     year = year_match.group(1) if year_match else None
 
-    mileage_match = re.search(r"([\d\s]+)\s*тис\.?\s*км", params_text or "")
-    mileage = (mileage_match.group(1).replace(" ", "") + " тис.км") if mileage_match else None
+    mileage = _parse_mileage_text(params_text or "")
 
     img_tag = card.select_one("img")
     photo_url = None
@@ -389,6 +514,13 @@ def parse_listing_details(html: str) -> dict:
         if match:
             vin = match.group(0)
 
+    posted_tag = (
+        soup.select_one('[data-testid="ad-posted-at"]')
+        or soup.select_one('[data-cy="ad-posted-at"]')
+        or soup.select_one('[data-testid="location-date"]')
+    )
+    published = posted_tag.get_text(strip=True) if posted_tag else None
+
     return {
         "description": description,
         "photos": photos,
@@ -396,6 +528,7 @@ def parse_listing_details(html: str) -> dict:
         "specs": specs,
         "price": price,
         "currency": currency,
+        "published": published,
     }
 
 
@@ -425,6 +558,9 @@ def apply_details_to_listing(listing: OlxListing, details: dict) -> None:
         listing.price = details.get("price")
     if not listing.currency and details.get("currency"):
         listing.currency = details.get("currency")
+
+    if details.get("published"):
+        listing.published = details.get("published")
 
     specs = listing.specs or {}
     if not listing.year:
@@ -508,30 +644,41 @@ def _listing_year(listing: OlxListing) -> int | None:
 
 def _listing_mileage_km(listing: OlxListing) -> int | None:
     if listing.mileage:
-        match = re.search(r"([\d\s]+)\s*тис", str(listing.mileage))
-        if match:
-            return int(re.sub(r"\s", "", match.group(1)) or "0") * 1000
-        digits = re.sub(r"[^\d]", "", str(listing.mileage))
-        if digits:
-            value = int(digits)
-            return value if value > 1000 else value * 1000
+        parsed = _parse_mileage_km_value(str(listing.mileage))
+        if parsed:
+            return parsed
 
     specs = listing.specs or {}
     spec_value = _spec_text(specs, "пробіг", "mileage")
     if spec_value:
-        match = re.search(r"([\d\s]+)\s*тис", spec_value)
-        if match:
-            return int(re.sub(r"\s", "", match.group(1)) or "0") * 1000
-        digits = re.sub(r"[^\d]", "", spec_value)
-        if digits:
-            value = int(digits)
-            return value if value > 1000 else value * 1000
+        parsed = _parse_mileage_km_value(spec_value)
+        if parsed:
+            return parsed
 
     blob = f"{listing.title or ''} {listing.raw_params}"
-    match = re.search(r"([\d\s]+)\s*тис\.?\s*км", blob)
+    match = re.search(r"([\d\s]+)\s*тис\.?\s*км", blob, re.IGNORECASE)
     if match:
         return int(re.sub(r"\s", "", match.group(1)) or "0") * 1000
+    match = re.search(r"([\d\s]{4,7})\s*км", blob, re.IGNORECASE)
+    if match:
+        return int(re.sub(r"\s", "", match.group(1)) or "0")
     return None
+
+
+def _parse_mileage_km_value(value: str) -> int | None:
+    match = re.search(r"([\d\s]+)\s*тис", value, re.IGNORECASE)
+    if match:
+        return int(re.sub(r"\s", "", match.group(1)) or "0") * 1000
+    match = re.search(r"([\d\s]{4,7})\s*км", value, re.IGNORECASE)
+    if match:
+        return int(re.sub(r"\s", "", match.group(1)) or "0")
+    digits = re.sub(r"[^\d]", "", value)
+    if not digits:
+        return None
+    amount = int(digits)
+    if amount > 1000:
+        return amount
+    return amount * 1000
 
 
 def _listing_text_blob(listing: OlxListing) -> str:

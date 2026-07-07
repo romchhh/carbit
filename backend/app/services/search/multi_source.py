@@ -122,6 +122,7 @@ async def _search_single_source(
     page: int,
     per_page: int,
     sort_by: str,
+    use_cache: bool = True,
     db=None,
 ) -> PaginatedListings:
     if source == "telegram":
@@ -142,8 +143,20 @@ async def _search_single_source(
                 sort_by=sort_by,
             )
     if source == "olx":
-        return await search_olx(filters, page=page, per_page=per_page, sort_by=sort_by)
-    return await search_auto_ria(filters, page=page, per_page=per_page, sort_by=sort_by)
+        return await search_olx(
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            use_cache=use_cache,
+        )
+    return await search_auto_ria(
+        filters,
+        page=page,
+        per_page=per_page,
+        sort_by=sort_by,
+        use_cache=use_cache,
+    )
 
 
 async def _search_olx_safe(
@@ -152,11 +165,18 @@ async def _search_olx_safe(
     page: int,
     per_page: int,
     sort_by: str,
+    use_cache: bool = True,
 ) -> tuple[PaginatedListings, str | None]:
     """OLX не повинен ламати весь пошук — таймаут/помилки дають порожню видачу."""
     try:
         result = await asyncio.wait_for(
-            search_olx(filters, page=page, per_page=per_page, sort_by=sort_by),
+            search_olx(
+                filters,
+                page=page,
+                per_page=per_page,
+                sort_by=sort_by,
+                use_cache=use_cache,
+            ),
             timeout=OLX_SEARCH_TIMEOUT_SECONDS,
         )
         return result, None
@@ -193,7 +213,6 @@ async def search_listings_outcome(
     use_cache: bool = True,
     db=None,
 ) -> SearchListingsOutcome:
-    del use_cache
     sources = normalize_sources(filters.sources)
     source_statuses: list[SourceSearchStatus] = []
 
@@ -206,6 +225,7 @@ async def search_listings_outcome(
                 page=page,
                 per_page=per_page,
                 sort_by=sort_by,
+                use_cache=use_cache,
                 db=db,
             )
         except Exception as exc:
@@ -231,6 +251,7 @@ async def search_listings_outcome(
                 page=1,
                 per_page=per_source_fetch,
                 sort_by=sort_by,
+                use_cache=use_cache,
             )
         except Exception as exc:
             return exc
@@ -241,6 +262,7 @@ async def search_listings_outcome(
             page=1,
             per_page=per_source_fetch,
             sort_by=sort_by,
+            use_cache=use_cache,
         )
 
     async def run_telegram() -> PaginatedListings | Exception:

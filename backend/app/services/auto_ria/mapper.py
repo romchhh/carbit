@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from app.core.timezone import KYIV_TZ, as_kyiv, now_kyiv
 from typing import Any
 
+from app.core.text import norm_text
 from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.auto_ria.catalog import resolve_mark_id, resolve_model_id
 from app.services.auto_ria.client import AutoRiaClient
@@ -17,10 +18,6 @@ from app.services.auto_ria.constants import (
     GEARBOX_NAME_TO_ID,
     REGION_TO_STATE_CITY,
 )
-
-
-def _norm(value: str) -> str:
-    return " ".join(value.strip().lower().split())
 
 
 async def filters_to_search_params(
@@ -66,8 +63,8 @@ async def filters_to_search_params(
     if filters.mileage_to is not None:
         params["raceTo"] = max(filters.mileage_to // 1000, 0)
 
-    if filters.region and _norm(filters.region) not in ("вся україна", ""):
-        region_key = _norm(filters.region)
+    if filters.region and norm_text(filters.region) not in ("вся україна", ""):
+        region_key = norm_text(filters.region)
         if region_key in REGION_TO_STATE_CITY:
             state_id, city_id = REGION_TO_STATE_CITY[region_key]
             params["state[0]"] = state_id
@@ -75,13 +72,13 @@ async def filters_to_search_params(
 
     if filters.fuel:
         for index, fuel in enumerate(filters.fuel[:3]):
-            fuel_id = FUEL_NAME_TO_ID.get(_norm(fuel))
+            fuel_id = FUEL_NAME_TO_ID.get(norm_text(fuel))
             if fuel_id:
                 params[f"type[{index}]"] = fuel_id
 
     if filters.transmission:
         for index, gear in enumerate(filters.transmission[:3]):
-            gear_id = GEARBOX_NAME_TO_ID.get(_norm(gear))
+            gear_id = GEARBOX_NAME_TO_ID.get(norm_text(gear))
             if gear_id:
                 params[f"gearbox[{index}]"] = gear_id
 

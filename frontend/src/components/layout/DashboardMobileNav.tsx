@@ -21,7 +21,7 @@ export function DashboardMobileNav({ badges }: Props) {
       aria-label="Навігація кабінету"
     >
       <div className="glass-liquid pointer-events-auto mx-auto flex h-[3.75rem] max-w-lg items-stretch justify-around gap-0.5 rounded-[28px] px-2 py-1.5">
-        {mobileNav.map(({ href, icon: Icon, shortLabel, label, badgeKey, badgeAccent }) => {
+        {mobileNav.map(({ href, icon: Icon, shortLabel, label, badgeKey, badgeAccent, tourId }) => {
           const active = isActive(href);
           const badge = badgeKey ? badges[badgeKey] : 0;
           const text = shortLabel ?? label;
@@ -30,6 +30,7 @@ export function DashboardMobileNav({ badges }: Props) {
             <Link
               key={href}
               href={href}
+              data-tour={tourId}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[18px] px-1 py-1.5 transition-all",

@@ -102,6 +102,23 @@ function AuthForm() {
     if (savedEmail) setEmail(savedEmail);
   }, []);
 
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    const stepParam = searchParams.get("step");
+    const emailParam = searchParams.get("email");
+    const codeParam = searchParams.get("code");
+
+    if (tabParam === "register") setTab("register");
+    if (stepParam === "verify") setRegisterStep("verify");
+    if (emailParam) setEmail(emailParam);
+    if (codeParam && /^\d{6}$/.test(codeParam)) {
+      setCode(codeParam);
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(codeParam).catch(() => {});
+      }
+    }
+  }, [searchParams]);
+
   const redirect = searchParams.get("redirect");
   const plan = searchParams.get("plan");
   const destination = redirect?.startsWith("/app") ? redirect : "/app/dashboard";
@@ -171,7 +188,7 @@ function AuthForm() {
     setLoading(true);
     try {
       await verifyRegisterCode(email.trim(), code);
-      router.replace("/app/onboarding");
+      router.replace("/app/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Помилка підтвердження");
     } finally {

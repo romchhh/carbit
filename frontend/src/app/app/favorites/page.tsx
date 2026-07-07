@@ -63,7 +63,7 @@ export default function FavoritesPage() {
   if (loading) return <AppLoading />;
 
   return (
-    <AppPage title="Обране" description="Збережені авто для швидкого доступу">
+    <AppPage title="Обране" description="Збережені авто для швидкого доступу" tourId="tour-section-favorites">
       {listings.length === 0 ? (
         <AppEmpty>
           <IconHeart size={32} className="mx-auto mb-4 text-muted/30" />

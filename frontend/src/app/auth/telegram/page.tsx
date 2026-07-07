@@ -23,7 +23,7 @@ function TelegramRegisterForm() {
       .then(async ({ access_token }) => {
         await loginWithToken(access_token);
         markOnboardingPending();
-        router.replace("/app/onboarding");
+        router.replace("/app/dashboard");
       })
       .catch(err => {
         setError(err instanceof ApiError ? err.message : "Не вдалось зареєструватись");

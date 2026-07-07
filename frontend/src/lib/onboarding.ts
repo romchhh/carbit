@@ -1,9 +1,12 @@
+import type { User } from "@/types/api";
+
 const ONBOARDING_KEY = "autoradar_onboarding_done";
 
-export function shouldShowOnboarding(): boolean {
+export function shouldShowOnboarding(user?: User | null): boolean {
   if (typeof window === "undefined") return false;
-  return sessionStorage.getItem("autoradar_show_onboarding") === "true"
-    && localStorage.getItem(ONBOARDING_KEY) !== "true";
+  if (user?.onboarding_completed) return false;
+  if (localStorage.getItem(ONBOARDING_KEY) === "true") return false;
+  return sessionStorage.getItem("autoradar_show_onboarding") === "true";
 }
 
 export function markOnboardingPending(): void {

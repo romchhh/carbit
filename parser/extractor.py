@@ -47,6 +47,11 @@ SPAM_PATTERNS = [
         r"наш\s+канал",
         r"переход(?:ь|ьте)\s+по\s+посилан",
         r"безкоштовн(?:ий|а)\s+(?:курс|урок)",
+        r"криптовалют",
+        r"обмін\s+квартир",
+        r"здаю\s+в\s+оренду",
+        r"вакансія",
+        r"набір\s+в\s+команду",
     )
 ]
 
@@ -88,6 +93,33 @@ USERNAME_RE = re.compile(r"@([A-Za-z0-9_]{4,32})")
 
 MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 MARKDOWN_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
+HASHTAG_RE = re.compile(r"#\w+")
+VIN_RE = re.compile(r"\b(?=[A-HJ-NPR-Z0-9]{17}\b)(?!.*[IOQ])[A-HJ-NPR-Z0-9]{17}\b")
+
+MILEAGE_FULL_KM_RE = re.compile(
+    r"(?P<val>\d{2,3}(?:[ .]\d{3})+|\d{4,7})\s*км",
+    re.IGNORECASE,
+)
+
+PRICE_LABEL_RE = re.compile(
+    r"(?:ціна|цена|price|💰|💵|💲)\s*:?\s*"
+    r"(?P<amount>\d{1,3}(?:[ .,]\d{3})+|\d{3,8})"
+    r"\s?(?P<cur>[\$€]|грн\.?|uah|usd|eur|у\.?\s?е\.?)?",
+    re.IGNORECASE,
+)
+
+MILEAGE_LABEL_RE = re.compile(
+    r"(?:пробіг|пробег|mileage|📏)\s*:?\s*"
+    r"(?P<val>\d{1,3}(?:[ .,]\d{3})?)\s?"
+    r"(?P<unit>тис\.?\s?км|тыс\.?\s?км|км)?",
+    re.IGNORECASE,
+)
+
+MODEL_STOP_WORDS = frozenset({
+    "рік", "года", "року", "р", "р.", "ціна", "цена", "price", "пробіг", "пробег",
+    "бензин", "дизель", "газ", "автомат", "механіка", "механика", "типтронік",
+    "тип", "кузов", "седан", "хетчбек", "продаю", "продам", "sale",
+})
 
 TRANSMISSION_MAP = {
     "механіка": "manual", "механика": "manual", "ручна": "manual", "мкпп": "manual",
@@ -120,11 +152,12 @@ CONDITION_KEYWORDS = {
 
 
 def normalize_listing_text(raw_text: str) -> str:
-    """Прибирає markdown і зайві пробіли перед парсингом."""
+    """Прибирає markdown, хештеги і зайві пробіли перед парсингом."""
     text = raw_text or ""
     text = MARKDOWN_LINK_RE.sub(r"\1", text)
     text = MARKDOWN_BOLD_RE.sub(r"\1", text)
     text = text.replace("**", "").replace("__", "")
+    text = HASHTAG_RE.sub(" ", text)
     text = re.sub(r"[\u00a0\u202f\u2009]", " ", text)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -201,6 +234,8 @@ def _find_brand_model(text_low: str, original_text: str):
         for w in words[:3]:
             if YEAR_RE.fullmatch(w):
                 break
+            if w.lower() in MODEL_STOP_WORDS:
+                break
             if w.lower() in ("рік", "года", "року", "р", "р."):
                 break
             model_words.append(w)
@@ -241,12 +276,40 @@ def _looks_like_year(amount: float) -> bool:
     return 1950 <= year <= CURRENT_YEAR + 1
 
 
+def _looks_like_phone_amount(amount: float) -> bool:
+    if amount != int(amount):
+        return False
+    digits = str(int(amount))
+    return len(digits) >= 10 and digits.startswith("0")
+
+
 def _find_price(text: str):
+    label_match = PRICE_LABEL_RE.search(text)
+    if label_match:
+        amount = _normalize_amount(label_match.group("amount"))
+        if amount is not None and not _looks_like_phone_amount(amount):
+            cur = (label_match.group("cur") or "").lower()
+            currency = None
+            if cur in ("$", "usd") or "у" in cur:
+                currency = "USD"
+            elif cur in ("€", "eur"):
+                currency = "EUR"
+            elif "грн" in cur or cur == "uah":
+                currency = "UAH"
+            if _price_in_range(amount, currency):
+                if currency is None:
+                    from .currency import infer_currency
+                    currency = infer_currency(amount, None, text)
+                return amount, currency
+
     best = None
     best_score = -1
     for m in PRICE_RE.finditer(text):
         amount = _normalize_amount(m.group("amount"))
         if amount is None:
+            continue
+
+        if _looks_like_phone_amount(amount):
             continue
 
         cur = (m.group("cur_before") or m.group("cur_after") or "").lower()
@@ -288,6 +351,17 @@ def _find_price(text: str):
 
 
 def _find_mileage(text: str) -> Optional[int]:
+    label = MILEAGE_LABEL_RE.search(text)
+    if label:
+        val = _normalize_amount(label.group("val"))
+        if val is not None:
+            unit = (label.group("unit") or "").lower()
+            if unit and ("тис" in unit or "тыс" in unit):
+                return int(val * 1000)
+            if val < 1000:
+                return int(val * 1000)
+            return int(val)
+
     m = MILEAGE_RE.search(text)
     if m:
         val = _normalize_amount(m.group("val"))
@@ -295,6 +369,12 @@ def _find_mileage(text: str) -> Optional[int]:
             unit = m.group("unit").lower()
             if "тис" in unit or "тыс" in unit:
                 val *= 1000
+            return int(val)
+
+    full_km = MILEAGE_FULL_KM_RE.search(text)
+    if full_km:
+        val = _normalize_amount(full_km.group("val"))
+        if val is not None:
             return int(val)
 
     miles = MILEAGE_MILES_RE.search(text)
@@ -387,6 +467,10 @@ def extract_car_data(
         listing.contact_username = user_m.group(1) if user_m else None
 
         listing.condition_flags = _find_condition_flags(text_low)
+
+        vin_m = VIN_RE.search(text.upper())
+        if vin_m:
+            listing.condition_flags = {**(listing.condition_flags or {}), "vin": vin_m.group(0)}
 
         key_fields = [listing.brand, listing.year, listing.price_amount]
         found_key = sum(1 for f in key_fields if f is not None)

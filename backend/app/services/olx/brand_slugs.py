@@ -3,8 +3,7 @@ from __future__ import annotations
 import re
 
 
-def _norm(value: str) -> str:
-    return " ".join(value.strip().lower().split())
+from app.core.text import norm_text as _norm
 
 
 def slugify(value: str) -> str:

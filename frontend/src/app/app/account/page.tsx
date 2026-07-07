@@ -236,7 +236,7 @@ export default function AccountPage() {
           </AppSection>
         )}
 
-        <AppSection className="!bg-white !p-5 sm:!p-6">
+        <AppSection className="!bg-white !p-5 sm:!p-6" data-tour="tour-section-telegram">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#E8F4FD]">

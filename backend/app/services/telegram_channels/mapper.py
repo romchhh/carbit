@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 from app.services.currency import infer_currency, to_uah
 from app.core.config import settings
+from app.core.text import norm_text
 from app.core.timezone import as_kyiv, now_kyiv
 from app.schemas.schemas import ListingOut, SearchFilters
+from app.services.telegram_channels.bootstrap import ensure_parser_path
+
+ensure_parser_path()
+from parser.channel_links import is_numeric_channel_id, public_telegram_message_url
 
 FUEL_LABELS = {
     "petrol": "Бензин",
@@ -24,15 +30,52 @@ TRANSMISSION_LABELS = {
     "variator": "Варіатор",
 }
 
-def _norm(value: str | None) -> str:
-    if not value:
-        return ""
-    return " ".join(str(value).strip().lower().split())
-
 
 def telegram_listing_id(channel: str, message_id: int) -> str:
     safe_channel = channel.strip("@").replace("/", "_").replace(" ", "_")
     return f"telegram_{safe_channel}_{message_id}"
+
+
+def telegram_message_url(channel: str, message_id: int, current_url: str = "") -> str:
+    slug = (channel or "").strip().lstrip("@")
+    if slug and not is_numeric_channel_id(slug):
+        return public_telegram_message_url(slug, message_id)
+    return current_url or ""
+
+
+def _channel_slug_from_telegram_images(images: list[str] | None) -> str:
+    for image in images or []:
+        marker = "/telegram-media/"
+        if marker not in image:
+            continue
+        rel = image.split(marker, 1)[-1].strip("/")
+        parts = rel.split("/")
+        if len(parts) >= 2 and not is_numeric_channel_id(parts[0]):
+            return parts[0]
+    return ""
+
+
+def fix_telegram_listing_url(
+    listing_id: str,
+    url: str,
+    *,
+    images: list[str] | None = None,
+) -> str:
+    """Виправляє старі посилання t.me/-100... → t.me/username/msg."""
+    if not url or "t.me/-" not in url:
+        return url
+    if listing_id.startswith("telegram_"):
+        body = listing_id.removeprefix("telegram_")
+        channel_part, _, msg_part = body.rpartition("_")
+        if channel_part and msg_part.isdigit() and not is_numeric_channel_id(channel_part):
+            return f"https://t.me/{channel_part}/{msg_part}"
+
+    channel_slug = _channel_slug_from_telegram_images(images)
+    if channel_slug:
+        match = re.search(r"/(\d+)$", url)
+        if match:
+            return f"https://t.me/{channel_slug}/{match.group(1)}"
+    return url
 
 
 def telegram_media_url(local_path: str) -> str:
@@ -88,7 +131,7 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
         region=listing.location_city or "Україна",
         description=listing.raw_text,
         images=images,
-        url=listing.source_link,
+        url=telegram_message_url(listing.channel, listing.message_id, listing.source_link),
         seller_type="private",
         vin=None,
         vin_checked=None,
@@ -114,16 +157,16 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
 
 def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> bool:
     if filters.brand:
-        brand = _norm(filters.brand)
-        haystack = _norm(f"{item.brand} {item.title}")
+        brand = norm_text(filters.brand)
+        haystack = norm_text(f"{item.brand} {item.title}")
         if brand not in haystack:
-            item_brand = _norm(item.brand)
+            item_brand = norm_text(item.brand)
             if not item_brand or (brand not in item_brand and item_brand not in brand):
                 return False
 
     if filters.model:
-        model = _norm(filters.model)
-        haystack = _norm(f"{item.model} {item.title}")
+        model = norm_text(filters.model)
+        haystack = norm_text(f"{item.model} {item.title}")
         if model not in haystack:
             return False
 
@@ -142,21 +185,21 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     if filters.mileage_to and item.mileage and item.mileage > filters.mileage_to:
         return False
 
-    if filters.region and _norm(filters.region) not in ("вся україна", ""):
-        region = _norm(filters.region).removeprefix("м. ")
-        item_region = _norm(item.region)
+    if filters.region and norm_text(filters.region) not in ("вся україна", ""):
+        region = norm_text(filters.region).removeprefix("м. ")
+        item_region = norm_text(item.region)
         generic_region = item_region in ("україна", "", "ukraine")
         if generic_region and item.source == "telegram":
             pass
         elif region not in item_region and item_region not in region:
             return False
 
-    blob = _norm(f"{item.title} {item.fuel} {item.transmission} {item.description}")
-    if filters.fuel and not any(_norm(value) in blob for value in filters.fuel):
+    blob = norm_text(f"{item.title} {item.fuel} {item.transmission} {item.description}")
+    if filters.fuel and not any(norm_text(value) in blob for value in filters.fuel):
         return False
 
     if filters.transmission and not any(
-        _norm(value) in blob or _norm(value) in _norm(item.transmission) for value in filters.transmission
+        norm_text(value) in blob or norm_text(value) in norm_text(item.transmission) for value in filters.transmission
     ):
         return False
 

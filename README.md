@@ -3,24 +3,47 @@
 Агрегатор оголошень авторинку України (AUTO.RIA · OLX · Telegram).
 
 ## Стек
+
 - **Frontend**: Next.js 15 · TypeScript · Tailwind CSS · PWA
 - **Backend**: FastAPI · SQLAlchemy · SQLite
 - **Bot**: Python · aiogram 3
+- **Parser**: Telethon (окремий Python-модуль)
 
-## Структура
+## Структура проєкту
+
 ```
 autoradar/
-├── .env.example  єдиний env для backend, bot і frontend
-├── .venv/        Python venv (backend + bot)
-├── database/     SQLite (autoradar.db + kv.db, не в git)
-├── storage/      локальне KV-сховище (коди, токени)
-├── frontend/     Next.js (кабінет + /admin)
-├── backend/      FastAPI REST API
-├── bot/          Telegram-бот (окремий сервіс)
-└── scripts/      Shell-скрипти запуску
+├── .env.example          # єдиний env для всіх сервісів
+├── .venv/                # Python venv (backend + bot)
+├── database/             # SQLite: autoradar.db, kv.db, Telethon session
+├── media/                # фото з Telegram-каналів (не в git)
+├── storage/              # KV-сховище (токени, коди)
+│
+├── frontend/             # Next.js — лендінг, кабінет /app, адмін /admin
+├── backend/              # FastAPI REST API
+│   └── app/services/
+│       ├── auto_ria/     # пошук через Partner API
+│       ├── olx/          # парсинг HTML olx.ua
+│       ├── telegram/     # Bot API (сповіщення користувачам)
+│       ├── telegram_channels/  # міст між /parser і БД
+│       ├── parser/       # ⚠️ пайплайн збережених пошуків (НЕ Telethon!)
+│       └── search/       # об'єднаний пошук по джерелах
+│
+├── parser/               # Telethon-парсер Telegram-каналів
+├── bot/                  # aiogram-бот (реєстрація / вхід / connect)
+├── worker/               # плановий парсер (AUTO.RIA + OLX + Telegram batch)
+├── telegram_worker/      # realtime-слухач нових постів у каналах
+└── scripts/              # docker-deploy.sh тощо
 ```
 
-## Перший запуск (один раз)
+### Потік даних
+
+1. **Пошук у кабінеті** — frontend → `backend/services/search/` → AUTO.RIA / OLX / Telegram (з БД).
+2. **Збережений пошук** — `worker` → `backend/services/parser/runner.py` → upsert у БД → сповіщення.
+3. **Telegram-канали** — `parser/` (Telethon) → `telegram_channels/ingest.py` → БД; realtime через `telegram_worker/`.
+4. **Бот** — `bot/` → internal API backend → токени в `storage/kv_store.py`.
+
+## Перший запуск (локально)
 
 ```bash
 cd autoradar
@@ -29,29 +52,27 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env   # заповніть TELEGRAM_BOT_TOKEN, RESEND_API_KEY тощо
+cp .env.example .env   # TELEGRAM_BOT_TOKEN, TELETHON_API_ID тощо
 
-mkdir -p database
+mkdir -p database media
 cd backend && PYTHONPATH=. alembic upgrade head && cd ..
 ```
 
-## Запуск
+## Запуск (3 термінали)
 
-**Backend** (термінал 1):
+**Backend:**
 ```bash
-./scripts/start-backend.sh
-# або вручну:
-source .venv/bin/activate && cd backend && PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+source .venv/bin/activate
+cd backend && PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Bot** (термінал 2):
+**Bot:**
 ```bash
-./scripts/start-bot.sh
-# або вручну:
-source .venv/bin/activate && cd bot && python main.py
+source .venv/bin/activate
+cd bot && python main.py
 ```
 
-**Frontend** (термінал 3):
+**Frontend:**
 ```bash
 cd frontend && npm install && npm run dev
 ```
@@ -59,28 +80,35 @@ cd frontend && npm install && npm run dev
 | Сервіс | URL |
 |--------|-----|
 | Frontend | http://localhost:3000 |
-| Admin panel | http://localhost:3000/admin |
+| Admin | http://localhost:3000/admin |
 | API docs | http://localhost:8000/api/docs |
 
-**Admin login** (за замовчуванням): `admin` / `admin123` — змініть через `ADMIN_USERNAME` / `ADMIN_PASSWORD` у `.env`.
+**Admin login** (за замовчуванням): `admin` / `admin123` — змініть через `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
 
-**Кеш/коди**: SQLite у `database/kv.db`.
+**База даних**: `database/autoradar.db` · **KV**: `database/kv.db`
 
-**База даних**: SQLite у `database/autoradar.db`.
-
-**Bot ↔ Backend**: `INTERNAL_API_SECRET` у кореневому `.env` має бути однаковим для обох сервісів.
+**Bot ↔ Backend**: `INTERNAL_API_SECRET` у `.env` має збігатися для обох сервісів.
 
 ## Docker (production)
 
-Повна інструкція для сервера: **[DOCKER.md](./DOCKER.md)**
+Повна інструкція: **[DOCKER.md](./DOCKER.md)**
 
 ```bash
-cp .env.example .env   # налаштуйте production-змінні
-mkdir -p database
+cp .env.example .env
+mkdir -p database media
 docker compose up -d --build
 ```
 
-## API модулі (`/api/v1/`)
-- `auth`, `users`, `searches`, `listings`, `favorites`, `notifications`, `billing`, `telegram`
-- `admin` — адмін-панель
-- `internal/bot` — внутрішній API для Telegram-бота
+## API (`/api/v1/`)
+
+`auth` · `users` · `searches` · `listings` · `favorites` · `notifications` · `billing` · `telegram` · `admin` · `internal/bot`
+
+## Тести
+
+```bash
+# Parser (без Telegram)
+python3 -m unittest parser.test_extractor parser.test_channel_links -q
+
+# Backend
+cd backend && PYTHONPATH=. python3 -m pytest tests/ -q
+```

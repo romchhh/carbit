@@ -79,6 +79,29 @@ class ExtractorTests(unittest.TestCase):
         listing = _extract("")
         self.assertFalse(is_valid_car_listing(listing))
 
+    def test_hashtags_stripped(self):
+        listing = _extract("#авто #продам Toyota Camry 2017, 14500$")
+        self.assertEqual(listing.brand, "Toyota")
+        self.assertEqual(listing.year, 2017)
+
+    def test_mileage_label(self):
+        listing = _extract("Volkswagen Passat 2015\nПробіг: 145 тис. км\nЦіна: 9800$")
+        self.assertEqual(listing.brand, "Volkswagen")
+        self.assertEqual(listing.mileage_km, 145000)
+        self.assertEqual(listing.price_amount, 9800)
+
+    def test_full_km_mileage(self):
+        listing = _extract("Ford Focus 2014, пробіг 118000 км, 7500$")
+        self.assertEqual(listing.mileage_km, 118000)
+
+    def test_phone_not_price(self):
+        listing = _extract("Продам авто, тел 0671234567, 2016 рік")
+        self.assertNotEqual(listing.price_amount, 671234567)
+
+    def test_vin_flag(self):
+        listing = _extract("BMW 320 2016, VIN WBA8E9G50JNU12345, 12000$")
+        self.assertEqual(listing.condition_flags.get("vin"), "WBA8E9G50JNU12345")
+
 
 if __name__ == "__main__":
     unittest.main()

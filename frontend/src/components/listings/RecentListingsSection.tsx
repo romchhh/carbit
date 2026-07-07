@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ListingsHorizontalCarousel } from "@/components/listings/ListingsHorizontalCarousel";
 import { loadRecentListings } from "@/lib/recent-listings";
+import { cn } from "@/lib/utils";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -24,7 +25,7 @@ export function RecentListingsSection({ limit = 6, className }: Props) {
 
   return (
     <ListingsHorizontalCarousel
-      className={className}
+      className={cn("mt-6", className)}
       listings={items}
       title="Останні переглянуті"
       description="Пропозиції, які ви відкривали нещодавно"

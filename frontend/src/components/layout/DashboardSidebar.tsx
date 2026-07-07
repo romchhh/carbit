@@ -51,13 +51,14 @@ export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
         </div>
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-          {primaryNav.map(({ href, icon: Icon, label, badgeKey, badgeAccent }) => {
+          {primaryNav.map(({ href, icon: Icon, label, badgeKey, badgeAccent, tourId }) => {
             const badge = badgeKey ? badges[badgeKey] : 0;
             const active = isActive(href);
             return (
               <Link
                 key={href}
                 href={href}
+                data-tour={tourId}
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] text-ink transition-all",
                   active
@@ -83,12 +84,13 @@ export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
 
           <div className="!my-3 border-t border-border/60" />
 
-          {secondaryNav.map(({ href, icon: Icon, label }) => {
+          {secondaryNav.map(({ href, icon: Icon, label, tourId }) => {
             const active = isActive(href);
             return (
               <Link
                 key={href}
                 href={href}
+                data-tour={tourId}
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] text-ink transition-all",
                   active ? "bg-surface font-semibold" : "hover:bg-surface",

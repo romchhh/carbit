@@ -1,30 +1,67 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { listings as listingsApi } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { listings as listingsApi, favorites as favoritesApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
+import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
+import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { Button } from "@/components/ui/Button";
-import { IconHeart, IconGlobe, IconArrowRight } from "@/components/icons";
-import { formatPrice, formatMileage, cn, publishedAgoLabel } from "@/lib/utils";
-import { favorites as favoritesApi } from "@/lib/api";
+import { IconArrowLeft, IconGlobe, IconHeart } from "@/components/icons";
+import {
+  formatPrice,
+  formatMileage,
+  cn,
+  publishedAgoLabel,
+} from "@/lib/utils";
+import {
+  listingAttributionUrl,
+  listingOpenLabel,
+  listingSourceSiteName,
+} from "@/lib/listing-source";
+import { hasVinCheck } from "@/lib/vin-check";
 import { normalizeListingForFavorite } from "@/lib/listing-favorite-payload";
 
 export default function ListingDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
   const [listing, setListing] = useState<Listing | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [id, setId] = useState("");
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const galleryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     params.then(p => {
-      setId(p.id);
-      listingsApi.get(p.id).then(setListing).catch(() => setListing(null));
+      setLoading(true);
+      setNotFound(false);
+      listingsApi
+        .get(p.id)
+        .then(data => {
+          setListing(data);
+          setNotFound(false);
+        })
+        .catch(() => {
+          setListing(null);
+          setNotFound(true);
+        })
+        .finally(() => setLoading(false));
       favoritesApi.check(p.id).then(r => setIsFavorite(r.is_favorite)).catch(() => {});
     });
   }, [params]);
+
+  const scrollToPhoto = useCallback((index: number) => {
+    const container = galleryRef.current;
+    if (!container) return;
+    const slide = container.children[index] as HTMLElement | undefined;
+    if (!slide) return;
+    container.scrollTo({ left: slide.offsetLeft, behavior: "smooth" });
+    setPhotoIndex(index);
+  }, []);
 
   const toggleFavorite = async () => {
     if (!listing) return;
@@ -37,77 +74,229 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  if (!listing) {
+  if (loading) {
     return (
       <div className="flex justify-center py-20">
-        <div className="w-8 h-8 border-2 border-emerald border-t-transparent rounded-full animate-spin" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (notFound || !listing) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+        <p className="text-[15px] font-semibold text-ink">Оголошення не знайдено</p>
+        <p className="max-w-xs text-[13px] text-muted">
+          Можливо, воно вже зняте з публікації або посилання застаріло.
+        </p>
+        <Link href="/app/dashboard">
+          <Button variant="secondary" size="md">
+            До пошуків
+          </Button>
+        </Link>
       </div>
     );
   }
 
   const images = Array.isArray(listing.images) ? listing.images : [];
   const publishedLabel = publishedAgoLabel(listing.published_at);
+  const hasAutoRiaDetails =
+    listing.source === "auto_ria" &&
+    listing.source_data &&
+    Object.keys(listing.source_data).length > 0;
+
+  const specs = [
+    { label: "Рік", value: listing.year > 0 ? String(listing.year) : null },
+    { label: "Пробіг", value: listing.mileage > 0 ? formatMileage(listing.mileage) : null },
+    { label: "Паливо", value: listing.fuel?.split(",")[0]?.trim() || null },
+    { label: "КПП", value: listing.transmission || null },
+    { label: "Регіон", value: listing.region?.split(",")[0]?.trim() || null },
+    {
+      label: "Продавець",
+      value: listing.seller_type === "dealer" ? "Автосалон" : "Приват",
+    },
+  ].filter(item => item.value);
 
   return (
-    <div className="max-w-[960px]">
-      <div className="flex items-center gap-2 text-[12px] text-muted mb-6">
-        <Link href="/app/dashboard" className="hover:text-ink">Пошуки</Link>
-        <span>/</span>
-        <span className="text-ink font-medium">{listing.title}</span>
+    <div className="w-full pb-4 lg:pb-0">
+      <div className="mb-3 flex items-center justify-between gap-3 lg:mb-6">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-white px-3 py-1.5 text-[13px] font-medium text-ink shadow-sm lg:hidden"
+        >
+          <IconArrowLeft size={14} />
+          Назад
+        </button>
+        <nav className="hidden min-w-0 flex-1 items-center gap-2 text-[12px] text-muted lg:flex">
+          <Link href="/app/dashboard" className="shrink-0 hover:text-ink">
+            Пошуки
+          </Link>
+          <span>/</span>
+          <span className="truncate font-medium text-ink">{listing.title}</span>
+        </nav>
+        <button
+          type="button"
+          aria-label={isFavorite ? "Прибрати з обраного" : "Додати в обране"}
+          onClick={() => void toggleFavorite()}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/80 bg-white shadow-sm lg:hidden"
+        >
+          <IconHeart
+            size={16}
+            className={cn("transition-colors", isFavorite ? "fill-current text-emerald" : "text-muted/75")}
+          />
+        </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-5">
-          <div className="bg-white border border-border rounded-xl overflow-hidden">
-            <div className="relative w-full h-[280px] bg-surface">
-              {images[0] ? (
-                <Image
-                  src={images[0]}
-                  alt={listing.title}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 960px) 66vw, 640px"
-                  unoptimized
-                />
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-6">
+        {/* Left: gallery + details */}
+        <div className="flex min-w-0 flex-col gap-4">
+          <section className="-mx-4 overflow-hidden bg-white sm:mx-0 sm:rounded-2xl sm:border sm:border-border/80">
+            <div className="relative aspect-[16/10] w-full bg-surface sm:aspect-[4/3]">
+              {images.length > 0 ? (
+                <div
+                  ref={galleryRef}
+                  className="flex h-full w-full snap-x snap-mandatory overflow-x-auto scroll-smooth scrollbar-hide touch-pan-x"
+                  onScroll={e => {
+                    const el = e.currentTarget;
+                    const width = el.clientWidth || 1;
+                    const index = Math.round(el.scrollLeft / width);
+                    if (index !== photoIndex) setPhotoIndex(index);
+                  }}
+                >
+                  {images.map((src, index) => (
+                    <div
+                      key={`${src}-${index}`}
+                      className="relative h-full w-full shrink-0 snap-start snap-always"
+                    >
+                      <Image
+                        src={src}
+                        alt={`${listing.title} — фото ${index + 1}`}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 1024px) 100vw, 640px"
+                        unoptimized
+                        priority={index === 0}
+                      />
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="flex h-full items-center justify-center text-[13px] text-muted">
                   Без фото
                 </div>
               )}
-              <div className="absolute bottom-3 left-3">
+
+              {images.length > 1 && (
+                <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">
+                  {photoIndex + 1} / {images.length}
+                </div>
+              )}
+              <div className="pointer-events-none absolute bottom-3 left-3">
                 <PublishedTimeBadge date={listing.published_at} short />
               </div>
             </div>
+
             {images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto p-3 border-t border-border/70">
+              <div className="flex gap-2 overflow-x-auto border-t border-border/70 px-3 py-3 scrollbar-hide sm:px-4">
                 {images.map((src, index) => (
-                  <div
-                    key={`${src}-${index}`}
-                    className="relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-border/70"
+                  <button
+                    key={`${src}-${index}-thumb`}
+                    type="button"
+                    onClick={() => scrollToPhoto(index)}
+                    className={cn(
+                      "relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-colors",
+                      index === photoIndex ? "border-emerald" : "border-transparent opacity-70",
+                    )}
                   >
                     <Image src={src} alt="" fill className="object-cover" sizes="80px" unoptimized />
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
-          </div>
-          {listing.description && (
-            <div className="bg-white border border-border rounded-xl p-6">
-              <h2 className="text-[15px] font-bold text-ink mb-3">Опис</h2>
-              <p className="text-[13px] text-muted leading-relaxed whitespace-pre-wrap">{listing.description}</p>
+          </section>
+
+          {/* Mobile summary */}
+          <section className="rounded-2xl border border-border/80 bg-white p-4 shadow-sm lg:hidden">
+            <SourceBadge source={listing.source} className="mb-2" />
+            <h1 className="text-[18px] font-bold leading-snug text-ink">{listing.title}</h1>
+            <p className="mt-1 text-[12px] text-muted">
+              {listing.brand} {listing.model}
+            </p>
+            {publishedLabel && (
+              <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
+            )}
+            <div className="mt-3 text-[28px] font-black leading-none tracking-tight text-ink">
+              {formatPrice(listing.price, listing.currency)}
             </div>
+            <div className="mt-4 flex flex-col gap-2">
+              <a href={listing.url} target="_blank" rel="noopener noreferrer">
+                <Button variant="primary" size="md" className="w-full gap-1.5">
+                  <IconGlobe size={14} />
+                  {listingOpenLabel(listing.source)}
+                </Button>
+              </a>
+              {hasVinCheck(listing) && <VinCheckButton listing={listing} size="md" className="w-full" />}
+            </div>
+          </section>
+
+          {specs.length > 0 && (
+            <section className="rounded-2xl border border-border/80 bg-white p-4 sm:p-5">
+              <h2 className="mb-3 text-[13px] font-bold text-ink">Характеристики</h2>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {specs.map(({ label, value }) => (
+                  <div
+                    key={label}
+                    className="rounded-xl border border-border/70 bg-surface/60 px-3 py-2.5"
+                  >
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      {label}
+                    </div>
+                    <div className="mt-1 text-[13px] font-semibold text-ink">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
+
+          {!hasAutoRiaDetails && listing.description && (
+            <section className="rounded-2xl border border-border/80 bg-white p-4 sm:p-6">
+              <h2 className="mb-3 text-[15px] font-bold text-ink">Опис</h2>
+              <p className="text-[13px] leading-relaxed text-muted whitespace-pre-wrap">
+                {listing.description}
+              </p>
+            </section>
+          )}
+
+          {hasAutoRiaDetails && (
+            <section className="rounded-2xl border border-border/80 bg-white p-4 sm:p-6">
+              <AutoRiaListingDetails listing={listing} />
+            </section>
+          )}
+
+          <p className="px-1 pb-2 text-center text-[11px] text-muted lg:pb-0">
+            Дані надано{" "}
+            <a
+              href={listingAttributionUrl(listing.source, listing.url)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-dark hover:underline"
+            >
+              {listingSourceSiteName(listing.source)}
+            </a>
+          </p>
         </div>
 
-        <aside className="space-y-4">
-          <div className="bg-white border border-border rounded-xl p-6 sticky top-[80px]">
-            <div className="flex items-start justify-between mb-1">
-              <h1 className="text-[16px] font-bold text-ink">{listing.title}</h1>
+        {/* Right: desktop sidebar */}
+        <aside className="hidden lg:block lg:sticky lg:top-6">
+          <div className="rounded-2xl border border-border/80 bg-white p-6 shadow-[0_2px_12px_-6px_rgba(10,12,14,0.12)]">
+            <div className="mb-1 flex items-start justify-between gap-3">
+              <h1 className="text-[18px] font-bold leading-snug text-ink">{listing.title}</h1>
               <button
                 type="button"
                 aria-label={isFavorite ? "Прибрати з обраного" : "Додати в обране"}
-                onClick={toggleFavorite}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-transparent"
+                onClick={() => void toggleFavorite()}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
               >
                 <IconHeart
                   size={16}
@@ -115,26 +304,26 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 />
               </button>
             </div>
-            <p className="text-[12px] text-muted mb-1">
-              {listing.year} · {formatMileage(listing.mileage)} · {listing.region}
+            <p className="text-[12px] text-muted">
+              {listing.brand} {listing.model}
             </p>
             {publishedLabel && (
-              <p className="text-[12px] text-muted/80 mb-4">{publishedLabel}</p>
+              <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
             )}
-            {!publishedLabel && <div className="mb-4" />}
-            <div className="text-[32px] font-black text-ink mb-4">{formatPrice(listing.price, listing.currency)}</div>
-            <SourceBadge source={listing.source} variant="outline" className="mb-4" />
-            <div className="space-y-2">
+            <div className="mt-4 text-[32px] font-black leading-none text-ink">
+              {formatPrice(listing.price, listing.currency)}
+            </div>
+            <div className="mt-4">
+              <SourceBadge source={listing.source} variant="outline" />
+            </div>
+            <div className="mt-5 space-y-2">
               <a href={listing.url} target="_blank" rel="noopener noreferrer">
                 <Button variant="primary" size="md" className="w-full gap-1.5">
-                  <IconGlobe size={13} /> Відкрити оригінал
+                  <IconGlobe size={13} />
+                  {listingOpenLabel(listing.source)}
                 </Button>
               </a>
-              <Link href="/app/dashboard">
-                <Button variant="secondary" size="md" className="w-full gap-1.5">
-                  <IconArrowRight size={13} /> До пошуків
-                </Button>
-              </Link>
+              {hasVinCheck(listing) && <VinCheckButton listing={listing} size="md" className="w-full" />}
             </div>
           </div>
         </aside>

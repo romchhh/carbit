@@ -7,10 +7,6 @@ from dataclasses import dataclass
 from app.schemas.schemas import SearchFilters
 
 
-def _norm(value: str) -> str:
-    return " ".join(value.strip().lower().split())
-
-
 def parse_search_filters(raw: SearchFilters | dict | None) -> SearchFilters:
     if raw is None:
         return SearchFilters()

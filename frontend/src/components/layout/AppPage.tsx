@@ -5,13 +5,17 @@ type AppPageProps = {
   description?: string;
   action?: React.ReactNode;
   wide?: boolean;
+  tourId?: string;
   children: React.ReactNode;
   className?: string;
 };
 
-export function AppPage({ title, description, action, wide, children, className }: AppPageProps) {
+export function AppPage({ title, description, action, wide, tourId, children, className }: AppPageProps) {
   return (
-    <div className={cn("mx-auto w-full", wide ? "max-w-[920px]" : "max-w-[760px]", className)}>
+    <div
+      data-tour={tourId}
+      className={cn("mx-auto w-full", wide ? "max-w-[920px]" : "max-w-[760px]", className)}
+    >
       {(title || action) && (
         <header className="mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">

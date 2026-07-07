@@ -72,7 +72,7 @@ export function SearchFiltersPanel({
       : filters.brand || "";
 
   return (
-    <div className={cn("w-full", wide ? "max-w-none" : "max-w-[640px]")}>
+    <div className={cn("w-full", wide ? "max-w-none" : "max-w-[640px]")} data-tour="search-filters">
       <div className="overflow-hidden rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] transition-shadow duration-300">
         <div className="border-b border-border/60 bg-surface/70 px-4 py-3.5 sm:px-5">
           <div className="overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -166,7 +166,7 @@ export function SearchFiltersPanel({
         </div>
 
         {onSave && (
-          <div className="border-t border-border/60 bg-white px-4 py-4 sm:px-5">
+          <div className="border-t border-border/60 bg-white px-4 py-4 sm:px-5" data-tour="save-search">
             <SaveSearchCTA
               onSave={onSave}
               saving={saving}

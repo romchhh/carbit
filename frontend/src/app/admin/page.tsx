@@ -1,17 +1,37 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminApi, AdminDashboard } from "@/lib/admin-api";
+import Link from "next/link";
+import { adminApi, type AdminAnalytics, type AdminDashboard } from "@/lib/admin-api";
+import { AdminBarChart, AdminStatusBadge } from "@/components/admin/AdminCharts";
 import { PLAN_LABELS, cn } from "@/lib/utils";
+
+const SOURCE_LABELS: Record<string, string> = {
+  auto_ria: "AUTO.RIA",
+  olx: "OLX",
+  telegram: "Telegram",
+};
 
 export default function AdminDashboardPage() {
   const [data, setData] = useState<AdminDashboard | null>(null);
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [systemStatus, setSystemStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    adminApi.dashboard().then(setData).catch(() => {});
+    Promise.all([
+      adminApi.dashboard(),
+      adminApi.analytics(),
+      adminApi.system(),
+    ])
+      .then(([dash, anal, sys]) => {
+        setData(dash);
+        setAnalytics(anal);
+        setSystemStatus(sys.scheduler_status);
+      })
+      .catch(() => {});
   }, []);
 
-  if (!data) {
+  if (!data || !analytics) {
     return (
       <div className="flex justify-center py-20">
         <div className="w-8 h-8 border-2 border-emerald border-t-transparent rounded-full animate-spin" />
@@ -20,32 +40,73 @@ export default function AdminDashboardPage() {
   }
 
   const cards = [
-    { label: "Клієнтів", value: data.total_users, sub: `+${data.new_users_today} сьогодні`, accent: data.new_users_today > 0 },
-    { label: "MRR", value: `${data.revenue_month_uah.toLocaleString("uk-UA")} ₴`, sub: "місячний дохід", accent: true },
+    { label: "Клієнтів", value: data.total_users, sub: `+${data.new_users_today} сьогодні · +${data.new_users_week} за тиждень`, accent: data.new_users_today > 0 },
+    { label: "MRR", value: `${data.revenue_month_uah.toLocaleString("uk-UA")} ₴`, sub: "оцінка за тарифами", accent: true },
     { label: "Платних", value: data.active_subscriptions, sub: `${data.trial_users} на trial`, accent: false },
+    { label: "Оголошень", value: analytics.total_listings, sub: `+${analytics.listings_today} сьогодні · ${analytics.duplicate_listings} дублів`, accent: analytics.listings_today > 0 },
+    { label: "Пошуків", value: analytics.active_searches, sub: `${analytics.inactive_searches} неактивних`, accent: false },
+    { label: "Сповіщень", value: data.total_notifications, sub: `+${analytics.notifications_today} сьогодні`, accent: analytics.notifications_today > 0 },
     { label: "Telegram", value: data.telegram_connected, sub: "підключено", accent: false },
-    { label: "Пошуків", value: data.total_searches, sub: "активних запитів", accent: false },
-    { label: "Сповіщень", value: data.total_notifications, sub: "всього надіслано", accent: false },
+    { label: "Обране", value: analytics.favorites_count, sub: "збережень", accent: false },
   ];
 
   const maxChart = Math.max(...data.registrations_chart.map(c => c.count), 1);
+  const totalBySource = Object.values(analytics.listings_by_source).reduce((a, b) => a + b, 0) || 1;
 
   return (
-    <div className="max-w-[1100px]">
-      <h1 className="text-[28px] font-black text-ink mb-1">Дашборд</h1>
-      <p className="text-[13px] text-muted mb-8">Огляд платформи Carbit</p>
+    <div className="max-w-[1200px]">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[28px] font-black text-ink mb-1">Дашборд</h1>
+          <p className="text-[13px] text-muted">Огляд платформи Carbit</p>
+        </div>
+        {systemStatus && (
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5">
+            <span className="text-[12px] text-muted">Планувальник парсингу</span>
+            <AdminStatusBadge status={systemStatus} />
+          </div>
+        )}
+      </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {cards.map(({ label, value, sub, accent }) => (
           <div key={label} className="bg-white border border-border rounded-xl p-5">
             <div className="text-[12px] text-muted mb-2">{label}</div>
-            <div className="text-[28px] font-black text-ink leading-none">{value}</div>
+            <div className="text-[26px] font-black text-ink leading-none">{value}</div>
             <div className={cn("text-[11px] mt-1.5", accent ? "text-emerald-dark font-semibold" : "text-muted")}>{sub}</div>
           </div>
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="mb-8 grid gap-6 lg:grid-cols-3">
+        <div className="bg-white border border-border rounded-xl p-6 lg:col-span-1">
+          <h2 className="text-[15px] font-bold text-ink mb-5">Джерела оголошень</h2>
+          <div className="space-y-3">
+            {Object.entries(analytics.listings_by_source).map(([source, count]) => (
+              <div key={source} className="flex items-center gap-3">
+                <span className="text-[13px] text-ink w-24 shrink-0">{SOURCE_LABELS[source] ?? source}</span>
+                <div className="flex-1 h-2 bg-surface rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald rounded-full"
+                    style={{ width: `${(count / totalBySource) * 100}%` }}
+                  />
+                </div>
+                <span className="text-[13px] font-semibold text-ink w-12 text-right">{count}</span>
+              </div>
+            ))}
+          </div>
+          <Link href="/admin/listings" className="mt-4 inline-block text-[12px] font-semibold text-emerald hover:underline">
+            Переглянути базу →
+          </Link>
+        </div>
+
+        <div className="bg-white border border-border rounded-xl p-6 lg:col-span-2">
+          <h2 className="text-[15px] font-bold text-ink mb-5">Нові оголошення (7 днів)</h2>
+          <AdminBarChart data={analytics.listings_chart} />
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white border border-border rounded-xl p-6">
           <h2 className="text-[15px] font-bold text-ink mb-5">Реєстрації (7 днів)</h2>
           <div className="flex items-end gap-2 h-32">
@@ -61,6 +122,13 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
+        <div className="bg-white border border-border rounded-xl p-6">
+          <h2 className="text-[15px] font-bold text-ink mb-5">Сповіщення (7 днів)</h2>
+          <AdminBarChart data={analytics.notifications_chart} colorClass="bg-blue-500" />
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-white border border-border rounded-xl p-6">
           <h2 className="text-[15px] font-bold text-ink mb-5">Розподіл тарифів</h2>
           <div className="space-y-3">
@@ -78,6 +146,40 @@ export default function AdminDashboardPage() {
             ))}
           </div>
         </div>
+
+        <div className="bg-white border border-border rounded-xl p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-[15px] font-bold text-ink">Парсинг (7 днів)</h2>
+            <Link href="/admin/parsing" className="text-[12px] font-semibold text-emerald hover:underline">
+              Керування →
+            </Link>
+          </div>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {analytics.parse_runs_chart.map(row => (
+              <div key={row.date} className="flex items-center justify-between text-[12px] rounded-lg bg-surface/60 px-3 py-2">
+                <span className="font-medium text-ink">{row.date}</span>
+                <span className="text-muted">
+                  {row.runs} запусків · знайдено {row.listings_found} · нових {row.listings_new}
+                </span>
+                <span className={cn(
+                  "font-semibold",
+                  row.failed > 0 ? "text-red-600" : "text-emerald-dark",
+                )}>
+                  {row.failed > 0 ? `${row.failed} помилок` : row.success > 0 ? "OK" : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-3">
+        <Link href="/admin/system" className="rounded-full border border-border bg-white px-4 py-2 text-[13px] font-semibold hover:bg-surface">
+          Стан системи
+        </Link>
+        <Link href="/admin/parsing" className="rounded-full border border-border bg-white px-4 py-2 text-[13px] font-semibold hover:bg-surface">
+          Запустити парсинг
+        </Link>
       </div>
     </div>
   );

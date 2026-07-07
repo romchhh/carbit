@@ -4,7 +4,6 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import settings
 from handlers import router
@@ -22,7 +21,7 @@ async def main() -> None:
         token=settings.TELEGRAM_BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = Dispatcher(storage=MemoryStorage())
+    dp = Dispatcher()
     dp.include_router(router)
 
     logger.info("Carbit bot started (@%s)", settings.TELEGRAM_BOT_USERNAME)

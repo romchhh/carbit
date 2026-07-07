@@ -53,6 +53,7 @@ export function AppShellHeader({ unreadNotifications = 0, className }: Props) {
         <div className="flex items-center gap-2.5">
           <Link
             href="/app/notifications"
+            data-tour="nav-notifications"
             className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/25 text-ink ring-1 ring-white/55 transition-colors hover:bg-white/40"
           >
             <IconBell size={18} />
@@ -82,7 +83,7 @@ export function AppShellHeader({ unreadNotifications = 0, className }: Props) {
                   <div className="truncate text-[13px] font-semibold text-ink">{user.name}</div>
                   <div className="truncate text-[11px] text-muted">{user.email}</div>
                 </div>
-                <Link href="/app/account" className="block px-3 py-2.5 text-[13px] text-ink transition-colors hover:bg-surface" onClick={() => setMenuOpen(false)}>
+                <Link href="/app/account" data-tour="nav-account" className="block px-3 py-2.5 text-[13px] text-ink transition-colors hover:bg-surface" onClick={() => setMenuOpen(false)}>
                   Акаунт
                 </Link>
                 <Link href="/app/billing" className="block px-3 py-2.5 text-[13px] text-ink transition-colors hover:bg-surface" onClick={() => setMenuOpen(false)}>

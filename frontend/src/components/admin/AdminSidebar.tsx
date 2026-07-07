@@ -8,10 +8,12 @@ import { useAdminAuth } from "@/contexts/AdminAuthProvider";
 
 const links = [
   { href: "/admin", label: "Дашборд", exact: true },
+  { href: "/admin/system", label: "Система" },
+  { href: "/admin/listings", label: "Оголошення" },
+  { href: "/admin/parsing", label: "Парсинг" },
   { href: "/admin/clients", label: "Клієнти" },
   { href: "/admin/subscriptions", label: "Підписки" },
   { href: "/admin/finance", label: "Фінанси" },
-  { href: "/admin/parsing", label: "Парсинг" },
 ];
 
 export function AdminSidebar() {

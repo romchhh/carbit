@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   adminApi,
+  type AdminAnalytics,
   type AdminParseRun,
   type AdminParserNotification,
   type AdminParserSettings,
@@ -42,6 +44,7 @@ function formatPrice(price: number | null | undefined) {
 
 export default function AdminParsingPage() {
   const [stats, setStats] = useState<AdminParserStats | null>(null);
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [settings, setSettings] = useState<AdminParserSettings | null>(null);
   const [runs, setRuns] = useState<AdminParseRun[]>([]);
   const [listings, setListings] = useState<Array<Record<string, unknown>>>([]);
@@ -67,16 +70,18 @@ export default function AdminParsingPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsData, settingsData, runsData, listingsData] = await Promise.all([
+      const [statsData, settingsData, runsData, listingsData, analyticsData] = await Promise.all([
         adminApi.parserStats(),
         adminApi.parserSettings(),
         adminApi.parserRuns(20),
         adminApi.parserListings(30),
+        adminApi.analytics(),
       ]);
       setStats(statsData);
       setSettings(settingsData);
       setRuns(runsData);
       setListings(listingsData);
+      setAnalytics(analyticsData);
     } finally {
       setLoading(false);
     }
@@ -160,6 +165,9 @@ export default function AdminParsingPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
+          <Link href="/admin/system" className="text-[12px] font-semibold text-emerald hover:underline">
+            Стан системи →
+          </Link>
           <button
             type="button"
             onClick={() => void handleRun()}
@@ -193,11 +201,12 @@ export default function AdminParsingPage() {
         </div>
       )}
 
-      <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-6">
         {[
           { label: "Активних пошуків", value: stats?.active_searches ?? 0 },
           { label: "Звʼязків пошук–авто", value: stats?.total_search_listings ?? 0 },
           { label: "Оголошень у базі", value: stats?.total_listings ?? 0 },
+          { label: "Дублів", value: analytics?.duplicate_listings ?? 0 },
           { label: "Telegram відправлено", value: stats?.total_telegram_sent ?? 0 },
           {
             label: "Останній запуск",
@@ -212,6 +221,30 @@ export default function AdminParsingPage() {
           </div>
         ))}
       </div>
+
+      {analytics && (
+        <div className="mb-8 rounded-2xl border border-border bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="text-[16px] font-bold text-ink">Розподіл за джерелами</h2>
+            <Link href="/admin/listings" className="text-[12px] font-semibold text-emerald hover:underline">
+              Усі оголошення →
+            </Link>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {Object.entries(analytics.listings_by_source).map(([src, count]) => (
+              <div key={src} className="rounded-xl border border-border/70 bg-surface/40 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  {SOURCE_LABELS[src] ?? src}
+                </div>
+                <div className="mt-1 text-[22px] font-bold text-ink">{count.toLocaleString("uk-UA")}</div>
+                <div className="text-[11px] text-muted">
+                  +{analytics.listings_week} за тиждень (усі джерела)
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {settings && (
         <div className="mb-8 rounded-2xl border border-border bg-white p-5">
@@ -265,6 +298,25 @@ export default function AdminParsingPage() {
                 onChange={e => setSettings({ ...settings, telegram_history_limit: Number(e.target.value) })}
                 className="mt-1 w-full rounded-lg border border-border px-3 py-2"
               />
+            </label>
+            <label className="block text-[13px]">
+              <span className="text-muted">TTL кешу пошуку (сек)</span>
+              <input
+                type="number"
+                min={300}
+                max={86400}
+                value={settings.cache_ttl_seconds}
+                onChange={e => setSettings({ ...settings, cache_ttl_seconds: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-border px-3 py-2"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                checked={settings.telegram_enabled}
+                onChange={e => setSettings({ ...settings, telegram_enabled: e.target.checked })}
+              />
+              Парсинг Telegram-каналів
             </label>
           </div>
           <button

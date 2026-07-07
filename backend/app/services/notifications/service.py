@@ -8,6 +8,7 @@ from app.models.models import Notification, NotificationType, User, Listing, Sea
 from app.schemas.schemas import NotificationOut
 from app.services.listings.serialize import listing_to_out
 from app.services.telegram.client import telegram_client, SOURCE_LABELS
+from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
 
 async def create_listing_notification(
@@ -18,6 +19,11 @@ async def create_listing_notification(
     send_telegram: bool = True,
 ) -> Notification:
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
+    listing_url = (
+        fix_telegram_listing_url(listing.id, listing.url, images=listing.images)
+        if source == "telegram"
+        else listing.url
+    )
 
     notification = Notification(
         user_id=user.id,
@@ -33,7 +39,7 @@ async def create_listing_notification(
             "region": listing.region,
             "source": source,
             "source_label": SOURCE_LABELS.get(source, source),
-            "url": listing.url,
+            "url": listing_url,
             "fuel": listing.fuel,
             "transmission": listing.transmission,
         },
@@ -56,7 +62,7 @@ async def create_listing_notification(
             "published_at": listing.published_at.isoformat() if listing.published_at else None,
             "source": source,
             "source_label": SOURCE_LABELS.get(source, source),
-            "url": listing.url,
+            "url": listing_url,
         }
         search_name = search.name if search else "Carbit"
         await asyncio.sleep(random.uniform(1, 3))

@@ -176,7 +176,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="mt-8 flex items-end justify-between gap-3">
+      <div className="mt-8 flex items-end justify-between gap-3" data-tour="my-searches">
         <div>
           <h2 className="text-[17px] font-bold text-ink">Мої запити</h2>
           <p className="mt-1 text-[13px] text-muted">

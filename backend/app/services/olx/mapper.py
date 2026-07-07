@@ -4,6 +4,7 @@ import re
 from app.core.timezone import now_kyiv
 from typing import Any
 
+from app.core.text import norm_text
 from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.auto_ria.mapper import sort_listings
 from app.services.olx.constants import (
@@ -14,13 +15,22 @@ from app.services.olx.constants import (
     REGION_TO_CITY_QUERY,
     TRANSMISSION_NAME_TO_KEY,
 )
+from app.services.olx.dates import resolve_olx_published_at
 from app.services.olx.parser import OlxListing, OlxSearchParams, is_valid_image_url
-from app.services.olx.slugify import brand_slug, model_slug
+from app.services.olx.brand_slugs import resolve_olx_brand_slug, resolve_olx_model_slug
+from app.services.olx.constants import MODEL_SLUG_ALIASES
 from app.services.currency import to_uah
 
 
-def _norm(value: str) -> str:
-    return " ".join(value.strip().lower().split())
+def brand_slug(brand: str) -> str:
+    return resolve_olx_brand_slug(brand)
+
+
+def model_slug(model: str, *, brand: str = "") -> str:
+    key = norm_text(model)
+    if key in MODEL_SLUG_ALIASES:
+        return MODEL_SLUG_ALIASES[key]
+    return resolve_olx_model_slug(model, brand=brand)
 
 
 def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxSearchParams:
@@ -34,8 +44,8 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
     if filters.category and filters.category != "all":
         params.condition = CATEGORY_TO_CONDITION.get(filters.category)
 
-    if filters.region and _norm(filters.region) not in ("вся україна", ""):
-        params.city_query = REGION_TO_CITY_QUERY.get(_norm(filters.region), slugify_region(filters.region))
+    if filters.region and norm_text(filters.region) not in ("вся україна", ""):
+        params.city_query = REGION_TO_CITY_QUERY.get(norm_text(filters.region), slugify_region(filters.region))
 
     params.price_from = filters.price_from
     params.price_to = filters.price_to
@@ -52,28 +62,28 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
 
     if filters.fuel:
         for fuel in filters.fuel:
-            key = FUEL_NAME_TO_KEY.get(_norm(fuel))
+            key = FUEL_NAME_TO_KEY.get(norm_text(fuel))
             if key:
                 params.fuel = key
                 break
 
     if filters.transmission:
         for gear in filters.transmission:
-            key = TRANSMISSION_NAME_TO_KEY.get(_norm(gear))
+            key = TRANSMISSION_NAME_TO_KEY.get(norm_text(gear))
             if key:
                 params.transmission = key
                 break
 
     if filters.drivetrain:
         for drive in filters.drivetrain:
-            token = DRIVETRAIN_NAME_TO_TOKEN.get(_norm(drive))
+            token = DRIVETRAIN_NAME_TO_TOKEN.get(norm_text(drive))
             if token:
                 params.drivetrain = token
                 break
 
     if filters.colors:
         for color in filters.colors:
-            token = COLOR_NAME_TO_TOKEN.get(_norm(color), _norm(color))
+            token = COLOR_NAME_TO_TOKEN.get(norm_text(color), norm_text(color))
             params.color = token
             break
 
@@ -239,7 +249,10 @@ def olx_listing_to_listing_out(
         },
         price_history=[],
         is_duplicate=False,
-        published_at=now_kyiv(),
+        published_at=resolve_olx_published_at(
+            published=listing.published,
+            raw_params=listing.raw_params,
+        ),
         found_at=now_kyiv(),
     )
 

@@ -37,7 +37,7 @@ export default function BillingPage() {
   };
 
   return (
-    <AppPage wide title="Підписка" description="Оберіть тариф під ваші задачі">
+    <AppPage wide title="Підписка" description="Оберіть тариф під ваші задачі" tourId="tour-section-billing">
       {subscription?.is_trial_active && (
         <AppSection className="mb-5 flex items-center gap-3 !border-emerald/20 !bg-emerald-light/30">
           <IconZap size={18} className="shrink-0 text-emerald-dark" />

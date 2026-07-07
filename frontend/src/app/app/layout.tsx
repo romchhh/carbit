@@ -5,18 +5,21 @@ import { usePathname, useRouter } from "next/navigation";
 import { DashboardSidebar, useDashboardBadges } from "@/components/layout/DashboardSidebar";
 import { DashboardMobileNav } from "@/components/layout/DashboardMobileNav";
 import { AppShellHeader } from "@/components/layout/AppShellHeader";
+import { OnboardingTour } from "@/components/onboarding/OnboardingTour";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 import { PwaLoadingScreen } from "@/components/pwa/PwaLoadingScreen";
 import { useAuth } from "@/contexts/AuthProvider";
 import * as api from "@/lib/api";
+import { completeOnboarding, shouldShowOnboarding } from "@/lib/onboarding";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading, initialized } = useAuth();
+  const { user, loading, initialized, refreshUser } = useAuth();
   const [searchesUsed, setSearchesUsed] = useState(0);
+  const [tourActive, setTourActive] = useState(false);
   const badges = useDashboardBadges();
-  const isOnboarding = pathname === "/app/onboarding";
+  const isOnboardingRoute = pathname === "/app/onboarding";
 
   useEffect(() => {
     if (!initialized || loading || user) return;
@@ -25,11 +28,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [initialized, loading, user, pathname, router]);
 
   useEffect(() => {
-    if (!user || isOnboarding) return;
+    if (isOnboardingRoute) {
+      router.replace("/app/dashboard");
+    }
+  }, [isOnboardingRoute, router]);
+
+  useEffect(() => {
+    if (!user || isOnboardingRoute) return;
     api.searches.list()
       .then(searches => setSearchesUsed(searches.filter(s => s.is_active).length))
       .catch(() => setSearchesUsed(0));
-  }, [user, isOnboarding]);
+  }, [user, isOnboardingRoute]);
+
+  useEffect(() => {
+    if (!user || tourActive || !shouldShowOnboarding(user)) return;
+    if (pathname !== "/app/dashboard") return;
+    const timer = window.setTimeout(() => setTourActive(true), 500);
+    return () => window.clearTimeout(timer);
+  }, [user, pathname, tourActive]);
+
+  const finishOnboarding = async () => {
+    try {
+      await api.users.completeOnboarding();
+    } catch {
+      /* ignore */
+    }
+    completeOnboarding();
+    setTourActive(false);
+    void refreshUser();
+  };
 
   if (!initialized || loading || !user) {
     return (
@@ -40,12 +67,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (isOnboarding) {
-    return <>{children}</>;
+  if (isOnboardingRoute) {
+    return (
+      <div className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white">
+        <PwaLoadingScreen fixed={false} className="relative min-h-0 flex-1 bg-white" />
+      </div>
+    );
   }
 
+  const firstName = user.name.split(" ")[0];
+
   return (
-      <div className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white lg:relative lg:min-h-screen lg:h-screen lg:bg-canvas">
+    <div className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white lg:relative lg:min-h-screen lg:h-screen lg:bg-canvas">
       <div className="app-pwa-statusbar lg:hidden" aria-hidden />
       <AppShellHeader unreadNotifications={badges.notifications} />
 
@@ -70,6 +103,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <DashboardMobileNav badges={badges} />
+
+      {tourActive && (
+        <OnboardingTour
+          firstName={firstName}
+          onComplete={() => void finishOnboarding()}
+          onSkip={() => void finishOnboarding()}
+        />
+      )}
     </div>
   );
 }

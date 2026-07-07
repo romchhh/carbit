@@ -25,6 +25,7 @@ export function DashboardWelcomeHero({
 
   return (
     <section
+      data-tour="welcome-hero"
       className={cn(
         "relative mb-8 overflow-hidden rounded-[1.35rem] border border-emerald/15",
         "bg-gradient-to-br from-emerald/[0.12] via-white to-surface/40",

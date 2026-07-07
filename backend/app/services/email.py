@@ -33,7 +33,7 @@ async def send_email(to: str, subject: str, html: str) -> None:
 
 
 async def send_verification_code(to: str, name: str, code: str) -> None:
-    subject, html = verification_code_email(name, code)
+    subject, html = verification_code_email(name, code, email=to)
     await send_email(to, subject, html)
 
 
