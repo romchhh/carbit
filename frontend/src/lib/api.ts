@@ -137,7 +137,7 @@ export const listingSearch = {
   search: (
     filters: BackendSearchFilters,
     page = 1,
-    perPage = 5,
+    perPage = 20,
     sortBy = "price_asc",
     mode: AutoRiaSearchMode = "preview",
   ) =>

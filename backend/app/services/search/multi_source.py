@@ -115,6 +115,49 @@ def _sorted_merge_slice(
     return merged_items[start:end], max(total, len(merged_items))
 
 
+def _filter_listings_by_published_days(
+    items: list[ListingOut],
+    days: int | None,
+) -> list[ListingOut]:
+    if not days:
+        return items
+
+    from datetime import timedelta
+
+    from app.core.timezone import as_kyiv, now_kyiv
+
+    cutoff = now_kyiv() - timedelta(days=days)
+    filtered: list[ListingOut] = []
+    for item in items:
+        try:
+            published = as_kyiv(item.published_at)
+        except Exception:
+            continue
+        if published >= cutoff:
+            filtered.append(item)
+    return filtered
+
+
+def _filter_page_by_published_within_days(
+    result: PaginatedListings,
+    *,
+    days: int | None,
+) -> PaginatedListings:
+    if not days:
+        return result
+
+    filtered = _filter_listings_by_published_days(result.items, days)
+    total = len(filtered)
+    pages = (total + result.per_page - 1) // result.per_page if total else 0
+    return PaginatedListings(
+        items=filtered,
+        total=total,
+        page=result.page,
+        per_page=result.per_page,
+        pages=pages,
+    )
+
+
 async def _search_single_source(
     source: str,
     filters: SearchFilters,
@@ -219,15 +262,41 @@ async def search_listings_outcome(
     if len(sources) == 1:
         source = sources[0]
         try:
-            result = await _search_single_source(
-                source,
-                filters,
-                page=page,
-                per_page=per_page,
-                sort_by=sort_by,
-                use_cache=use_cache,
-                db=db,
-            )
+            if filters.published_within_days:
+                raw = await _search_single_source(
+                    source,
+                    filters,
+                    page=1,
+                    per_page=per_page * max(page, 1) * 3,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                    db=db,
+                )
+                filtered = sort_listings(
+                    _filter_listings_by_published_days(raw.items, filters.published_within_days),
+                    sort_by,
+                )
+                start = (page - 1) * per_page
+                page_items = filtered[start : start + per_page]
+                total = len(filtered)
+                pages = (total + per_page - 1) // per_page if total else 0
+                result = PaginatedListings(
+                    items=page_items,
+                    total=total,
+                    page=page,
+                    per_page=per_page,
+                    pages=pages,
+                )
+            else:
+                result = await _search_single_source(
+                    source,
+                    filters,
+                    page=page,
+                    per_page=per_page,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                    db=db,
+                )
         except Exception as exc:
             source_statuses.append(
                 SourceSearchStatus(source=_source_label(source), item_count=0, error=str(exc))
@@ -239,7 +308,10 @@ async def search_listings_outcome(
         )
         return SearchListingsOutcome(result=result, sources=source_statuses)
 
-    per_source_fetch = per_page if page == 1 else per_page * page
+    # Для «тільки нові» тягнемо більше з джерел, бо частина відсіється по даті
+    freshness_days = filters.published_within_days
+    fetch_multiplier = 3 if freshness_days else 1
+    per_source_fetch = (per_page if page == 1 else per_page * page) * fetch_multiplier
     errors: list[Exception] = []
     successful: list[tuple[str, PaginatedListings]] = []
 
@@ -335,6 +407,24 @@ async def search_listings_outcome(
             source_statuses.append(
                 SourceSearchStatus(source="Telegram", item_count=len(telegram_out.items))
             )
+
+    if freshness_days:
+        filtered_batches: list[tuple[str, PaginatedListings]] = []
+        for source, result in successful:
+            items = _filter_listings_by_published_days(result.items, freshness_days)
+            filtered_batches.append(
+                (
+                    source,
+                    PaginatedListings(
+                        items=items,
+                        total=len(items),
+                        page=result.page,
+                        per_page=result.per_page,
+                        pages=max((len(items) + result.per_page - 1) // result.per_page, 0),
+                    ),
+                )
+            )
+        successful = filtered_batches
 
     if page == 1:
         sorted_batches = [

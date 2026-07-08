@@ -26,6 +26,7 @@ export type BackendSearchFilters = {
   battery_capacity_to?: number | null;
   power_from?: number | null;
   power_to?: number | null;
+  published_within_days?: number | null;
 };
 
 const SOURCE_TO_BACKEND: Record<string, string> = {

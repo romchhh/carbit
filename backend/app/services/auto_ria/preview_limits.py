@@ -4,9 +4,10 @@ from fastapi import HTTPException
 
 from app.core.redis import get_redis
 
-PREVIEW_MAX_PER_PAGE = 5
-PREVIEW_MAX_PAGE = 1
-PREVIEW_HOURLY_LIMIT = 20
+# Live search у кабінеті: історичний каталог за фільтрами, порціями по 20
+PREVIEW_MAX_PER_PAGE = 20
+PREVIEW_MAX_PAGE = 25
+PREVIEW_HOURLY_LIMIT = 40
 PREVIEW_RATE_TTL_SECONDS = 3600
 
 BROWSE_MAX_PER_PAGE = 12
@@ -46,8 +47,8 @@ def clamp_preview_request(*, page: int, per_page: int, mode: str) -> tuple[int, 
     if page > PREVIEW_MAX_PAGE:
         raise HTTPException(
             400,
-            "Повний каталог доступний лише для збережених пошуків. "
-            "Збережіть запит, щоб отримувати нові авто в Telegram.",
+            f"Досягнуто ліміт перегляду ({PREVIEW_MAX_PAGE} сторінок). "
+            "Збережіть пошук — Carbit надсилатиме нові авто в Telegram.",
         )
     return page, min(per_page, PREVIEW_MAX_PER_PAGE)
 

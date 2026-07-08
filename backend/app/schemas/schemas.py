@@ -130,6 +130,8 @@ class SearchFilters(BaseModel):
     battery_capacity_to: Optional[float] = None
     power_from: Optional[int] = None
     power_to: Optional[int] = None
+    # Тільки оголошення, опубліковані за останні N днів (напр. 7 = «тільки нові»)
+    published_within_days: Optional[int] = Field(default=None, ge=1, le=90)
 
 
 class SearchQueryCreate(BaseModel):

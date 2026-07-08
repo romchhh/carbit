@@ -22,21 +22,23 @@ async def run_live_search(
     sort_by: str,
     mode: str,
 ) -> PaginatedListings:
-    if is_preview_mode(mode):
+    if is_preview_mode(mode) and page == 1:
         await consume_preview_quota(user_id)
 
     page, per_page = clamp_preview_request(page=page, per_page=per_page, mode=mode)
 
-    async with AsyncSessionLocal() as db:
-        cached = await get_cached_preview_results(
-            db,
-            filters,
-            page=page,
-            per_page=per_page,
-            sort_by=sort_by,
-        )
-        if cached is not None:
-            return cached
+    # Кеш preview зберігає лише першу порцію — пагінацію завжди беремо з джерел
+    if page == 1:
+        async with AsyncSessionLocal() as db:
+            cached = await get_cached_preview_results(
+                db,
+                filters,
+                page=page,
+                per_page=per_page,
+                sort_by=sort_by,
+            )
+            if cached is not None:
+                return cached
 
     try:
         results = await search_listings(
@@ -53,11 +55,12 @@ async def run_live_search(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    async with AsyncSessionLocal() as db:
-        try:
-            await ingest_preview_results(db, filters, results.items)
-            await db.commit()
-        except Exception:
-            await db.rollback()
+    if page == 1:
+        async with AsyncSessionLocal() as db:
+            try:
+                await ingest_preview_results(db, filters, results.items)
+                await db.commit()
+            except Exception:
+                await db.rollback()
 
     return results

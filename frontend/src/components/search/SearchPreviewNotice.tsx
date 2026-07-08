@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { IconArrowRight, IconBell, IconTelegram } from "@/components/icons";
 import { cn } from "@/lib/utils";
-import { PREVIEW_RESULTS_LIMIT } from "@/lib/search-preview";
+import type { SearchFreshness } from "@/lib/search-preview";
 
 type Props = {
   total: number;
+  shown: number;
+  freshness: SearchFreshness;
   onSave: () => void;
   saving?: boolean;
   telegramConnected?: boolean;
@@ -15,12 +17,14 @@ type Props = {
 
 export function SearchPreviewNotice({
   total,
+  shown,
+  freshness,
   onSave,
   saving,
   telegramConnected,
   className,
 }: Props) {
-  const moreCount = Math.max(total - PREVIEW_RESULTS_LIMIT, 0);
+  const remaining = Math.max(total - shown, 0);
 
   return (
     <div
@@ -39,24 +43,23 @@ export function SearchPreviewNotice({
               <IconBell size={18} />
             </span>
             <p className="text-[15px] font-bold leading-snug text-ink sm:text-[16px]">
-              Це лише короткий перегляд
+              Шукаєте далі автоматично?
             </p>
           </div>
           <p className="mt-2 max-w-[540px] text-[13px] leading-relaxed text-muted sm:text-[14px]">
-            Carbit — це моніторинг нових оголошень, а не повний каталог AUTO.RIA.
-            {moreCount > 0 ? (
+            {freshness === "new"
+              ? "Це оголошення за останній тиждень. "
+              : "Це всі доступні авто за вашими фільтрами. "}
+            {remaining > 0 ? (
               <>
-                {" "}
-                За вашими фільтрами знайдено ще{" "}
+                Ще можна підвантажити{" "}
                 <strong className="font-semibold text-ink">
-                  {moreCount.toLocaleString("uk-UA")}+
-                </strong>{" "}
-                авто — ми не показуємо їх усі тут.
+                  {remaining.toLocaleString("uk-UA")}+
+                </strong>
+                .{" "}
               </>
-            ) : (
-              " "
-            )}
-            Збережіть пошук, і кожна нова пропозиція приходитиме в Telegram, коли з&apos;явиться на ринку.
+            ) : null}
+            Збережіть моніторинг — нові пропозиції приходитимуть у Telegram, щойно зʼявляться на ринку.
           </p>
           {!telegramConnected && (
             <p className="mt-2 text-[12px] text-[#229ED9]">

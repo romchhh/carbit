@@ -9,9 +9,23 @@ from app.services.olx.parser import (
     _listing_mileage_km,
     _parse_mileage_text,
     _parse_single_card,
+    build_search_url,
     parse_listing_page,
     passes_olx_filters,
 )
+
+
+def test_build_search_url_newest_sort():
+    url = build_search_url(OlxSearchParams(city_query="kyiv"))
+    assert "search%5Border%5D=created_at%3Adesc" in url
+    assert "currency=UAH" in url
+    assert "/q-kyiv/" in url
+
+
+def test_build_search_url_pagination():
+    url = build_search_url(OlxSearchParams(brand="toyota", model="camry"), page=2)
+    assert "page=2" in url
+    assert "search%5Border%5D=created_at%3Adesc" in url
 
 
 def test_parse_mileage_text_thousands():

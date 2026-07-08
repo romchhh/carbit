@@ -17,11 +17,18 @@ export default function SearchPage() {
     setFilters,
     results,
     total,
+    sort,
+    freshness,
     running,
     searching,
+    loadingMore,
+    hasMore,
     error,
     resultsRef,
     runSearch,
+    changeSort,
+    changeFreshness,
+    loadMore,
     reset,
     clearError,
   } = usePreviewSearch();
@@ -57,9 +64,9 @@ export default function SearchPage() {
             Пошук авто
           </h1>
           <p className="mt-1 max-w-[560px] text-[12px] leading-relaxed text-muted sm:text-[13px]">
-            AUTO.RIA та OLX в одному місці. Налаштуйте фільтри, перегляньте кілька прикладів і
-            збережіть пошук — Carbit надсилатиме <strong className="font-medium text-ink">нові</strong>{" "}
-            авто за цими параметрами прямо в Telegram.
+            AUTO.RIA та OLX в одному місці. Шукайте всі доступні авто за фільтрами або лише нові за
+            тиждень. Збережіть пошук — Carbit надсилатиме{" "}
+            <strong className="font-medium text-ink">нові</strong> оголошення в Telegram.
           </p>
         </div>
         <span className="w-fit rounded-lg border border-border bg-surface px-3 py-1.5 text-[11px] text-muted sm:bg-white sm:text-[12px]">
@@ -90,8 +97,16 @@ export default function SearchPage() {
         resultsRef={resultsRef}
         running={running}
         searching={searching}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
         total={total}
         results={results}
+        sort={sort}
+        freshness={freshness}
+        error={error}
+        onSortChange={changeSort}
+        onFreshnessChange={changeFreshness}
+        onLoadMore={loadMore}
         onSave={handleSave}
         saving={saving}
         telegramConnected={user?.telegram_connected}

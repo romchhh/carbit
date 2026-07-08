@@ -24,8 +24,6 @@ type Props = {
   newCount?: number;
   loading?: boolean;
   idleLabel?: string;
-  previewMode?: boolean;
-  previewLimit?: number;
 };
 
 export function SearchResultsToolbar({
@@ -40,8 +38,6 @@ export function SearchResultsToolbar({
   newCount,
   loading,
   idleLabel = "Натисніть «Шукати»",
-  previewMode = false,
-  previewLimit = 5,
 }: Props) {
   return (
     <div className="mb-4 rounded-2xl border border-border bg-white p-3.5 sm:px-5 sm:py-3.5">
@@ -64,53 +60,32 @@ export function SearchResultsToolbar({
                     {isActive ? "Активний" : "Неактивний"}
                   </span>
                   <span className="text-border">·</span>
-                  <span className="text-muted">
-                    Знайдено <strong className="text-ink">{total.toLocaleString("uk-UA")}</strong>
-                    {shown < total && (
-                      <span className="hidden sm:inline"> · показано {shown}</span>
-                    )}
-                  </span>
-                  {typeof newCount === "number" && newCount > 0 && (
-                    <>
-                      <span className="text-border">·</span>
-                      <span className="font-semibold text-emerald-dark">{newCount} нових</span>
-                    </>
-                  )}
-                  {shown < total && (
-                    <span className="w-full text-[12px] text-muted sm:hidden">
-                      Показано {shown} з {total.toLocaleString("uk-UA")}
-                    </span>
-                  )}
-                </>
-              ) : previewMode ? (
-                <>
-                  <span className="font-medium text-ink">Приклад за фільтрами</span>
-                  <span className="text-border">·</span>
-                  <span className="text-muted">
-                    Знайдено <strong className="text-ink">{total.toLocaleString("uk-UA")}</strong>
-                    {" · "}
-                    показано <strong className="text-ink">{Math.min(shown, previewLimit)}</strong>
-                  </span>
                 </>
               ) : (
                 <>
                   <span className="flex items-center gap-2 font-medium text-emerald-dark">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-emerald" />
-                    Пошук активний
+                    Результати пошуку
                   </span>
-                  <span className="hidden text-border sm:inline">·</span>
-                  <span className="text-muted">
-                    Знайдено <strong className="text-ink">{total.toLocaleString("uk-UA")}</strong>
-                    {shown < total && (
-                      <span className="hidden sm:inline"> · показано {shown}</span>
-                    )}
-                  </span>
-                  {shown < total && (
-                    <span className="w-full text-[12px] text-muted sm:hidden">
-                      Показано {shown} з {total.toLocaleString("uk-UA")}
-                    </span>
-                  )}
+                  <span className="text-border">·</span>
                 </>
+              )}
+              <span className="text-muted">
+                Знайдено <strong className="text-ink">{total.toLocaleString("uk-UA")}</strong>
+                {shown < total && (
+                  <span className="hidden sm:inline"> · показано {shown}</span>
+                )}
+              </span>
+              {typeof newCount === "number" && newCount > 0 && (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="font-semibold text-emerald-dark">{newCount} нових</span>
+                </>
+              )}
+              {shown < total && (
+                <span className="w-full text-[12px] text-muted sm:hidden">
+                  Показано {shown} з {total.toLocaleString("uk-UA")}
+                </span>
               )}
             </div>
           ) : (
@@ -118,7 +93,7 @@ export function SearchResultsToolbar({
           )}
         </div>
 
-        {running && !previewMode && (
+        {running && (
           <div className="flex items-center gap-2 sm:gap-3">
             <ExportMenu items={exportItems} filename={exportName} />
             <select

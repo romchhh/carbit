@@ -179,30 +179,6 @@ export function SearchFiltersPanel({
         )}
 
         <div className="space-y-2 border-t border-border/60 bg-white px-4 py-4 sm:px-5">
-          {searchError && (
-            <div
-              role="alert"
-              className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-[13px] leading-relaxed text-red-700"
-            >
-              {searchError}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={onSearch}
-            disabled={searching}
-            className={cn(
-              "relative w-full overflow-hidden rounded-full bg-emerald py-3.5 text-[16px] font-semibold text-white shadow-md shadow-emerald/25 transition-all duration-300 hover:bg-emerald-dark disabled:cursor-wait",
-              searching && "animate-pulse shadow-[0_0_0_4px_rgba(16,185,129,0.25)]",
-            )}
-          >
-            <span className={cn("inline-flex items-center justify-center gap-2", searching && "opacity-90")}>
-              {searching && (
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              )}
-              {searching ? searchingButtonLabel : searchButtonLabel}
-            </span>
-          </button>
           <button
             type="button"
             onClick={() => setAdvanced(v => !v)}
@@ -216,6 +192,33 @@ export function SearchFiltersPanel({
       {advanced && (
         <AdvancedSearchPanel filters={filters} onChange={onChange} onReset={onReset} />
       )}
+
+      <div className="mt-4 space-y-2 rounded-[1.35rem] border border-border/80 bg-white px-4 py-4 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:px-5">
+        {searchError && (
+          <div
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-[13px] leading-relaxed text-red-700"
+          >
+            {searchError}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onSearch}
+          disabled={searching}
+          className={cn(
+            "relative w-full overflow-hidden rounded-full bg-emerald py-3.5 text-[16px] font-semibold text-white shadow-md shadow-emerald/25 transition-all duration-300 hover:bg-emerald-dark disabled:cursor-wait",
+            searching && "animate-pulse shadow-[0_0_0_4px_rgba(16,185,129,0.25)]",
+          )}
+        >
+          <span className={cn("inline-flex items-center justify-center gap-2", searching && "opacity-90")}>
+            {searching && (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            )}
+            {searching ? searchingButtonLabel : searchButtonLabel}
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

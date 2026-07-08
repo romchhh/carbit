@@ -74,11 +74,18 @@ export default function DashboardPage() {
     setFilters,
     results,
     total,
+    sort,
+    freshness,
     running,
     searching,
+    loadingMore,
+    hasMore,
     error,
     resultsRef,
     runSearch,
+    changeSort,
+    changeFreshness,
+    loadMore,
     reset,
     clearError,
   } = usePreviewSearch();
@@ -144,7 +151,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-[17px] font-bold text-ink">Новий моніторинг</h2>
         <p className="mt-1 text-[13px] text-muted">
-          Перегляньте кілька прикладів і збережіть пошук — далі нові пропозиції приходитимуть автоматично.
+          Пошук усіх авто за фільтрами. Збережіть запит — далі нові пропозиції приходитимуть автоматично.
         </p>
         <div className="mt-4">
           <SearchFiltersPanel
@@ -168,8 +175,16 @@ export default function DashboardPage() {
           resultsRef={resultsRef}
           running={running}
           searching={searching}
+          loadingMore={loadingMore}
+          hasMore={hasMore}
           total={total}
           results={results}
+          sort={sort}
+          freshness={freshness}
+          error={error}
+          onSortChange={changeSort}
+          onFreshnessChange={changeFreshness}
+          onLoadMore={loadMore}
           onSave={handleSave}
           saving={saving}
           telegramConnected={user.telegram_connected}

@@ -47,6 +47,8 @@ class OlxSearchParams:
     power_to: Optional[int] = None
     max_pages: int = 3
     fetch_details: bool = True
+    # OLX «Сортувати за: Найновіші» — search[order]=created_at:desc
+    sort_order: str = "created_at:desc"
 
     def needs_post_filter(self) -> bool:
         return any(
@@ -129,10 +131,10 @@ def is_valid_image_url(url: str | None) -> bool:
 
 
 def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
-    """Будує URL лише з path-фільтрів (марка/модель/місто).
+    """Будує URL з path-фільтрів (марка/модель/місто) та безпечних query-параметрів.
 
-    OLX віддає порожню SSR-сторінку для search[...] query-параметрів (рік, пробіг,
-    паливо тощо), тому ці фільтри застосовуємо пост-фільтром у passes_olx_filters().
+    Рік, пробіг, паливо тощо в query OLX часто ламають SSR — їх фільтруємо
+    пост-фільтром у passes_olx_filters(). Сортування та валюта в query працюють.
     """
     path_parts = [CATEGORY_PATH.strip("/")]
 
@@ -146,14 +148,14 @@ def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
     if params.city_query:
         path = path.rstrip("/") + f"/q-{params.city_query.lower().strip()}/"
 
-    query: dict[str, str] = {}
+    query: dict[str, str] = {"currency": "UAH"}
+    if params.sort_order:
+        query["search[order]"] = params.sort_order
     if page > 1:
         query["page"] = str(page)
 
     url = urljoin(BASE_URL, path)
-    if query:
-        url = f"{url}?{urlencode(query)}"
-    return url
+    return f"{url}?{urlencode(query)}"
 
 
 def _extract_id_from_url(url: str) -> Optional[str]:

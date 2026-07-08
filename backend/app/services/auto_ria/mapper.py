@@ -207,7 +207,7 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
 
 
 def sort_listings(items: list[ListingOut], sort_by: str) -> list[ListingOut]:
-    if sort_by == "published_desc":
+    if sort_by in ("published_desc", "newest"):
         return sorted(items, key=lambda x: x.published_at, reverse=True)
     if sort_by == "price_desc":
         return sorted(items, key=lambda x: x.price, reverse=True)

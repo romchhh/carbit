@@ -18,7 +18,7 @@ async def run_preview_search(
     on_error: Callable[[Exception], None],
 ) -> PaginatedListings:
     """Спільна обгортка для preview-пошуку AUTO.RIA / OLX."""
-    if is_preview_mode(mode):
+    if is_preview_mode(mode) and page == 1:
         await consume_preview_quota(user_id)
 
     page, per_page = clamp_preview_request(page=page, per_page=per_page, mode=mode)
