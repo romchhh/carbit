@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.redis import get_redis
-from app.core.timezone import now_kyiv, start_of_kyiv_day
+from app.core.timezone import as_kyiv, now_kyiv, start_of_kyiv_day
 from app.models.models import (
     Favorite,
     Listing,
@@ -202,7 +202,7 @@ async def build_system_status(db: AsyncSession) -> dict:
             "notifications_sent": last_run.notifications_sent,
             "error": last_run.error,
         }
-        delta = now_kyiv() - last_run.started_at
+        delta = now_kyiv() - as_kyiv(last_run.started_at)
         seconds_since_run = int(delta.total_seconds())
         interval = parser_settings.get("interval_seconds", 3600)
         if last_run.status == ParseRunStatus.running:

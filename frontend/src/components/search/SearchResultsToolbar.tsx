@@ -89,7 +89,7 @@ export function SearchResultsToolbar({
               )}
             </div>
           ) : (
-            <span className="text-muted">{loading ? "Завантаження..." : idleLabel}</span>
+            <span className="text-muted">{loading ? "Пошук…" : idleLabel}</span>
           )}
         </div>
 

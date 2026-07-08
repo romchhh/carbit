@@ -32,20 +32,33 @@ export function ListingFavoriteButton({
         onToggle();
       }}
       className={cn(
-        "inline-flex items-center justify-center rounded-full border-0 bg-transparent p-0 shadow-none transition-colors",
-        active
-          ? "text-emerald"
-          : variant === "overlay"
-            ? "text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] hover:text-emerald"
-            : "text-muted/75 hover:text-emerald-dark",
+        "inline-flex items-center justify-center rounded-full border-0 p-0 transition-all",
+        variant === "overlay"
+          ? cn(
+              "shadow-[0_2px_10px_rgba(0,0,0,0.28)] backdrop-blur-[3px]",
+              size === "sm" ? "h-9 w-9" : "h-10 w-10",
+              active
+                ? "bg-white text-emerald ring-2 ring-emerald/40"
+                : "bg-black/55 text-white hover:bg-black/70",
+            )
+          : cn(
+              "bg-transparent shadow-none",
+              active
+                ? "text-emerald"
+                : "text-muted/75 hover:text-emerald-dark",
+              size === "sm" ? "h-8 w-8" : "h-9 w-9",
+            ),
         loading && "opacity-60",
-        size === "sm" ? "h-8 w-8" : "h-9 w-9",
         className,
       )}
     >
       <IconHeart
-        size={size === "sm" ? 15 : 17}
-        className={cn("transition-colors", active && "fill-current")}
+        size={variant === "overlay" ? (size === "sm" ? 17 : 19) : size === "sm" ? 15 : 17}
+        className={cn(
+          "transition-colors",
+          active && "fill-current",
+          variant === "overlay" && !active && "drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]",
+        )}
       />
     </button>
   );

@@ -51,7 +51,8 @@ export function DashboardWelcomeHero({
         </h1>
         <p className="mt-2.5 max-w-[34rem] text-[13px] leading-relaxed text-muted sm:text-[14px]">
           Налаштуйте фільтри — Carbit моніторить{" "}
-          <span className="font-medium text-ink">AUTO.RIA</span> і надсилає нові авто в{" "}
+          <span className="font-medium text-ink">AUTO.RIA</span>,{" "}
+          <span className="font-medium text-ink">OLX</span> і надсилає нові авто в{" "}
           <span className="font-medium text-ink">Telegram</span>
         </p>
 
@@ -59,6 +60,10 @@ export function DashboardWelcomeHero({
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-ink shadow-sm">
             <Image src={SOURCE_LOGOS.autoRia} alt="" width={18} height={18} className="rounded-full" />
             AUTO.RIA
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-ink shadow-sm">
+            <Image src={SOURCE_LOGOS.olx} alt="" width={18} height={18} className="rounded-full" />
+            OLX
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-ink shadow-sm">
             <Image src={SOURCE_LOGOS.telegram} alt="" width={18} height={18} className="rounded-full" />

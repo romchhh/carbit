@@ -1,8 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
+import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { adminApi, type AdminListingRow } from "@/lib/admin-api";
 import { formatKyivDateTime } from "@/lib/datetime";
+import type { Listing } from "@/types/api";
 
 const SOURCE_OPTIONS = [
   { value: "", label: "Усі джерела" },
@@ -26,6 +29,8 @@ export default function AdminListingsPage() {
   const [query, setQuery] = useState("");
   const [duplicatesOnly, setDuplicatesOnly] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +57,16 @@ export default function AdminListingsPage() {
     e.preventDefault();
     setPage(1);
     setQuery(search);
+  };
+
+  const openListing = async (id: string) => {
+    setDetailLoadingId(id);
+    try {
+      const listing = await adminApi.listing(id);
+      setSelectedListing(listing);
+    } finally {
+      setDetailLoadingId(null);
+    }
   };
 
   return (
@@ -105,6 +120,7 @@ export default function AdminListingsPage() {
             <table className="w-full text-left text-[13px]">
               <thead className="border-b border-border bg-surface/50 text-[11px] uppercase tracking-wide text-muted">
                 <tr>
+                  <th className="px-4 py-3 font-semibold w-[72px]" />
                   <th className="px-4 py-3 font-semibold">Оголошення</th>
                   <th className="px-4 py-3 font-semibold">Джерело</th>
                   <th className="px-4 py-3 font-semibold">Ціна</th>
@@ -115,7 +131,42 @@ export default function AdminListingsPage() {
               </thead>
               <tbody>
                 {items.map(item => (
-                  <tr key={item.id} className="border-b border-border/60 hover:bg-surface/30">
+                  <tr
+                    key={item.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => void openListing(item.id)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        void openListing(item.id);
+                      }
+                    }}
+                    className="border-b border-border/60 hover:bg-surface/30 cursor-pointer focus:outline-none focus-visible:bg-surface/40"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="relative h-12 w-16 overflow-hidden rounded-lg bg-surface">
+                        {item.image ? (
+                          <Image
+                            src={item.image}
+                            alt=""
+                            fill
+                            className="object-cover"
+                            sizes="64px"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-[9px] text-muted">
+                            —
+                          </div>
+                        )}
+                        {detailLoadingId === item.id && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="font-semibold text-ink line-clamp-1">{item.title}</div>
                       <div className="text-[11px] text-muted">
@@ -136,6 +187,7 @@ export default function AdminListingsPage() {
                         href={item.url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
                         className="text-[12px] font-semibold text-emerald hover:underline"
                       >
                         Відкрити
@@ -172,6 +224,11 @@ export default function AdminListingsPage() {
           </button>
         </div>
       )}
+
+      <ListingDetailModal
+        listing={selectedListing}
+        onClose={() => setSelectedListing(null)}
+      />
     </div>
   );
 }

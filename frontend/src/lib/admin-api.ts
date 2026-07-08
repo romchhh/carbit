@@ -111,6 +111,7 @@ export const adminApi = {
       `/admin/listings?${params}`,
     );
   },
+  listing: (id: string) => request<AdminListingDetail>(`/admin/listings/${id}`),
 };
 
 export interface AdminParserSettings {
@@ -226,6 +227,9 @@ export interface AdminListingRow {
   price: number;
   region: string;
   url: string;
+  image: string | null;
   is_duplicate: boolean;
   found_at: string;
 }
+
+export type AdminListingDetail = import("@/types/api").Listing;

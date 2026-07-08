@@ -223,6 +223,7 @@ export function ListingsHorizontalCarousel({
                             active={favoriteIds.has(listing.id)}
                             loading={loadingIds.has(listing.id)}
                             onToggle={() => toggleFavorite(listing)}
+                            variant="overlay"
                           />
                         )}
                       </div>

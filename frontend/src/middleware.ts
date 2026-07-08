@@ -22,6 +22,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/app")) {
+    // Публічні сторінки оголошень — без логіну
+    if (pathname.startsWith("/app/listing/")) {
+      return NextResponse.next();
+    }
     if (!token) {
       const loginUrl = new URL("/auth/login", request.url);
       loginUrl.searchParams.set("redirect", pathname);

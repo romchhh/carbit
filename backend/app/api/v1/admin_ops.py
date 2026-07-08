@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_admin
 from app.models.models import Listing, Source
+from app.schemas.schemas import ListingOut
 from app.services.admin.metrics import build_analytics, build_system_status
 from app.services.listings.serialize import listing_to_out
 
@@ -90,6 +91,7 @@ class AdminListingOut(BaseModel):
     price: int
     region: str
     url: str
+    image: str | None
     is_duplicate: bool
     found_at: datetime
 
@@ -177,8 +179,21 @@ async def admin_listings(
             price=out.price,
             region=out.region,
             url=out.url,
+            image=out.images[0] if out.images else None,
             is_duplicate=row.is_duplicate,
             found_at=row.found_at,
         ))
 
     return PaginatedListings(items=items, total=total, page=page, per_page=per_page)
+
+
+@router.get("/listings/{listing_id}", response_model=ListingOut)
+async def admin_listing_detail(
+    listing_id: str,
+    _: str = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    listing = await db.get(Listing, listing_id)
+    if not listing:
+        raise HTTPException(404, "Listing not found")
+    return listing_to_out(listing)

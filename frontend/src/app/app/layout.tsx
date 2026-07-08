@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { DashboardSidebar, useDashboardBadges } from "@/components/layout/DashboardSidebar";
 import { DashboardMobileNav } from "@/components/layout/DashboardMobileNav";
 import { AppShellHeader } from "@/components/layout/AppShellHeader";
+import { PublicListingShell } from "@/components/layout/PublicListingShell";
 import { OnboardingTour } from "@/components/onboarding/OnboardingTour";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 import { PwaLoadingScreen } from "@/components/pwa/PwaLoadingScreen";
@@ -20,12 +21,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [tourActive, setTourActive] = useState(false);
   const badges = useDashboardBadges();
   const isOnboardingRoute = pathname === "/app/onboarding";
+  const isPublicListing = pathname.startsWith("/app/listing/");
 
   useEffect(() => {
+    if (isPublicListing) return;
     if (!initialized || loading || user) return;
     const redirect = pathname.startsWith("/app") ? pathname : "/app/dashboard";
     router.replace(`/auth/login?redirect=${encodeURIComponent(redirect)}`);
-  }, [initialized, loading, user, pathname, router]);
+  }, [initialized, loading, user, pathname, router, isPublicListing]);
 
   useEffect(() => {
     if (isOnboardingRoute) {
@@ -34,11 +37,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [isOnboardingRoute, router]);
 
   useEffect(() => {
-    if (!user || isOnboardingRoute) return;
+    if (!user || isOnboardingRoute || isPublicListing) return;
     api.searches.list()
       .then(searches => setSearchesUsed(searches.filter(s => s.is_active).length))
       .catch(() => setSearchesUsed(0));
-  }, [user, isOnboardingRoute]);
+  }, [user, isOnboardingRoute, isPublicListing]);
 
   useEffect(() => {
     if (!user || tourActive || !shouldShowOnboarding(user)) return;
@@ -57,6 +60,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setTourActive(false);
     void refreshUser();
   };
+
+  if (isPublicListing) {
+    if (!initialized || loading) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
+        </div>
+      );
+    }
+    if (!user) {
+      return <PublicListingShell>{children}</PublicListingShell>;
+    }
+  }
 
   if (!initialized || loading || !user) {
     return (

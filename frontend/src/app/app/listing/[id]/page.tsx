@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { listings as listingsApi, favorites as favoritesApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
 import { SourceBadge } from "@/components/listings/SourceBadge";
@@ -12,6 +12,7 @@ import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetai
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { Button } from "@/components/ui/Button";
 import { IconArrowLeft, IconGlobe, IconHeart } from "@/components/icons";
+import { useAuth } from "@/contexts/AuthProvider";
 import {
   formatPrice,
   formatMileage,
@@ -28,6 +29,8 @@ import { normalizeListingForFavorite } from "@/lib/listing-favorite-payload";
 
 export default function ListingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { user } = useAuth();
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -50,9 +53,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           setNotFound(true);
         })
         .finally(() => setLoading(false));
-      favoritesApi.check(p.id).then(r => setIsFavorite(r.is_favorite)).catch(() => {});
+      if (user) {
+        favoritesApi.check(p.id).then(r => setIsFavorite(r.is_favorite)).catch(() => {});
+      }
     });
-  }, [params]);
+  }, [params, user]);
 
   const scrollToPhoto = useCallback((index: number) => {
     const container = galleryRef.current;
@@ -65,6 +70,10 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   const toggleFavorite = async () => {
     if (!listing) return;
+    if (!user) {
+      router.push(`/auth/login?redirect=${encodeURIComponent(pathname)}`);
+      return;
+    }
     if (isFavorite) {
       await favoritesApi.remove(listing.id);
       setIsFavorite(false);
@@ -89,9 +98,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         <p className="max-w-xs text-[13px] text-muted">
           Можливо, воно вже зняте з публікації або посилання застаріло.
         </p>
-        <Link href="/app/dashboard">
+        <Link href={user ? "/app/dashboard" : "/"}>
           <Button variant="secondary" size="md">
-            До пошуків
+            {user ? "До пошуків" : "На головну"}
           </Button>
         </Link>
       </div>
@@ -129,8 +138,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           Назад
         </button>
         <nav className="hidden min-w-0 flex-1 items-center gap-2 text-[12px] text-muted lg:flex">
-          <Link href="/app/dashboard" className="shrink-0 hover:text-ink">
-            Пошуки
+          <Link href={user ? "/app/dashboard" : "/"} className="shrink-0 hover:text-ink">
+            {user ? "Пошуки" : "Головна"}
           </Link>
           <span>/</span>
           <span className="truncate font-medium text-ink">{listing.title}</span>

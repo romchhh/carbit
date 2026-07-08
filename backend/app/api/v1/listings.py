@@ -35,9 +35,9 @@ async def get_listings_for_search(
 @router.get("/{listing_id}", response_model=ListingOut)
 async def get_listing(
     listing_id: str,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
+    """Публічний перегляд оголошення — без авторизації."""
     listing = await db.get(Listing, listing_id)
     if not listing:
         raise HTTPException(404, "Listing not found")

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchPreviewNotice } from "@/components/search/SearchPreviewNotice";
+import { SearchProgressBar } from "@/components/search/SearchProgressBar";
 import { SearchResultsSkeleton } from "@/components/search/SearchResultsSkeleton";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
@@ -79,6 +80,8 @@ export function SearchPreviewResults({
   );
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const exportItems = useMemo(() => toExportItems(results), [results]);
+  const remaining = Math.max(0, total - results.length);
+  const nextBatch = Math.min(SEARCH_PAGE_SIZE, remaining);
 
   const openListing = (listing: Listing) => {
     saveRecentListing(listing);
@@ -98,6 +101,7 @@ export function SearchPreviewResults({
             <button
               key={option.value}
               type="button"
+              disabled={searching || loadingMore}
               onClick={() => onFreshnessChange(option.value)}
               className={cn(
                 "rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors",
@@ -132,8 +136,22 @@ export function SearchPreviewResults({
           </div>
         )}
 
-        {searching ? (
-          <SearchResultsSkeleton count={Math.min(SEARCH_PAGE_SIZE, 8)} />
+        <SearchProgressBar
+          active={searching || Boolean(loadingMore)}
+          compact={running && !searching}
+          label={
+            loadingMore
+              ? `Завантажуємо ще ${nextBatch}…`
+              : running
+                ? "Оновлюємо результати…"
+                : "Шукаємо на AUTO.RIA та OLX…"
+          }
+          hint={loadingMore ? null : undefined}
+          className="mb-4"
+        />
+
+        {searching && !running ? (
+          <SearchResultsSkeleton count={3} />
         ) : !running ? (
           <div className="rounded-2xl border border-dashed border-border bg-surface/40 px-5 py-10 text-center sm:bg-white sm:px-6 sm:py-12">
             <p className="text-[15px] font-semibold text-ink">Результати з&apos;являться тут</p>
@@ -156,7 +174,12 @@ export function SearchPreviewResults({
           </div>
         ) : (
           <>
-            <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:gap-3 sm:px-0">
+            <div
+              className={cn(
+                "-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:gap-3 sm:px-0",
+                searching && "pointer-events-none opacity-60",
+              )}
+            >
               {results.map(item => (
                 <ListingCard
                   key={item.id}
@@ -173,10 +196,12 @@ export function SearchPreviewResults({
               <button
                 type="button"
                 onClick={onLoadMore}
-                disabled={loadingMore}
+                disabled={loadingMore || searching}
                 className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[13px] font-semibold text-muted transition-colors hover:border-ink/20 hover:text-ink disabled:opacity-60"
               >
-                {loadingMore ? "Завантаження..." : "Показати ще"}
+                {loadingMore
+                  ? "Завантаження…"
+                  : `Показати ще ${nextBatch}${total > 0 ? ` · ${results.length} з ${total.toLocaleString("uk-UA")}` : ""}`}
               </button>
             )}
 

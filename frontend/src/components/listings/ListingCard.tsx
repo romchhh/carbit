@@ -86,6 +86,7 @@ export function ListingCard({
                 active={isFavorite}
                 loading={favoriteLoading}
                 onToggle={onToggleFavorite}
+                variant="overlay"
               />
             )}
             <span className="rounded-full bg-ink/75 px-2.5 py-1 text-[10px] font-medium text-white">
@@ -120,6 +121,7 @@ export function ListingCard({
               active={isFavorite}
               loading={favoriteLoading}
               onToggle={onToggleFavorite}
+              variant="overlay"
             />
           </div>
         )}
