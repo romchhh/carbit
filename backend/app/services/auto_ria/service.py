@@ -7,6 +7,7 @@ from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
 from app.services.auto_ria.mapper import filters_to_search_params, info_to_listing, sort_listings
+from app.services.search.concurrency import acquire_auto_ria_slot
 
 
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
@@ -20,6 +21,22 @@ def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str
 
 
 async def _search_auto_ria_uncached(
+    filters: SearchFilters,
+    *,
+    page: int = 1,
+    per_page: int = 20,
+    sort_by: str = "newest",
+) -> PaginatedListings:
+    async with acquire_auto_ria_slot():
+        return await _search_auto_ria_body(
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+        )
+
+
+async def _search_auto_ria_body(
     filters: SearchFilters,
     *,
     page: int = 1,

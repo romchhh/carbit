@@ -58,7 +58,11 @@ class Settings(BaseSettings):
     OLX_CLIENT_SECRET: str = ""
 
     # CORS
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "https://carbit.telebots.site"]
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "https://carbit.telebots.site",
+        "https://carbit.info",
+    ]
 
     # Email (Resend)
     RESEND_API_KEY: str = ""
@@ -94,6 +98,19 @@ class Settings(BaseSettings):
         if not self.PUBLIC_API_BASE:
             backend = os.getenv("BACKEND_URL", "").strip().rstrip("/")
             self.PUBLIC_API_BASE = backend or f"{self.FRONTEND_URL.rstrip('/')}/api/v1"
+        return self
+
+    @model_validator(mode="after")
+    def guard_secrets(self) -> "Settings":
+        from app.core.secrets_guard import assert_production_secrets
+
+        assert_production_secrets(
+            debug=self.DEBUG,
+            secret_key=self.SECRET_KEY,
+            internal_api_secret=self.INTERNAL_API_SECRET,
+            admin_password=self.ADMIN_PASSWORD,
+            frontend_url=self.FRONTEND_URL,
+        )
         return self
 
 

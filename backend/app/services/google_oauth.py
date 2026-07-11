@@ -7,7 +7,9 @@ from app.core.config import settings
 from app.core.redis import get_redis
 
 STATE_TTL = 600
+LOGIN_CODE_TTL = 120
 _STATE_KEY = "google_oauth_state:{state}"
+_LOGIN_CODE_KEY = "oauth_login_code:{code}"
 
 
 def google_redirect_uri() -> str:
@@ -34,6 +36,23 @@ async def verify_state(state: str) -> bool:
     if exists:
         await r.delete(key)
     return bool(exists)
+
+
+async def create_login_code(access_token: str) -> str:
+    """One-time code so JWT never appears in the OAuth redirect URL."""
+    code = secrets.token_urlsafe(32)
+    r = await get_redis()
+    await r.setex(_LOGIN_CODE_KEY.format(code=code), LOGIN_CODE_TTL, access_token)
+    return code
+
+
+async def consume_login_code(code: str) -> str | None:
+    r = await get_redis()
+    key = _LOGIN_CODE_KEY.format(code=code)
+    token = await r.get(key)
+    if token:
+        await r.delete(key)
+    return token
 
 
 def build_authorize_url(state: str) -> str:

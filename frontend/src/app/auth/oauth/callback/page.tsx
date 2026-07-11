@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthProvider";
+import { auth } from "@/lib/api";
 
 const ERROR_MESSAGES: Record<string, string> = {
   access_denied: "Вхід через Google скасовано",
@@ -21,7 +22,8 @@ function OAuthCallback() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const token = searchParams.get("token");
+    const code = searchParams.get("code");
+    const legacyToken = searchParams.get("token");
     const err = searchParams.get("error");
 
     if (err) {
@@ -29,14 +31,23 @@ function OAuthCallback() {
       return;
     }
 
-    if (!token) {
-      setError("Токен не отримано");
+    if (code) {
+      auth
+        .oauthExchange(code)
+        .then(({ access_token }) => loginWithToken(access_token))
+        .then(() => router.replace("/app/dashboard"))
+        .catch(() => setError("Не вдалося завершити вхід"));
       return;
     }
 
-    loginWithToken(token)
-      .then(() => router.replace("/app/dashboard"))
-      .catch(() => setError("Не вдалося завершити вхід"));
+    if (legacyToken) {
+      loginWithToken(legacyToken)
+        .then(() => router.replace("/app/dashboard"))
+        .catch(() => setError("Не вдалося завершити вхід"));
+      return;
+    }
+
+    setError("Токен не отримано");
   }, [searchParams, loginWithToken, router]);
 
   if (error) {

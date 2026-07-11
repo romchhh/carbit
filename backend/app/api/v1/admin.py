@@ -2,17 +2,19 @@ from datetime import datetime, timedelta
 
 from app.core.timezone import now_kyiv, start_of_kyiv_day
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 
+from app.core.auth_cookies import attach_admin_cookie
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_admin_token, get_current_admin, get_current_admin_flexible
 from app.models.models import User, SearchQuery, Notification, Favorite, PlanTier
 from app.services.billing.plans import PLANS, get_plan
+from app.services.rate_limit import client_ip, enforce_rate_limit
 from app.services.telegram.client import telegram_client
 from app.services.user_avatar import admin_user_avatar_api_path, sync_telegram_avatar
 
@@ -112,10 +114,19 @@ class FinanceOut(BaseModel):
 
 
 @router.post("/auth/login", response_model=AdminTokenResponse)
-async def admin_login(body: AdminLoginRequest):
+async def admin_login(body: AdminLoginRequest, request: Request):
+    await enforce_rate_limit(
+        key=f"admin-login:{client_ip(request)}",
+        limit=10,
+        window_seconds=900,
+        detail="Занадто багато спроб входу в адмінку.",
+    )
     if body.username != settings.ADMIN_USERNAME or body.password != settings.ADMIN_PASSWORD:
         raise HTTPException(401, "Invalid credentials")
-    return AdminTokenResponse(access_token=create_admin_token())
+    token = create_admin_token()
+    response = JSONResponse(content={"access_token": token, "token_type": "bearer"})
+    attach_admin_cookie(response, token)
+    return response
 
 
 @router.get("/dashboard", response_model=AdminDashboardOut)

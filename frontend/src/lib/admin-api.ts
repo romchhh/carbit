@@ -13,7 +13,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${getApiUrl()}${path}`, { ...options, headers });
+  const res = await fetch(`${getApiUrl()}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
   if (!res.ok) {
     let msg = "Помилка запиту";
     try { const b = await res.json(); if (b.detail) msg = b.detail; } catch { /* */ }

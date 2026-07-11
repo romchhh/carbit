@@ -21,6 +21,7 @@ from app.services.olx.parser import (
     passes_olx_filters,
 )
 from app.services.olx.errors import OlxError
+from app.services.search.concurrency import acquire_olx_slot
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 
 
@@ -36,6 +37,22 @@ def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str
 
 
 async def _search_olx_uncached(
+    filters: SearchFilters,
+    *,
+    page: int = 1,
+    per_page: int = 20,
+    sort_by: str = "newest",
+) -> PaginatedListings:
+    async with acquire_olx_slot():
+        return await _search_olx_body(
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+        )
+
+
+async def _search_olx_body(
     filters: SearchFilters,
     *,
     page: int = 1,
@@ -88,11 +105,14 @@ async def _search_olx_uncached(
         if not page_listings:
             break
 
-        for listing in page_listings:
-            if not passes_olx_filters(listing, params):
-                continue
-            if listing_needs_enrichment(listing, params):
-                listing = await enrich_listing(listing)
+        candidates: list[OlxListing] = [
+            listing for listing in page_listings if passes_olx_filters(listing, params)
+        ]
+        to_enrich = [listing for listing in candidates if listing_needs_enrichment(listing, params)]
+        if to_enrich:
+            await asyncio.gather(*(enrich_listing(listing) for listing in to_enrich))
+
+        for listing in candidates:
             if not passes_olx_filters(listing, params):
                 continue
             collected.append(listing)

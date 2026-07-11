@@ -1,9 +1,10 @@
 import logging
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -31,6 +32,7 @@ from app.services import verification as verify_svc
 from app.services import password_reset as pwd_reset_svc
 from app.services import google_oauth as google_svc
 from app.services.email import send_verification_code, send_welcome_email, send_password_reset_email
+from app.services.rate_limit import client_ip, enforce_rate_limit
 from app.services.telegram import tokens as tg_tokens
 from app.services.telegram.client import telegram_client
 from app.services.telegram.links import bot_url, bot_username
@@ -43,14 +45,23 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register/send-code", response_model=MessageResponse)
-async def register_send_code(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register_send_code(
+    body: RegisterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await enforce_rate_limit(
+        key=f"register:{client_ip(request)}",
+        limit=10,
+        window_seconds=3600,
+        detail="Занадто багато реєстрацій з цієї IP. Спробуйте пізніше.",
+    )
     existing = await db.scalar(select(User).where(User.email == body.email))
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     if not await verify_svc.resend_allowed(body.email):
         raise HTTPException(status_code=429, detail="Зачекайте хвилину перед повторною відправкою")
-
     hashed = hash_password(body.password)
     code = await verify_svc.store_registration(body.email, body.name, hashed)
 
@@ -117,7 +128,13 @@ async def register_verify(body: VerifyCodeRequest, db: AsyncSession = Depends(ge
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    await enforce_rate_limit(
+        key=f"login:{client_ip(request)}:{body.email.lower()}",
+        limit=20,
+        window_seconds=900,
+        detail="Занадто багато спроб входу. Спробуйте через 15 хвилин.",
+    )
     user = await db.scalar(select(User).where(User.email == body.email))
     if not user or not user.hashed_password or not verify_password(body.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -127,6 +144,17 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     return token_json_response(create_access_token(user.id))
 
+
+class OAuthExchangeRequest(BaseModel):
+    code: str = Field(min_length=16, max_length=256)
+
+
+@router.post("/oauth/exchange", response_model=TokenResponse)
+async def oauth_exchange(body: OAuthExchangeRequest):
+    token = await google_svc.consume_login_code(body.code)
+    if not token:
+        raise HTTPException(status_code=400, detail="Код недійсний або прострочений")
+    return token_json_response(token)
 
 @router.post("/password/forgot", response_model=MessageResponse)
 async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
@@ -222,11 +250,11 @@ async def google_callback(
         return RedirectResponse(f"{settings.FRONTEND_URL}/auth/oauth/callback?{params}")
 
     token = create_access_token(user.id)
-    params = urlencode({"token": token})
+    login_code = await google_svc.create_login_code(token)
+    params = urlencode({"code": login_code})
     response = RedirectResponse(f"{settings.FRONTEND_URL}/auth/oauth/callback?{params}")
     attach_auth_cookie(response, token)
     return response
-
 
 @router.get("/telegram/login-url", response_model=TelegramLoginUrlOut)
 async def telegram_login_url():

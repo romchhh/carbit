@@ -1,12 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.core.config import settings
 from app.api.v1.router import api_router
+from app.services.health import check_database, check_kv, heartbeat_age_seconds
 
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
-    docs_url="/api/docs",
+    docs_url="/api/docs" if settings.DEBUG else None,
     redoc_url=None,
     redirect_slashes=False,
 )
@@ -22,18 +24,18 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 
-def _route_paths() -> set[str]:
-    return {getattr(route, "path", "") for route in app.routes if hasattr(route, "path")}
-
-
 @app.get("/health")
 async def health():
-    paths = _route_paths()
+    db_ok = await check_database()
+    kv_ok = await check_kv()
+    worker_age = await heartbeat_age_seconds("worker")
+    telegram_age = await heartbeat_age_seconds("telegram_worker")
+    status = "ok" if db_ok and kv_ok else "degraded"
     return {
-        "status": "ok",
+        "status": status,
         "version": "1.0.0",
-        "auto_ria_search_route": "/api/v1/auto-ria/search" in paths,
-        "auto_ria_live_route": "/api/v1/searches/live" in paths,
-        "auto_ria_api_key": bool(settings.AUTO_RIA_API_KEY.strip()),
-        "favorites_add_route": "/api/v1/favorites/add" in paths,
+        "database": db_ok,
+        "kv": kv_ok,
+        "worker_heartbeat_age_s": worker_age,
+        "telegram_worker_heartbeat_age_s": telegram_age,
     }

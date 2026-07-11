@@ -1,4 +1,5 @@
-"""Локальне key-value сховище (Redis-подібний API) на SQLite."""
+"""KV client factory: sqlite:// (default) or redis:// for production scale."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -32,8 +33,9 @@ class SQLiteKV:
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=5.0)
         conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
     def _init_db(self) -> None:
@@ -105,6 +107,30 @@ class SQLiteKV:
         return await to_thread(self._ttl_sync, key)
 
 
+class RedisKV:
+    """Thin async wrapper around redis.asyncio."""
+
+    def __init__(self, url: str):
+        import redis.asyncio as redis
+
+        self._client = redis.from_url(url, decode_responses=True)
+
+    async def setex(self, key: str, ttl: int, value: str) -> None:
+        await self._client.setex(key, ttl, value)
+
+    async def get(self, key: str) -> str | None:
+        return await self._client.get(key)
+
+    async def delete(self, key: str) -> None:
+        await self._client.delete(key)
+
+    async def exists(self, key: str) -> int:
+        return int(await self._client.exists(key))
+
+    async def ttl(self, key: str) -> int:
+        return int(await self._client.ttl(key))
+
+
 _clients: dict[str, KVClient] = {}
 
 
@@ -112,7 +138,13 @@ def get_kv_client(url: str, root_dir: Path) -> KVClient:
     if url in _clients:
         return _clients[url]
 
-    db_path = resolve_sqlite_path(url, root_dir)
-    client: KVClient = SQLiteKV(db_path)
+    if url.startswith("redis://") or url.startswith("rediss://"):
+        client: KVClient = RedisKV(url)
+    elif url.startswith("sqlite://"):
+        db_path = resolve_sqlite_path(url, root_dir)
+        client = SQLiteKV(db_path)
+    else:
+        raise ValueError(f"Unsupported REDIS_URL scheme: {url}")
+
     _clients[url] = client
     return client

@@ -64,8 +64,8 @@ class User(Base):
 
     @property
     def searches_limit(self) -> int:
-        from app.services.billing.plans import get_plan
-        return get_plan(self.plan.value)["searches_limit"]
+        from app.services.billing.plans import effective_searches_limit
+        return effective_searches_limit(self)
 
     @property
     def is_trial_active(self) -> bool:

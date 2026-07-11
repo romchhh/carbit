@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from app.core.config import settings as app_settings  # noqa: E402
 from app.core.database import AsyncSessionLocal  # noqa: E402
+from app.services.health import beat  # noqa: E402
 from app.services.parser.settings import get_parser_settings  # noqa: E402
 from app.services.telegram_channels.ingest import ingest_telegram_listing  # noqa: E402
 from app.services.telegram_channels.service_loader import get_parser_channels, get_parser_service  # noqa: E402
@@ -56,11 +57,13 @@ async def main() -> None:
     logger.info("Telethon started, channels: %s", channels)
 
     await bootstrap_channels(service, channels, history_limit)
+    await beat("telegram_worker")
 
     async def on_new_listing(listing) -> None:
         async with AsyncSessionLocal() as db:
             item, new_count, sent = await ingest_telegram_listing(db, listing, notify=True)
             await db.commit()
+        await beat("telegram_worker")
         logger.info(
             "New listing %s | new=%s notifications=%s | %s",
             item.id,
@@ -69,6 +72,12 @@ async def main() -> None:
             item.title[:60],
         )
 
+    async def heartbeat_loop() -> None:
+        while True:
+            await beat("telegram_worker")
+            await asyncio.sleep(60)
+
+    asyncio.create_task(heartbeat_loop())
     await service.listen(channels, on_new_listing)
 
 

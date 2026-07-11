@@ -206,6 +206,7 @@ async def _search_single_source(
     per_page: int,
     sort_by: str,
     use_cache: bool = True,
+    cache_ttl_seconds: int = 120,
     db=None,
 ) -> PaginatedListings:
     if source == "telegram":
@@ -234,6 +235,7 @@ async def _search_single_source(
             per_page=per_page,
             sort_by=sort_by,
             use_cache=use_cache,
+            cache_ttl_seconds=cache_ttl_seconds,
         )
     return await search_auto_ria(
         filters,
@@ -241,6 +243,7 @@ async def _search_single_source(
         per_page=per_page,
         sort_by=sort_by,
         use_cache=use_cache,
+        cache_ttl_seconds=cache_ttl_seconds,
     )
 
 
@@ -251,6 +254,7 @@ async def _fetch_source_pool(
     need: int,
     sort_by: str,
     use_cache: bool = True,
+    cache_ttl_seconds: int = 120,
     db=None,
 ) -> PaginatedListings:
     """Тягне пул оголошень з джерела (кілька сторінок AUTO.RIA за потреби)."""
@@ -263,6 +267,7 @@ async def _fetch_source_pool(
             per_page=need,
             sort_by=sort_by,
             use_cache=use_cache,
+            cache_ttl_seconds=cache_ttl_seconds,
             db=db,
         )
 
@@ -274,6 +279,7 @@ async def _fetch_source_pool(
             per_page=need,
             sort_by=sort_by,
             use_cache=use_cache,
+            cache_ttl_seconds=cache_ttl_seconds,
             db=db,
         )
 
@@ -292,6 +298,7 @@ async def _fetch_source_pool(
             per_page=min(AUTO_RIA_PAGE_SIZE, need - len(collected)),
             sort_by=sort_by,
             use_cache=use_cache,
+            cache_ttl_seconds=cache_ttl_seconds,
             db=db,
         )
         total = max(total, chunk.total)
@@ -325,6 +332,7 @@ async def _search_olx_safe(
     per_page: int,
     sort_by: str,
     use_cache: bool = True,
+    cache_ttl_seconds: int = 120,
 ) -> tuple[PaginatedListings, str | None]:
     """OLX не повинен ламати весь пошук — таймаут/помилки дають порожню видачу."""
     try:
@@ -335,6 +343,7 @@ async def _search_olx_safe(
                 per_page=per_page,
                 sort_by=sort_by,
                 use_cache=use_cache,
+                cache_ttl_seconds=cache_ttl_seconds,
             ),
             timeout=OLX_SEARCH_TIMEOUT_SECONDS,
         )
@@ -370,6 +379,7 @@ async def search_listings_outcome(
     per_page: int = 20,
     sort_by: str = "newest",
     use_cache: bool = True,
+    cache_ttl_seconds: int = 120,
     db=None,
 ) -> SearchListingsOutcome:
     sources = normalize_sources(filters.sources)
@@ -387,6 +397,7 @@ async def search_listings_outcome(
                     per_page=per_page * max(page, 1) * 3,
                     sort_by=sort_by,
                     use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
                     db=db,
                 )
                 filtered = sort_listings(
@@ -412,6 +423,7 @@ async def search_listings_outcome(
                     per_page=per_page,
                     sort_by=sort_by,
                     use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
                     db=db,
                 )
         except Exception as exc:
@@ -440,6 +452,7 @@ async def search_listings_outcome(
                 need=pool_need,
                 sort_by=sort_by,
                 use_cache=use_cache,
+                cache_ttl_seconds=cache_ttl_seconds,
             )
         except Exception as exc:
             return exc
@@ -453,6 +466,7 @@ async def search_listings_outcome(
                     need=pool_need,
                     sort_by=sort_by,
                     use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
                 ),
                 timeout=OLX_SEARCH_TIMEOUT_SECONDS,
             )
@@ -473,6 +487,7 @@ async def search_listings_outcome(
                 need=telegram_need,
                 sort_by=sort_by,
                 use_cache=use_cache,
+                cache_ttl_seconds=cache_ttl_seconds,
                 db=None,
             )
         except Exception as exc:
@@ -590,6 +605,7 @@ async def search_listings(
     per_page: int = 20,
     sort_by: str = "newest",
     use_cache: bool = True,
+    cache_ttl_seconds: int = 120,
     db=None,
 ) -> PaginatedListings:
     outcome = await search_listings_outcome(
@@ -598,6 +614,7 @@ async def search_listings(
         per_page=per_page,
         sort_by=sort_by,
         use_cache=use_cache,
+        cache_ttl_seconds=cache_ttl_seconds,
         db=db,
     )
     return outcome.result

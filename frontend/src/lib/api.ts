@@ -59,6 +59,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${apiUrl()}${path}`, {
     ...options,
     headers,
+    credentials: "include",
     redirect: method === "GET" || method === "HEAD" ? "follow" : "manual",
   });
 
@@ -75,6 +76,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const auth = {
   login: (body: { email: string; password: string }) =>
     request<TokenResponse>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+  oauthExchange: (code: string) =>
+    request<TokenResponse>("/auth/oauth/exchange", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
   registerSendCode: (body: { email: string; name: string; password: string }) =>
     request<{ message: string }>("/auth/register/send-code", { method: "POST", body: JSON.stringify(body) }),
   registerResendCode: (email: string) =>

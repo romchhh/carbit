@@ -3,9 +3,10 @@ from typing import Optional
 
 import bcrypt
 from jose import jwt, JWTError
-from fastapi import Depends, HTTPException, Query, Request, status
+from fastapi import Cookie, Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordBearer
 
+from app.core.auth_cookies import ADMIN_COOKIE_NAME, AUTH_COOKIE_NAME
 from app.core.config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
@@ -22,6 +23,17 @@ def _decode_user_id(token: str) -> str:
     return user_id
 
 
+def _extract_bearer_or_cookie(
+    credentials: HTTPAuthorizationCredentials | None,
+    cookie_token: str | None,
+) -> str | None:
+    if credentials and credentials.credentials:
+        return credentials.credentials
+    if cookie_token:
+        return cookie_token
+    return None
+
+
 async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> str:
     try:
         return _decode_user_id(token)
@@ -33,8 +45,10 @@ async def get_current_user_id_flexible(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer),
     access_token: str | None = Query(None),
+    cookie_token: str | None = Cookie(None, alias=AUTH_COOKIE_NAME),
 ) -> str:
-    token = credentials.credentials if credentials else access_token
+    # Prefer Authorization / HttpOnly cookie; query token kept only as legacy fallback.
+    token = _extract_bearer_or_cookie(credentials, cookie_token) or access_token
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
@@ -85,8 +99,9 @@ async def get_current_admin(token: str = Depends(admin_oauth2_scheme)) -> str:
 async def get_current_admin_flexible(
     credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer),
     access_token: str | None = Query(None),
+    cookie_token: str | None = Cookie(None, alias=ADMIN_COOKIE_NAME),
 ) -> str:
-    token = credentials.credentials if credentials else access_token
+    token = _extract_bearer_or_cookie(credentials, cookie_token) or access_token
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:

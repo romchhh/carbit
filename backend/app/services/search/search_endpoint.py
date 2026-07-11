@@ -12,9 +12,14 @@ from app.services.auto_ria.preview_limits import clamp_preview_request, consume_
 from app.services.olx.errors import OlxError, raise_olx_http
 from app.services.parser.results import get_cached_preview_results
 from app.services.parser.runner import ingest_preview_results
+from app.services.rate_limit import enforce_rate_limit
+from app.services.search.concurrency import acquire_live_search_slot
 from app.services.search.multi_source import search_listings
 
 logger = logging.getLogger(__name__)
+
+# Короткий TTL: однакові фільтри кількох користувачів зливаються в один upstream-запит
+LIVE_SEARCH_CACHE_TTL_SECONDS = 60
 
 
 async def run_live_search(
@@ -26,8 +31,15 @@ async def run_live_search(
     sort_by: str,
     mode: str,
 ) -> PaginatedListings:
-    if is_preview_mode(mode) and page == 1:
-        await consume_preview_quota(user_id)
+    if is_preview_mode(mode):
+        await enforce_rate_limit(
+            key=f"live-search:{user_id}",
+            limit=60,
+            window_seconds=3600,
+            detail="Ліміт пошуків на годину вичерпано. Спробуйте пізніше.",
+        )
+        if page == 1:
+            await consume_preview_quota(user_id)
 
     page, per_page = clamp_preview_request(page=page, per_page=per_page, mode=mode)
 
@@ -47,29 +59,31 @@ async def run_live_search(
         except Exception:
             logger.exception("Preview cache read failed — falling back to live search")
 
-    try:
-        results = await search_listings(
-            filters,
-            page=page,
-            per_page=per_page,
-            sort_by=sort_by,
-            use_cache=False,
-            db=None,
-        )
-    except AutoRiaError as exc:
-        raise_auto_ria_http(exc)
-    except OlxError as exc:
-        raise_olx_http(exc)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Live search failed")
-        raise HTTPException(
-            502,
-            "Пошук тимчасово недоступний. Спробуйте ще раз за хвилину.",
-        ) from exc
+    async with acquire_live_search_slot():
+        try:
+            results = await search_listings(
+                filters,
+                page=page,
+                per_page=per_page,
+                sort_by=sort_by,
+                use_cache=True,
+                cache_ttl_seconds=LIVE_SEARCH_CACHE_TTL_SECONDS,
+                db=None,
+            )
+        except AutoRiaError as exc:
+            raise_auto_ria_http(exc)
+        except OlxError as exc:
+            raise_olx_http(exc)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("Live search failed")
+            raise HTTPException(
+                502,
+                "Пошук тимчасово недоступний. Спробуйте ще раз за хвилину.",
+            ) from exc
 
     if page == 1:
         async with AsyncSessionLocal() as db:

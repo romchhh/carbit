@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
@@ -14,6 +15,26 @@ class AutoRiaError(Exception):
         self.status_code = status_code
 
 
+_http_client: httpx.AsyncClient | None = None
+_client_lock = asyncio.Lock()
+
+
+async def get_shared_http_client() -> httpx.AsyncClient:
+    """Reuse one AsyncClient across concurrent AUTO.RIA requests."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        return _http_client
+
+    async with _client_lock:
+        if _http_client is None or _http_client.is_closed:
+            _http_client = httpx.AsyncClient(
+                timeout=20.0,
+                base_url=AUTO_RIA_BASE_URL,
+                limits=httpx.Limits(max_connections=40, max_keepalive_connections=20),
+            )
+        return _http_client
+
+
 class AutoRiaClient:
     def __init__(self, api_key: str | None = None):
         self.api_key = (api_key or settings.AUTO_RIA_API_KEY or "").strip()
@@ -25,8 +46,8 @@ class AutoRiaClient:
         if params:
             query.update(params)
 
-        async with httpx.AsyncClient(timeout=20.0, base_url=AUTO_RIA_BASE_URL) as client:
-            response = await client.get(path, params=query)
+        client = await get_shared_http_client()
+        response = await client.get(path, params=query)
 
         if response.status_code >= 400:
             raise AutoRiaError(

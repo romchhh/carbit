@@ -14,7 +14,6 @@ from app.services.parser.linking import link_listing_to_search
 from app.services.parser.settings import get_parser_settings, set_filter_cache
 from app.services.notifications.freshness import coerce_notification_max_hours
 from app.services.search.multi_source import normalize_sources, search_listings_outcome
-from app.services.telegram_channels.cycle import run_telegram_channels_cycle
 
 
 async def _process_group(
@@ -170,19 +169,13 @@ async def run_parser_cycle(
     had_errors = False
 
     try:
+        # Telethon history/live належить telegram_worker — не дублюємо сесію в parser cycle.
         run_telegram = sources_only is None or "telegram" in sources_only
-        ignore_dedupe = triggered_by.startswith("admin")
         if run_telegram:
-            try:
-                await run_telegram_channels_cycle(
-                    db,
-                    settings,
-                    log,
-                    ignore_dedupe=ignore_dedupe,
-                )
-            except Exception as exc:
-                had_errors = True
-                log.append(f"Telegram parse: критична помилка — {exc}")
+            log.append(
+                "Telegram: ingest через telegram_worker (live + bootstrap); "
+                "у циклі лише лінкування вже збережених оголошень"
+            )
 
         rows = await db.scalars(select(SearchQuery).where(SearchQuery.is_active.is_(True)))
         active = [(sq.id, sq.filters) for sq in rows.all()]

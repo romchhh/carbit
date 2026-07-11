@@ -7,12 +7,18 @@ from aiogram.enums import ParseMode
 
 from config import settings
 from handlers import router
+from secrets_guard import assert_bot_secrets
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
+    assert_bot_secrets(
+        debug=str(__import__("os").environ.get("DEBUG", "")).lower() in {"1", "true", "yes"}
+        or "localhost" in (settings.FRONTEND_URL or "").lower(),
+        internal_api_secret=settings.INTERNAL_API_SECRET,
+    )
     if not settings.TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not set")
         return

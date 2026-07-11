@@ -1,6 +1,35 @@
 name: carbit
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: carbit-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: carbit-postgres
+    profiles: ["scale"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-carbit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-carbit}
+      POSTGRES_DB: ${POSTGRES_DB:-carbit}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-carbit}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -11,15 +40,22 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      DATABASE_URL: sqlite+aiosqlite:///database/autoradar.db
-      REDIS_URL: sqlite://database/kv.db
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///database/autoradar.db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       TELEGRAM_MEDIA_DIR: /app/media
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+    command:
+      - sh
+      - -c
+      - uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $${UVICORN_WORKERS:-1}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./database:/app/database
       - ./media:/app/media
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -38,13 +74,15 @@ services:
     environment:
       TZ: Europe/Kyiv
       BACKEND_URL: http://backend:8000/api/v1
-      REDIS_URL: sqlite://database/kv.db
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     entrypoint: ["python", "main.py"]
     working_dir: /app/bot
     volumes:
       - ./database:/app/database
     depends_on:
       backend:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   worker:
@@ -57,8 +95,8 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      DATABASE_URL: sqlite+aiosqlite:///database/autoradar.db
-      REDIS_URL: sqlite://database/kv.db
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///database/autoradar.db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       TELEGRAM_MEDIA_DIR: /app/media
     entrypoint: ["python", "main.py"]
     working_dir: /app/worker
@@ -68,6 +106,14 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import asyncio,sys; sys.path.insert(0,'/app/backend'); from app.services.health import heartbeat_age_seconds; age=asyncio.run(heartbeat_age_seconds('worker')); raise SystemExit(0 if age is not None and age < 600 else 1)\""]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
 
   telegram-worker:
     build:
@@ -79,8 +125,8 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      DATABASE_URL: sqlite+aiosqlite:///database/autoradar.db
-      REDIS_URL: sqlite://database/kv.db
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///database/autoradar.db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       TELEGRAM_MEDIA_DIR: /app/media
     entrypoint: ["python", "main.py"]
     working_dir: /app/telegram_worker
@@ -89,6 +135,8 @@ services:
       - ./media:/app/media
     depends_on:
       backend:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   frontend:
@@ -112,3 +160,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+volumes:
+  redis_data:
+  postgres_data:

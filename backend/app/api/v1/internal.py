@@ -1,3 +1,5 @@
+import hmac
+
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +36,9 @@ class BotRegisterRequest(BaseModel):
 
 
 def verify_internal_secret(x_internal_secret: str = Header(...)):
-    if x_internal_secret != settings.INTERNAL_API_SECRET:
+    expected = settings.INTERNAL_API_SECRET or ""
+    provided = x_internal_secret or ""
+    if not expected or not hmac.compare_digest(provided, expected):
         raise HTTPException(403, "Forbidden")
 
 

@@ -77,8 +77,19 @@ export default function BillingPage() {
                 ))}
               </ul>
               {!isCurrent && plan.id !== "free" && (
-                <Button variant="primary" size="sm" className="w-full" loading={loading === plan.id} onClick={() => subscribe(plan.id)}>
-                  Обрати
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="w-full"
+                  loading={loading === plan.id}
+                  onClick={() => subscribe(plan.id)}
+                >
+                  Замовити
+                </Button>
+              )}
+              {!isCurrent && plan.id === "free" && (
+                <Button variant="secondary" size="sm" className="w-full" loading={loading === plan.id} onClick={() => subscribe("free")}>
+                  Перейти на Free
                 </Button>
               )}
             </AppSection>
@@ -87,7 +98,7 @@ export default function BillingPage() {
       </div>
 
       <p className="mt-6 text-center text-[12px] text-muted">
-        Оплата через LiqPay / Mono Pay — незабаром
+        Оплата через LiqPay / Mono Pay — незабаром. Зараз платний план активує підтримка після оплати.
       </p>
     </AppPage>
   );
