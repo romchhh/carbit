@@ -24,7 +24,7 @@ async def _search_auto_ria_uncached(
     *,
     page: int = 1,
     per_page: int = 20,
-    sort_by: str = "price_asc",
+    sort_by: str = "newest",
 ) -> PaginatedListings:
     client = AutoRiaClient()
 
@@ -72,7 +72,7 @@ async def search_auto_ria(
     *,
     page: int = 1,
     per_page: int = 20,
-    sort_by: str = "price_asc",
+    sort_by: str = "newest",
     use_cache: bool = True,
     cache_ttl_seconds: int = 120,
 ) -> PaginatedListings:

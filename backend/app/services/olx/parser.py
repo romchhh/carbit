@@ -27,6 +27,7 @@ class OlxSearchParams:
     city_query: Optional[str] = None
     price_from: Optional[int] = None
     price_to: Optional[int] = None
+    currency: str = "UAH"
     year_from: Optional[int] = None
     year_to: Optional[int] = None
     mileage_from: Optional[int] = None
@@ -148,7 +149,7 @@ def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
     if params.city_query:
         path = path.rstrip("/") + f"/q-{params.city_query.lower().strip()}/"
 
-    query: dict[str, str] = {"currency": "UAH"}
+    query: dict[str, str] = {"currency": (params.currency or "UAH").upper()}
     if params.sort_order:
         query["search[order]"] = params.sort_order
     if page > 1:

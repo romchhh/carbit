@@ -84,6 +84,22 @@ class ExtractorTests(unittest.TestCase):
         self.assertEqual(listing.brand, "Toyota")
         self.assertEqual(listing.year, 2017)
 
+    def test_year_with_cyrillic_g_suffix(self):
+        listing = _extract(
+            "MAZDA MX-30 2021г. Электро 35,5 kWt 45 тыс.км. Автомат. "
+            "Без ДТП, все в оригинале. Запас хода 220 км. 14900$. 067-7960229"
+        )
+        self.assertEqual(listing.brand, "Mazda")
+        self.assertEqual(listing.year, 2021)
+        self.assertEqual(listing.model, "MX-30")
+        self.assertEqual(listing.price_amount, 14900)
+        self.assertEqual(listing.mileage_km, 45000)
+
+    def test_year_rik_suffix(self):
+        listing = _extract("Toyota Camry 2019 рік, 14500$")
+        self.assertEqual(listing.year, 2019)
+        self.assertEqual(listing.model, "Camry")
+
     def test_mileage_label(self):
         listing = _extract("Volkswagen Passat 2015\nПробіг: 145 тис. км\nЦіна: 9800$")
         self.assertEqual(listing.brand, "Volkswagen")

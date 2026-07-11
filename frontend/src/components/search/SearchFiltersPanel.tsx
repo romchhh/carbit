@@ -11,6 +11,8 @@ import { UKRAINE_REGIONS } from "@/lib/search-data/regions";
 import {
   CATEGORY_OPTIONS,
   DEFAULT_FILTERS,
+  DEFAULT_PRICE_BY_CURRENCY,
+  PRICE_CURRENCY_OPTIONS,
   VEHICLE_TYPE_OPTIONS,
   formatPriceInput,
   type SearchFilterState,
@@ -149,9 +151,23 @@ export function SearchFiltersPanel({
               to={filters.priceTo}
               onChange={(priceFrom, priceTo) => update({ priceFrom, priceTo })}
               format={formatPriceInput}
-              placeholderFrom={DEFAULT_FILTERS.priceFrom}
-              placeholderTo={DEFAULT_FILTERS.priceTo}
-              suffix="грн"
+              placeholderFrom={DEFAULT_PRICE_BY_CURRENCY[filters.currency].from}
+              placeholderTo={DEFAULT_PRICE_BY_CURRENCY[filters.currency].to}
+              suffix={filters.currency === "USD" ? "$" : "грн"}
+              currency={filters.currency}
+              currencyOptions={PRICE_CURRENCY_OPTIONS.map(option => ({
+                value: option.value,
+                label: option.label,
+              }))}
+              onCurrencyChange={value => {
+                const next = value === "UAH" ? "UAH" : "USD";
+                const defaults = DEFAULT_PRICE_BY_CURRENCY[next];
+                update({
+                  currency: next,
+                  priceFrom: defaults.from,
+                  priceTo: defaults.to,
+                });
+              }}
             />
           </div>
 

@@ -57,7 +57,12 @@ SPAM_PATTERNS = [
 
 # --- окремі regex-и на кожне поле ---------------------------------------
 
-YEAR_RE = re.compile(r"\b(19[5-9]\d|20[0-2]\d|20 ?[0-2]\d)\b")
+# Рік: 2021, 2021г, 2021г., 2021 рік, 20 21 (рідко)
+YEAR_RE = re.compile(
+    r"(?<!\d)(19[5-9]\d|20[0-3]\d|20 ?[0-3]\d)(?!\d)"
+    r"(?:\s*(?:[гg]\.?(?:ода?|од)?|рік|року|р\.?))?",
+    re.IGNORECASE,
+)
 
 # ціна: $12 000, 12000$, 12 000 usd, 350000 грн, 12000 у.е., €9500, MMR: $7,350
 PRICE_RE = re.compile(
@@ -232,11 +237,11 @@ def _find_brand_model(text_low: str, original_text: str):
         words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", tail)
         model_words = []
         for w in words[:3]:
-            if YEAR_RE.fullmatch(w):
+            if YEAR_RE.fullmatch(w) or YEAR_RE.match(w):
                 break
             if w.lower() in MODEL_STOP_WORDS:
                 break
-            if w.lower() in ("рік", "года", "року", "р", "р."):
+            if w.lower() in ("рік", "года", "року", "р", "р.", "г", "г."):
                 break
             model_words.append(w)
             if len(model_words) >= 2:
@@ -249,7 +254,7 @@ def _find_brand_model(text_low: str, original_text: str):
 def _find_year(text: str, brand_pos_hint: Optional[int] = None) -> Optional[int]:
     candidates = []
     for m in YEAR_RE.finditer(text):
-        val = int(m.group(0).replace(" ", ""))
+        val = int(m.group(1).replace(" ", ""))
         if 1950 <= val <= CURRENT_YEAR + 1:
             candidates.append((m.start(), val))
     if not candidates:

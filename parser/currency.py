@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-USD_TO_UAH = 41
+USD_TO_UAH = 45
 EUR_TO_UAH = 44
 
 

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 
 from sqlalchemy import select, func
@@ -7,8 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import Notification, NotificationType, User, Listing, SearchQuery
 from app.schemas.schemas import NotificationOut
 from app.services.listings.serialize import listing_to_out
+from app.services.notifications.freshness import (
+    coerce_notification_max_hours,
+    is_listing_fresh_for_notification,
+)
+from app.services.parser.settings import get_parser_settings
 from app.services.telegram.client import telegram_client, SOURCE_LABELS
 from app.services.telegram_channels.mapper import fix_telegram_listing_url
+
+logger = logging.getLogger(__name__)
 
 
 async def create_listing_notification(
@@ -17,6 +25,7 @@ async def create_listing_notification(
     listing: Listing,
     search: SearchQuery | None = None,
     send_telegram: bool = True,
+    max_published_hours: float | None = None,
 ) -> Notification:
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
     listing_url = (
@@ -48,34 +57,53 @@ async def create_listing_notification(
     await db.flush()
 
     if send_telegram and user.telegram_connected and user.telegram_id:
-        listing_data = {
-            "title": listing.title,
-            "year": listing.year,
-            "mileage": listing.mileage,
-            "price": listing.price,
-            "currency": listing.currency,
-            "region": listing.region,
-            "fuel": listing.fuel,
-            "transmission": listing.transmission,
-            "description": listing.description,
-            "images": list(listing.images or []),
-            "published_at": listing.published_at.isoformat() if listing.published_at else None,
-            "source": source,
-            "source_label": SOURCE_LABELS.get(source, source),
-            "url": listing_url,
-        }
-        search_name = search.name if search else "Carbit"
-        await asyncio.sleep(random.uniform(1, 3))
-        result = await telegram_client.send_listing_card(
-            user.telegram_id,
-            listing_data,
-            search_name,
-            search_id=search.id if search else None,
-            listing_id=listing.id,
-        )
-        if result:
-            notification.sent_telegram = True
-            await db.flush()
+        if max_published_hours is None:
+            settings = await get_parser_settings()
+            max_published_hours = coerce_notification_max_hours(
+                settings.get("notification_max_published_hours", 1)
+            )
+        else:
+            max_published_hours = coerce_notification_max_hours(max_published_hours)
+
+        if not is_listing_fresh_for_notification(
+            listing.published_at,
+            max_hours=max_published_hours,
+        ):
+            logger.info(
+                "Skip Telegram notify for %s: published_at=%s max_hours=%s",
+                listing.id,
+                listing.published_at,
+                max_published_hours,
+            )
+        else:
+            listing_data = {
+                "title": listing.title,
+                "year": listing.year,
+                "mileage": listing.mileage,
+                "price": listing.price,
+                "currency": listing.currency,
+                "region": listing.region,
+                "fuel": listing.fuel,
+                "transmission": listing.transmission,
+                "description": listing.description,
+                "images": list(listing.images or []),
+                "published_at": listing.published_at.isoformat() if listing.published_at else None,
+                "source": source,
+                "source_label": SOURCE_LABELS.get(source, source),
+                "url": listing_url,
+            }
+            search_name = search.name if search else "Carbit"
+            await asyncio.sleep(random.uniform(1, 3))
+            result = await telegram_client.send_listing_card(
+                user.telegram_id,
+                listing_data,
+                search_name,
+                search_id=search.id if search else None,
+                listing_id=listing.id,
+            )
+            if result:
+                notification.sent_telegram = True
+                await db.flush()
 
     return notification
 

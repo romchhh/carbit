@@ -26,6 +26,7 @@ class ParserSettingsOut(BaseModel):
     notify_telegram: bool
     telegram_enabled: bool
     telegram_history_limit: int
+    notification_max_published_hours: int
 
 
 class ParserSettingsUpdate(BaseModel):
@@ -36,6 +37,7 @@ class ParserSettingsUpdate(BaseModel):
     notify_telegram: bool | None = None
     telegram_enabled: bool | None = None
     telegram_history_limit: int | None = Field(default=None, ge=10, le=500)
+    notification_max_published_hours: int | None = Field(default=None, ge=1, le=24)
 
 
 class ParseRunOut(BaseModel):

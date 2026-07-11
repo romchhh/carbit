@@ -300,6 +300,25 @@ export default function AdminParsingPage() {
               />
             </label>
             <label className="block text-[13px]">
+              <span className="text-muted">Telegram: лише авто не старіші (год)</span>
+              <input
+                type="number"
+                min={1}
+                max={24}
+                value={settings.notification_max_published_hours ?? 1}
+                onChange={e =>
+                  setSettings({
+                    ...settings,
+                    notification_max_published_hours: Number(e.target.value),
+                  })
+                }
+                className="mt-1 w-full rounded-lg border border-border px-3 py-2"
+              />
+              <span className="mt-1 block text-[11px] text-muted">
+                За замовчуванням 1 год. AUTO.RIA шукає з параметром top (за годину / 3 год).
+              </span>
+            </label>
+            <label className="block text-[13px]">
               <span className="text-muted">TTL кешу пошуку (сек)</span>
               <input
                 type="number"

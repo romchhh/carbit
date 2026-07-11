@@ -1,4 +1,5 @@
 import type { SearchFilterState } from "@/lib/search-catalog";
+import { DEFAULT_FILTERS } from "@/lib/search-catalog";
 
 const KEY = "carbit:search-draft";
 
@@ -12,7 +13,8 @@ export function loadSearchDraft(): SearchFilterState | null {
   const raw = sessionStorage.getItem(KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as SearchFilterState;
+    const parsed = JSON.parse(raw) as Partial<SearchFilterState>;
+    return { ...DEFAULT_FILTERS, ...parsed };
   } catch {
     return null;
   }

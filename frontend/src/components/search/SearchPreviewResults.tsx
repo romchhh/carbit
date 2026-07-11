@@ -103,6 +103,11 @@ export function SearchPreviewResults({
               type="button"
               disabled={searching || loadingMore}
               onClick={() => onFreshnessChange(option.value)}
+              title={
+                option.value === "all"
+                  ? "AUTO.RIA + OLX + Telegram без обмеження по даті"
+                  : "Лише оголошення за останні 7 днів"
+              }
               className={cn(
                 "rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors",
                 freshness === option.value
@@ -124,7 +129,7 @@ export function SearchPreviewResults({
           exportItems={exportItems}
           exportName="search"
           loading={searching}
-          idleLabel="Натисніть «Шукати», щоб побачити авто за вашими фільтрами"
+            idleLabel="Натисніть «Шукати», щоб побачити авто з AUTO.RIA, OLX і Telegram за вашими фільтрами"
         />
 
         {error && (
@@ -156,8 +161,8 @@ export function SearchPreviewResults({
           <div className="rounded-2xl border border-dashed border-border bg-surface/40 px-5 py-10 text-center sm:bg-white sm:px-6 sm:py-12">
             <p className="text-[15px] font-semibold text-ink">Результати з&apos;являться тут</p>
             <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-muted">
-              Оберіть фільтри і натисніть «Шукати» — покажемо всі доступні авто по 20 з можливістю
-              підвантажити ще.
+              Оберіть фільтри і натисніть «Шукати» — покажемо всі доступні авто з AUTO.RIA,
+              OLX і Telegram по 20 з можливістю підвантажити ще.
             </p>
             <p className="mt-3 text-[11px] text-muted">
               До {SEARCH_HOURLY_LIMIT} запитів на годину

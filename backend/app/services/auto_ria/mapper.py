@@ -13,11 +13,14 @@ from app.services.auto_ria.details import extract_image_urls, sanitize_source_da
 from app.services.auto_ria.constants import (
     AUTO_RIA_SITE_URL,
     CURRENCY_UAH,
+    CURRENCY_USD,
     DEFAULT_CATEGORY_ID,
     FUEL_NAME_TO_ID,
     GEARBOX_NAME_TO_ID,
     REGION_TO_STATE_CITY,
 )
+from app.services.currency import resolve_filter_currency
+from app.services.notifications.freshness import auto_ria_top_for_max_hours
 
 
 async def filters_to_search_params(
@@ -51,17 +54,36 @@ async def filters_to_search_params(
     if filters.year_to:
         params["po_yers[0]"] = filters.year_to
 
+    if filters.price_from is not None or filters.price_to is not None:
+        # AUTO.RIA: currency=1 → USD, currency=3 → UAH (price_ot / price_do у цій валюті)
+        params["currency"] = (
+            CURRENCY_USD if resolve_filter_currency(filters.currency) == "USD" else CURRENCY_UAH
+        )
     if filters.price_from is not None:
         params["price_ot"] = filters.price_from
-        params["currency"] = CURRENCY_UAH
     if filters.price_to is not None:
         params["price_do"] = filters.price_to
-        params["currency"] = CURRENCY_UAH
 
     if filters.mileage_from is not None:
         params["raceFrom"] = max(filters.mileage_from // 1000, 0)
     if filters.mileage_to is not None:
         params["raceTo"] = max(filters.mileage_to // 1000, 0)
+
+    # Свіжі оголошення: top=1 (година), 8 (3г), 14 (12г), 11 (доба)…
+    if filters.published_within_hours:
+        top = auto_ria_top_for_max_hours(filters.published_within_hours)
+        if top is not None:
+            params["top"] = top
+    elif filters.published_within_days:
+        days = filters.published_within_days
+        if days <= 1:
+            params["top"] = 11
+        elif days <= 2:
+            params["top"] = 10
+        elif days <= 3:
+            params["top"] = 3
+        else:
+            params["top"] = 4
 
     if filters.region and norm_text(filters.region) not in ("вся україна", ""):
         region_key = norm_text(filters.region)
@@ -86,17 +108,25 @@ async def filters_to_search_params(
 
 
 def _parse_datetime(value: Any) -> datetime:
+    """Парсить дату AUTO.RIA. Невідоме значення → далеке минуле (не «зараз»),
+    щоб старі/биті дати не проходили фільтр свіжості для Telegram."""
+    fallback = datetime(1970, 1, 1, tzinfo=KYIV_TZ)
     if not value:
-        return now_kyiv()
+        return fallback
     if isinstance(value, (int, float)):
         return as_kyiv(datetime.fromtimestamp(value, tz=UTC))
     if isinstance(value, str):
+        text = value.strip()
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
             try:
-                return datetime.strptime(value, fmt).replace(tzinfo=KYIV_TZ)
+                return datetime.strptime(text, fmt).replace(tzinfo=KYIV_TZ)
             except ValueError:
                 continue
-    return now_kyiv()
+        try:
+            return as_kyiv(datetime.fromisoformat(text.replace("Z", "+00:00")))
+        except ValueError:
+            return fallback
+    return fallback
 
 
 def _pick_vin_value(value: Any) -> str | None:
@@ -206,9 +236,13 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
     )
 
 
+def _listing_published_key(item: ListingOut) -> datetime:
+    return as_kyiv(item.published_at)
+
+
 def sort_listings(items: list[ListingOut], sort_by: str) -> list[ListingOut]:
     if sort_by in ("published_desc", "newest"):
-        return sorted(items, key=lambda x: x.published_at, reverse=True)
+        return sorted(items, key=_listing_published_key, reverse=True)
     if sort_by == "price_desc":
         return sorted(items, key=lambda x: x.price, reverse=True)
     if sort_by == "year_desc":

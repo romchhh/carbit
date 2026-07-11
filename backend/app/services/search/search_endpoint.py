@@ -27,7 +27,7 @@ async def run_live_search(
 
     page, per_page = clamp_preview_request(page=page, per_page=per_page, mode=mode)
 
-    # Кеш preview зберігає лише першу порцію — пагінацію завжди беремо з джерел
+    # Кеш preview зберігає першу порцію + total — пагінацію (page>1) завжди беремо з джерел
     if page == 1:
         async with AsyncSessionLocal() as db:
             cached = await get_cached_preview_results(
@@ -41,13 +41,15 @@ async def run_live_search(
                 return cached
 
     try:
-        results = await search_listings(
-            filters,
-            page=page,
-            per_page=per_page,
-            sort_by=sort_by,
-            use_cache=False,
-        )
+        async with AsyncSessionLocal() as db:
+            results = await search_listings(
+                filters,
+                page=page,
+                per_page=per_page,
+                sort_by=sort_by,
+                use_cache=False,
+                db=db,
+            )
     except AutoRiaError as exc:
         raise_auto_ria_http(exc)
     except OlxError as exc:
@@ -58,7 +60,13 @@ async def run_live_search(
     if page == 1:
         async with AsyncSessionLocal() as db:
             try:
-                await ingest_preview_results(db, filters, results.items)
+                await ingest_preview_results(
+                    db,
+                    filters,
+                    results.items,
+                    total=results.total,
+                    pages=results.pages,
+                )
                 await db.commit()
             except Exception:
                 await db.rollback()

@@ -12,6 +12,7 @@ from app.services.listings.upsert import upsert_listing
 from app.services.parser.filter_groups import FilterGroup, filters_group_key, group_searches, parse_search_filters
 from app.services.parser.linking import link_listing_to_search
 from app.services.parser.settings import get_parser_settings, set_filter_cache
+from app.services.notifications.freshness import coerce_notification_max_hours
 from app.services.search.multi_source import normalize_sources, search_listings_outcome
 from app.services.telegram_channels.cycle import run_telegram_channels_cycle
 
@@ -28,22 +29,34 @@ async def _process_group(
     """Returns found, new, notifications."""
     log.append(f"Група {group.key[:8]}… — {len(group.search_ids)} пошук(ів)")
 
-    if sources_only:
-        parse_filters = group.filters.model_copy(
-            update={"sources": normalize_sources(sources_only)}
-        )
-    else:
-        parse_filters = group.filters.model_copy(
-            update={"sources": normalize_sources(group.filters.sources) or ["auto_ria", "olx"]}
-        )
-        if "olx" not in parse_filters.sources:
-            parse_filters.sources = [*parse_filters.sources, "olx"]
-        if "auto_ria" not in parse_filters.sources:
-            parse_filters.sources = ["auto_ria", *parse_filters.sources]
-        if app_settings.TELEGRAM_ENABLED and "telegram" not in parse_filters.sources:
-            parse_filters.sources = [*parse_filters.sources, "telegram"]
+    settings = await get_parser_settings()
+    max_hours = coerce_notification_max_hours(settings.get("notification_max_published_hours", 1))
+    # Для SearchFilters потрібне int ≥ 1
+    max_hours_int = max(1, int(round(max_hours)))
 
     try:
+        parse_filters = group.filters.model_copy(
+            update={"sources": normalize_sources(sources_only)}
+        ) if sources_only else group.filters.model_copy(
+            update={"sources": normalize_sources(group.filters.sources) or ["auto_ria", "olx"]}
+        )
+        if not sources_only:
+            if "olx" not in parse_filters.sources:
+                parse_filters = parse_filters.model_copy(
+                    update={"sources": [*parse_filters.sources, "olx"]}
+                )
+            if "auto_ria" not in parse_filters.sources:
+                parse_filters = parse_filters.model_copy(
+                    update={"sources": ["auto_ria", *parse_filters.sources]}
+                )
+            if app_settings.TELEGRAM_ENABLED and "telegram" not in parse_filters.sources:
+                parse_filters = parse_filters.model_copy(
+                    update={"sources": [*parse_filters.sources, "telegram"]}
+                )
+        parse_filters = parse_filters.model_copy(
+            update={"published_within_hours": max_hours_int},
+        )
+
         outcome = await search_listings_outcome(
             parse_filters,
             page=1,
@@ -55,6 +68,8 @@ async def _process_group(
     except Exception as exc:
         log.append(f"  ✗ Помилка пошуку: {exc}")
         return 0, 0, 0
+
+    log.append(f"  · Telegram лише ≤ {max_hours_int} год від публікації")
 
     for status in outcome.sources:
         if status.error:
@@ -93,13 +108,13 @@ async def _process_group(
                 listing_id=listing.id,
                 notify=notify,
                 user=user,
+                max_notification_hours=max_hours,
             )
             if is_new:
                 new_total += 1
             if sent:
                 notifications += 1
 
-    settings = await get_parser_settings()
     await set_filter_cache(
         group.key,
         listing_ids,
@@ -229,6 +244,9 @@ async def ingest_preview_results(
     db: AsyncSession,
     filters,
     items: list[ListingOut],
+    *,
+    total: int | None = None,
+    pages: int | None = None,
 ) -> None:
     """Зберігає результати preview-пошуку в кеш і БД."""
     listing_ids: list[str] = []
@@ -238,7 +256,13 @@ async def ingest_preview_results(
 
     key = filters_group_key(filters)
     settings = await get_parser_settings()
-    await set_filter_cache(key, listing_ids, ttl_seconds=settings["cache_ttl_seconds"])
+    await set_filter_cache(
+        key,
+        listing_ids,
+        ttl_seconds=settings["cache_ttl_seconds"],
+        total=total if total is not None else len(listing_ids),
+        pages=pages,
+    )
 
 
 async def run_parser_for_search(db: AsyncSession, search_id: str) -> None:

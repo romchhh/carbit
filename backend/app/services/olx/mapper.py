@@ -19,7 +19,7 @@ from app.services.olx.dates import resolve_olx_published_at
 from app.services.olx.parser import OlxListing, OlxSearchParams, is_valid_image_url
 from app.services.olx.brand_slugs import resolve_olx_brand_slug, resolve_olx_model_slug
 from app.services.olx.constants import MODEL_SLUG_ALIASES
-from app.services.currency import to_uah
+from app.services.currency import filter_price_to_uah, resolve_filter_currency, to_uah
 
 
 def brand_slug(brand: str) -> str:
@@ -47,8 +47,9 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
     if filters.region and norm_text(filters.region) not in ("вся україна", ""):
         params.city_query = REGION_TO_CITY_QUERY.get(norm_text(filters.region), slugify_region(filters.region))
 
-    params.price_from = filters.price_from
-    params.price_to = filters.price_to
+    params.price_from = filter_price_to_uah(filters.price_from, filters.currency)
+    params.price_to = filter_price_to_uah(filters.price_to, filters.currency)
+    params.currency = resolve_filter_currency(filters.currency)
     params.year_from = filters.year_from
     params.year_to = filters.year_to
 

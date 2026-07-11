@@ -122,6 +122,7 @@ export interface AdminParserSettings {
   notify_telegram: boolean;
   telegram_enabled: boolean;
   telegram_history_limit: number;
+  notification_max_published_hours: number;
 }
 
 export interface AdminParseRun {

@@ -40,7 +40,7 @@ async def _search_olx_uncached(
     *,
     page: int = 1,
     per_page: int = 20,
-    sort_by: str = "price_asc",
+    sort_by: str = "newest",
 ) -> PaginatedListings:
     client = OlxClient()
     params = filters_to_olx_params(filters, max_pages=min(page + 2, 6))
@@ -134,7 +134,7 @@ async def search_olx(
     *,
     page: int = 1,
     per_page: int = 20,
-    sort_by: str = "price_asc",
+    sort_by: str = "newest",
     use_cache: bool = True,
     cache_ttl_seconds: int = 120,
 ) -> PaginatedListings:

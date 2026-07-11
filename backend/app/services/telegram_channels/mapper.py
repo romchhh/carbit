@@ -175,10 +175,15 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     if filters.year_to and item.year and item.year > filters.year_to:
         return False
 
-    if filters.price_from and item.price and item.price < filters.price_from:
-        return False
-    if filters.price_to and item.price and item.price > filters.price_to:
-        return False
+    if filters.price_from or filters.price_to:
+        from app.services.currency import filter_price_to_uah
+
+        price_from = filter_price_to_uah(filters.price_from, filters.currency)
+        price_to = filter_price_to_uah(filters.price_to, filters.currency)
+        if price_from and item.price and item.price < price_from:
+            return False
+        if price_to and item.price and item.price > price_to:
+            return False
 
     if filters.mileage_from and item.mileage and item.mileage < filters.mileage_from:
         return False

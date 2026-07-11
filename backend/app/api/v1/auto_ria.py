@@ -14,7 +14,7 @@ async def search_used_cars(
     filters: SearchFilters,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=50),
-    sort_by: str = Query("price_asc"),
+    sort_by: str = Query("newest"),
     mode: str = Query("preview", pattern="^(preview|browse)$"),
     user_id: str = Depends(get_current_user_id),
 ):

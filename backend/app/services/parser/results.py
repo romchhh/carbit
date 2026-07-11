@@ -22,7 +22,11 @@ def _sort_items(items: list[tuple[ListingOut, datetime]], sort_by: str) -> list[
         return [item for item, _ in sorted(items, key=lambda row: row[0].year, reverse=True)]
     if sort_by == "mileage_asc":
         return [item for item, _ in sorted(items, key=lambda row: row[0].mileage)]
-    # newest first (default for saved searches)
+    if sort_by in ("newest", "published_desc"):
+        return [
+            item
+            for item, _ in sorted(items, key=lambda row: as_kyiv(row[0].published_at), reverse=True)
+        ]
     return [item for item, _ in sorted(items, key=lambda row: row[1], reverse=True)]
 
 
@@ -44,7 +48,7 @@ async def get_search_results_from_db(
         stmt = stmt.where(SearchListing.is_new.is_(True))
 
     rows = (await db.execute(stmt)).all()
-    paired = [(listing_to_out(listing), sl.first_seen_at) for listing, sl in rows]
+    paired = [(listing_to_out(listing), as_kyiv(listing.published_at)) for listing, sl in rows]
     items = _sort_items(paired, sort_by)
 
     total = len(items)
@@ -67,7 +71,7 @@ async def get_cached_preview_results(
     *,
     page: int = 1,
     per_page: int = 20,
-    sort_by: str = "price_asc",
+    sort_by: str = "newest",
 ) -> PaginatedListings | None:
     from app.services.parser.settings import get_filter_cache, get_parser_settings
 
@@ -95,13 +99,25 @@ async def get_cached_preview_results(
 
     result = await db.scalars(select(Listing).where(Listing.id.in_(listing_ids)))
     listings = {item.id: item for item in result.all()}
-    paired = [(listing_to_out(listings[lid]), now_kyiv()) for lid in listing_ids if lid in listings]
+    paired = [
+        (listing_to_out(listings[lid]), as_kyiv(listings[lid].published_at))
+        for lid in listing_ids
+        if lid in listings
+    ]
     items = _sort_items(paired, sort_by)
 
+    # Старий кеш без total ламав «Показати ще» (total == len(ids) ≈ 20).
+    # Без збереженого total не використовуємо кеш — йдемо в живий пошук.
+    cached_total = cache.get("total")
+    if cached_total is None:
+        return None
+
+    total = int(cached_total)
     start = (page - 1) * per_page
     page_items = items[start : start + per_page]
-    total = len(items)
-    pages = (total + per_page - 1) // per_page if total else 0
+    pages = int(cache["pages"]) if cache.get("pages") is not None else (
+        (total + per_page - 1) // per_page if total else 0
+    )
 
     return PaginatedListings(
         items=page_items,

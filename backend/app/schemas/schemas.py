@@ -111,6 +111,9 @@ class SearchFilters(BaseModel):
     year_to: Optional[int] = None
     price_from: Optional[int] = None
     price_to: Optional[int] = None
+    # Валюта діапазону ціни: USD (AUTO.RIA currency=1) або UAH (currency=3).
+    # None = UAH (зворотна сумісність зі збереженими пошуками).
+    currency: Optional[str] = Field(default=None, pattern=r"^(USD|UAH)$")
     mileage_from: Optional[int] = None
     mileage_to: Optional[int] = None
     fuel: Optional[list[str]] = None
@@ -132,6 +135,8 @@ class SearchFilters(BaseModel):
     power_to: Optional[int] = None
     # Тільки оголошення, опубліковані за останні N днів (напр. 7 = «тільки нові»)
     published_within_days: Optional[int] = Field(default=None, ge=1, le=90)
+    # Для моніторингу / Telegram: лише оголошення за останні N годин
+    published_within_hours: Optional[int] = Field(default=None, ge=1, le=168)
 
 
 class SearchQueryCreate(BaseModel):

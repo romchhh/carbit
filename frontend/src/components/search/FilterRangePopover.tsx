@@ -4,6 +4,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { FilterRow } from "@/components/search/FilterRow";
 import { cn } from "@/lib/utils";
 
+type CurrencyOption = { value: string; label: string };
+
 type Props = {
   label: string;
   from: string;
@@ -13,6 +15,9 @@ type Props = {
   placeholderFrom?: string;
   placeholderTo?: string;
   suffix?: string;
+  currency?: string;
+  currencyOptions?: CurrencyOption[];
+  onCurrencyChange?: (currency: string) => void;
   className?: string;
 };
 
@@ -32,6 +37,9 @@ export function FilterRangePopover({
   placeholderFrom,
   placeholderTo,
   suffix,
+  currency,
+  currencyOptions,
+  onCurrencyChange,
   className,
 }: Props) {
   const panelId = useId();
@@ -66,7 +74,28 @@ export function FilterRangePopover({
           id={panelId}
           className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-xl border border-border bg-white p-4 shadow-card"
         >
-          <div className="mb-3 text-[12px] font-semibold text-ink">{label}</div>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="text-[12px] font-semibold text-ink">{label}</div>
+            {currencyOptions && onCurrencyChange && (
+              <div className="flex rounded-full border border-border bg-surface p-0.5">
+                {currencyOptions.map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onCurrencyChange(option.value)}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                      currency === option.value
+                        ? "bg-white text-ink shadow-sm"
+                        : "text-muted hover:text-ink",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <input
               value={from}

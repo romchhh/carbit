@@ -15,6 +15,11 @@ from app.services.telegram_channels.ingest import search_telegram_listings
 
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
 OLX_SEARCH_TIMEOUT_SECONDS = 45.0
+# Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»)
+SOURCE_POOL_CAP = 150
+TELEGRAM_POOL_CAP = 800
+TELEGRAM_MAX_SCAN = 3000
+AUTO_RIA_PAGE_SIZE = 50
 
 
 @dataclass(frozen=True)
@@ -103,30 +108,54 @@ def _sorted_merge_slice(
     sort_by: str,
 ) -> tuple[list[ListingOut], int]:
     merged_items: list[ListingOut] = []
+    seen: set[str] = set()
     total = 0
 
     for _, result in batches:
-        merged_items.extend(result.items)
         total += result.total
+        for item in result.items:
+            if item.id in seen:
+                continue
+            seen.add(item.id)
+            merged_items.append(item)
 
     merged_items = sort_listings(merged_items, sort_by)
     start = (page - 1) * per_page
     end = start + per_page
-    return merged_items[start:end], max(total, len(merged_items))
+    page_items = merged_items[start:end]
+    # Не завищуємо total вище того, що реально є в пулі для поточної видачі,
+    # інакше «Показати ще» крутиться в порожнечу.
+    pool_size = len(merged_items)
+    if page_items and len(page_items) < per_page:
+        total = start + len(page_items)
+    else:
+        total = max(total, pool_size)
+        # Якщо пул вичерпано — total = розмір пулу
+        if start + per_page >= pool_size:
+            total = pool_size
+    return page_items, total
 
 
-def _filter_listings_by_published_days(
-    items: list[ListingOut],
-    days: int | None,
-) -> list[ListingOut]:
-    if not days:
-        return items
-
+def _published_max_age(filters: SearchFilters):
     from datetime import timedelta
+
+    if filters.published_within_hours:
+        return timedelta(hours=filters.published_within_hours)
+    if filters.published_within_days:
+        return timedelta(days=filters.published_within_days)
+    return None
+
+
+def _filter_listings_by_published_age(
+    items: list[ListingOut],
+    max_age,
+) -> list[ListingOut]:
+    if not max_age:
+        return items
 
     from app.core.timezone import as_kyiv, now_kyiv
 
-    cutoff = now_kyiv() - timedelta(days=days)
+    cutoff = now_kyiv() - max_age
     filtered: list[ListingOut] = []
     for item in items:
         try:
@@ -136,6 +165,17 @@ def _filter_listings_by_published_days(
         if published >= cutoff:
             filtered.append(item)
     return filtered
+
+
+def _filter_listings_by_published_days(
+    items: list[ListingOut],
+    days: int | None,
+) -> list[ListingOut]:
+    if not days:
+        return items
+    from datetime import timedelta
+
+    return _filter_listings_by_published_age(items, timedelta(days=days))
 
 
 def _filter_page_by_published_within_days(
@@ -176,6 +216,7 @@ async def _search_single_source(
                 page=page,
                 per_page=per_page,
                 sort_by=sort_by,
+                max_scan=TELEGRAM_MAX_SCAN,
             )
         async with AsyncSessionLocal() as session:
             return await search_telegram_listings(
@@ -184,6 +225,7 @@ async def _search_single_source(
                 page=page,
                 per_page=per_page,
                 sort_by=sort_by,
+                max_scan=TELEGRAM_MAX_SCAN,
             )
     if source == "olx":
         return await search_olx(
@@ -199,6 +241,80 @@ async def _search_single_source(
         per_page=per_page,
         sort_by=sort_by,
         use_cache=use_cache,
+    )
+
+
+async def _fetch_source_pool(
+    source: str,
+    filters: SearchFilters,
+    *,
+    need: int,
+    sort_by: str,
+    use_cache: bool = True,
+    db=None,
+) -> PaginatedListings:
+    """Тягне пул оголошень з джерела (кілька сторінок AUTO.RIA за потреби)."""
+    need = max(need, 1)
+    if source == "telegram":
+        return await _search_single_source(
+            source,
+            filters,
+            page=1,
+            per_page=need,
+            sort_by=sort_by,
+            use_cache=use_cache,
+            db=db,
+        )
+
+    if source == "olx":
+        return await _search_single_source(
+            source,
+            filters,
+            page=1,
+            per_page=need,
+            sort_by=sort_by,
+            use_cache=use_cache,
+            db=db,
+        )
+
+    # AUTO.RIA: countpage ≤ 50 — збираємо кілька сторінок
+    collected: list[ListingOut] = []
+    seen: set[str] = set()
+    total = 0
+    page = 1
+    max_pages = max((need + AUTO_RIA_PAGE_SIZE - 1) // AUTO_RIA_PAGE_SIZE, 1)
+
+    while len(collected) < need and page <= max_pages:
+        chunk = await _search_single_source(
+            source,
+            filters,
+            page=page,
+            per_page=min(AUTO_RIA_PAGE_SIZE, need - len(collected)),
+            sort_by=sort_by,
+            use_cache=use_cache,
+            db=db,
+        )
+        total = max(total, chunk.total)
+        if not chunk.items:
+            break
+        for item in chunk.items:
+            if item.id in seen:
+                continue
+            seen.add(item.id)
+            collected.append(item)
+            if len(collected) >= need:
+                break
+        if len(chunk.items) < chunk.per_page:
+            break
+        page += 1
+
+    pages = (total + need - 1) // need if total else 0
+    return PaginatedListings(
+        items=collected[:need],
+        total=total,
+        page=1,
+        per_page=need,
+        pages=pages,
     )
 
 
@@ -252,17 +368,18 @@ async def search_listings_outcome(
     *,
     page: int = 1,
     per_page: int = 20,
-    sort_by: str = "price_asc",
+    sort_by: str = "newest",
     use_cache: bool = True,
     db=None,
 ) -> SearchListingsOutcome:
     sources = normalize_sources(filters.sources)
     source_statuses: list[SourceSearchStatus] = []
+    max_age = _published_max_age(filters)
 
     if len(sources) == 1:
         source = sources[0]
         try:
-            if filters.published_within_days:
+            if max_age:
                 raw = await _search_single_source(
                     source,
                     filters,
@@ -273,7 +390,7 @@ async def search_listings_outcome(
                     db=db,
                 )
                 filtered = sort_listings(
-                    _filter_listings_by_published_days(raw.items, filters.published_within_days),
+                    _filter_listings_by_published_age(raw.items, max_age),
                     sort_by,
                 )
                 start = (page - 1) * per_page
@@ -308,20 +425,19 @@ async def search_listings_outcome(
         )
         return SearchListingsOutcome(result=result, sources=source_statuses)
 
-    # Для «тільки нові» тягнемо більше з джерел, бо частина відсіється по даті
-    freshness_days = filters.published_within_days
-    fetch_multiplier = 3 if freshness_days else 1
-    per_source_fetch = (per_page if page == 1 else per_page * page) * fetch_multiplier
+    # Для «Шукати всі» / «тільки нові» тягнемо пул з кожного джерела і сортуємо разом
+    fetch_multiplier = 3 if max_age else 2
+    pool_need = min(SOURCE_POOL_CAP, per_page * max(page, 1) * fetch_multiplier)
+    telegram_need = min(TELEGRAM_POOL_CAP, max(pool_need, per_page * max(page, 1) * 5))
     errors: list[Exception] = []
     successful: list[tuple[str, PaginatedListings]] = []
 
     async def run_auto_ria() -> PaginatedListings | Exception:
         try:
-            return await _search_single_source(
+            return await _fetch_source_pool(
                 "auto_ria",
                 filters,
-                page=1,
-                per_page=per_source_fetch,
+                need=pool_need,
                 sort_by=sort_by,
                 use_cache=use_cache,
             )
@@ -329,22 +445,33 @@ async def search_listings_outcome(
             return exc
 
     async def run_olx() -> tuple[PaginatedListings, str | None]:
-        return await _search_olx_safe(
-            filters,
-            page=1,
-            per_page=per_source_fetch,
-            sort_by=sort_by,
-            use_cache=use_cache,
-        )
+        try:
+            result = await asyncio.wait_for(
+                _fetch_source_pool(
+                    "olx",
+                    filters,
+                    need=pool_need,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                ),
+                timeout=OLX_SEARCH_TIMEOUT_SECONDS,
+            )
+            return result, None
+        except asyncio.TimeoutError:
+            return _empty_page(1, pool_need), f"таймаут {OLX_SEARCH_TIMEOUT_SECONDS:.0f}s"
+        except OlxError as exc:
+            return _empty_page(1, pool_need), str(exc)
+        except Exception as exc:
+            return _empty_page(1, pool_need), str(exc)
 
     async def run_telegram() -> PaginatedListings | Exception:
         try:
-            return await _search_single_source(
+            return await _fetch_source_pool(
                 "telegram",
                 filters,
-                page=1,
-                per_page=per_source_fetch,
+                need=telegram_need,
                 sort_by=sort_by,
+                use_cache=use_cache,
                 db=db,
             )
         except Exception as exc:
@@ -408,10 +535,10 @@ async def search_listings_outcome(
                 SourceSearchStatus(source="Telegram", item_count=len(telegram_out.items))
             )
 
-    if freshness_days:
+    if max_age:
         filtered_batches: list[tuple[str, PaginatedListings]] = []
         for source, result in successful:
-            items = _filter_listings_by_published_days(result.items, freshness_days)
+            items = _filter_listings_by_published_age(result.items, max_age)
             filtered_batches.append(
                 (
                     source,
@@ -426,21 +553,12 @@ async def search_listings_outcome(
             )
         successful = filtered_batches
 
-    if page == 1:
-        sorted_batches = [
-            (source, sort_listings(list(result.items), sort_by))
-            for source, result in successful
-            if result.items
-        ]
-        page_items = _interleave_by_source(sorted_batches, per_page=per_page)
-        total = sum(result.total for _, result in successful)
-    else:
-        page_items, total = _sorted_merge_slice(
-            successful,
-            page=page,
-            per_page=per_page,
-            sort_by=sort_by,
-        )
+    page_items, total = _sorted_merge_slice(
+        successful,
+        page=page,
+        per_page=per_page,
+        sort_by=sort_by,
+    )
 
     if not page_items:
         if errors and not successful:
@@ -469,8 +587,9 @@ async def search_listings(
     *,
     page: int = 1,
     per_page: int = 20,
-    sort_by: str = "price_asc",
+    sort_by: str = "newest",
     use_cache: bool = True,
+    db=None,
 ) -> PaginatedListings:
     outcome = await search_listings_outcome(
         filters,
@@ -478,5 +597,6 @@ async def search_listings(
         per_page=per_page,
         sort_by=sort_by,
         use_cache=use_cache,
+        db=db,
     )
     return outcome.result

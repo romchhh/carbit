@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-USD_TO_UAH = 41
+USD_TO_UAH = 45
 EUR_TO_UAH = 44
 
 
@@ -17,10 +17,18 @@ def normalize_currency(currency: str | None) -> str:
     return cur
 
 
+def resolve_filter_currency(currency: str | None) -> str:
+    """Валюта діапазону ціни у фільтрі. Без значення — UAH (старі збережені пошуки)."""
+    if not currency:
+        return "UAH"
+    cur = normalize_currency(currency)
+    return cur if cur in {"USD", "UAH"} else "UAH"
+
+
 def infer_currency(amount: float, currency: str | None, text: str = "") -> str:
     """
     Визначає валюту оголошення.
-    Пошук користувача в грн — тому USD/EUR конвертуємо перед порівнянням.
+    Ціни в БД/результатах зберігаємо в грн — USD/EUR конвертуємо перед порівнянням.
     """
     if currency:
         return normalize_currency(currency)
@@ -51,3 +59,10 @@ def to_uah(amount: float | int | None, currency: str | None, *, text: str = "") 
     if cur == "EUR":
         return int(round(value * EUR_TO_UAH))
     return int(round(value))
+
+
+def filter_price_to_uah(amount: int | None, currency: str | None) -> int | None:
+    """Переводить межу фільтра ціни в грн для пост-фільтрів (OLX/Telegram/БД)."""
+    if amount is None:
+        return None
+    return to_uah(amount, resolve_filter_currency(currency))

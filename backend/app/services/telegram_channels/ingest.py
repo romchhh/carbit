@@ -54,6 +54,7 @@ async def ingest_telegram_listing(
             listing_id=listing.id,
             notify=notify,
             user=user,
+            max_notification_hours=parser_settings.get("notification_max_published_hours", 1),
         )
         if is_new:
             new_total += 1
@@ -69,8 +70,8 @@ async def search_telegram_listings(
     *,
     page: int = 1,
     per_page: int = 20,
-    sort_by: str = "price_asc",
-    max_scan: int = 500,
+    sort_by: str = "newest",
+    max_scan: int = 3000,
 ) -> PaginatedListings:
     rows = await db.scalars(
         select(Listing)

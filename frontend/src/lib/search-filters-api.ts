@@ -7,6 +7,7 @@ export type BackendSearchFilters = {
   year_to?: number | null;
   price_from?: number | null;
   price_to?: number | null;
+  currency?: "USD" | "UAH" | null;
   mileage_from?: number | null;
   mileage_to?: number | null;
   fuel?: string[] | null;
@@ -71,6 +72,7 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
     year_to: parseNumber(filters.yearTo),
     price_from: parseNumber(filters.priceFrom),
     price_to: parseNumber(filters.priceTo),
+    currency: filters.currency || "USD",
     mileage_from: parseThousandsKm(filters.mileageFrom),
     mileage_to: parseThousandsKm(filters.mileageTo),
     fuel: filters.fuels.length ? [...filters.fuels] : null,

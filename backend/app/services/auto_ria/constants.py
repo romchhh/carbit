@@ -9,6 +9,15 @@ DEFAULT_CATEGORY_ID = 1
 CURRENCY_UAH = 3
 CURRENCY_USD = 1
 
+# Період подачі (top) — https://developers.ria.com auto search
+# 0=весь час, 1=година, 8=3год, 9=6год, 14=12год, 11=доба, 2=сьогодні, …
+AUTO_RIA_TOP_HOUR = 1
+AUTO_RIA_TOP_3H = 8
+AUTO_RIA_TOP_6H = 9
+AUTO_RIA_TOP_12H = 14
+AUTO_RIA_TOP_24H = 11
+AUTO_RIA_TOP_TODAY = 2
+
 FUEL_NAME_TO_ID: dict[str, int] = {
     "бензин": 1,
     "дизель": 2,

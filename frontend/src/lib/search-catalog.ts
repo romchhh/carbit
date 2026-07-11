@@ -21,6 +21,8 @@ export type SearchFilterState = {
   yearTo: string;
   priceFrom: string;
   priceTo: string;
+  /** Валюта діапазону ціни: USD (основна) або UAH */
+  currency: "USD" | "UAH";
   mileageFrom: string;
   mileageTo: string;
   fuels: string[];
@@ -60,6 +62,16 @@ export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
   { value: "import", label: "Під пригон" },
 ];
 
+export const PRICE_CURRENCY_OPTIONS = [
+  { value: "USD" as const, label: "$", suffix: "$" },
+  { value: "UAH" as const, label: "грн", suffix: "грн" },
+] as const;
+
+export const DEFAULT_PRICE_BY_CURRENCY = {
+  USD: { from: "10 000", to: "22 000" },
+  UAH: { from: "400 000", to: "900 000" },
+} as const;
+
 export const DEFAULT_FILTERS: SearchFilterState = {
   name: "",
   category: "all",
@@ -69,8 +81,9 @@ export const DEFAULT_FILTERS: SearchFilterState = {
   model: "",
   yearFrom: "2018",
   yearTo: "2024",
-  priceFrom: "400 000",
-  priceTo: "900 000",
+  priceFrom: DEFAULT_PRICE_BY_CURRENCY.USD.from,
+  priceTo: DEFAULT_PRICE_BY_CURRENCY.USD.to,
+  currency: "USD",
   mileageFrom: "",
   mileageTo: "",
   fuels: [],
@@ -141,8 +154,21 @@ function regionMatches(listingRegion: string, filterRegion: string): boolean {
 export function filterListings(items: SearchResult[], filters: SearchFilterState): SearchResult[] {
   const yearFrom = parseNumberInput(filters.yearFrom);
   const yearTo = parseNumberInput(filters.yearTo);
-  const priceFrom = parseNumberInput(filters.priceFrom);
-  const priceTo = parseNumberInput(filters.priceTo);
+  const rawPriceFrom = parseNumberInput(filters.priceFrom);
+  const rawPriceTo = parseNumberInput(filters.priceTo);
+  const usdToUah = 45;
+  const priceFrom =
+    rawPriceFrom == null
+      ? null
+      : filters.currency === "USD"
+        ? rawPriceFrom * usdToUah
+        : rawPriceFrom;
+  const priceTo =
+    rawPriceTo == null
+      ? null
+      : filters.currency === "USD"
+        ? rawPriceTo * usdToUah
+        : rawPriceTo;
   const mileageFrom = parseThousandsKm(filters.mileageFrom) ?? parseNumberInput(filters.mileageFrom);
   const mileageTo = parseThousandsKm(filters.mileageTo) ?? parseNumberInput(filters.mileageTo);
 

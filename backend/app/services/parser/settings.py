@@ -16,6 +16,7 @@ DEFAULT_SETTINGS = {
     "notify_telegram": True,
     "telegram_enabled": True,
     "telegram_history_limit": 100,
+    "notification_max_published_hours": 1,
 }
 
 
@@ -52,10 +53,22 @@ async def get_filter_cache(filter_key: str) -> dict | None:
         return None
 
 
-async def set_filter_cache(filter_key: str, listing_ids: list[str], *, ttl_seconds: int) -> None:
+async def set_filter_cache(
+    filter_key: str,
+    listing_ids: list[str],
+    *,
+    ttl_seconds: int,
+    total: int | None = None,
+    pages: int | None = None,
+) -> None:
     redis = await get_redis()
-    payload = json.dumps(
-        {"listing_ids": listing_ids, "fetched_at": now_kyiv().isoformat()},
-        ensure_ascii=False,
-    )
-    await redis.setex(f"{CACHE_PREFIX}{filter_key}", ttl_seconds, payload)
+    payload: dict = {
+        "listing_ids": listing_ids,
+        "fetched_at": now_kyiv().isoformat(),
+    }
+    if total is not None:
+        payload["total"] = total
+    if pages is not None:
+        payload["pages"] = pages
+    await redis.setex(f"{CACHE_PREFIX}{filter_key}", ttl_seconds, json.dumps(payload, ensure_ascii=False))
+
