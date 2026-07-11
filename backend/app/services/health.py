@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 
-from app.core.redis import get_redis
 from sqlalchemy import text
 
 from app.core.database import engine
+from app.core.redis import get_redis
 
 HEARTBEAT_TTL = 300
 HEARTBEAT_PREFIX = "heartbeat:"
@@ -41,7 +42,20 @@ async def check_database() -> bool:
 async def check_kv() -> bool:
     try:
         redis = await get_redis()
-        await redis.setex("health:ping", 30, "1")
-        return (await redis.get("health:ping")) == "1"
+        return await redis.ping()
+    except Exception:
+        return False
+
+
+async def check_database_fast(timeout: float = 1.5) -> bool:
+    try:
+        return await asyncio.wait_for(check_database(), timeout=timeout)
+    except Exception:
+        return False
+
+
+async def check_kv_fast(timeout: float = 1.5) -> bool:
+    try:
+        return await asyncio.wait_for(check_kv(), timeout=timeout)
     except Exception:
         return False

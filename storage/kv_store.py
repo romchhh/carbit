@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 import time
 from asyncio import to_thread
 from pathlib import Path
 from typing import Protocol
+
+logger = logging.getLogger(__name__)
 
 
 class KVClient(Protocol):
@@ -15,6 +18,7 @@ class KVClient(Protocol):
     async def delete(self, key: str) -> None: ...
     async def exists(self, key: str) -> int: ...
     async def ttl(self, key: str) -> int: ...
+    async def ping(self) -> bool: ...
 
 
 def resolve_sqlite_path(url: str, root_dir: Path) -> Path:
@@ -106,6 +110,13 @@ class SQLiteKV:
     async def ttl(self, key: str) -> int:
         return await to_thread(self._ttl_sync, key)
 
+    async def ping(self) -> bool:
+        try:
+            await self.setex("kv:ping", 10, "1")
+            return (await self.get("kv:ping")) == "1"
+        except Exception:
+            return False
+
 
 class RedisKV:
     """Thin async wrapper around redis.asyncio."""
@@ -113,7 +124,13 @@ class RedisKV:
     def __init__(self, url: str):
         import redis.asyncio as redis
 
-        self._client = redis.from_url(url, decode_responses=True)
+        self._client = redis.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=1.5,
+            socket_timeout=1.5,
+            retry_on_timeout=False,
+        )
 
     async def setex(self, key: str, ttl: int, value: str) -> None:
         await self._client.setex(key, ttl, value)
@@ -130,8 +147,21 @@ class RedisKV:
     async def ttl(self, key: str) -> int:
         return int(await self._client.ttl(key))
 
+    async def ping(self) -> bool:
+        try:
+            return bool(await self._client.ping())
+        except Exception:
+            return False
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
 
 _clients: dict[str, KVClient] = {}
+
+
+def _sqlite_fallback(root_dir: Path) -> SQLiteKV:
+    return SQLiteKV(resolve_sqlite_path("sqlite://database/kv.db", root_dir))
 
 
 def get_kv_client(url: str, root_dir: Path) -> KVClient:
@@ -139,12 +169,37 @@ def get_kv_client(url: str, root_dir: Path) -> KVClient:
         return _clients[url]
 
     if url.startswith("redis://") or url.startswith("rediss://"):
-        client: KVClient = RedisKV(url)
+        try:
+            client: KVClient = RedisKV(url)
+        except Exception as exc:
+            logger.warning("Redis client init failed (%s) — falling back to SQLite KV", exc)
+            client = _sqlite_fallback(root_dir)
+            _clients[url] = client
+            return client
     elif url.startswith("sqlite://"):
-        db_path = resolve_sqlite_path(url, root_dir)
-        client = SQLiteKV(db_path)
+        client = SQLiteKV(resolve_sqlite_path(url, root_dir))
     else:
         raise ValueError(f"Unsupported REDIS_URL scheme: {url}")
 
     _clients[url] = client
+    return client
+
+
+async def open_kv_client(url: str, root_dir: Path) -> KVClient:
+    """Create KV client and verify Redis connectivity; fall back to SQLite if needed."""
+    client = get_kv_client(url, root_dir)
+    if isinstance(client, RedisKV):
+        try:
+            ok = await client.ping()
+        except Exception as exc:
+            logger.warning("Redis ping failed (%s) — falling back to SQLite KV", exc)
+            ok = False
+        if not ok:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
+            fallback = _sqlite_fallback(root_dir)
+            _clients[url] = fallback
+            return fallback
     return client

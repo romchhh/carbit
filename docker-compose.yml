@@ -40,14 +40,10 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///database/autoradar.db}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # У Docker завжди ходимо в сервіс redis (не sqlite з .env).
+      REDIS_URL: redis://redis:6379/0
       TELEGRAM_MEDIA_DIR: /app/media
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
-    command:
-      - sh
-      - -c
-      - uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $${UVICORN_WORKERS:-1}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
@@ -55,13 +51,13 @@ services:
       - ./media:/app/media
     depends_on:
       redis:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      test: ["CMD", "curl", "-fsS", "--max-time", "3", "http://localhost:8000/health"]
+      interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 60s
 
   bot:
     build:
@@ -74,7 +70,7 @@ services:
     environment:
       TZ: Europe/Kyiv
       BACKEND_URL: http://backend:8000/api/v1
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: redis://redis:6379/0
     entrypoint: ["python", "main.py"]
     working_dir: /app/bot
     volumes:
@@ -95,8 +91,7 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///database/autoradar.db}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: redis://redis:6379/0
       TELEGRAM_MEDIA_DIR: /app/media
     entrypoint: ["python", "main.py"]
     working_dir: /app/worker
@@ -108,12 +103,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import asyncio,sys; sys.path.insert(0,'/app/backend'); from app.services.health import heartbeat_age_seconds; age=asyncio.run(heartbeat_age_seconds('worker')); raise SystemExit(0 if age is not None and age < 600 else 1)\""]
-      interval: 60s
-      timeout: 15s
-      retries: 3
-      start_period: 120s
 
   telegram-worker:
     build:
@@ -125,8 +114,7 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///database/autoradar.db}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: redis://redis:6379/0
       TELEGRAM_MEDIA_DIR: /app/media
     entrypoint: ["python", "main.py"]
     working_dir: /app/telegram_worker
