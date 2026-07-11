@@ -10,7 +10,9 @@ def now_kyiv() -> datetime:
     return datetime.now(KYIV_TZ)
 
 
-def as_kyiv(dt: datetime) -> datetime:
+def as_kyiv(dt: datetime | None) -> datetime:
+    if dt is None:
+        return now_kyiv()
     if dt.tzinfo is None:
         return dt.replace(tzinfo=KYIV_TZ)
     return dt.astimezone(KYIV_TZ)

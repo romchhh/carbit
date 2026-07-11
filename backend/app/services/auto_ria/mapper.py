@@ -237,7 +237,10 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
 
 
 def _listing_published_key(item: ListingOut) -> datetime:
-    return as_kyiv(item.published_at)
+    try:
+        return as_kyiv(item.published_at)
+    except Exception:
+        return datetime(1970, 1, 1, tzinfo=KYIV_TZ)
 
 
 def sort_listings(items: list[ListingOut], sort_by: str) -> list[ListingOut]:

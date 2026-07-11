@@ -466,13 +466,14 @@ async def search_listings_outcome(
 
     async def run_telegram() -> PaginatedListings | Exception:
         try:
+            # Окрема сесія: AsyncSession не можна ділити між asyncio.gather
             return await _fetch_source_pool(
                 "telegram",
                 filters,
                 need=telegram_need,
                 sort_by=sort_by,
                 use_cache=use_cache,
-                db=db,
+                db=None,
             )
         except Exception as exc:
             return exc

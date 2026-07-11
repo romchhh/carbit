@@ -113,7 +113,7 @@ class SearchFilters(BaseModel):
     price_to: Optional[int] = None
     # Валюта діапазону ціни: USD (AUTO.RIA currency=1) або UAH (currency=3).
     # None = UAH (зворотна сумісність зі збереженими пошуками).
-    currency: Optional[str] = Field(default=None, pattern=r"^(USD|UAH)$")
+    currency: Optional[str] = None
     mileage_from: Optional[int] = None
     mileage_to: Optional[int] = None
     fuel: Optional[list[str]] = None
@@ -137,6 +137,20 @@ class SearchFilters(BaseModel):
     published_within_days: Optional[int] = Field(default=None, ge=1, le=90)
     # Для моніторингу / Telegram: лише оголошення за останні N годин
     published_within_hours: Optional[int] = Field(default=None, ge=1, le=168)
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: object) -> str | None:
+        if value is None or value == "":
+            return None
+        cur = str(value).strip().upper()
+        if cur in {"USD", "UAH"}:
+            return cur
+        if cur in {"$", "US"}:
+            return "USD"
+        if cur in {"ГРН", "UA"}:
+            return "UAH"
+        return None
 
 
 class SearchQueryCreate(BaseModel):

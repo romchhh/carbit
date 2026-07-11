@@ -104,7 +104,10 @@ async def get_cached_preview_results(
         for lid in listing_ids
         if lid in listings
     ]
-    items = _sort_items(paired, sort_by)
+    try:
+        items = _sort_items(paired, sort_by)
+    except Exception:
+        items = [item for item, _ in paired]
 
     # Старий кеш без total ламав «Показати ще» (total == len(ids) ≈ 20).
     # Без збереженого total не використовуємо кеш — йдемо в живий пошук.
@@ -112,7 +115,10 @@ async def get_cached_preview_results(
     if cached_total is None:
         return None
 
-    total = int(cached_total)
+    try:
+        total = int(cached_total)
+    except (TypeError, ValueError):
+        return None
     start = (page - 1) * per_page
     page_items = items[start : start + per_page]
     pages = int(cache["pages"]) if cache.get("pages") is not None else (
