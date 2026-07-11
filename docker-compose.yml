@@ -1,9 +1,12 @@
 name: carbit
 
 services:
+  # Опційно: docker compose --profile cache up -d
+  # Тоді в .env / environment постав REDIS_URL=redis://redis:6379/0
   redis:
     image: redis:7-alpine
     container_name: carbit-redis
+    profiles: ["cache"]
     restart: unless-stopped
     volumes:
       - redis_data:/data
@@ -40,8 +43,8 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      # У Docker завжди ходимо в сервіс redis (не sqlite з .env).
-      REDIS_URL: redis://redis:6379/0
+      # Стабільно: SQLite KV. Redis — лише з profile cache + REDIS_URL=redis://redis:6379/0
+      REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
       TELEGRAM_MEDIA_DIR: /app/media
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
     ports:
@@ -49,15 +52,12 @@ services:
     volumes:
       - ./database:/app/database
       - ./media:/app/media
-    depends_on:
-      redis:
-        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "3", "http://localhost:8000/health"]
-      interval: 15s
+      interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 60s
+      retries: 6
+      start_period: 45s
 
   bot:
     build:
@@ -70,15 +70,13 @@ services:
     environment:
       TZ: Europe/Kyiv
       BACKEND_URL: http://backend:8000/api/v1
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
     entrypoint: ["python", "main.py"]
     working_dir: /app/bot
     volumes:
       - ./database:/app/database
     depends_on:
       backend:
-        condition: service_healthy
-      redis:
         condition: service_healthy
 
   worker:
@@ -91,7 +89,7 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
       TELEGRAM_MEDIA_DIR: /app/media
     entrypoint: ["python", "main.py"]
     working_dir: /app/worker
@@ -100,8 +98,6 @@ services:
       - ./media:/app/media
     depends_on:
       backend:
-        condition: service_healthy
-      redis:
         condition: service_healthy
 
   telegram-worker:
@@ -114,7 +110,7 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
       TELEGRAM_MEDIA_DIR: /app/media
     entrypoint: ["python", "main.py"]
     working_dir: /app/telegram_worker
@@ -123,8 +119,6 @@ services:
       - ./media:/app/media
     depends_on:
       backend:
-        condition: service_healthy
-      redis:
         condition: service_healthy
 
   frontend:

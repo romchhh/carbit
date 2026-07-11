@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Secrets already validated in entrypoint; keep a second check for non-Docker runs.
     try:
         assert_production_secrets(
             debug=settings.DEBUG,
@@ -28,6 +29,7 @@ async def lifespan(_app: FastAPI):
         logger.error("%s", exc)
         print(f"FATAL: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
+    logger.info("KV REDIS_URL=%s", settings.REDIS_URL)
     yield
 
 
