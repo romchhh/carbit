@@ -29,7 +29,7 @@ async def authorize() -> None:
     print(f"📱 Телефон: ...{settings.phone[-4:]}")
     print(f"📁 Сесія: {settings.session_file}")
     print(f"📡 API ID: {settings.api_id}")
-    print(f"📢 Каналів у конфігу: {len(settings.default_channels)}")
+    print("📢 Канали: адмінка /admin/channels")
 
     client = build_client()
     await client.connect()

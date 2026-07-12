@@ -97,8 +97,8 @@ export const auth = {
   telegramRegisterUrl: () => request<{ bot_url: string; bot_username: string }>("/auth/telegram/register-url"),
   googleLoginUrl: () => `${apiUrl()}/auth/google`,
   me: () => request<User>("/auth/me"),
-  updateProfile: (name: string) =>
-    request<User>("/auth/me", { method: "PATCH", body: JSON.stringify({ name }) }),
+  updateProfile: (body: { name?: string; preferred_currency?: string }) =>
+    request<User>("/auth/me", { method: "PATCH", body: JSON.stringify(body) }),
 };
 
 // ── Users ─────────────────────────────────────────────

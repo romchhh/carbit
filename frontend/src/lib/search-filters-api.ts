@@ -7,7 +7,7 @@ export type BackendSearchFilters = {
   year_to?: number | null;
   price_from?: number | null;
   price_to?: number | null;
-  currency?: "USD" | "UAH" | null;
+  currency?: "USD" | "UAH" | "EUR" | null;
   mileage_from?: number | null;
   mileage_to?: number | null;
   fuel?: string[] | null;

@@ -1,19 +1,16 @@
 """
 Конфігурація парсера Telegram-каналів (.env у корені проєкту).
+
+Список каналів більше не з env — керується в адмінці (таблиця telegram_channels).
 """
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
-
-
-def _channels_from_env() -> list[str]:
-    raw = os.getenv("TELEGRAM_CHANNELS") or os.getenv("DEFAULT_CHANNELS") or ""
-    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 @dataclass
@@ -45,7 +42,6 @@ class Settings:
     )
 
     webhook_url: str = os.getenv("WEBHOOK_URL", "")
-    default_channels: list = field(default_factory=_channels_from_env)
     max_photos_per_listing: int = int(os.getenv("TELEGRAM_MAX_PHOTOS", "5"))
 
 

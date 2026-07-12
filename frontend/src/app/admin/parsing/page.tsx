@@ -168,6 +168,9 @@ export default function AdminParsingPage() {
           <Link href="/admin/system" className="text-[12px] font-semibold text-emerald hover:underline">
             Стан системи →
           </Link>
+          <Link href="/admin/channels" className="text-[12px] font-semibold text-emerald hover:underline">
+            Telegram-канали →
+          </Link>
           <button
             type="button"
             onClick={() => void handleRun()}

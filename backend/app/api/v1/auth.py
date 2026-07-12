@@ -357,6 +357,9 @@ async def update_me(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.name = body.name
+    if body.name is not None:
+        user.name = body.name
+    if body.preferred_currency is not None:
+        user.preferred_currency = body.preferred_currency
     await db.flush()
     return user_out(user)

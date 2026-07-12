@@ -706,9 +706,19 @@ def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
         return False
 
     price = _listing_price_uah(listing)
-    if params.price_from is not None and price is not None and price < params.price_from:
+    from app.services.currency import to_uah
+
+    price_from = params.price_from
+    price_to = params.price_to
+    if (params.currency or "UAH").upper() == "USD":
+        if price_from is not None:
+            price_from = to_uah(price_from, "USD")
+        if price_to is not None:
+            price_to = to_uah(price_to, "USD")
+
+    if price_from is not None and price is not None and price < price_from:
         return False
-    if params.price_to is not None and price is not None and price > params.price_to:
+    if price_to is not None and price is not None and price > price_to:
         return False
 
     year = _listing_year(listing)

@@ -104,6 +104,24 @@ export const adminApi = {
   triggerParserRun: () => request<AdminParseRun>("/admin/parser/run", { method: "POST" }),
   triggerParserRunSource: (source: "auto_ria" | "olx" | "telegram") =>
     request<AdminParseRun>(`/admin/parser/run/${source}`, { method: "POST" }),
+  telegramChannels: () => request<AdminTelegramChannel[]>("/admin/parser/channels"),
+  createTelegramChannel: (body: { username: string; title?: string; enabled?: boolean }) =>
+    request<AdminTelegramChannel>("/admin/parser/channels", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateTelegramChannel: (
+    id: string,
+    body: { username?: string; title?: string | null; enabled?: boolean; sort_order?: number },
+  ) =>
+    request<AdminTelegramChannel>(`/admin/parser/channels/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteTelegramChannel: (id: string) =>
+    request<void>(`/admin/parser/channels/${id}`, { method: "DELETE" }),
+  telegramChannelListings: (id: string, limit = 40) =>
+    request<Array<Record<string, unknown>>>(`/admin/parser/channels/${id}/listings?limit=${limit}`),
   analytics: () => request<AdminAnalytics>("/admin/analytics"),
   system: () => request<AdminSystem>("/admin/system"),
   listingsBrowse: (page = 1, opts: { source?: string; search?: string; duplicates_only?: boolean } = {}) => {
@@ -172,6 +190,16 @@ export interface AdminParserNotification {
   listing_source: string | null;
   listing_url: string | null;
   listing_image: string | null;
+}
+
+export interface AdminTelegramChannel {
+  id: string;
+  username: string;
+  title: string | null;
+  enabled: boolean;
+  sort_order: number;
+  listings_count: number;
+  created_at: string;
 }
 
 export interface AdminAnalytics {

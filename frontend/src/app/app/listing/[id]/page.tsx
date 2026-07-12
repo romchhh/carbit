@@ -14,11 +14,11 @@ import { Button } from "@/components/ui/Button";
 import { IconArrowLeft, IconGlobe, IconHeart } from "@/components/icons";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
-  formatPrice,
   formatMileage,
   cn,
   publishedAgoLabel,
 } from "@/lib/utils";
+import { formatPriceFromUah, resolveDisplayCurrency } from "@/lib/display-currency";
 import {
   listingAttributionUrl,
   listingOpenLabel,
@@ -236,7 +236,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
             )}
             <div className="mt-3 text-[28px] font-black leading-none tracking-tight text-ink">
-              {formatPrice(listing.price, listing.currency)}
+              {formatPriceFromUah(listing.price, resolveDisplayCurrency(user?.preferred_currency))}
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <a href={listing.url} target="_blank" rel="noopener noreferrer">
@@ -320,7 +320,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
             )}
             <div className="mt-4 text-[32px] font-black leading-none text-ink">
-              {formatPrice(listing.price, listing.currency)}
+              {formatPriceFromUah(listing.price, resolveDisplayCurrency(user?.preferred_currency))}
             </div>
             <div className="mt-4">
               <SourceBadge source={listing.source} variant="outline" />

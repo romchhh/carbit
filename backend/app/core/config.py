@@ -82,7 +82,6 @@ class Settings(BaseSettings):
     TELETHON_API_HASH: str = ""
     TELETHON_NUMBER: str = ""
     TELETHON_SESSION_NAME: str = "carbit_parser"
-    TELEGRAM_CHANNELS: str = ""
     TELEGRAM_MEDIA_DIR: str = "media"
     TELEGRAM_ENABLED: bool = True
     TELEGRAM_MAX_PHOTOS: int = 5

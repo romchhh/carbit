@@ -11,7 +11,9 @@ import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { saveRecentListing } from "@/lib/recent-listings";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
-import { cn, formatMileage, formatPrice, publishedAgoLabel } from "@/lib/utils";
+import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
+import { formatPriceFromUah, resolveDisplayCurrency } from "@/lib/display-currency";
+import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -49,6 +51,7 @@ export function ListingsHorizontalCarousel({
   className,
   id,
 }: Props) {
+  const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -237,7 +240,7 @@ export function ListingsHorizontalCarousel({
                         {listing.title}
                       </h3>
                       <p className="mt-2 text-[20px] font-semibold tracking-tight text-ink">
-                        {formatPrice(listing.price, listing.currency)}
+                        {formatPriceFromUah(listing.price, resolveDisplayCurrency(user?.preferred_currency))}
                       </p>
                       <p className="mt-1.5 text-[12px] leading-snug text-muted">
                         {[

@@ -18,7 +18,9 @@ import {
 } from "@/lib/listing-source";
 import { hasVinCheck } from "@/lib/vin-check";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
-import { cn, formatMileage, formatPrice, publishedAgoLabel } from "@/lib/utils";
+import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
+import { formatPriceFromUah, resolveDisplayCurrency } from "@/lib/display-currency";
+import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -41,6 +43,10 @@ export function ListingDetailModal({
   onToggleFavorite,
   favoriteError,
 }: Props) {
+  const { user } = useAuth();
+  const priceLabel = listing
+    ? formatPriceFromUah(listing.price, resolveDisplayCurrency(user?.preferred_currency))
+    : "";
   const [photoIndex, setPhotoIndex] = useState(0);
   const galleryRef = useRef<HTMLDivElement>(null);
   const photoIndexRef = useRef(photoIndex);
@@ -343,7 +349,7 @@ export function ListingDetailModal({
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-[26px] font-black leading-none text-ink">
-                      {formatPrice(listing.price, listing.currency)}
+                      {priceLabel}
                     </div>
                   </div>
                 </div>
@@ -400,7 +406,7 @@ export function ListingDetailModal({
             <div className="flex flex-wrap items-end justify-between gap-3 sm:hidden">
               <div>
                 <div className="text-[28px] font-black leading-none text-ink">
-                  {formatPrice(listing.price, listing.currency)}
+                  {priceLabel}
                 </div>
                 <p className="mt-1.5 text-[12px] text-muted">
                   {listing.brand} {listing.model}

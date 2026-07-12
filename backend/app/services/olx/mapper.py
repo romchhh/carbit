@@ -47,9 +47,16 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
     if filters.region and norm_text(filters.region) not in ("вся україна", ""):
         params.city_query = REGION_TO_CITY_QUERY.get(norm_text(filters.region), slugify_region(filters.region))
 
-    params.price_from = filter_price_to_uah(filters.price_from, filters.currency)
-    params.price_to = filter_price_to_uah(filters.price_to, filters.currency)
-    params.currency = resolve_filter_currency(filters.currency)
+    filter_cur = resolve_filter_currency(filters.currency)
+    if filter_cur == "USD":
+        params.price_from = filters.price_from
+        params.price_to = filters.price_to
+        params.currency = "USD"
+    else:
+        # UAH / EUR → суми в грн для URL і пост-фільтра
+        params.price_from = filter_price_to_uah(filters.price_from, filter_cur)
+        params.price_to = filter_price_to_uah(filters.price_to, filter_cur)
+        params.currency = "UAH"
     params.year_from = filters.year_from
     params.year_to = filters.year_to
 

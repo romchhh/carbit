@@ -47,9 +47,9 @@ async def run_telegram_channels_cycle(
         log.append("Telegram: немає TELETHON_API_ID / TELETHON_API_HASH")
         return 0
 
-    channels = get_parser_channels()
+    channels = await get_parser_channels(db)
     if not channels:
-        log.append("Telegram: немає каналів у TELEGRAM_CHANNELS")
+        log.append("Telegram: немає каналів — додайте в адмінці /admin/channels")
         return 0
 
     limit = int(settings.get("telegram_history_limit", 100))

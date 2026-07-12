@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Notification, NotificationType, User, Listing, SearchQuery
 from app.schemas.schemas import NotificationOut
+from app.services.currency import format_price_uah, resolve_display_currency
 from app.services.listings.serialize import listing_to_out
 from app.services.notifications.freshness import (
     coerce_notification_max_hours,
@@ -34,15 +35,20 @@ async def create_listing_notification(
         else listing.url
     )
 
+    display_currency = resolve_display_currency(getattr(user, "preferred_currency", None))
+    price_label = format_price_uah(listing.price, display_currency)
+
     notification = Notification(
         user_id=user.id,
         type=NotificationType.listing_match,
         title=listing.title,
-        body=f"{listing.year} · {listing.mileage:,} км · {listing.price:,} грн · {listing.region}",
+        body=f"{listing.year} · {listing.mileage:,} км · {price_label} · {listing.region}",
         listing_id=listing.id,
         search_id=search.id if search else None,
         payload={
             "price": listing.price,
+            "display_price": price_label,
+            "preferred_currency": display_currency,
             "year": listing.year,
             "mileage": listing.mileage,
             "region": listing.region,
@@ -82,6 +88,8 @@ async def create_listing_notification(
                 "mileage": listing.mileage,
                 "price": listing.price,
                 "currency": listing.currency,
+                "display_price": price_label,
+                "preferred_currency": display_currency,
                 "region": listing.region,
                 "fuel": listing.fuel,
                 "transmission": listing.transmission,

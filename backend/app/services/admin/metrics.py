@@ -137,10 +137,16 @@ def integration_status() -> list[dict]:
     ]
 
 
-def telegram_channel_count() -> int:
+async def telegram_channel_count(db: AsyncSession) -> int:
     try:
-        from app.services.telegram_channels.service_loader import get_parser_channels
-        return len(get_parser_channels())
+        from app.models.models import TelegramChannel
+
+        return int(
+            await db.scalar(
+                select(func.count()).select_from(TelegramChannel).where(TelegramChannel.enabled.is_(True))
+            )
+            or 0
+        )
     except Exception:
         return 0
 
@@ -223,7 +229,7 @@ async def build_system_status(db: AsyncSession) -> dict:
         "kv_store_ok": await check_kv_store(),
         "integrations": integration_status(),
         "parser_settings": parser_settings,
-        "telegram_channels": telegram_channel_count(),
+        "telegram_channels": await telegram_channel_count(db),
         "last_run": last_run_out,
         "scheduler_status": scheduler_status,
         "seconds_since_last_run": seconds_since_run,

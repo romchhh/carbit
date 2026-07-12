@@ -79,7 +79,7 @@ TELEGRAM_ENABLED=true
 TELETHON_API_ID=...
 TELETHON_API_HASH=...
 TELETHON_NUMBER=+380...
-TELEGRAM_CHANNELS=@ua_autobazar,@auto_amerika_europa,@autobazarlvivua,@CarsBidPro,@avtoUAeuro,@kievautotrade,@isAuto99,@kievavto2
+# Канали для парсингу — в адмінці /admin/channels (не в .env)
 ```
 
 **Важливо:**
@@ -237,7 +237,7 @@ docker compose start backend bot worker telegram-worker
 | Симптом | Що робити |
 |---------|-----------|
 | `telegram-worker` падає | Перевір `database/carbit_parser.session` і `TELETHON_*` у `.env` |
-| 0 оголошень з Telegram | Логи worker; перевір `TELEGRAM_CHANNELS`, `TELEGRAM_ENABLED=true` |
+| 0 оголошень з Telegram | Логи worker; перевір канали в адмінці `/admin/channels`, `TELEGRAM_ENABLED=true` |
 | Сповіщення без фото | Перевір `./media` на хості і nginx для `/api/v1/telegram-media/` |
 | Build «no space left» | `docker builder prune -af --filter "until=168h"` |
 | Старий UI в адмінці | Rebuild frontend + hard refresh |

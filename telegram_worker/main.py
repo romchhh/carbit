@@ -44,9 +44,9 @@ async def main() -> None:
         logger.error("TELETHON_API_ID / TELETHON_API_HASH not configured")
         return
 
-    channels = get_parser_channels()
+    channels = await get_parser_channels()
     if not channels:
-        logger.error("TELEGRAM_CHANNELS is empty — add channels to .env")
+        logger.error("No Telegram channels in DB — add them in admin /admin/channels")
         return
 
     parser_settings = await get_parser_settings()

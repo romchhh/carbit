@@ -72,9 +72,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    channels = args.channels or settings.default_channels
+    channels = args.channels
     if not channels:
-        print("❌ Немає каналів — задай TELEGRAM_CHANNELS у .env")
+        print("❌ Вкажи канал: --channel @ua_autobazar")
+        print("   (список для продакшену — в адмінці /admin/channels)")
         sys.exit(1)
 
     code = asyncio.run(run(limit=args.limit, channels=channels, fresh=args.fresh))

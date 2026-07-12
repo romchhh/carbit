@@ -1,19 +1,45 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listingSearch, getApiErrorMessage } from "@/lib/api";
-import { DEFAULT_FILTERS, type SearchFilterState, type SortOption } from "@/lib/search-catalog";
+import { useAuth } from "@/contexts/AuthProvider";
+import {
+  DEFAULT_FILTERS,
+  DEFAULT_PRICE_BY_CURRENCY,
+  type SearchFilterState,
+  type SortOption,
+} from "@/lib/search-catalog";
 import {
   SEARCH_NEW_WITHIN_DAYS,
   SEARCH_PAGE_SIZE,
   type SearchFreshness,
 } from "@/lib/search-preview";
 import { toBackendSearchFilters } from "@/lib/search-filters-api";
+import { resolveDisplayCurrency } from "@/lib/display-currency";
 import type { Listing } from "@/types/api";
 
 export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAULT_FILTERS }) {
+  const { user } = useAuth();
   const resultsRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState<SearchFilterState>(initialFilters);
+  const lastPreferredCurrency = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const preferred = resolveDisplayCurrency(user.preferred_currency);
+    if (lastPreferredCurrency.current === preferred) return;
+    lastPreferredCurrency.current = preferred;
+    setFilters(prev => {
+      if (prev.currency === preferred) return prev;
+      const defaults = DEFAULT_PRICE_BY_CURRENCY[preferred];
+      return {
+        ...prev,
+        currency: preferred,
+        priceFrom: defaults.from,
+        priceTo: defaults.to,
+      };
+    });
+  }, [user]);
   const [results, setResults] = useState<Listing[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -122,7 +148,14 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   }, [fetchPage, filters, freshness, loadingMore, page, pages, running, searching, sort]);
 
   const reset = useCallback(() => {
-    setFilters({ ...DEFAULT_FILTERS });
+    const preferred = resolveDisplayCurrency(user?.preferred_currency);
+    const defaults = DEFAULT_PRICE_BY_CURRENCY[preferred];
+    setFilters({
+      ...DEFAULT_FILTERS,
+      currency: preferred,
+      priceFrom: defaults.from,
+      priceTo: defaults.to,
+    });
     setResults([]);
     setTotal(0);
     setPage(1);
@@ -131,7 +164,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setFreshness("all");
     setRunning(false);
     setError(null);
-  }, []);
+  }, [user?.preferred_currency]);
 
   return {
     filters,

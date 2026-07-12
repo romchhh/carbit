@@ -153,8 +153,15 @@ class TelegramClient:
     ) -> dict | None:
         source = listing.get("source", "")
         source_label = listing.get("source_label") or SOURCE_LABELS.get(source, source)
-        price = f"{listing['price']:,}".replace(",", " ")
-        currency = listing.get("currency") or "грн"
+        if listing.get("display_price"):
+            price_line = str(listing["display_price"])
+        else:
+            from app.services.currency import format_price_uah
+
+            price_line = format_price_uah(
+                listing.get("price"),
+                listing.get("preferred_currency") or listing.get("currency"),
+            )
 
         published_line = _published_caption_line(listing)
 
@@ -164,7 +171,7 @@ class TelegramClient:
             f"📅 {listing.get('year', '—')}  ·  🛣 {listing.get('mileage', 0):,} км".replace(",", " "),
             f"⛽ {html.escape(str(listing.get('fuel') or '—'))}  ·  ⚙️ {html.escape(str(listing.get('transmission') or '—'))}",
             f"📍 {html.escape(str(listing.get('region') or 'Україна'))}",
-            f"💰 <b>{price} {html.escape(str(currency))}</b>",
+            f"💰 <b>{html.escape(price_line)}</b>",
             f"📡 {html.escape(source_label)}",
         ]
         if published_line:

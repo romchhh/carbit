@@ -1,3 +1,10 @@
+import {
+  currencySuffix,
+  fromUah,
+  resolveDisplayCurrency,
+  type DisplayCurrency,
+} from "@/lib/display-currency";
+
 export type ExportFormat = "csv" | "excel";
 
 export type ExportListing = {
@@ -22,24 +29,33 @@ const RISK_LABELS: Record<string, string> = {
   high: "Пропустити",
 };
 
-const COLUMNS: { key: keyof ExportListing | "riskLabel"; header: string }[] = [
-  { key: "title", header: "Назва" },
-  { key: "year", header: "Рік" },
-  { key: "mileage", header: "Пробіг, км" },
-  { key: "price", header: "Ціна, грн" },
-  { key: "region", header: "Регіон" },
-  { key: "fuel", header: "Паливо" },
-  { key: "trans", header: "КПП" },
-  { key: "src", header: "Джерело" },
-  { key: "riskLabel", header: "Оцінка" },
-  { key: "time", header: "Час" },
-  { key: "desc", header: "Опис" },
-  { key: "url", header: "Посилання" },
-];
+function columnsFor(currency: DisplayCurrency): { key: keyof ExportListing | "riskLabel"; header: string }[] {
+  return [
+    { key: "title", header: "Назва" },
+    { key: "year", header: "Рік" },
+    { key: "mileage", header: "Пробіг, км" },
+    { key: "price", header: `Ціна, ${currencySuffix(currency)}` },
+    { key: "region", header: "Регіон" },
+    { key: "fuel", header: "Паливо" },
+    { key: "trans", header: "КПП" },
+    { key: "src", header: "Джерело" },
+    { key: "riskLabel", header: "Оцінка" },
+    { key: "time", header: "Час" },
+    { key: "desc", header: "Опис" },
+    { key: "url", header: "Посилання" },
+  ];
+}
 
-function cellValue(item: ExportListing, key: typeof COLUMNS[number]["key"]): string {
+function cellValue(
+  item: ExportListing,
+  key: keyof ExportListing | "riskLabel",
+  currency: DisplayCurrency,
+): string {
   if (key === "riskLabel") {
     return item.risk ? RISK_LABELS[item.risk] ?? item.risk : "";
+  }
+  if (key === "price") {
+    return String(fromUah(Number(item.price) || 0, currency));
   }
   const value = item[key as keyof ExportListing];
   if (value == null) return "";
@@ -71,22 +87,24 @@ function download(content: string, filename: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-function buildCsv(items: ExportListing[]): string {
-  const header = COLUMNS.map(c => escapeCsv(c.header)).join(",");
+function buildCsv(items: ExportListing[], currency: DisplayCurrency): string {
+  const columns = columnsFor(currency);
+  const header = columns.map(c => escapeCsv(c.header)).join(",");
   const rows = items.map(item =>
-    COLUMNS.map(c => escapeCsv(cellValue(item, c.key))).join(","),
+    columns.map(c => escapeCsv(cellValue(item, c.key, currency))).join(","),
   );
   return `\uFEFF${[header, ...rows].join("\r\n")}`;
 }
 
-function buildExcelXml(items: ExportListing[]): string {
-  const headerRow = COLUMNS.map(c =>
+function buildExcelXml(items: ExportListing[], currency: DisplayCurrency): string {
+  const columns = columnsFor(currency);
+  const headerRow = columns.map(c =>
     `<Cell><Data ss:Type="String">${escapeXml(c.header)}</Data></Cell>`,
   ).join("");
 
   const dataRows = items.map(item => {
-    const cells = COLUMNS.map(c => {
-      const raw = cellValue(item, c.key);
+    const cells = columns.map(c => {
+      const raw = cellValue(item, c.key, currency);
       const isNumber = c.key === "year" || c.key === "mileage" || c.key === "price";
       const type = isNumber && raw !== "" ? "Number" : "String";
       return `<Cell><Data ss:Type="${type}">${escapeXml(raw)}</Data></Cell>`;
@@ -113,18 +131,20 @@ export function exportListings(
   items: ExportListing[],
   format: ExportFormat,
   filenameBase: string,
+  displayCurrency?: string | null,
 ) {
   if (items.length === 0) return false;
 
+  const currency = resolveDisplayCurrency(displayCurrency);
   const safeName = filenameBase.replace(/[^\w\u0400-\u04FF\-]+/g, "_").slice(0, 80) || "export";
 
   if (format === "csv") {
-    download(buildCsv(items), `${safeName}.csv`, "text/csv;charset=utf-8");
+    download(buildCsv(items, currency), `${safeName}.csv`, "text/csv;charset=utf-8");
     return true;
   }
 
   download(
-    buildExcelXml(items),
+    buildExcelXml(items, currency),
     `${safeName}.xls`,
     "application/vnd.ms-excel",
   );

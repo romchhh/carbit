@@ -19,7 +19,7 @@ from app.services.auto_ria.constants import (
     GEARBOX_NAME_TO_ID,
     REGION_TO_STATE_CITY,
 )
-from app.services.currency import resolve_filter_currency
+from app.services.currency import filter_price_to_uah, resolve_filter_currency
 from app.services.notifications.freshness import auto_ria_top_for_max_hours
 
 
@@ -55,14 +55,21 @@ async def filters_to_search_params(
         params["po_yers[0]"] = filters.year_to
 
     if filters.price_from is not None or filters.price_to is not None:
-        # AUTO.RIA: currency=1 → USD, currency=3 → UAH (price_ot / price_do у цій валюті)
-        params["currency"] = (
-            CURRENCY_USD if resolve_filter_currency(filters.currency) == "USD" else CURRENCY_UAH
-        )
-    if filters.price_from is not None:
-        params["price_ot"] = filters.price_from
-    if filters.price_to is not None:
-        params["price_do"] = filters.price_to
+        # AUTO.RIA: currency=1 → USD, currency=3 → UAH.
+        # EUR у фільтрі конвертуємо в грн (API не має окремого EUR).
+        filter_cur = resolve_filter_currency(filters.currency)
+        if filter_cur == "USD":
+            params["currency"] = CURRENCY_USD
+            if filters.price_from is not None:
+                params["price_ot"] = filters.price_from
+            if filters.price_to is not None:
+                params["price_do"] = filters.price_to
+        else:
+            params["currency"] = CURRENCY_UAH
+            if filters.price_from is not None:
+                params["price_ot"] = filter_price_to_uah(filters.price_from, filter_cur)
+            if filters.price_to is not None:
+                params["price_do"] = filter_price_to_uah(filters.price_to, filter_cur)
 
     if filters.mileage_from is not None:
         params["raceFrom"] = max(filters.mileage_from // 1000, 0)

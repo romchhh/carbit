@@ -8,7 +8,12 @@ import { IconGear, IconCreditCard, IconTelegram, IconArrowRight, IconZap, IconLo
 import { useAuth } from "@/contexts/AuthProvider";
 import { ApiError, telegram as telegramApi, billing as billingApi, users as usersApi } from "@/lib/api";
 import { CodeInput } from "@/components/auth/CodeInput";
-import { PLAN_LABELS } from "@/lib/utils";
+import { PLAN_LABELS, cn } from "@/lib/utils";
+import {
+  DISPLAY_CURRENCY_OPTIONS,
+  resolveDisplayCurrency,
+  type DisplayCurrency,
+} from "@/lib/display-currency";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { getTelegramBotMention, getTelegramBotUrl } from "@/lib/telegram";
 import { AppPage, AppSection } from "@/components/layout/AppPage";
@@ -30,6 +35,8 @@ export default function AccountPage() {
   const [bindLoading, setBindLoading] = useState(false);
   const [bindError, setBindError] = useState("");
   const [bindSuccess, setBindSuccess] = useState("");
+  const [currencySaving, setCurrencySaving] = useState(false);
+  const [currencyError, setCurrencyError] = useState("");
 
   useEffect(() => {
     billingApi.subscription().then(setSubscription).catch(() => {});
@@ -60,12 +67,24 @@ export default function AccountPage() {
     if (!name.trim()) { setError("Введіть ім'я"); return; }
     setSaving(true);
     try {
-      await updateProfile(name.trim());
+      await updateProfile({ name: name.trim() });
       setEditing(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не вдалося зберегти");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveCurrency = async (currency: DisplayCurrency) => {
+    setCurrencyError("");
+    setCurrencySaving(true);
+    try {
+      await updateProfile({ preferred_currency: currency });
+    } catch (err) {
+      setCurrencyError(err instanceof ApiError ? err.message : "Не вдалося зберегти валюту");
+    } finally {
+      setCurrencySaving(false);
     }
   };
 
@@ -165,6 +184,38 @@ export default function AccountPage() {
               )}
             </div>
           </div>
+        </AppSection>
+
+        <AppSection className="!bg-white">
+          <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">Валюта цін</div>
+          <p className="mt-1 text-[13px] text-muted">
+            Ціни оголошень, фільтрів і сповіщень у Telegram
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {DISPLAY_CURRENCY_OPTIONS.map(option => {
+              const active = resolveDisplayCurrency(user.preferred_currency) === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  disabled={currencySaving}
+                  onClick={() => saveCurrency(option.value)}
+                  className={cn(
+                    "rounded-xl border px-4 py-2.5 text-left transition-colors",
+                    active
+                      ? "border-emerald bg-emerald-light/40 text-ink"
+                      : "border-border/80 bg-white text-muted hover:border-emerald/30 hover:text-ink",
+                  )}
+                >
+                  <div className="text-[14px] font-bold">{option.label}</div>
+                  <div className="text-[11px] opacity-70">{option.suffix}</div>
+                </button>
+              );
+            })}
+          </div>
+          {currencyError && (
+            <p className="mt-3 text-[12px] text-red-600">{currencyError}</p>
+          )}
         </AppSection>
 
         <AppSection className="!bg-white">

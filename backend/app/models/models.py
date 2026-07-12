@@ -53,6 +53,7 @@ class User(Base):
     plan: Mapped[PlanTier] = mapped_column(SAEnum(PlanTier), default=PlanTier.free)
     plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    preferred_currency: Mapped[str] = mapped_column(String, default="UAH")
     telegram_connected: Mapped[bool] = mapped_column(Boolean, default=False)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -190,3 +191,16 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
 
     user: Mapped["User"] = relationship(back_populates="notifications")
+
+
+class TelegramChannel(Base):
+    """Канали для парсингу Telethon — керуються з адмінки."""
+
+    __tablename__ = "telegram_channels"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    username: Mapped[str] = mapped_column(String, unique=True, index=True)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)

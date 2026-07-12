@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { IconDownload } from "@/components/icons";
+import { useAuth } from "@/contexts/AuthProvider";
 import { exportListings, type ExportFormat, type ExportListing } from "@/lib/export-listings";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ type Props = {
 };
 
 export function ExportMenu({ items, filename = "carbit-export", className, iconSize = 13 }: Props) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -44,7 +46,7 @@ export function ExportMenu({ items, filename = "carbit-export", className, iconS
       setOpen(false);
       return;
     }
-    const ok = exportListings(items, format, filename);
+    const ok = exportListings(items, format, filename, user?.preferred_currency);
     if (ok) {
       setMessage(`Завантажено ${items.length} оголошень`);
     }

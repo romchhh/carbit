@@ -18,7 +18,7 @@ interface AuthContextValue {
   resendRegisterCode: (email: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
-  updateProfile: (name: string) => Promise<void>;
+  updateProfile: (body: { name?: string; preferred_currency?: string }) => Promise<void>;
   loginWithToken: (token: string, remember?: boolean) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
@@ -84,8 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/auth/login");
   };
 
-  const updateProfile = async (name: string) => {
-    setUser(await api.auth.updateProfile(name));
+  const updateProfile = async (body: { name?: string; preferred_currency?: string }) => {
+    setUser(await api.auth.updateProfile(body));
   };
 
   const loginWithToken = async (token: string, remember = true) => {

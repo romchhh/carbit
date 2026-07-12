@@ -12,6 +12,7 @@ export interface User {
   is_trial_active?: boolean;
   onboarding_completed?: boolean;
   plan_expires_at?: string | null;
+  preferred_currency?: string;
   created_at: string;
 }
 

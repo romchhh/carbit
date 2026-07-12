@@ -21,8 +21,8 @@ export type SearchFilterState = {
   yearTo: string;
   priceFrom: string;
   priceTo: string;
-  /** Валюта діапазону ціни: USD (основна) або UAH */
-  currency: "USD" | "UAH";
+  /** Валюта діапазону ціни */
+  currency: "USD" | "UAH" | "EUR";
   mileageFrom: string;
   mileageTo: string;
   fuels: string[];
@@ -64,11 +64,13 @@ export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
 
 export const PRICE_CURRENCY_OPTIONS = [
   { value: "USD" as const, label: "$", suffix: "$" },
+  { value: "EUR" as const, label: "€", suffix: "€" },
   { value: "UAH" as const, label: "грн", suffix: "грн" },
 ] as const;
 
 export const DEFAULT_PRICE_BY_CURRENCY = {
   USD: { from: "10 000", to: "22 000" },
+  EUR: { from: "9 000", to: "20 000" },
   UAH: { from: "400 000", to: "900 000" },
 } as const;
 
@@ -157,18 +159,23 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
   const rawPriceFrom = parseNumberInput(filters.priceFrom);
   const rawPriceTo = parseNumberInput(filters.priceTo);
   const usdToUah = 45;
+  const eurToUah = 44;
   const priceFrom =
     rawPriceFrom == null
       ? null
       : filters.currency === "USD"
         ? rawPriceFrom * usdToUah
-        : rawPriceFrom;
+        : filters.currency === "EUR"
+          ? rawPriceFrom * eurToUah
+          : rawPriceFrom;
   const priceTo =
     rawPriceTo == null
       ? null
       : filters.currency === "USD"
         ? rawPriceTo * usdToUah
-        : rawPriceTo;
+        : filters.currency === "EUR"
+          ? rawPriceTo * eurToUah
+          : rawPriceTo;
   const mileageFrom = parseThousandsKm(filters.mileageFrom) ?? parseNumberInput(filters.mileageFrom);
   const mileageTo = parseThousandsKm(filters.mileageTo) ?? parseNumberInput(filters.mileageTo);
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Literal
 from sqlalchemy import desc, func, select
@@ -14,7 +14,15 @@ from app.models.models import Listing, Notification, NotificationType, ParseRun,
 from app.services.listings.serialize import listing_to_out
 from app.services.parser.runner import run_parser_cycle
 from app.services.parser.settings import get_parser_settings, save_parser_settings
-
+from app.services.telegram_channels.channels import (
+    count_channel_listings,
+    create_channel,
+    delete_channel,
+    get_channel,
+    list_channel_listings,
+    list_channels,
+    update_channel,
+)
 router = APIRouter(prefix="/admin/parser", tags=["admin-parser"])
 
 
@@ -252,3 +260,122 @@ async def trigger_parser_run_source(source: ParserSource, _admin=Depends(get_cur
         await db.commit()
         await db.refresh(run)
         return _run_out(run)
+
+
+class TelegramChannelOut(BaseModel):
+    id: str
+    username: str
+    title: str | None
+    enabled: bool
+    sort_order: int
+    listings_count: int
+    created_at: datetime
+
+
+class TelegramChannelCreate(BaseModel):
+    username: str = Field(min_length=2, max_length=120)
+    title: str | None = Field(default=None, max_length=200)
+    enabled: bool = True
+
+
+class TelegramChannelUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=2, max_length=120)
+    title: str | None = Field(default=None, max_length=200)
+    enabled: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0, le=10_000)
+
+
+async def _channel_out(db: AsyncSession, channel) -> TelegramChannelOut:
+    return TelegramChannelOut(
+        id=channel.id,
+        username=channel.username,
+        title=channel.title,
+        enabled=channel.enabled,
+        sort_order=channel.sort_order,
+        listings_count=await count_channel_listings(db, channel.username),
+        created_at=channel.created_at,
+    )
+
+
+@router.get("/channels", response_model=list[TelegramChannelOut])
+async def list_telegram_channels(
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    channels = await list_channels(db)
+    return [await _channel_out(db, channel) for channel in channels]
+
+
+@router.post("/channels", response_model=TelegramChannelOut)
+async def create_telegram_channel(
+    body: TelegramChannelCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    try:
+        channel = await create_channel(
+            db,
+            username=body.username,
+            title=body.title,
+            enabled=body.enabled,
+        )
+        await db.commit()
+        await db.refresh(channel)
+        return await _channel_out(db, channel)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.patch("/channels/{channel_id}", response_model=TelegramChannelOut)
+async def update_telegram_channel(
+    channel_id: str,
+    body: TelegramChannelUpdate,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    channel = await get_channel(db, channel_id)
+    if not channel:
+        raise HTTPException(404, "Канал не знайдено")
+    try:
+        channel = await update_channel(
+            db,
+            channel,
+            username=body.username,
+            title=body.title,
+            enabled=body.enabled,
+            sort_order=body.sort_order,
+        )
+        await db.commit()
+        await db.refresh(channel)
+        return await _channel_out(db, channel)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.delete("/channels/{channel_id}", status_code=204)
+async def delete_telegram_channel(
+    channel_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    channel = await get_channel(db, channel_id)
+    if not channel:
+        raise HTTPException(404, "Канал не знайдено")
+    await delete_channel(db, channel)
+    await db.commit()
+
+
+@router.get("/channels/{channel_id}/listings")
+async def telegram_channel_listings(
+    channel_id: str,
+    limit: int = Query(40, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    channel = await get_channel(db, channel_id)
+    if not channel:
+        raise HTTPException(404, "Канал не знайдено")
+    rows = await list_channel_listings(db, channel.username, limit=limit)
+    return [listing_to_out(item).model_dump() for item in rows]

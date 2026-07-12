@@ -30,13 +30,21 @@ class PriceCurrencyTests(unittest.TestCase):
         self.assertIn("currency=USD", usd_url)
         self.assertIn("currency=UAH", uah_url)
 
-    def test_olx_params_convert_usd_bounds_to_uah(self):
+    def test_olx_params_keep_usd_bounds_for_usd_filters(self):
         params = filters_to_olx_params(
             SearchFilters(price_from=10_000, price_to=22_000, currency="USD")
         )
         self.assertEqual(params.currency, "USD")
-        self.assertEqual(params.price_from, 450_000)
-        self.assertEqual(params.price_to, 990_000)
+        self.assertEqual(params.price_from, 10_000)
+        self.assertEqual(params.price_to, 22_000)
+
+    def test_olx_params_convert_eur_bounds_to_uah(self):
+        params = filters_to_olx_params(
+            SearchFilters(price_from=10_000, price_to=22_000, currency="EUR")
+        )
+        self.assertEqual(params.currency, "UAH")
+        self.assertEqual(params.price_from, 440_000)
+        self.assertEqual(params.price_to, 968_000)
 
 
 if __name__ == "__main__":

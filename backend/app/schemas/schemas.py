@@ -57,12 +57,24 @@ class GoogleAuthUrlOut(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    preferred_currency: Optional[str] = None
 
     @field_validator("name")
     @classmethod
-    def strip_name(cls, v: str) -> str:
+    def strip_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         return v.strip()
+
+    @field_validator("preferred_currency", mode="before")
+    @classmethod
+    def normalize_preferred_currency(cls, value: object) -> str | None:
+        if value is None or value == "":
+            return None
+        from app.services.currency import resolve_display_currency
+
+        return resolve_display_currency(str(value))
 
 
 class TokenResponse(BaseModel):
@@ -85,6 +97,7 @@ class UserOut(BaseModel):
     is_trial_active: bool = False
     onboarding_completed: bool = False
     plan_expires_at: datetime | None = None
+    preferred_currency: str = "UAH"
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -144,12 +157,14 @@ class SearchFilters(BaseModel):
         if value is None or value == "":
             return None
         cur = str(value).strip().upper()
-        if cur in {"USD", "UAH"}:
+        if cur in {"USD", "UAH", "EUR"}:
             return cur
         if cur in {"$", "US"}:
             return "USD"
         if cur in {"ГРН", "UA"}:
             return "UAH"
+        if cur in {"€", "EU", "EURO"}:
+            return "EUR"
         return None
 
 

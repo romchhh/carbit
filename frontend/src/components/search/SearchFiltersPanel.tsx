@@ -153,7 +153,9 @@ export function SearchFiltersPanel({
               format={formatPriceInput}
               placeholderFrom={DEFAULT_PRICE_BY_CURRENCY[filters.currency].from}
               placeholderTo={DEFAULT_PRICE_BY_CURRENCY[filters.currency].to}
-              suffix={filters.currency === "USD" ? "$" : "грн"}
+              suffix={
+                filters.currency === "USD" ? "$" : filters.currency === "EUR" ? "€" : "грн"
+              }
               currency={filters.currency}
               currencyOptions={PRICE_CURRENCY_OPTIONS.map(option => ({
                 value: option.value,
