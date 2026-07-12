@@ -6,16 +6,22 @@ from typing import Any
 
 from app.core.timezone import KYIV_TZ, as_kyiv, now_kyiv
 
-TIME_FIELD_KEYS = (
-    "lastRefreshTime",
-    "last_refresh_time",
+# published_at: перша публікація
+CREATED_TIME_KEYS = (
     "createdTime",
     "created_time",
     "createdAt",
     "created_at",
+)
+# refreshed_at: підняття / оновлення на OLX
+REFRESH_TIME_KEYS = (
+    "lastRefreshTime",
+    "last_refresh_time",
     "pushupTime",
     "refreshTime",
 )
+# Сумісність: будь-який timestamp (спочатку created, потім refresh)
+TIME_FIELD_KEYS = CREATED_TIME_KEYS + REFRESH_TIME_KEYS
 
 UK_MONTHS = {
     "січня": 1,
@@ -69,13 +75,17 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
     return None
 
 
-def _extract_timestamp_from_raw(raw: dict | None) -> datetime | None:
+def _extract_timestamp_from_raw(
+    raw: dict | None,
+    *,
+    keys: tuple[str, ...] = TIME_FIELD_KEYS,
+) -> datetime | None:
     if not raw:
         return None
 
     # Спочатку топ-рівень (оголошення), без глибокого walk — менше шансів
     # схопити чужий timestamp з вкладених об'єктів.
-    for key in TIME_FIELD_KEYS:
+    for key in keys:
         if key in raw:
             parsed = _parse_iso_datetime(raw[key])
             if parsed:
@@ -85,7 +95,7 @@ def _extract_timestamp_from_raw(raw: dict | None) -> datetime | None:
         if depth > 4:
             return None
         if isinstance(node, dict):
-            for key in TIME_FIELD_KEYS:
+            for key in keys:
                 if key in node:
                     parsed = _parse_iso_datetime(node[key])
                     if parsed:
@@ -115,8 +125,8 @@ def parse_olx_published_text(text: str, *, now: datetime | None = None) -> datet
     normalized = " ".join(text.strip().lower().split())
     # «10 липня 2026 р.» / «10 липня 2026р.»
     normalized = re.sub(r"\s*р\.?\s*$", "", normalized)
-    # «Опубліковано 10 липня 2026»
-    normalized = re.sub(r"^опубліковано\s+", "", normalized)
+    # «Опубліковано 10 липня» або злите «Опублікованосьогодні о 08:21» (get_text(strip=True))
+    normalized = re.sub(r"^опубліковано\s*", "", normalized)
 
     if normalized in {"щойно", "just now"}:
         return current
@@ -213,13 +223,14 @@ def resolve_olx_published_at(
     raw_params: dict | None = None,
     now: datetime | None = None,
 ) -> datetime:
-    """Повертає дату публікації на OLX або now_kyiv() як останній fallback."""
+    """Дата першої публікації (createdTime), не lastRefreshTime."""
     current = now or now_kyiv()
 
-    from_raw = _extract_timestamp_from_raw(raw_params)
-    if from_raw:
-        return from_raw
+    from_created = _extract_timestamp_from_raw(raw_params, keys=CREATED_TIME_KEYS)
+    if from_created:
+        return from_created
 
+    # Fallback: текст «Опубліковано…» або будь-який timestamp
     if published:
         from_iso = _parse_iso_datetime(published)
         if from_iso:
@@ -229,14 +240,44 @@ def resolve_olx_published_at(
         if from_text:
             return from_text
 
-        # «Київ - 5 хвилин тому» — беремо частину після « - »
-        if " - " in published:
-            _, tail = published.split(" - ", 1)
-            from_tail = parse_olx_published_text(tail.strip(), now=current)
-            if from_tail:
-                return from_tail
-            from_tail_iso = _parse_iso_datetime(tail.strip())
-            if from_tail_iso:
-                return from_tail_iso
+        # «Київ - 5 хвилин тому» / «Київ – сьогодні о 08:21»
+        for sep in (" - ", " – ", " — ", " • ", " · "):
+            if sep in published:
+                _, tail = published.split(sep, 1)
+                from_tail = parse_olx_published_text(tail.strip(), now=current)
+                if from_tail:
+                    return from_tail
+                from_tail_iso = _parse_iso_datetime(tail.strip())
+                if from_tail_iso:
+                    return from_tail_iso
+                break
+
+    from_any = _extract_timestamp_from_raw(raw_params, keys=TIME_FIELD_KEYS)
+    if from_any:
+        return from_any
 
     return current
+
+
+def resolve_olx_refreshed_at(
+    *,
+    published: str | None = None,
+    raw_params: dict | None = None,
+    published_at: datetime | None = None,
+    now: datetime | None = None,
+) -> datetime | None:
+    """Дата оновлення/підняття (lastRefreshTime). None, якщо збігається з публікацією."""
+    refreshed = _extract_timestamp_from_raw(raw_params, keys=REFRESH_TIME_KEYS)
+    if refreshed is None and published:
+        # Картки часто показують саме refresh у рядку «Сьогодні о …»
+        text_dt = parse_olx_published_text(published, now=now or now_kyiv())
+        if text_dt and published_at and abs((text_dt - published_at).total_seconds()) > 120:
+            refreshed = text_dt
+        elif text_dt and published_at is None:
+            refreshed = text_dt
+
+    if refreshed is None:
+        return None
+    if published_at and abs((refreshed - published_at).total_seconds()) < 60:
+        return None
+    return refreshed

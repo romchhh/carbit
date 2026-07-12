@@ -55,8 +55,17 @@ export interface Listing {
   source_data?: Record<string, unknown> | null;
   price_history: Record<string, unknown>[];
   is_duplicate: boolean;
+  duplicate_of?: string | null;
   published_at: string;
+  refreshed_at?: string | null;
   found_at: string;
+}
+
+export interface SourceStatus {
+  source: string;
+  item_count: number;
+  error?: string | null;
+  pending?: boolean;
 }
 
 export interface PaginatedListings {
@@ -65,6 +74,9 @@ export interface PaginatedListings {
   page: number;
   per_page: number;
   pages: number;
+  sources?: SourceStatus[];
+  partial?: boolean;
+  from_cache?: boolean;
 }
 
 export interface SearchLiveResults {

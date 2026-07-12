@@ -24,6 +24,9 @@ export default function SearchPage() {
     loadingMore,
     hasMore,
     error,
+    sourceStatuses,
+    partial,
+    fromCache,
     resultsRef,
     runSearch,
     changeSort,
@@ -110,6 +113,9 @@ export default function SearchPage() {
         sort={sort}
         freshness={freshness}
         error={error}
+        sourceStatuses={sourceStatuses}
+        partial={partial}
+        fromCache={fromCache}
         onSortChange={changeSort}
         onFreshnessChange={changeFreshness}
         onLoadMore={loadMore}

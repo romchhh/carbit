@@ -224,6 +224,18 @@ export interface AdminAnalytics {
     listings_found: number;
     listings_new: number;
   }[];
+  data_quality?: Record<
+    string,
+    {
+      total: number;
+      with_vin: number;
+      with_price: number;
+      with_published_at: number;
+      pct_vin: number;
+      pct_price: number;
+      pct_published_at: number;
+    }
+  >;
 }
 
 export interface AdminSystem {

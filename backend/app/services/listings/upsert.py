@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, Source
 from app.schemas.schemas import ListingOut
+from app.services.listings.duplicates import find_duplicate_of
+from app.services.vin import extract_vin
 
 
 def _parse_source(value: str) -> Source:
@@ -22,8 +24,45 @@ def _external_id(listing_id: str) -> str:
     return listing_id
 
 
+def _append_price_history(listing: Listing, new_price: int, currency: str) -> list:
+    history = list(listing.price_history or [])
+    if listing.price and int(listing.price) != int(new_price):
+        history.append(
+            {
+                "price": int(listing.price),
+                "currency": listing.currency or currency,
+                "at": (listing.found_at or now_kyiv()).isoformat(),
+            }
+        )
+    return history[-30:]
+
+
 async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
     listing = await db.get(Listing, data.id)
+    vin = (data.vin or extract_vin(data.description, data.title) or "").strip().upper() or None
+
+    duplicate = await find_duplicate_of(db, data.model_copy(update={"vin": vin}))
+    is_duplicate = bool(data.is_duplicate or duplicate)
+    duplicate_of = data.duplicate_of or (duplicate.id if duplicate else None)
+
+    price_changed = False
+    vin_appeared = False
+    old_price = None
+    old_currency = None
+
+    if listing:
+        old_price = int(listing.price or 0)
+        old_currency = listing.currency
+        if old_price and old_price != int(data.price):
+            price_changed = True
+        if vin and not (listing.vin or "").strip():
+            vin_appeared = True
+        history = _append_price_history(listing, data.price, data.currency or "USD")
+        keep_found_at = listing.found_at or data.found_at or now_kyiv()
+    else:
+        history = list(data.price_history or [])
+        keep_found_at = data.found_at or now_kyiv()
+
     payload = {
         "external_id": _external_id(data.id),
         "source": _parse_source(data.source),
@@ -41,18 +80,35 @@ async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
         "images": data.images or [],
         "url": data.url,
         "seller_type": data.seller_type or "private",
-        "price_history": data.price_history or [],
-        "is_duplicate": data.is_duplicate,
+        "price_history": history,
+        "vin": vin,
+        "is_duplicate": is_duplicate,
+        "duplicate_of": duplicate_of,
         "published_at": data.published_at,
-        "found_at": data.found_at or now_kyiv(),
+        "refreshed_at": data.refreshed_at,
+        "found_at": keep_found_at,
     }
 
     if listing:
         for key, value in payload.items():
             setattr(listing, key, value)
-        return listing
+    else:
+        listing = Listing(id=data.id, **payload)
+        db.add(listing)
 
-    listing = Listing(id=data.id, **payload)
-    db.add(listing)
     await db.flush()
+
+    # Алерти «ціна впала» / «з’явився VIN» для вже прив’язаних пошуків
+    if listing and (price_changed or vin_appeared):
+        from app.services.notifications.listing_events import notify_listing_events
+
+        await notify_listing_events(
+            db,
+            listing,
+            price_dropped=price_changed and old_price is not None and int(data.price) < int(old_price),
+            old_price=old_price,
+            old_currency=old_currency,
+            vin_appeared=vin_appeared,
+        )
+
     return listing

@@ -106,6 +106,41 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {analytics.data_quality && (
+        <div className="mb-8 bg-white border border-border rounded-xl p-6">
+          <h2 className="text-[15px] font-bold text-ink mb-2">Якість даних по джерелах</h2>
+          <p className="text-[12px] text-muted mb-5">
+            Частка оголошень з валідним published_at, VIN і ціною
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-border text-muted">
+                  <th className="py-2 pr-4 font-medium">Джерело</th>
+                  <th className="py-2 pr-4 font-medium">Всього</th>
+                  <th className="py-2 pr-4 font-medium">published_at</th>
+                  <th className="py-2 pr-4 font-medium">VIN</th>
+                  <th className="py-2 font-medium">Ціна</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(analytics.data_quality).map(([source, row]) => (
+                  <tr key={source} className="border-b border-border/60">
+                    <td className="py-2.5 pr-4 font-medium text-ink">
+                      {SOURCE_LABELS[source] ?? source}
+                    </td>
+                    <td className="py-2.5 pr-4 text-muted">{row.total}</td>
+                    <td className="py-2.5 pr-4">{row.pct_published_at}%</td>
+                    <td className="py-2.5 pr-4">{row.pct_vin}%</td>
+                    <td className="py-2.5">{row.pct_price}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white border border-border rounded-xl p-6">
           <h2 className="text-[15px] font-bold text-ink mb-5">Реєстрації (7 днів)</h2>

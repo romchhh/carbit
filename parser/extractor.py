@@ -99,7 +99,26 @@ USERNAME_RE = re.compile(r"@([A-Za-z0-9_]{4,32})")
 MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 MARKDOWN_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 HASHTAG_RE = re.compile(r"#\w+")
-VIN_RE = re.compile(r"\b(?=[A-HJ-NPR-Z0-9]{17}\b)(?!.*[IOQ])[A-HJ-NPR-Z0-9]{17}\b")
+VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
+_VIN_LABELED_RE = re.compile(
+    r"(?:vin|він|вин(?:[\s\-]*код)?)\s*[:\-–—]?\s*([A-HJ-NPR-Z0-9]{17})",
+    re.IGNORECASE,
+)
+
+
+def _extract_vin(text: str) -> str | None:
+    if not text:
+        return None
+    labeled = _VIN_LABELED_RE.search(text)
+    if labeled:
+        candidate = labeled.group(1).upper()
+        if "I" not in candidate and "O" not in candidate and "Q" not in candidate:
+            return candidate
+    for match in VIN_RE.finditer(text.upper()):
+        candidate = match.group(0)
+        if "I" not in candidate and "O" not in candidate and "Q" not in candidate:
+            return candidate
+    return None
 
 MILEAGE_FULL_KM_RE = re.compile(
     r"(?P<val>\d{2,3}(?:[ .]\d{3})+|\d{4,7})\s*км",
@@ -473,9 +492,9 @@ def extract_car_data(
 
         listing.condition_flags = _find_condition_flags(text_low)
 
-        vin_m = VIN_RE.search(text.upper())
-        if vin_m:
-            listing.condition_flags = {**(listing.condition_flags or {}), "vin": vin_m.group(0)}
+        vin = _extract_vin(text)
+        if vin:
+            listing.condition_flags = {**(listing.condition_flags or {}), "vin": vin}
 
         key_fields = [listing.brand, listing.year, listing.price_amount]
         found_key = sum(1 for f in key_fields if f is not None)

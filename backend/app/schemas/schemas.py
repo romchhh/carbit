@@ -219,10 +219,19 @@ class ListingOut(BaseModel):
     source_data: Optional[dict[str, Any]] = None
     price_history: list[dict]
     is_duplicate: bool
+    duplicate_of: Optional[str] = None
     published_at: datetime
+    refreshed_at: Optional[datetime] = None
     found_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SourceStatusOut(BaseModel):
+    source: str
+    item_count: int = 0
+    error: Optional[str] = None
+    pending: bool = False
 
 
 class PaginatedListings(BaseModel):
@@ -231,6 +240,9 @@ class PaginatedListings(BaseModel):
     page: int
     per_page: int
     pages: int
+    sources: list[SourceStatusOut] = Field(default_factory=list)
+    partial: bool = False
+    from_cache: bool = False
 
 
 class SearchLiveResultsOut(BaseModel):

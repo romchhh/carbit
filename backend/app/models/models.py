@@ -25,6 +25,7 @@ class Source(str, enum.Enum):
 class NotificationType(str, enum.Enum):
     listing_match = "listing_match"
     price_drop = "price_drop"
+    vin_found = "vin_found"
     system = "system"
 
 
@@ -153,9 +154,11 @@ class Listing(Base):
     seller_name: Mapped[str | None] = mapped_column(String, nullable=True)
     seller_type: Mapped[str] = mapped_column(String, default="private")
     price_history: Mapped[list] = mapped_column(JSON, default=list)
+    vin: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     is_duplicate: Mapped[bool] = mapped_column(Boolean, default=False)
     duplicate_of: Mapped[str | None] = mapped_column(String, ForeignKey("listings.id"), nullable=True)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     found_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
 
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="listing")

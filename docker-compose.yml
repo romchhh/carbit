@@ -43,10 +43,13 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      # Стабільно: SQLite KV. Redis — лише з profile cache + REDIS_URL=redis://redis:6379/0
+      # Стабільно: SQLite KV. Redis — profile cache + KV_URL=redis://redis:6379/0
+      # Postgres — profile scale + DATABASE_URL=postgresql+asyncpg://carbit:carbit@postgres:5432/carbit
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///database/autoradar.db}
       REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
       TELEGRAM_MEDIA_DIR: /app/media
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:

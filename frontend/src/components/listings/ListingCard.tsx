@@ -9,7 +9,7 @@ import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { hasVinCheck } from "@/lib/vin-check";
-import { cn, publishedAgoLabel } from "@/lib/utils";
+import { cn, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
 import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
@@ -40,13 +40,23 @@ export function ListingCard({
   const displayCurrency = resolveDisplayCurrency(user?.preferred_currency);
   const images = Array.isArray(listing.images) ? listing.images : [];
   const price = Number(listing.price) || 0;
-  const priceLabel = formatListingPrice(price, listing.currency, displayCurrency);
+  const priceLabel = formatListingPrice(
+    price,
+    listing.currency,
+    displayCurrency,
+    listing.source_data,
+  );
   const fuel = typeof listing.fuel === "string" ? listing.fuel : "";
   const region = typeof listing.region === "string" ? listing.region : "";
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
   const showVinBlock = Boolean(listing.vin) || hasVinCheck(listing);
   const highlights = getAutoRiaHighlights(listing.source_data).slice(0, 3);
   const publishedLabel = publishedAgoLabel(listing.published_at);
+  const refreshedLabel =
+    listing.refreshed_at && listing.refreshed_at !== listing.published_at
+      ? refreshedAgoLabel(listing.refreshed_at)
+      : "";
+  const timeBadgeDate = listing.refreshed_at || listing.published_at;
 
   return (
     <article
@@ -100,7 +110,7 @@ export function ListingCard({
           </div>
         </div>
         <div className="absolute bottom-2 left-2">
-          <PublishedTimeBadge date={listing.published_at} short />
+          <PublishedTimeBadge date={timeBadgeDate} short />
         </div>
       </div>
 
@@ -131,7 +141,7 @@ export function ListingCard({
           </div>
         )}
         <div className="absolute bottom-2 left-2">
-          <PublishedTimeBadge date={listing.published_at} short />
+          <PublishedTimeBadge date={timeBadgeDate} short />
         </div>
       </div>
 
@@ -206,8 +216,18 @@ export function ListingCard({
         <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 sm:mt-auto sm:border-0 sm:pt-2.5">
           <div className="min-w-0 flex-1">
             <span className="block truncate text-[12px] text-muted">{shortRegion(region)}</span>
-            {publishedLabel && (
-              <span className="mt-0.5 block truncate text-[11px] text-muted/80">{publishedLabel}</span>
+            {refreshedLabel ? (
+              <span className="mt-0.5 block truncate text-[11px] text-muted/80">
+                {refreshedLabel}
+                {publishedLabel ? ` · ${publishedLabel}` : ""}
+              </span>
+            ) : (
+              publishedLabel && (
+                <span className="mt-0.5 block truncate text-[11px] text-muted/80">{publishedLabel}</span>
+              )
+            )}
+            {listing.is_duplicate && (
+              <span className="mt-0.5 block text-[11px] text-amber-700">Дублікат в іншому джерелі</span>
             )}
           </div>
           <span className="hidden items-center gap-1.5 sm:flex">

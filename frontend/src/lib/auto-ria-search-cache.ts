@@ -22,7 +22,8 @@ function cacheKey({ filters, page, perPage, sortBy, mode }: SearchParams): strin
 function isRetryableSearchError(err: unknown): boolean {
   if (err && typeof err === "object" && "status" in err) {
     const status = Number((err as { status: unknown }).status);
-    return status === 502 || status === 503 || status === 504;
+    // 500 часто = таймаут/падіння проксі Next→backend або ResponseValidation на бекенді
+    return status === 500 || status === 502 || status === 503 || status === 504;
   }
   return err instanceof TypeError;
 }

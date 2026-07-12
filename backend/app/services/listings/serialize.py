@@ -8,6 +8,7 @@ from app.services.telegram_channels.mapper import fix_telegram_listing_url
 def listing_to_out(listing: Listing) -> ListingOut:
     from app.core.timezone import as_kyiv, now_kyiv
     from app.services.currency import normalize_currency
+    from app.services.vin import extract_vin
 
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
     url = listing.url
@@ -20,6 +21,9 @@ def listing_to_out(listing: Listing) -> ListingOut:
     currency = normalize_currency(raw_currency)
     if currency not in {"UAH", "USD", "EUR"}:
         currency = "UAH"
+
+    vin = extract_vin(listing.description, listing.title) or getattr(listing, "vin", None)
+
     return ListingOut(
         id=listing.id,
         source=source,
@@ -37,12 +41,14 @@ def listing_to_out(listing: Listing) -> ListingOut:
         images=listing.images or [],
         url=url or "",
         seller_type=listing.seller_type or "private",
-        vin=None,
+        vin=(vin or None),
         vin_checked=None,
         vin_check_url=None,
         source_data=None,
         price_history=listing.price_history or [],
         is_duplicate=bool(listing.is_duplicate),
+        duplicate_of=getattr(listing, "duplicate_of", None),
         published_at=published_at,
+        refreshed_at=as_kyiv(listing.refreshed_at) if getattr(listing, "refreshed_at", None) else None,
         found_at=found_at,
     )

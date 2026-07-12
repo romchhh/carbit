@@ -1,6 +1,19 @@
-/** Курси як у backend/app/services/currency.py — лише для крос-конвертації. */
-export const USD_TO_UAH = 45;
-export const EUR_TO_UAH = 44;
+/** Курси — оновлюються з /fx/rates (НБУ); fallback як у backend. */
+export let USD_TO_UAH = 45;
+export let EUR_TO_UAH = 44;
+
+let ratesLoadedAt = 0;
+const RATES_TTL_MS = 60 * 60 * 1000;
+
+export function applyFxRates(rates: { USD?: number; EUR?: number }) {
+  if (rates.USD && rates.USD > 0) USD_TO_UAH = rates.USD;
+  if (rates.EUR && rates.EUR > 0) EUR_TO_UAH = rates.EUR;
+  ratesLoadedAt = Date.now();
+}
+
+export function fxRatesStale(): boolean {
+  return !ratesLoadedAt || Date.now() - ratesLoadedAt > RATES_TTL_MS;
+}
 
 export type DisplayCurrency = "UAH" | "USD" | "EUR";
 
@@ -64,13 +77,53 @@ export function convertPrice(
   return fromUah(toUah(Number(amount) || 0, from), to);
 }
 
+/** Парсить 12500 / "12 500" / "12\u00a0500" з AUTO.RIA source_data. */
+export function parseMoneyAmount(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.round(value);
+  }
+  if (typeof value !== "string") return null;
+  const cleaned = value.replace(/[\s\u00a0\u202f\u2009]/g, "").replace(",", ".");
+  if (!cleaned) return null;
+  const num = Number(cleaned);
+  if (!Number.isFinite(num)) return null;
+  return Math.round(num);
+}
+
+/**
+ * Рідна сума з AUTO.RIA (UAH/USD/EUR на верхньому рівні або в prices[]).
+ * Уникає грн→$ через фіксований курс, коли джерело вже дає долари.
+ */
+export function nativeAmountFromSourceData(
+  sourceData: Record<string, unknown> | null | undefined,
+  currency: DisplayCurrency,
+): number | null {
+  if (!sourceData) return null;
+
+  const direct = parseMoneyAmount(sourceData[currency]);
+  if (direct != null && direct > 0) return direct;
+
+  const prices = sourceData.prices;
+  if (!Array.isArray(prices)) return null;
+
+  for (const entry of prices) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const amount = parseMoneyAmount((entry as Record<string, unknown>)[currency]);
+    if (amount != null && amount > 0) return amount;
+  }
+  return null;
+}
+
 export function formatListingPrice(
   amount: number,
   listingCurrency: string | null | undefined,
   preferredCurrency: DisplayCurrency | string | null | undefined = DEFAULT_DISPLAY_CURRENCY,
+  sourceData?: Record<string, unknown> | null,
 ): string {
   const target = resolveDisplayCurrency(preferredCurrency);
-  const value = convertPrice(amount, listingCurrency, target);
+  const native = nativeAmountFromSourceData(sourceData, target);
+  const value = native != null ? native : convertPrice(amount, listingCurrency, target);
   const formatted = new Intl.NumberFormat("uk-UA").format(value);
   return `${formatted} ${currencySuffix(target)}`;
 }

@@ -14,12 +14,13 @@ from app.services.olx.service import search_olx
 from app.services.telegram_channels.ingest import search_telegram_listings
 
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
-OLX_SEARCH_TIMEOUT_SECONDS = 45.0
+OLX_SEARCH_TIMEOUT_SECONDS = 15.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»)
-SOURCE_POOL_CAP = 150
+SOURCE_POOL_CAP = 300
 TELEGRAM_POOL_CAP = 800
 TELEGRAM_MAX_SCAN = 3000
 AUTO_RIA_PAGE_SIZE = 50
+TELEGRAM_POOL_TIMEOUT_SECONDS = 12.0
 
 
 @dataclass(frozen=True)
@@ -446,14 +447,19 @@ async def search_listings_outcome(
 
     async def run_auto_ria() -> PaginatedListings | Exception:
         try:
-            return await _fetch_source_pool(
-                "auto_ria",
-                filters,
-                need=pool_need,
-                sort_by=sort_by,
-                use_cache=use_cache,
-                cache_ttl_seconds=cache_ttl_seconds,
+            return await asyncio.wait_for(
+                _fetch_source_pool(
+                    "auto_ria",
+                    filters,
+                    need=pool_need,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
+                ),
+                timeout=AUTO_RIA_POOL_TIMEOUT_SECONDS,
             )
+        except asyncio.TimeoutError:
+            return TimeoutError(f"AUTO.RIA: таймаут {AUTO_RIA_POOL_TIMEOUT_SECONDS:.0f}s")
         except Exception as exc:
             return exc
 
@@ -481,15 +487,20 @@ async def search_listings_outcome(
     async def run_telegram() -> PaginatedListings | Exception:
         try:
             # Окрема сесія: AsyncSession не можна ділити між asyncio.gather
-            return await _fetch_source_pool(
-                "telegram",
-                filters,
-                need=telegram_need,
-                sort_by=sort_by,
-                use_cache=use_cache,
-                cache_ttl_seconds=cache_ttl_seconds,
-                db=None,
+            return await asyncio.wait_for(
+                _fetch_source_pool(
+                    "telegram",
+                    filters,
+                    need=telegram_need,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
+                    db=None,
+                ),
+                timeout=TELEGRAM_POOL_TIMEOUT_SECONDS,
             )
+        except asyncio.TimeoutError:
+            return TimeoutError(f"Telegram: таймаут {TELEGRAM_POOL_TIMEOUT_SECONDS:.0f}s")
         except Exception as exc:
             return exc
 

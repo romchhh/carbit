@@ -151,6 +151,55 @@ async def telegram_channel_count(db: AsyncSession) -> int:
         return 0
 
 
+async def data_quality_by_source(db: AsyncSession) -> dict[str, dict]:
+    """% оголошень з валідним published_at / VIN / ціною по джерелах."""
+    now = now_kyiv()
+    # published_at «валідний», якщо не в майбутньому і не fallback «щойно» (старший за 2 хв від found_at
+    # або явно відрізняється від now більше ніж на годину — евристика: year>0 і price>0 окремо)
+    result: dict[str, dict] = {}
+    for source in Source:
+        total = await db.scalar(
+            select(func.count()).select_from(Listing).where(Listing.source == source)
+        ) or 0
+        with_vin = await db.scalar(
+            select(func.count())
+            .select_from(Listing)
+            .where(
+                Listing.source == source,
+                Listing.vin.isnot(None),
+                func.length(Listing.vin) == 17,
+            )
+        ) or 0
+        with_price = await db.scalar(
+            select(func.count())
+            .select_from(Listing)
+            .where(Listing.source == source, Listing.price > 0)
+        ) or 0
+        with_published = await db.scalar(
+            select(func.count())
+            .select_from(Listing)
+            .where(
+                Listing.source == source,
+                Listing.published_at.isnot(None),
+                Listing.published_at < now,
+            )
+        ) or 0
+
+        def pct(n: int) -> float:
+            return round(100.0 * n / total, 1) if total else 0.0
+
+        result[source.value] = {
+            "total": total,
+            "with_vin": with_vin,
+            "with_price": with_price,
+            "with_published_at": with_published,
+            "pct_vin": pct(with_vin),
+            "pct_price": pct(with_price),
+            "pct_published_at": pct(with_published),
+        }
+    return result
+
+
 async def build_analytics(db: AsyncSession) -> dict:
     now = now_kyiv()
     today = start_of_kyiv_day(now)
@@ -183,6 +232,7 @@ async def build_analytics(db: AsyncSession) -> dict:
         "listings_chart": await daily_chart(db, Listing, Listing.found_at),
         "notifications_chart": await daily_chart(db, Notification, Notification.created_at),
         "parse_runs_chart": await parse_runs_chart(db),
+        "data_quality": await data_quality_by_source(db),
     }
 
 

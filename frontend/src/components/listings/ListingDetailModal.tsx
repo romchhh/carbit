@@ -49,6 +49,7 @@ export function ListingDetailModal({
         listing.price,
         listing.currency,
         resolveDisplayCurrency(user?.preferred_currency),
+        listing.source_data,
       )
     : "";
   const [photoIndex, setPhotoIndex] = useState(0);

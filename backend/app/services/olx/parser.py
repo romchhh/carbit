@@ -117,7 +117,7 @@ class OlxListing:
     raw_params: dict = field(default_factory=dict)
 
 
-VIN_PATTERN = re.compile(r"\b(?=[A-HJ-NPR-Z0-9]{17}\b)(?!.*[IOQ])[A-HJ-NPR-Z0-9]{17}\b")
+VIN_PATTERN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")  # legacy; prefer extract_vin
 PLACEHOLDER_IMAGE_MARKERS = ("no_thumbnail", "/app/static/")
 
 
@@ -535,10 +535,12 @@ def _split_price(price_text: Optional[str]):
 def _split_location_date(text: Optional[str]):
     if not text:
         return None, None
-    parts = text.split(" - ", 1)
-    if len(parts) == 2:
-        return parts[0].strip(), parts[1].strip()
-    return text.strip(), None
+    normalized = text.replace("\xa0", " ").strip()
+    for sep in (" - ", " – ", " — ", " • ", " · "):
+        if sep in normalized:
+            left, right = normalized.split(sep, 1)
+            return left.strip(), right.strip()
+    return normalized, None
 
 
 def parse_listing_details(html: str) -> dict:
@@ -580,21 +582,42 @@ def parse_listing_details(html: str) -> dict:
     vin = None
     for value in specs.values():
         if isinstance(value, str):
-            match = VIN_PATTERN.search(value)
-            if match:
-                vin = match.group(0)
+            from app.services.vin import extract_vin
+
+            vin = extract_vin(value)
+            if vin:
                 break
     if not vin and description:
-        match = VIN_PATTERN.search(description)
-        if match:
-            vin = match.group(0)
+        from app.services.vin import extract_vin
+
+        vin = extract_vin(description)
+    if not vin:
+        from app.services.vin import extract_vin
+
+        title_tag = soup.select_one("h1") or soup.select_one('[data-testid="ad-title"]')
+        title_text = title_tag.get_text(" ", strip=True) if title_tag else None
+        vin = extract_vin(title_text, soup.get_text("\n", strip=True)[:4000])
 
     posted_tag = (
         soup.select_one('[data-testid="ad-posted-at"]')
         or soup.select_one('[data-cy="ad-posted-at"]')
         or soup.select_one('[data-testid="location-date"]')
     )
-    published = posted_tag.get_text(strip=True) if posted_tag else None
+    # separator=" " — інакше «Опубліковано»+«сьогодні…» зливається в «Опублікованосьогодні»
+    published = posted_tag.get_text(" ", strip=True) if posted_tag else None
+
+    # ISO-час з __PRERENDERED_STATE__ на детальній сторінці (надійніше за відносний текст)
+    last_refresh_time = None
+    created_time = None
+    for raw in _try_extract_embedded_json(html):
+        last_refresh_time = (
+            raw.get("lastRefreshTime")
+            or raw.get("last_refresh_time")
+            or last_refresh_time
+        )
+        created_time = raw.get("createdTime") or raw.get("created_time") or created_time
+        if last_refresh_time or created_time:
+            break
 
     return {
         "description": description,
@@ -604,6 +627,8 @@ def parse_listing_details(html: str) -> dict:
         "price": price,
         "currency": currency,
         "published": published,
+        "lastRefreshTime": last_refresh_time,
+        "createdTime": created_time,
     }
 
 
@@ -616,12 +641,38 @@ def _spec_text(specs: dict, *keys: str) -> str:
     return ""
 
 
+def _is_better_published(candidate: str | None, current: str | None) -> bool:
+    """Чи варто замінити current на candidate (пріоритет ISO > відносний текст)."""
+    if not candidate:
+        return False
+    from app.services.olx.dates import _parse_iso_datetime, parse_olx_published_text
+
+    cand_iso = _parse_iso_datetime(candidate)
+    cur_iso = _parse_iso_datetime(current) if current else None
+    if cand_iso and not cur_iso:
+        return True
+    if cand_iso and cur_iso:
+        return False
+    if current and (cur_iso or parse_olx_published_text(current)):
+        # Уже є щось парсабельне — не затираємо злитим «Опублікованосьогодні»
+        return False
+    return bool(parse_olx_published_text(candidate) or _parse_iso_datetime(candidate))
+
+
 def apply_details_to_listing(listing: OlxListing, details: dict) -> None:
     if not details:
         return
 
     listing.description = details.get("description") or listing.description
     listing.vin = details.get("vin") or listing.vin
+    if not listing.vin:
+        from app.services.vin import extract_vin
+
+        listing.vin = extract_vin(
+            listing.title,
+            listing.description,
+            " ".join(str(v) for v in (listing.specs or {}).values() if isinstance(v, str)),
+        )
     listing.specs = {**(listing.specs or {}), **(details.get("specs") or {})}
 
     photos = [url for url in details.get("photos", []) if is_valid_image_url(url)]
@@ -634,12 +685,18 @@ def apply_details_to_listing(listing: OlxListing, details: dict) -> None:
     if not listing.currency and details.get("currency"):
         listing.currency = details.get("currency")
 
-    if details.get("published"):
-        from app.services.olx.dates import _parse_iso_datetime
+    if listing.raw_params is None:
+        listing.raw_params = {}
+    for key in ("lastRefreshTime", "createdTime"):
+        value = details.get(key)
+        if value and key not in listing.raw_params:
+            listing.raw_params[key] = value
 
-        # Не затираємо ISO-час з search JSON відносним текстом з детальної сторінки.
-        if not _parse_iso_datetime(listing.published):
-            listing.published = details.get("published")
+    iso_from_details = details.get("lastRefreshTime") or details.get("createdTime")
+    if _is_better_published(iso_from_details, listing.published):
+        listing.published = str(iso_from_details)
+    elif _is_better_published(details.get("published"), listing.published):
+        listing.published = details.get("published")
 
     specs = listing.specs or {}
     if not listing.year:

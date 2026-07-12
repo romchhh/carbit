@@ -129,6 +129,7 @@ def extract_image_urls(info: dict[str, Any], fotos_payload: Any | None = None) -
 
 
 def sanitize_source_data(info: dict[str, Any], fotos_payload: Any | None = None) -> dict[str, Any]:
+    del fotos_payload  # images already extracted separately; raw fotos can break JSON
     payload = copy.deepcopy(info)
 
     link = str(payload.get("linkToView") or "").strip()
@@ -148,8 +149,10 @@ def sanitize_source_data(info: dict[str, Any], fotos_payload: Any | None = None)
             dealer["link"] = f"{AUTO_RIA_SITE_URL}{dealer_link}"
 
     payload.pop("vinSvg", None)
+    # Не кладемо сирий fotos у відповідь API — images уже зібрані окремо,
+    # а великий вкладений об'єкт інколи ламає JSON-серіалізацію (500).
+    payload.pop("_fotos", None)
 
-    if isinstance(fotos_payload, dict):
-        payload["_fotos"] = fotos_payload
+    from app.services.listings.sanitize import json_safe
 
-    return payload
+    return json_safe(payload) if isinstance(payload, dict) else {}

@@ -113,6 +113,13 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
 
     posted_at = as_kyiv(listing.posted_at) if listing.posted_at else now_kyiv()
 
+    from app.services.vin import extract_vin
+
+    flags = listing.condition_flags if isinstance(listing.condition_flags, dict) else {}
+    vin = flags.get("vin") if isinstance(flags.get("vin"), str) else None
+    if not vin:
+        vin = extract_vin(raw_text, listing.brand, listing.model)
+
     return ListingOut(
         id=telegram_listing_id(listing.channel, listing.message_id),
         source="telegram",
@@ -133,7 +140,7 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
         images=images,
         url=telegram_message_url(listing.channel, listing.message_id, listing.source_link),
         seller_type="private",
-        vin=None,
+        vin=vin,
         vin_checked=None,
         vin_check_url=None,
         source_data={

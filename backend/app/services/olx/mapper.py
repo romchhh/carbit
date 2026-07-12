@@ -15,7 +15,7 @@ from app.services.olx.constants import (
     REGION_TO_CITY_QUERY,
     TRANSMISSION_NAME_TO_KEY,
 )
-from app.services.olx.dates import resolve_olx_published_at
+from app.services.olx.dates import resolve_olx_published_at, resolve_olx_refreshed_at
 from app.services.olx.parser import OlxListing, OlxSearchParams, is_valid_image_url
 from app.services.olx.brand_slugs import resolve_olx_brand_slug, resolve_olx_model_slug
 from app.services.olx.constants import MODEL_SLUG_ALIASES
@@ -232,6 +232,24 @@ def olx_listing_to_listing_out(
 
     price_amount, price_currency = _listing_price_value(listing)
 
+    from app.services.vin import extract_vin
+
+    vin = listing.vin or extract_vin(
+        title,
+        listing.description,
+        " ".join(str(v) for v in specs.values() if isinstance(v, str)),
+    )
+
+    published_at = resolve_olx_published_at(
+        published=listing.published,
+        raw_params=listing.raw_params,
+    )
+    refreshed_at = resolve_olx_refreshed_at(
+        published=listing.published,
+        raw_params=listing.raw_params,
+        published_at=published_at,
+    )
+
     return ListingOut(
         id=f"olx_{listing_id}",
         source="olx",
@@ -249,7 +267,7 @@ def olx_listing_to_listing_out(
         images=images,
         url=listing.url or "",
         seller_type="private",
-        vin=listing.vin,
+        vin=vin,
         vin_checked=None,
         vin_check_url=None,
         source_data={
@@ -259,13 +277,17 @@ def olx_listing_to_listing_out(
             "raw_params": listing.raw_params,
             "price_original": price_amount,
             "price_currency": price_currency,
+            "createdTime": (listing.raw_params or {}).get("createdTime")
+            if isinstance(listing.raw_params, dict)
+            else None,
+            "lastRefreshTime": (listing.raw_params or {}).get("lastRefreshTime")
+            if isinstance(listing.raw_params, dict)
+            else None,
         },
         price_history=[],
         is_duplicate=False,
-        published_at=resolve_olx_published_at(
-            published=listing.published,
-            raw_params=listing.raw_params,
-        ),
+        published_at=published_at,
+        refreshed_at=refreshed_at,
         found_at=now_kyiv(),
     )
 

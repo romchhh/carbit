@@ -9,7 +9,7 @@ export function normalizeListingForFavorite(listing: Listing): Listing {
     fuel: listing.fuel ?? "",
     transmission: listing.transmission ?? "",
     region: listing.region ?? "",
-    currency: listing.currency || "грн",
+    currency: listing.currency || "UAH",
     is_duplicate: listing.is_duplicate ?? false,
     published_at: listing.published_at || new Date().toISOString(),
     found_at: listing.found_at || new Date().toISOString(),

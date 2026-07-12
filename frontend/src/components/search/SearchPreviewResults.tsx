@@ -12,13 +12,13 @@ import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import type { ExportListing } from "@/lib/export-listings";
 import { SEARCH_HOURLY_LIMIT, SEARCH_PAGE_SIZE, type SearchFreshness } from "@/lib/search-preview";
-import type { Listing } from "@/types/api";
+import type { Listing, SourceStatus } from "@/types/api";
 import { cn } from "@/lib/utils";
 
 function sourceLabel(source: string): string {
-  if (source === "olx") return "OLX";
-  if (source === "auto_ria") return "AUTO.RIA";
-  if (source === "telegram") return "Telegram";
+  if (source === "olx" || source === "OLX") return "OLX";
+  if (source === "auto_ria" || source === "AUTO.RIA") return "AUTO.RIA";
+  if (source === "telegram" || source === "Telegram") return "Telegram";
   return source.toUpperCase();
 }
 
@@ -50,6 +50,9 @@ type Props = {
   sort: SortOption;
   freshness: SearchFreshness;
   error?: string | null;
+  sourceStatuses?: SourceStatus[];
+  partial?: boolean;
+  fromCache?: boolean;
   onSortChange: (sort: SortOption) => void;
   onFreshnessChange: (freshness: SearchFreshness) => void;
   onLoadMore?: () => void;
@@ -69,6 +72,9 @@ export function SearchPreviewResults({
   sort,
   freshness,
   error,
+  sourceStatuses,
+  partial,
+  fromCache,
   onSortChange,
   onFreshnessChange,
   onLoadMore,
@@ -83,6 +89,14 @@ export function SearchPreviewResults({
   const exportItems = useMemo(() => toExportItems(results), [results]);
   const remaining = Math.max(0, total - results.length);
   const nextBatch = Math.min(SEARCH_PAGE_SIZE, remaining);
+
+  const pendingSources = (sourceStatuses ?? []).filter(s => s.error);
+  const partialHint =
+    partial && pendingSources.length > 0
+      ? pendingSources
+          .map(s => `${sourceLabel(s.source)} ще не відповів`)
+          .join(" · ")
+      : null;
 
   const openListing = (listing: Listing) => {
     saveRecentListing(listing);
@@ -142,12 +156,24 @@ export function SearchPreviewResults({
           </div>
         )}
 
+        {partialHint && !error && (
+          <div
+            role="status"
+            className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900"
+          >
+            Показано часткові результати. {partialHint}. Решту можна підвантажити пізніше.
+            {fromCache ? " Результати з кешу." : ""}
+          </div>
+        )}
+
         <SearchProgressBar
           active={searching || Boolean(loadingMore)}
           compact={running && !searching}
           label={
             loadingMore
-              ? `Завантажуємо ще ${nextBatch}…`
+              ? fromCache
+                ? `Завантажуємо ще ${nextBatch} з кешу…`
+                : `Завантажуємо ще ${nextBatch}…`
               : running
                 ? "Оновлюємо результати…"
                 : "Шукаємо на AUTO.RIA та OLX…"

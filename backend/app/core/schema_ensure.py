@@ -57,6 +57,20 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
                     )
                 )
                 logger.warning("Created missing telegram_channels table")
+
+            listing_cols = {
+                row[1]
+                for row in (await conn.execute(text("PRAGMA table_info(listings)"))).fetchall()
+            }
+            if "vin" not in listing_cols:
+                await conn.execute(text("ALTER TABLE listings ADD COLUMN vin VARCHAR"))
+                await conn.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_listings_vin ON listings (vin)")
+                )
+                logger.warning("Added missing listings.vin column")
+            if "refreshed_at" not in listing_cols:
+                await conn.execute(text("ALTER TABLE listings ADD COLUMN refreshed_at DATETIME"))
+                logger.warning("Added missing listings.refreshed_at column")
             return
 
         # Postgres / others
@@ -109,3 +123,25 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
                 )
             )
             logger.warning("Created missing telegram_channels table")
+
+        for column, ddl in (
+            ("vin", "ALTER TABLE listings ADD COLUMN vin VARCHAR"),
+            ("refreshed_at", "ALTER TABLE listings ADD COLUMN refreshed_at TIMESTAMPTZ"),
+        ):
+            col_exists = await conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_name = 'listings' AND column_name = :column
+                    """
+                ),
+                {"column": column},
+            )
+            if col_exists.first() is None:
+                await conn.execute(text(ddl))
+                if column == "vin":
+                    await conn.execute(
+                        text("CREATE INDEX IF NOT EXISTS ix_listings_vin ON listings (vin)")
+                    )
+                logger.warning("Added missing listings.%s column", column)

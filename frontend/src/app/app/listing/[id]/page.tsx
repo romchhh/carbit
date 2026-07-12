@@ -240,6 +240,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 listing.price,
                 listing.currency,
                 resolveDisplayCurrency(user?.preferred_currency),
+                listing.source_data,
               )}
             </div>
             <div className="mt-4 flex flex-col gap-2">
@@ -328,6 +329,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 listing.price,
                 listing.currency,
                 resolveDisplayCurrency(user?.preferred_currency),
+                listing.source_data,
               )}
             </div>
             <div className="mt-4">

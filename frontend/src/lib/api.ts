@@ -5,6 +5,7 @@ import { cachedAutoRiaSearch } from "@/lib/auto-ria-search-cache";
 import type { AutoRiaSearchMode } from "@/lib/search-preview";
 import type { SortOption } from "@/lib/search-catalog";
 import type { BackendSearchFilters } from "@/lib/search-filters-api";
+import { applyFxRates, fxRatesStale } from "@/lib/display-currency";
 import type {
   DashboardStats,
   Favorite,
@@ -155,6 +156,18 @@ export const listingSearch = {
           { method: "POST", body: JSON.stringify(filters) },
         ),
     ),
+};
+
+export const fx = {
+  rates: async () => {
+    if (!fxRatesStale()) return;
+    try {
+      const data = await request<{ USD?: number; EUR?: number }>("/fx/rates");
+      applyFxRates(data);
+    } catch {
+      /* fallback constants */
+    }
+  },
 };
 
 /** @deprecated Use listingSearch.search */

@@ -65,6 +65,9 @@ const withPWA = require("next-pwa")({
   runtimeCaching,
 });
 
+// Absolute API URL → браузер б'є backend напряму (CORS). Relative `/api/v1` → Next rewrite.
+const useDirectApi = /^https?:\/\//i.test(apiUrl);
+
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
@@ -74,6 +77,7 @@ const nextConfig = {
     NEXT_PUBLIC_TELEGRAM_BOT_URL: telegramBotUrl,
   },
   async rewrites() {
+    if (useDirectApi) return [];
     return [
       {
         source: "/api/v1/:path*",

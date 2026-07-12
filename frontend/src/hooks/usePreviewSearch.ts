@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listingSearch, getApiErrorMessage } from "@/lib/api";
+import { listingSearch, fx, getApiErrorMessage } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
   DEFAULT_FILTERS,
@@ -16,7 +16,7 @@ import {
 } from "@/lib/search-preview";
 import { toBackendSearchFilters } from "@/lib/search-filters-api";
 import { resolveDisplayCurrency } from "@/lib/display-currency";
-import type { Listing } from "@/types/api";
+import type { Listing, SourceStatus } from "@/types/api";
 
 export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAULT_FILTERS }) {
   const { user } = useAuth();
@@ -50,6 +50,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sourceStatuses, setSourceStatuses] = useState<SourceStatus[]>([]);
+  const [partial, setPartial] = useState(false);
+  const [fromCache, setFromCache] = useState(false);
 
   const buildRequestFilters = useCallback(
     (nextFilters: SearchFilterState, nextFreshness: SearchFreshness) => {
@@ -82,6 +85,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       }
 
       try {
+        void fx.rates();
         const data = await listingSearch.search(
           buildRequestFilters(nextFilters, nextFreshness),
           nextPage,
@@ -94,6 +98,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         setTotal(data.total);
         setPage(data.page);
         setPages(data.pages);
+        setSourceStatuses(data.sources ?? []);
+        setPartial(Boolean(data.partial));
+        setFromCache(Boolean(data.from_cache));
         setFilters({ ...nextFilters });
         setSort(nextSort);
         setFreshness(nextFreshness);
@@ -106,6 +113,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           setTotal(0);
           setPage(1);
           setPages(0);
+          setSourceStatuses([]);
+          setPartial(false);
+          setFromCache(false);
           setRunning(false);
         }
         setError(getApiErrorMessage(err, "Не вдалось виконати пошук. Спробуйте ще раз."));
@@ -166,6 +176,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setTotal(0);
     setPage(1);
     setPages(0);
+    setSourceStatuses([]);
+    setPartial(false);
+    setFromCache(false);
     setSort("newest");
     setFreshness("all");
     setRunning(false);
@@ -186,6 +199,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     loadingMore,
     hasMore: running && page < pages,
     error,
+    sourceStatuses,
+    partial,
+    fromCache,
     resultsRef,
     runSearch,
     changeSort,

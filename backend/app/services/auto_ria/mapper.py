@@ -176,6 +176,64 @@ def _extract_vin_check_url(info: dict[str, Any], auto_id: str) -> str | None:
     return None
 
 
+def _parse_money(value: Any) -> int:
+    """Парсить суму з int/float або рядка на кшталт «12 500»."""
+    if value is None or value is False:
+        return 0
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(round(value))
+    if isinstance(value, str):
+        cleaned = (
+            value.replace("\u00a0", "")
+            .replace("\u202f", "")
+            .replace("\u2009", "")
+            .replace(" ", "")
+            .replace(",", ".")
+            .strip()
+        )
+        if not cleaned:
+            return 0
+        try:
+            return int(round(float(cleaned)))
+        except ValueError:
+            return 0
+    return 0
+
+
+def _money_from_info(info: dict[str, Any], key: str) -> int:
+    """Бере суму з верхнього рівня або з prices[0] (там часто рядки з пробілами)."""
+    amount = _parse_money(info.get(key))
+    if amount > 0:
+        return amount
+    prices = info.get("prices")
+    if isinstance(prices, list):
+        for entry in prices:
+            if isinstance(entry, dict):
+                amount = _parse_money(entry.get(key))
+                if amount > 0:
+                    return amount
+    return 0
+
+
+def _listing_price_from_info(info: dict[str, Any]) -> tuple[int, str]:
+    """
+    Оригінальна ціна оголошення.
+    USD з AUTO.RIA має пріоритет — інакше 12 500$ стають 12 389$ через курс 45.
+    """
+    usd = _money_from_info(info, "USD")
+    if usd > 0:
+        return usd, "USD"
+    eur = _money_from_info(info, "EUR")
+    if eur > 0:
+        return eur, "EUR"
+    uah = _money_from_info(info, "UAH")
+    if uah > 0:
+        return uah, "UAH"
+    return 0, "USD"
+
+
 def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> ListingOut:
     auto_data = info.get("autoData") or {}
     state_data = info.get("stateData") or {}
@@ -199,18 +257,7 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
     if not title:
         title = " ".join(part for part in (brand, model) if part) or "AUTO.RIA"
 
-    price = int(info.get("UAH") or 0)
-    usd = int(info.get("USD") or 0)
-    # Беремо оригінальний USD з API, щоб не ганяти через фіксований курс грн→$.
-    if usd > 0:
-        price_amount = usd
-        price_currency = "USD"
-    elif price > 0:
-        price_amount = price
-        price_currency = "UAH"
-    else:
-        price_amount = 0
-        price_currency = "USD"
+    price_amount, price_currency = _listing_price_from_info(info)
 
     year = int(auto_data.get("year") or 0)
     mileage = int(auto_data.get("raceInt") or 0) * 1000 if auto_data.get("raceInt") else 0

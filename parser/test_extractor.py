@@ -118,6 +118,19 @@ class ExtractorTests(unittest.TestCase):
         listing = _extract("BMW 320 2016, VIN WBA8E9G50JNU12345, 12000$")
         self.assertEqual(listing.condition_flags.get("vin"), "WBA8E9G50JNU12345")
 
+    def test_vin_from_plain_line(self):
+        text = """
+Mercedes-Benz G63 2023
+269500$
+W1NWH5AB1SX014976
+"""
+        listing = _extract(text)
+        self.assertEqual(listing.condition_flags.get("vin"), "W1NWH5AB1SX014976")
+
+    def test_vin_not_blocked_by_later_letter_i(self):
+        listing = _extract("Toyota Camry 2018 9000$\nWBA8E9G50JNU12345\nOfficial import")
+        self.assertEqual(listing.condition_flags.get("vin"), "WBA8E9G50JNU12345")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     TELEGRAM_ENABLED: bool = True
     TELEGRAM_MAX_PHOTOS: int = 5
 
+    # Observability
+    SENTRY_DSN: str = ""
+
     @model_validator(mode="after")
     def resolve_paths(self) -> "Settings":
         self.DATABASE_URL = resolve_database_url(self.DATABASE_URL)

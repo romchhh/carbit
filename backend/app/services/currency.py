@@ -1,7 +1,16 @@
 from __future__ import annotations
 
-USD_TO_UAH = 45
-EUR_TO_UAH = 44
+from app.services.fx_rates import (
+    FALLBACK_EUR_TO_UAH,
+    FALLBACK_USD_TO_UAH,
+    current_rates,
+    eur_to_uah_rate,
+    usd_to_uah_rate,
+)
+
+# Зворотна сумісність: модулі імпортують ці імена.
+USD_TO_UAH = FALLBACK_USD_TO_UAH
+EUR_TO_UAH = FALLBACK_EUR_TO_UAH
 
 DISPLAY_CURRENCIES = frozenset({"UAH", "USD", "EUR"})
 DEFAULT_DISPLAY_CURRENCY = "USD"
@@ -68,15 +77,15 @@ def infer_currency(amount: float, currency: str | None, text: str = "") -> str:
 
 
 def to_uah(amount: float | int | None, currency: str | None, *, text: str = "") -> int:
-    """Переводить суму в грн для порівнянь/сортування."""
+    """Переводить суму в грн для порівнянь/сортування (живий курс НБУ, якщо є)."""
     if amount is None:
         return 0
     value = float(amount)
     cur = infer_currency(value, currency, text)
     if cur == "USD":
-        return int(round(value * USD_TO_UAH))
+        return int(round(value * usd_to_uah_rate()))
     if cur == "EUR":
-        return int(round(value * EUR_TO_UAH))
+        return int(round(value * eur_to_uah_rate()))
     return int(round(value))
 
 
@@ -87,9 +96,11 @@ def from_uah(amount_uah: float | int | None, target_currency: str | None) -> int
     value = float(amount_uah)
     cur = resolve_display_currency(target_currency)
     if cur == "USD":
-        return int(round(value / USD_TO_UAH))
+        rate = usd_to_uah_rate() or FALLBACK_USD_TO_UAH
+        return int(round(value / rate))
     if cur == "EUR":
-        return int(round(value / EUR_TO_UAH))
+        rate = eur_to_uah_rate() or FALLBACK_EUR_TO_UAH
+        return int(round(value / rate))
     return int(round(value))
 
 
@@ -102,8 +113,7 @@ def convert_price(
 ) -> int:
     """
     Конвертує ціну між валютами.
-    Якщо валюти збігаються — повертає оригінал без округлення через курс
-    (щоб 16 300 $ з OLX лишались 16 300 $, а не 16 131 $).
+    Якщо валюти збігаються — повертає оригінал без округлення через курс.
     """
     if amount is None:
         return 0
@@ -143,3 +153,7 @@ def filter_price_to_uah(amount: int | None, currency: str | None) -> int | None:
 def listing_price_uah(amount: float | int | None, currency: str | None) -> int:
     """Ціна оголошення в грн для сортування/фільтрів."""
     return to_uah(amount, currency)
+
+
+def fx_snapshot() -> dict[str, float]:
+    return current_rates()

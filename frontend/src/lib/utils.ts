@@ -71,3 +71,8 @@ export function publishedAgoLabel(date: string | null | undefined) {
   const label = timeAgo(date);
   return label ? `Опубліковано ${label}` : "";
 }
+
+export function refreshedAgoLabel(date: string | null | undefined) {
+  const label = timeAgo(date);
+  return label ? `Оновлено ${label}` : "";
+}

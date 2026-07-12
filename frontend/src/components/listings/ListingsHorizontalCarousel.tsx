@@ -244,6 +244,7 @@ export function ListingsHorizontalCarousel({
                           listing.price,
                           listing.currency,
                           resolveDisplayCurrency(user?.preferred_currency),
+                          listing.source_data,
                         )}
                       </p>
                       <p className="mt-1.5 text-[12px] leading-snug text-muted">

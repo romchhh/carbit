@@ -3,8 +3,10 @@ import asyncio
 import logging
 import sys
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import ResponseValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.api.v1.router import api_router
@@ -12,6 +14,30 @@ from app.core.secrets_guard import assert_production_secrets
 from app.services.health import check_database_fast, check_kv_fast, heartbeat_age_seconds
 
 logger = logging.getLogger(__name__)
+
+
+def _init_sentry() -> None:
+    dsn = (settings.SENTRY_DSN or "").strip()
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+
+        sentry_sdk.init(
+            dsn=dsn,
+            integrations=[
+                FastApiIntegration(),
+                LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+            ],
+            traces_sample_rate=0.05 if not settings.DEBUG else 0.0,
+            environment="debug" if settings.DEBUG else "production",
+            send_default_pii=False,
+        )
+        logger.info("Sentry initialized")
+    except Exception:
+        logger.exception("Sentry init failed")
 
 
 @asynccontextmanager
@@ -38,9 +64,18 @@ async def lifespan(_app: FastAPI):
     except Exception:
         logger.exception("Runtime schema ensure failed")
 
+    try:
+        from app.services.fx_rates import refresh_process_rates
+
+        await refresh_process_rates()
+    except Exception:
+        logger.debug("FX rates warmup failed", exc_info=True)
+
     logger.info("KV REDIS_URL=%s", settings.REDIS_URL)
     yield
 
+
+_init_sentry()
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -51,15 +86,35 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS: браузер → backend напряму (без Next rewrite як SPOF)
+_origins = list(settings.ALLOWED_ORIGINS or [])
+if settings.FRONTEND_URL and settings.FRONTEND_URL.rstrip("/") not in _origins:
+    _origins.append(settings.FRONTEND_URL.rstrip("/"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+
+@app.exception_handler(ResponseValidationError)
+async def response_validation_exception_handler(
+    _request: Request,
+    exc: ResponseValidationError,
+) -> JSONResponse:
+    """Не віддаємо сирий 500 — клієнт бачить зрозумілу помилку, в логах є деталі."""
+    logger.error("Response validation failed: %s", exc.errors())
+    return JSONResponse(
+        status_code=502,
+        content={
+            "detail": "Пошук тимчасово недоступний через помилку даних. Спробуйте ще раз.",
+        },
+    )
 
 
 @app.get("/health")
