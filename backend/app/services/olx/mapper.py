@@ -19,7 +19,7 @@ from app.services.olx.dates import resolve_olx_published_at
 from app.services.olx.parser import OlxListing, OlxSearchParams, is_valid_image_url
 from app.services.olx.brand_slugs import resolve_olx_brand_slug, resolve_olx_model_slug
 from app.services.olx.constants import MODEL_SLUG_ALIASES
-from app.services.currency import filter_price_to_uah, resolve_filter_currency, to_uah
+from app.services.currency import filter_price_to_uah, resolve_filter_currency
 
 
 def brand_slug(brand: str) -> str:
@@ -172,11 +172,16 @@ def _listing_year_value(listing: OlxListing) -> int:
     return int(match.group(1)) if match else 0
 
 
-def _listing_price_value(listing: OlxListing) -> int:
+def _listing_price_value(listing: OlxListing) -> tuple[int, str]:
+    from app.services.currency import infer_currency, normalize_currency
+
     price = _parse_int(listing.price)
     if not price:
-        return 0
-    return to_uah(price, listing.currency)
+        return 0, "USD"
+    currency = normalize_currency(listing.currency) if listing.currency else infer_currency(price, None)
+    if currency not in {"UAH", "USD", "EUR"}:
+        currency = infer_currency(price, None)
+    return price, currency
 
 
 def _listing_mileage_value(listing: OlxListing) -> int:
@@ -225,7 +230,7 @@ def olx_listing_to_listing_out(
     transmission = _extract_spec(specs, "короб", "transmission", "кпп") or ""
     images = _listing_images(listing)
 
-    price_uah = _listing_price_value(listing)
+    price_amount, price_currency = _listing_price_value(listing)
 
     return ListingOut(
         id=f"olx_{listing_id}",
@@ -234,8 +239,8 @@ def olx_listing_to_listing_out(
         brand=brand,
         model=model,
         year=_listing_year_value(listing),
-        price=price_uah,
-        currency="грн",
+        price=price_amount,
+        currency=price_currency,
         mileage=_listing_mileage_value(listing),
         fuel=fuel,
         transmission=transmission,
@@ -252,8 +257,8 @@ def olx_listing_to_listing_out(
             "published": listing.published,
             "promoted": listing.promoted,
             "raw_params": listing.raw_params,
-            "price_original": _parse_int(listing.price),
-            "price_currency": listing.currency or "UAH",
+            "price_original": price_amount,
+            "price_currency": price_currency,
         },
         price_history=[],
         is_duplicate=False,

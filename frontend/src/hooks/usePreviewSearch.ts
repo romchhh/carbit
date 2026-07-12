@@ -22,13 +22,13 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const { user } = useAuth();
   const resultsRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState<SearchFilterState>(initialFilters);
-  const lastPreferredCurrency = useRef<string | null>(null);
+  const currencySynced = useRef(false);
+  const searchGen = useRef(0);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || currencySynced.current) return;
+    currencySynced.current = true;
     const preferred = resolveDisplayCurrency(user.preferred_currency);
-    if (lastPreferredCurrency.current === preferred) return;
-    lastPreferredCurrency.current = preferred;
     setFilters(prev => {
       if (prev.currency === preferred) return prev;
       const defaults = DEFAULT_PRICE_BY_CURRENCY[preferred];
@@ -70,6 +70,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       nextFreshness: SearchFreshness,
       append: boolean,
     ) => {
+      const gen = ++searchGen.current;
       if (append) {
         setLoadingMore(true);
       } else {
@@ -88,6 +89,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           nextSort === "newest" ? "published_desc" : nextSort,
           "preview",
         );
+        if (gen !== searchGen.current) return;
         setResults(prev => (append ? [...prev, ...data.items] : data.items));
         setTotal(data.total);
         setPage(data.page);
@@ -96,7 +98,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         setSort(nextSort);
         setFreshness(nextFreshness);
         setRunning(true);
+        setError(null);
       } catch (err) {
+        if (gen !== searchGen.current) return;
         if (!append) {
           setResults([]);
           setTotal(0);
@@ -106,8 +110,10 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         }
         setError(getApiErrorMessage(err, "Не вдалось виконати пошук. Спробуйте ще раз."));
       } finally {
-        setSearching(false);
-        setLoadingMore(false);
+        if (gen === searchGen.current) {
+          setSearching(false);
+          setLoadingMore(false);
+        }
       }
     },
     [buildRequestFilters],

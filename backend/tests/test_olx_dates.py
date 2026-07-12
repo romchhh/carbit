@@ -32,6 +32,22 @@ class OlxPublishedDateTests(unittest.TestCase):
         dt = parse_olx_published_text("3 липня 2026", now=self.now)
         self.assertEqual(dt, datetime(2026, 7, 3, 12, 0, tzinfo=KYIV_TZ))
 
+    def test_month_name_with_year_suffix(self):
+        dt = parse_olx_published_text("10 липня 2026 р.", now=self.now)
+        self.assertEqual(dt, datetime(2026, 7, 10, 12, 0, tzinfo=KYIV_TZ))
+
+    def test_published_label_prefix(self):
+        dt = parse_olx_published_text("Опубліковано 10 липня 2026 р.", now=self.now)
+        self.assertEqual(dt, datetime(2026, 7, 10, 12, 0, tzinfo=KYIV_TZ))
+
+    def test_prefers_last_refresh_time(self):
+        raw = {
+            "createdTime": "2024-10-28T14:04:07+02:00",
+            "lastRefreshTime": "2026-06-22T00:07:18+03:00",
+        }
+        dt = resolve_olx_published_at(published=None, raw_params=raw, now=self.now)
+        self.assertEqual(dt, datetime(2026, 6, 22, 0, 7, 18, tzinfo=KYIV_TZ))
+
     def test_created_time_from_raw_params(self):
         raw = {"createdTime": "2026-06-15T10:00:00+03:00"}
         dt = resolve_olx_published_at(published=None, raw_params=raw, now=self.now)

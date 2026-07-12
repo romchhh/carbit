@@ -1,6 +1,6 @@
 import {
+  convertPrice,
   currencySuffix,
-  fromUah,
   resolveDisplayCurrency,
   type DisplayCurrency,
 } from "@/lib/display-currency";
@@ -13,6 +13,7 @@ export type ExportListing = {
   year: number;
   mileage: number;
   price: number;
+  currency?: string;
   region: string;
   src: string;
   fuel?: string;
@@ -55,7 +56,7 @@ function cellValue(
     return item.risk ? RISK_LABELS[item.risk] ?? item.risk : "";
   }
   if (key === "price") {
-    return String(fromUah(Number(item.price) || 0, currency));
+    return String(convertPrice(Number(item.price) || 0, item.currency, currency));
   }
   const value = item[key as keyof ExportListing];
   if (value == null) return "";

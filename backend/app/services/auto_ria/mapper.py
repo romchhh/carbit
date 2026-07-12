@@ -200,6 +200,18 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
         title = " ".join(part for part in (brand, model) if part) or "AUTO.RIA"
 
     price = int(info.get("UAH") or 0)
+    usd = int(info.get("USD") or 0)
+    # Беремо оригінальний USD з API, щоб не ганяти через фіксований курс грн→$.
+    if usd > 0:
+        price_amount = usd
+        price_currency = "USD"
+    elif price > 0:
+        price_amount = price
+        price_currency = "UAH"
+    else:
+        price_amount = 0
+        price_currency = "USD"
+
     year = int(auto_data.get("year") or 0)
     mileage = int(auto_data.get("raceInt") or 0) * 1000 if auto_data.get("raceInt") else 0
 
@@ -222,8 +234,8 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
         brand=brand,
         model=model,
         year=year,
-        price=price,
-        currency="грн",
+        price=price_amount,
+        currency=price_currency,
         mileage=mileage,
         fuel=fuel,
         transmission=transmission,
@@ -251,12 +263,18 @@ def _listing_published_key(item: ListingOut) -> datetime:
 
 
 def sort_listings(items: list[ListingOut], sort_by: str) -> list[ListingOut]:
+    from app.services.currency import listing_price_uah
+
     if sort_by in ("published_desc", "newest"):
         return sorted(items, key=_listing_published_key, reverse=True)
     if sort_by == "price_desc":
-        return sorted(items, key=lambda x: x.price, reverse=True)
+        return sorted(
+            items,
+            key=lambda x: listing_price_uah(x.price, x.currency),
+            reverse=True,
+        )
     if sort_by == "year_desc":
         return sorted(items, key=lambda x: x.year, reverse=True)
     if sort_by == "mileage_asc":
         return sorted(items, key=lambda x: x.mileage)
-    return sorted(items, key=lambda x: x.price)
+    return sorted(items, key=lambda x: listing_price_uah(x.price, x.currency))

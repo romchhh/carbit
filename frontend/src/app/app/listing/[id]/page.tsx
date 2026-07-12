@@ -18,7 +18,7 @@ import {
   cn,
   publishedAgoLabel,
 } from "@/lib/utils";
-import { formatPriceFromUah, resolveDisplayCurrency } from "@/lib/display-currency";
+import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
 import {
   listingAttributionUrl,
   listingOpenLabel,
@@ -236,12 +236,16 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
             )}
             <div className="mt-3 text-[28px] font-black leading-none tracking-tight text-ink">
-              {formatPriceFromUah(listing.price, resolveDisplayCurrency(user?.preferred_currency))}
+              {formatListingPrice(
+                listing.price,
+                listing.currency,
+                resolveDisplayCurrency(user?.preferred_currency),
+              )}
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <a href={listing.url} target="_blank" rel="noopener noreferrer">
-                <Button variant="primary" size="md" className="w-full gap-1.5">
-                  <IconGlobe size={14} />
+                <Button variant="emerald" size="lg" className="w-full gap-2 py-3 text-[15px] font-bold">
+                  <IconGlobe size={18} />
                   {listingOpenLabel(listing.source)}
                 </Button>
               </a>
@@ -320,15 +324,19 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
             )}
             <div className="mt-4 text-[32px] font-black leading-none text-ink">
-              {formatPriceFromUah(listing.price, resolveDisplayCurrency(user?.preferred_currency))}
+              {formatListingPrice(
+                listing.price,
+                listing.currency,
+                resolveDisplayCurrency(user?.preferred_currency),
+              )}
             </div>
             <div className="mt-4">
               <SourceBadge source={listing.source} variant="outline" />
             </div>
             <div className="mt-5 space-y-2">
               <a href={listing.url} target="_blank" rel="noopener noreferrer">
-                <Button variant="primary" size="md" className="w-full gap-1.5">
-                  <IconGlobe size={13} />
+                <Button variant="emerald" size="lg" className="w-full gap-2 py-3 text-[15px] font-bold">
+                  <IconGlobe size={18} />
                   {listingOpenLabel(listing.source)}
                 </Button>
               </a>

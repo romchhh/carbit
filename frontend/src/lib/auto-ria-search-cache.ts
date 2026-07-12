@@ -19,6 +19,14 @@ function cacheKey({ filters, page, perPage, sortBy, mode }: SearchParams): strin
   return JSON.stringify({ filters, page, perPage, sortBy, mode });
 }
 
+function isRetryableSearchError(err: unknown): boolean {
+  if (err && typeof err === "object" && "status" in err) {
+    const status = Number((err as { status: unknown }).status);
+    return status === 502 || status === 503 || status === 504;
+  }
+  return err instanceof TypeError;
+}
+
 export async function cachedAutoRiaSearch(
   params: SearchParams,
   fetcher: () => Promise<PaginatedListings>,
@@ -36,14 +44,28 @@ export async function cachedAutoRiaSearch(
     return pending;
   }
 
-  const request = fetcher()
-    .then(data => {
-      memoryCache.set(key, { expires: Date.now() + CACHE_TTL_MS, data });
-      return data;
-    })
-    .finally(() => {
+  const request = (async () => {
+    try {
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const data = await fetcher();
+          memoryCache.set(key, { expires: Date.now() + CACHE_TTL_MS, data });
+          return data;
+        } catch (err) {
+          lastError = err;
+          if (attempt === 0 && isRetryableSearchError(err)) {
+            await new Promise(resolve => setTimeout(resolve, 600));
+            continue;
+          }
+          throw err;
+        }
+      }
+      throw lastError;
+    } finally {
       inflight.delete(key);
-    });
+    }
+  })();
 
   inflight.set(key, request);
   return request;

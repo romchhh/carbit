@@ -14,8 +14,8 @@ class PriceCurrencyTests(unittest.TestCase):
         self.assertEqual(CURRENCY_USD, 1)
         self.assertEqual(CURRENCY_UAH, 3)
 
-    def test_resolve_filter_currency_defaults_uah_for_legacy(self):
-        self.assertEqual(resolve_filter_currency(None), "UAH")
+    def test_resolve_filter_currency_defaults_usd(self):
+        self.assertEqual(resolve_filter_currency(None), "USD")
         self.assertEqual(resolve_filter_currency("USD"), "USD")
         self.assertEqual(resolve_filter_currency("UAH"), "UAH")
 

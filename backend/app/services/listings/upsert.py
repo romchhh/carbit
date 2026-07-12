@@ -32,7 +32,7 @@ async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
         "model": data.model,
         "year": data.year,
         "price": data.price,
-        "currency": data.currency or "UAH",
+        "currency": data.currency or "USD",
         "mileage": data.mileage,
         "fuel": data.fuel or "",
         "transmission": data.transmission or "",

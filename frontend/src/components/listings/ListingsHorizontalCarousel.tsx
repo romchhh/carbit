@@ -12,7 +12,7 @@ import { saveRecentListing } from "@/lib/recent-listings";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
-import { formatPriceFromUah, resolveDisplayCurrency } from "@/lib/display-currency";
+import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
 
@@ -240,7 +240,11 @@ export function ListingsHorizontalCarousel({
                         {listing.title}
                       </h3>
                       <p className="mt-2 text-[20px] font-semibold tracking-tight text-ink">
-                        {formatPriceFromUah(listing.price, resolveDisplayCurrency(user?.preferred_currency))}
+                        {formatListingPrice(
+                          listing.price,
+                          listing.currency,
+                          resolveDisplayCurrency(user?.preferred_currency),
+                        )}
                       </p>
                       <p className="mt-1.5 text-[12px] leading-snug text-muted">
                         {[

@@ -37,8 +37,14 @@ export default function SearchPage() {
     const draft = loadSearchDraft();
     if (!draft) return;
     clearSearchDraft();
-    void runSearch(draft);
-  }, [runSearch]);
+    // Не стартуємо, поки валюта з профілю ще може перезаписати фільтри.
+    const timer = window.setTimeout(() => {
+      void runSearch(draft);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // лише на mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSearch = () => {
     clearSaveMessages();

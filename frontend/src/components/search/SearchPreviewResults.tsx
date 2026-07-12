@@ -29,6 +29,7 @@ function toExportItems(items: Listing[]): ExportListing[] {
     year: item.year,
     mileage: item.mileage,
     price: item.price,
+    currency: item.currency,
     region: item.region,
     src: sourceLabel(item.source),
     fuel: item.fuel,

@@ -1,5 +1,6 @@
 import type { ExportListing } from "@/lib/export-listings";
 import { regionMatchesListing } from "@/lib/search-data/regions";
+import { resolveDisplayCurrency, resolveListingCurrency, toUah } from "@/lib/display-currency";
 
 export type SearchResult = ExportListing & {
   id: string;
@@ -158,24 +159,10 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
   const yearTo = parseNumberInput(filters.yearTo);
   const rawPriceFrom = parseNumberInput(filters.priceFrom);
   const rawPriceTo = parseNumberInput(filters.priceTo);
-  const usdToUah = 45;
-  const eurToUah = 44;
+  const filterCur = resolveDisplayCurrency(filters.currency);
   const priceFrom =
-    rawPriceFrom == null
-      ? null
-      : filters.currency === "USD"
-        ? rawPriceFrom * usdToUah
-        : filters.currency === "EUR"
-          ? rawPriceFrom * eurToUah
-          : rawPriceFrom;
-  const priceTo =
-    rawPriceTo == null
-      ? null
-      : filters.currency === "USD"
-        ? rawPriceTo * usdToUah
-        : filters.currency === "EUR"
-          ? rawPriceTo * eurToUah
-          : rawPriceTo;
+    rawPriceFrom == null ? null : toUah(rawPriceFrom, filterCur);
+  const priceTo = rawPriceTo == null ? null : toUah(rawPriceTo, filterCur);
   const mileageFrom = parseThousandsKm(filters.mileageFrom) ?? parseNumberInput(filters.mileageFrom);
   const mileageTo = parseThousandsKm(filters.mileageTo) ?? parseNumberInput(filters.mileageTo);
 
@@ -185,8 +172,9 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
     if (!regionMatches(item.region, filters.region)) return false;
     if (yearFrom != null && item.year < yearFrom) return false;
     if (yearTo != null && item.year > yearTo) return false;
-    if (priceFrom != null && item.price < priceFrom) return false;
-    if (priceTo != null && item.price > priceTo) return false;
+    const itemUah = toUah(item.price, resolveListingCurrency((item as { currency?: string }).currency));
+    if (priceFrom != null && itemUah < priceFrom) return false;
+    if (priceTo != null && itemUah > priceTo) return false;
     if (mileageFrom != null && item.mileage < mileageFrom) return false;
     if (mileageTo != null && item.mileage > mileageTo) return false;
     if (filters.fuels.length > 0 && item.fuel && !filters.fuels.includes(item.fuel)) return false;

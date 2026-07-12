@@ -22,7 +22,7 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
                 await conn.execute(
                     text(
                         "ALTER TABLE users ADD COLUMN preferred_currency VARCHAR "
-                        "NOT NULL DEFAULT 'UAH'"
+                        "NOT NULL DEFAULT 'USD'"
                     )
                 )
                 logger.warning("Added missing users.preferred_currency column")
@@ -73,7 +73,7 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
             await conn.execute(
                 text(
                     "ALTER TABLE users ADD COLUMN preferred_currency VARCHAR "
-                    "NOT NULL DEFAULT 'UAH'"
+                    "NOT NULL DEFAULT 'USD'"
                 )
             )
             logger.warning("Added missing users.preferred_currency column")

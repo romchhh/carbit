@@ -7,6 +7,7 @@ from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
 def listing_to_out(listing: Listing) -> ListingOut:
     from app.core.timezone import as_kyiv, now_kyiv
+    from app.services.currency import normalize_currency
 
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
     url = listing.url
@@ -14,6 +15,11 @@ def listing_to_out(listing: Listing) -> ListingOut:
         url = fix_telegram_listing_url(listing.id, url, images=listing.images)
     published_at = as_kyiv(listing.published_at) if listing.published_at else now_kyiv()
     found_at = as_kyiv(listing.found_at) if listing.found_at else now_kyiv()
+    # Старі записи в БД — грн; нові — оригінальна валюта з джерела.
+    raw_currency = listing.currency or "UAH"
+    currency = normalize_currency(raw_currency)
+    if currency not in {"UAH", "USD", "EUR"}:
+        currency = "UAH"
     return ListingOut(
         id=listing.id,
         source=source,
@@ -22,7 +28,7 @@ def listing_to_out(listing: Listing) -> ListingOut:
         model=listing.model or "",
         year=int(listing.year or 0),
         price=int(listing.price or 0),
-        currency=listing.currency or "грн",
+        currency=currency,
         mileage=int(listing.mileage or 0),
         fuel=listing.fuel or "",
         transmission=listing.transmission or "",

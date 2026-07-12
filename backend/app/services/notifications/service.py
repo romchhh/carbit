@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Notification, NotificationType, User, Listing, SearchQuery
 from app.schemas.schemas import NotificationOut
-from app.services.currency import format_price_uah, resolve_display_currency
+from app.services.currency import format_display_price, resolve_display_currency
 from app.services.listings.serialize import listing_to_out
 from app.services.notifications.freshness import (
     coerce_notification_max_hours,
@@ -36,7 +36,7 @@ async def create_listing_notification(
     )
 
     display_currency = resolve_display_currency(getattr(user, "preferred_currency", None))
-    price_label = format_price_uah(listing.price, display_currency)
+    price_label = format_display_price(listing.price, listing.currency, display_currency)
 
     notification = Notification(
         user_id=user.id,

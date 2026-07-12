@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from app.services.currency import infer_currency, to_uah
+from app.services.currency import infer_currency
 from app.core.config import settings
 from app.core.text import norm_text
 from app.core.timezone import as_kyiv, now_kyiv
@@ -106,7 +106,7 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
         listing.price_currency,
         raw_text,
     )
-    price_uah = to_uah(listing.price_amount, original_currency, text=raw_text)
+    price_amount = int(round(float(listing.price_amount or 0)))
 
     images = [telegram_media_url(path) for path in (listing.photos or [])[: settings.TELEGRAM_MAX_PHOTOS]]
     images = [url for url in images if url]
@@ -120,8 +120,8 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
         brand=listing.brand or "",
         model=listing.model or "",
         year=int(listing.year or 0),
-        price=price_uah,
-        currency="грн",
+        price=price_amount,
+        currency=original_currency,
         mileage=int(listing.mileage_km or 0),
         fuel=FUEL_LABELS.get(listing.fuel_type or "", listing.fuel_type or ""),
         transmission=TRANSMISSION_LABELS.get(
@@ -176,13 +176,14 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
         return False
 
     if filters.price_from or filters.price_to:
-        from app.services.currency import filter_price_to_uah
+        from app.services.currency import filter_price_to_uah, listing_price_uah
 
         price_from = filter_price_to_uah(filters.price_from, filters.currency)
         price_to = filter_price_to_uah(filters.price_to, filters.currency)
-        if price_from and item.price and item.price < price_from:
+        item_uah = listing_price_uah(item.price, item.currency)
+        if price_from and item_uah and item_uah < price_from:
             return False
-        if price_to and item.price and item.price > price_to:
+        if price_to and item_uah and item_uah > price_to:
             return False
 
     if filters.mileage_from and item.mileage and item.mileage < filters.mileage_from:

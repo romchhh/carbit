@@ -53,7 +53,7 @@ class User(Base):
     plan: Mapped[PlanTier] = mapped_column(SAEnum(PlanTier), default=PlanTier.free)
     plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    preferred_currency: Mapped[str] = mapped_column(String, default="UAH")
+    preferred_currency: Mapped[str] = mapped_column(String, default="USD")
     telegram_connected: Mapped[bool] = mapped_column(Boolean, default=False)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

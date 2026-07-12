@@ -100,7 +100,7 @@ class UserOut(BaseModel):
     is_trial_active: bool = False
     onboarding_completed: bool = False
     plan_expires_at: datetime | None = None
-    preferred_currency: str = "UAH"
+    preferred_currency: str = "USD"
     created_at: datetime
 
     model_config = {"from_attributes": True}

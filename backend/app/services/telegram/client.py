@@ -156,11 +156,12 @@ class TelegramClient:
         if listing.get("display_price"):
             price_line = str(listing["display_price"])
         else:
-            from app.services.currency import format_price_uah
+            from app.services.currency import format_display_price
 
-            price_line = format_price_uah(
+            price_line = format_display_price(
                 listing.get("price"),
-                listing.get("preferred_currency") or listing.get("currency"),
+                listing.get("currency"),
+                listing.get("preferred_currency") or "USD",
             )
 
         published_line = _published_caption_line(listing)

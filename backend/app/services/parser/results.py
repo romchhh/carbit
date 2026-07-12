@@ -14,10 +14,22 @@ from app.services.parser.filter_groups import filters_group_key
 
 
 def _sort_items(items: list[tuple[ListingOut, datetime]], sort_by: str) -> list[ListingOut]:
+    from app.services.currency import listing_price_uah
+
     if sort_by == "price_asc":
-        return [item for item, _ in sorted(items, key=lambda row: row[0].price)]
+        return [
+            item
+            for item, _ in sorted(items, key=lambda row: listing_price_uah(row[0].price, row[0].currency))
+        ]
     if sort_by == "price_desc":
-        return [item for item, _ in sorted(items, key=lambda row: row[0].price, reverse=True)]
+        return [
+            item
+            for item, _ in sorted(
+                items,
+                key=lambda row: listing_price_uah(row[0].price, row[0].currency),
+                reverse=True,
+            )
+        ]
     if sort_by == "year_desc":
         return [item for item, _ in sorted(items, key=lambda row: row[0].year, reverse=True)]
     if sort_by == "mileage_asc":

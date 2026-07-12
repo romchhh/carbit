@@ -19,7 +19,7 @@ import {
 import { hasVinCheck } from "@/lib/vin-check";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
-import { formatPriceFromUah, resolveDisplayCurrency } from "@/lib/display-currency";
+import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
 
@@ -45,7 +45,11 @@ export function ListingDetailModal({
 }: Props) {
   const { user } = useAuth();
   const priceLabel = listing
-    ? formatPriceFromUah(listing.price, resolveDisplayCurrency(user?.preferred_currency))
+    ? formatListingPrice(
+        listing.price,
+        listing.currency,
+        resolveDisplayCurrency(user?.preferred_currency),
+      )
     : "";
   const [photoIndex, setPhotoIndex] = useState(0);
   const galleryRef = useRef<HTMLDivElement>(null);
@@ -481,9 +485,9 @@ export function ListingDetailModal({
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <Link href={listing.url} target="_blank" rel="noopener noreferrer" className="flex-1 sm:min-w-[200px]">
-              <Button variant="primary" size="md" className="w-full gap-1.5">
-                <IconGlobe size={14} />
+            <Link href={listing.url} target="_blank" rel="noopener noreferrer" className="flex-1 sm:min-w-[240px]">
+              <Button variant="emerald" size="lg" className="w-full gap-2 py-3 text-[15px] font-bold">
+                <IconGlobe size={18} />
                 {listingOpenLabel(listing.source)}
               </Button>
             </Link>

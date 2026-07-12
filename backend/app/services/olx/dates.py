@@ -7,10 +7,10 @@ from typing import Any
 from app.core.timezone import KYIV_TZ, as_kyiv, now_kyiv
 
 TIME_FIELD_KEYS = (
-    "createdTime",
-    "created_time",
     "lastRefreshTime",
     "last_refresh_time",
+    "createdTime",
+    "created_time",
     "createdAt",
     "created_at",
     "pushupTime",
@@ -73,7 +73,17 @@ def _extract_timestamp_from_raw(raw: dict | None) -> datetime | None:
     if not raw:
         return None
 
-    def walk(node: Any) -> datetime | None:
+    # Спочатку топ-рівень (оголошення), без глибокого walk — менше шансів
+    # схопити чужий timestamp з вкладених об'єктів.
+    for key in TIME_FIELD_KEYS:
+        if key in raw:
+            parsed = _parse_iso_datetime(raw[key])
+            if parsed:
+                return parsed
+
+    def walk(node: Any, *, depth: int = 0) -> datetime | None:
+        if depth > 4:
+            return None
         if isinstance(node, dict):
             for key in TIME_FIELD_KEYS:
                 if key in node:
@@ -81,12 +91,12 @@ def _extract_timestamp_from_raw(raw: dict | None) -> datetime | None:
                     if parsed:
                         return parsed
             for value in node.values():
-                parsed = walk(value)
+                parsed = walk(value, depth=depth + 1)
                 if parsed:
                     return parsed
         elif isinstance(node, list):
             for item in node:
-                parsed = walk(item)
+                parsed = walk(item, depth=depth + 1)
                 if parsed:
                     return parsed
         return None
@@ -103,6 +113,10 @@ def parse_olx_published_text(text: str, *, now: datetime | None = None) -> datet
 
     current = now or now_kyiv()
     normalized = " ".join(text.strip().lower().split())
+    # «10 липня 2026 р.» / «10 липня 2026р.»
+    normalized = re.sub(r"\s*р\.?\s*$", "", normalized)
+    # «Опубліковано 10 липня 2026»
+    normalized = re.sub(r"^опубліковано\s+", "", normalized)
 
     if normalized in {"щойно", "just now"}:
         return current

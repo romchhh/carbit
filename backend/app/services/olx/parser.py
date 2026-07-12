@@ -257,11 +257,12 @@ def _listing_from_embedded(raw: dict) -> Optional[OlxListing]:
 
     price, currency = _price_from_embedded(raw)
     year, mileage, specs = _params_from_embedded(raw.get("params"))
+    # На картках OLX показує lastRefreshTime («Сьогодні о …»); createdTime — перша публікація.
     created = (
-        raw.get("createdTime")
-        or raw.get("lastRefreshTime")
-        or raw.get("created_time")
+        raw.get("lastRefreshTime")
         or raw.get("last_refresh_time")
+        or raw.get("createdTime")
+        or raw.get("created_time")
     )
 
     title = raw.get("title")
@@ -300,29 +301,100 @@ def _parse_mileage_text(params_text: str) -> Optional[str]:
     return None
 
 
-def _try_extract_embedded_json(html: str) -> list[dict]:
-    results: list[dict] = []
-    match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
+def _parse_json_assignment(html: str, marker: str) -> object | None:
+    """Parse `window.FOO = {...}` or `window.FOO = "{...}"`."""
+    match = re.search(re.escape(marker) + r"\s*=\s*", html)
     if not match:
-        return results
+        return None
+    start = match.end()
+    while start < len(html) and html[start] in " \t\n\r":
+        start += 1
+    if start >= len(html):
+        return None
 
     try:
-        data = json.loads(match.group(1))
-    except json.JSONDecodeError:
-        return results
+        if html[start] == '"':
+            # JSON-encoded string payload
+            decoder = json.JSONDecoder()
+            raw_string, _ = decoder.raw_decode(html[start:])
+            if isinstance(raw_string, str):
+                return json.loads(raw_string)
+            return raw_string
+        if html[start] == "{":
+            decoder = json.JSONDecoder()
+            data, _ = decoder.raw_decode(html[start:])
+            return data
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return None
+    return None
 
-    def walk(node):
-        if isinstance(node, dict):
-            if "id" in node and ("url" in node or "title" in node):
-                results.append(node)
-            for value in node.values():
-                walk(value)
-        elif isinstance(node, list):
-            for item in node:
-                walk(item)
 
-    walk(data)
-    return results
+def _collect_ad_dicts(node: object, results: list[dict]) -> None:
+    if isinstance(node, dict):
+        has_id = node.get("id") is not None
+        has_title = bool(node.get("title"))
+        has_url = bool(node.get("url") or node.get("slug"))
+        has_time = bool(
+            node.get("createdTime")
+            or node.get("lastRefreshTime")
+            or node.get("created_time")
+            or node.get("last_refresh_time")
+        )
+        if has_id and has_title and (has_url or has_time):
+            results.append(node)
+        for value in node.values():
+            _collect_ad_dicts(value, results)
+    elif isinstance(node, list):
+        for item in node:
+            _collect_ad_dicts(item, results)
+
+
+def _try_extract_embedded_json(html: str) -> list[dict]:
+    """
+    OLX search HTML: раніше __NEXT_DATA__, зараз window.__PRERENDERED_STATE__.
+    """
+    results: list[dict] = []
+
+    for marker in (
+        "window.__PRERENDERED_STATE__",
+        "window.__NEXT_DATA__",
+    ):
+        data = None
+        if marker.startswith("window."):
+            data = _parse_json_assignment(html, marker)
+        if data is None and marker == "window.__NEXT_DATA__":
+            match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
+            if match:
+                try:
+                    data = json.loads(match.group(1))
+                except json.JSONDecodeError:
+                    data = None
+        if data is None:
+            continue
+        _collect_ad_dicts(data, results)
+        if results:
+            break
+
+    # Prefer richer ad objects (with timestamps) first, keep order otherwise.
+    results.sort(
+        key=lambda item: (
+            0
+            if (item.get("lastRefreshTime") or item.get("createdTime"))
+            else 1,
+            str(item.get("id") or ""),
+        )
+    )
+
+    # Deduplicate by id
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for item in results:
+        listing_id = str(item.get("id") or "")
+        if not listing_id or listing_id in seen:
+            continue
+        seen.add(listing_id)
+        unique.append(item)
+    return unique
 
 
 def parse_listing_page(html: str) -> list[OlxListing]:
@@ -563,7 +635,11 @@ def apply_details_to_listing(listing: OlxListing, details: dict) -> None:
         listing.currency = details.get("currency")
 
     if details.get("published"):
-        listing.published = details.get("published")
+        from app.services.olx.dates import _parse_iso_datetime
+
+        # Не затираємо ISO-час з search JSON відносним текстом з детальної сторінки.
+        if not _parse_iso_datetime(listing.published):
+            listing.published = details.get("published")
 
     specs = listing.specs or {}
     if not listing.year:

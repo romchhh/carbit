@@ -10,7 +10,7 @@ import { SourceBadge } from "@/components/listings/SourceBadge";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { hasVinCheck } from "@/lib/vin-check";
 import { cn, publishedAgoLabel } from "@/lib/utils";
-import { formatPriceFromUah, resolveDisplayCurrency } from "@/lib/display-currency";
+import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
 
@@ -40,7 +40,7 @@ export function ListingCard({
   const displayCurrency = resolveDisplayCurrency(user?.preferred_currency);
   const images = Array.isArray(listing.images) ? listing.images : [];
   const price = Number(listing.price) || 0;
-  const priceLabel = formatPriceFromUah(price, displayCurrency);
+  const priceLabel = formatListingPrice(price, listing.currency, displayCurrency);
   const fuel = typeof listing.fuel === "string" ? listing.fuel : "";
   const region = typeof listing.region === "string" ? listing.region : "";
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";

@@ -12,7 +12,9 @@ if str(_BACKEND) not in sys.path:
 from app.services.currency import (  # noqa: E402
     EUR_TO_UAH,
     USD_TO_UAH,
+    convert_price,
     currency_label,
+    format_display_price,
     format_price_uah,
     from_uah,
     infer_currency,
@@ -27,6 +29,8 @@ __all__ = [
     "infer_currency",
     "to_uah",
     "from_uah",
+    "convert_price",
+    "format_display_price",
     "format_price_uah",
     "currency_label",
 ]
