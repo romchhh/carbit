@@ -50,6 +50,25 @@ def _seed_usernames() -> list[str]:
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        tables = {
+            row[0]
+            for row in bind.execute(
+                sa.text("SELECT name FROM sqlite_master WHERE type='table'")
+            ).fetchall()
+        }
+        if "telegram_channels" in tables:
+            return
+    else:
+        exists = bind.execute(
+            sa.text(
+                "SELECT 1 FROM information_schema.tables WHERE table_name = 'telegram_channels'"
+            )
+        ).first()
+        if exists:
+            return
+
     op.create_table(
         "telegram_channels",
         sa.Column("id", sa.String(), nullable=False),

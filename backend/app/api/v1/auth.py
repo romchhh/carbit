@@ -357,9 +357,19 @@ async def update_me(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if body.name is None and body.preferred_currency is None:
+        raise HTTPException(status_code=400, detail="Немає змін для збереження")
+
     if body.name is not None:
         user.name = body.name
     if body.preferred_currency is not None:
         user.preferred_currency = body.preferred_currency
-    await db.flush()
+    try:
+        await db.flush()
+    except Exception as exc:
+        logger.exception("Failed to update profile for %s", user_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Не вдалося зберегти профіль. Спробуйте після оновлення сервера.",
+        ) from exc
     return user_out(user)

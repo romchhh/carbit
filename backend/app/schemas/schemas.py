@@ -57,7 +57,7 @@ class GoogleAuthUrlOut(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    name: Optional[str] = Field(default=None, max_length=100)
     preferred_currency: Optional[str] = None
 
     @field_validator("name")
@@ -65,7 +65,10 @@ class UserProfileUpdate(BaseModel):
     def strip_name(cls, v: str | None) -> str | None:
         if v is None:
             return None
-        return v.strip()
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Введіть ім'я")
+        return stripped
 
     @field_validator("preferred_currency", mode="before")
     @classmethod

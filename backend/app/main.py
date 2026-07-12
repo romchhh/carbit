@@ -29,6 +29,15 @@ async def lifespan(_app: FastAPI):
         logger.error("%s", exc)
         print(f"FATAL: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
+
+    try:
+        from app.core.database import engine
+        from app.core.schema_ensure import ensure_runtime_schema
+
+        await ensure_runtime_schema(engine)
+    except Exception:
+        logger.exception("Runtime schema ensure failed")
+
     logger.info("KV REDIS_URL=%s", settings.REDIS_URL)
     yield
 
