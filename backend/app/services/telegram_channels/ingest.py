@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, SearchQuery, Source, User
@@ -64,6 +64,49 @@ async def ingest_telegram_listing(
     return item, new_total, notifications
 
 
+def _telegram_sql_prefilters(filters: SearchFilters):
+    """Грубі SQL-предикати — менше рядків тягнемо в Python."""
+    clauses = [Listing.source == Source.telegram]
+
+    brand = (filters.brand or "").strip()
+    if brand:
+        like = f"%{brand}%"
+        clauses.append(
+            or_(
+                Listing.brand.ilike(like),
+                Listing.title.ilike(like),
+            )
+        )
+
+    model = (filters.model or "").strip()
+    if model:
+        like = f"%{model}%"
+        clauses.append(
+            or_(
+                Listing.model.ilike(like),
+                Listing.title.ilike(like),
+            )
+        )
+
+    if filters.year_from or filters.year_to:
+        clauses.append(Listing.year > 0)
+        if filters.year_from:
+            clauses.append(Listing.year >= filters.year_from)
+        if filters.year_to:
+            clauses.append(Listing.year <= filters.year_to)
+
+    if filters.mileage_from:
+        clauses.append(
+            or_(Listing.mileage == 0, Listing.mileage >= filters.mileage_from)
+        )
+    if filters.mileage_to:
+        clauses.append(
+            or_(Listing.mileage == 0, Listing.mileage <= filters.mileage_to)
+        )
+
+    return and_(*clauses)
+
+
 async def search_telegram_listings(
     db: AsyncSession,
     filters: SearchFilters,
@@ -75,7 +118,7 @@ async def search_telegram_listings(
 ) -> PaginatedListings:
     rows = await db.scalars(
         select(Listing)
-        .where(Listing.source == Source.telegram)
+        .where(_telegram_sql_prefilters(filters))
         .order_by(Listing.published_at.desc())
         .limit(max_scan)
     )

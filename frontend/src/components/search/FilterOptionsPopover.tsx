@@ -69,7 +69,7 @@ export function FilterOptionsPopover({
   };
 
   return (
-    <div ref={rootRef} className={cn("relative", className)}>
+    <div ref={rootRef} className={cn("relative", open && "z-[80]", className)}>
       <FilterRow
         label={label}
         value={display}
@@ -79,7 +79,7 @@ export function FilterOptionsPopover({
       {open && !disabled && (
         <div
           id={panelId}
-          className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-72 overflow-hidden rounded-xl border border-border bg-white shadow-card"
+          className="absolute left-0 right-0 top-[calc(100%+6px)] z-[90] max-h-72 overflow-hidden rounded-xl border border-border bg-white shadow-card"
         >
           {searchable && (
             <div className="border-b border-border/60 p-3">

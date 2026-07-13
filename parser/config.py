@@ -42,7 +42,7 @@ class Settings:
     )
 
     webhook_url: str = os.getenv("WEBHOOK_URL", "")
-    max_photos_per_listing: int = int(os.getenv("TELEGRAM_MAX_PHOTOS", "5"))
+    max_photos_per_listing: int = int(os.getenv("TELEGRAM_MAX_PHOTOS", "3"))
 
 
 settings = Settings()

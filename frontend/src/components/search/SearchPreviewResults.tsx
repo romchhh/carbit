@@ -213,11 +213,21 @@ export function SearchPreviewResults({
                 disabled={loadingMore || searching}
                 className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[13px] font-semibold text-muted transition-colors hover:border-ink/20 hover:text-ink disabled:opacity-60"
               >
-                {loadingMore
-                  ? "Йдемо далі по ряду…"
-                  : `Ще поторгуватись${nextBatch > 0 ? ` · +${nextBatch}` : ""}${
-                      total > 0 ? ` · ${results.length} з ${total.toLocaleString("uk-UA")}` : ""
-                    }`}
+                {loadingMore ? (
+                  "Йдемо далі по ряду…"
+                ) : (
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    <span>Ще поторгуватись</span>
+                    {nextBatch > 0 && (
+                      <span className="font-bold text-emerald">+{nextBatch}</span>
+                    )}
+                    {total > 0 && (
+                      <span>
+                        · {results.length} з {total.toLocaleString("uk-UA")}
+                      </span>
+                    )}
+                  </span>
+                )}
               </button>
             )}
           </>

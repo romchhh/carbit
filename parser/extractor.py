@@ -23,7 +23,7 @@ CURRENT_YEAR = datetime.now().year
 # Бренди, для яких потрібні межі слова (щоб не ловити "man" у "roman", "mini" у "minimal")
 WORD_BOUNDARY_BRANDS = {
     "man", "ман", "vw", "kia", "кіа", "киа", "gmc", "daf", "даф", "byd", "mini", "міні",
-    "ev", "seat", "сеат", "opel", "опель", "geely", "джили",
+    "ev", "seat", "сеат", "opel", "опель", "geely", "джили", "nio", "li",
 }
 
 MIN_LISTING_CONFIDENCE = 0.33

@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     TELETHON_SESSION_NAME: str = "carbit_parser"
     TELEGRAM_MEDIA_DIR: str = "media"
     TELEGRAM_ENABLED: bool = True
-    TELEGRAM_MAX_PHOTOS: int = 5
+    TELEGRAM_MAX_PHOTOS: int = 3
 
     # Observability
     SENTRY_DSN: str = ""

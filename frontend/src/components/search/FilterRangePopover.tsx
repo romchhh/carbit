@@ -67,12 +67,12 @@ export function FilterRangePopover({
   const display = displayRange(from, to, suffix);
 
   return (
-    <div ref={rootRef} className={cn("relative", className)}>
+    <div ref={rootRef} className={cn("relative", open && "z-[80]", className)}>
       <FilterRow label={label} value={display} onClick={() => setOpen(v => !v)} />
       {open && (
         <div
           id={panelId}
-          className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-xl border border-border bg-white p-4 shadow-card"
+          className="absolute left-0 right-0 top-[calc(100%+6px)] z-[90] rounded-xl border border-border bg-white p-4 shadow-card"
         >
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="text-[12px] font-semibold text-ink">{label}</div>

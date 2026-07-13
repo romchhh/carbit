@@ -60,10 +60,11 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         keep = OlxListing(title="Zeekr 001 WE 2025", price="20500", currency="USD")
         drop = OlxListing(title="Zeekr 7x повний привід", price="45900", currency="USD")
         junk = OlxListing(title="Коврики EVA універсальні", price="500", currency="UAH")
+        cyrillic = OlxListing(title="Зікр 001 You 2024", price="34000", currency="USD")
         self.assertTrue(passes_olx_filters(keep, params))
         self.assertFalse(passes_olx_filters(drop, params))
         self.assertFalse(passes_olx_filters(junk, params))
-
+        self.assertTrue(passes_olx_filters(cyrillic, params))
     def test_jaecoo_j7_matches_jaecoo_7(self):
         params = filters_to_olx_params(
             SearchFilters(brand="Jaecoo", model="J7", currency="USD")

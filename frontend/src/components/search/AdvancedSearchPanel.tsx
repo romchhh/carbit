@@ -33,12 +33,12 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
   };
 
   return (
-    <div className="mt-4 overflow-hidden rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04]">
-      <div className="border-b border-border/60 bg-surface/50 px-4 py-3.5 sm:px-5">
+    <div className="mt-4 rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04]">
+      <div className="overflow-hidden rounded-t-[1.35rem] border-b border-border/60 bg-surface/50 px-4 py-3.5 sm:px-5">
         <h2 className="text-[17px] font-bold text-ink">Розширений пошук авто</h2>
       </div>
 
-      <div className="space-y-5 px-4 py-4 sm:px-5">
+      <div className="relative z-20 space-y-5 overflow-visible px-4 py-4 sm:px-5">
         <section className="space-y-2">
           <SectionTitle>Технічні характеристики</SectionTitle>
 

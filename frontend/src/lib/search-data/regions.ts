@@ -32,8 +32,25 @@ export type UkraineRegion = (typeof UKRAINE_REGIONS)[number];
 
 /** Міста/ключові слова для зіставлення з полем region у оголошенні */
 export const REGION_KEYWORDS: Record<string, string[]> = {
-  "м. Київ": ["київ"],
-  "Київська область": ["бровари", "біла церква", "ірпін", "буча", "фастів", "вишгород", "обухів"],
+  "м. Київ": ["київ", "киев", "kyiv", "kiev"],
+  "Київська область": [
+    "київськ",
+    "киевск",
+    "бровар",
+    "біла церкв",
+    "белая церк",
+    "ірпін",
+    "ирпен",
+    "буча",
+    "фастів",
+    "фастов",
+    "вишгород",
+    "обухів",
+    "обухов",
+    "боярк",
+    "вишнев",
+    "васильк",
+  ],
   "Вінницька область": ["вінниця", "жмеринка", "хмільник"],
   "Волинська область": ["луцьк", "ковель", "нововолинськ"],
   "Дніпропетровська область": ["дніпро", "дніпропетровськ", "кривий ріг", "кам'янське", "павлоград", "никополь"],
@@ -61,8 +78,12 @@ export const REGION_KEYWORDS: Record<string, string[]> = {
 
 export function regionMatchesListing(listingRegion: string, filterRegion: string): boolean {
   if (!filterRegion || filterRegion === "Вся Україна") return true;
-  const keywords = REGION_KEYWORDS[filterRegion];
-  if (!keywords) return listingRegion.toLowerCase().includes(filterRegion.toLowerCase());
   const normalized = listingRegion.toLowerCase();
+  if (filterRegion === "м. Київ") {
+    const head = normalized.split(",")[0]?.trim() || normalized;
+    return /^(київ|киев|kyiv|kiev)(\s|$|,)/.test(head) || head === "київ" || head === "киев";
+  }
+  const keywords = REGION_KEYWORDS[filterRegion];
+  if (!keywords) return normalized.includes(filterRegion.toLowerCase());
   return keywords.some(kw => normalized.includes(kw));
 }

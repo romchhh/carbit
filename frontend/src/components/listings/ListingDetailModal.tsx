@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { IconGlobe, IconHeart, IconX } from "@/components/icons";
+import { IconGlobe, IconHeart, IconX, IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
@@ -62,6 +62,7 @@ export function ListingDetailModal({
   photoIndexRef.current = photoIndex;
 
   const scrollToPhoto = useCallback((index: number) => {
+    setPhotoIndex(index);
     const container = galleryRef.current;
     if (!container) return;
 
@@ -69,7 +70,6 @@ export function ListingDetailModal({
     if (!slide) return;
 
     container.scrollTo({ left: slide.offsetLeft, behavior: "smooth" });
-    setPhotoIndex(index);
   }, []);
 
   const handleDragStart = useCallback((clientY: number) => {
@@ -92,9 +92,14 @@ export function ListingDetailModal({
     lockBodyScroll();
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      const lastIndex = Math.max(0, listing.images.length - 1);
-      if (e.key === "ArrowLeft") scrollToPhoto(Math.max(0, photoIndexRef.current - 1));
-      if (e.key === "ArrowRight") scrollToPhoto(Math.min(lastIndex, photoIndexRef.current + 1));
+      const count = listing.images.length;
+      if (count <= 1) return;
+      if (e.key === "ArrowLeft") {
+        scrollToPhoto((photoIndexRef.current - 1 + count) % count);
+      }
+      if (e.key === "ArrowRight") {
+        scrollToPhoto((photoIndexRef.current + 1) % count);
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -309,9 +314,35 @@ export function ListingDetailModal({
                     </div>
                   )}
                   {photos.length > 1 && (
-                    <div className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white">
-                      {photoIndex + 1} / {photos.length}
-                    </div>
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Попереднє фото"
+                        onClick={() => setPhotoIndex(i => (i - 1 + photos.length) % photos.length)}
+                        className={cn(
+                          "absolute left-2 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center",
+                          "rounded-full bg-ink/70 text-white shadow-sm backdrop-blur-sm transition-colors",
+                          "hover:bg-ink/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                        )}
+                      >
+                        <IconArrowLeft size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Наступне фото"
+                        onClick={() => setPhotoIndex(i => (i + 1) % photos.length)}
+                        className={cn(
+                          "absolute right-2 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center",
+                          "rounded-full bg-ink/70 text-white shadow-sm backdrop-blur-sm transition-colors",
+                          "hover:bg-ink/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                        )}
+                      >
+                        <IconArrowRight size={16} />
+                      </button>
+                      <div className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white">
+                        {photoIndex + 1} / {photos.length}
+                      </div>
+                    </>
                   )}
                   <div className="absolute bottom-2 left-2">
                     <PublishedTimeBadge date={listing.published_at} short />

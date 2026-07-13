@@ -131,16 +131,19 @@ class CarParserService:
             photos=[],
         )
 
-        self.dedupe.mark_seen(channel, ids)
-
         if not is_valid_car_listing(listing):
+            # Відсічені спам/неавто — позначаємо, щоб не ганяти знову.
+            # Валідні — тільки після успішного download (інакше crash = назавжди lost).
+            if not self.skip_dedupe:
+                self.dedupe.mark_seen(channel, ids)
             self.last_parse_stats["invalid"] = self.last_parse_stats.get("invalid", 0) + 1
             return None
 
         listing.photos = await download_photos(self.client, channel, group_messages)
+        if not self.skip_dedupe:
+            self.dedupe.mark_seen(channel, ids)
         self.last_parse_stats["valid"] = self.last_parse_stats.get("valid", 0) + 1
         return listing
-
     async def parse_channel_history(self, channel: str, limit: int = 200) -> list:
         """
         Розбирає останні `limit` повідомлень каналу і повертає список CarListing.
@@ -194,7 +197,6 @@ class CarParserService:
         self,
         channels: list,
         on_new_listing: Callable[[CarListing], Awaitable[None]],
-        album_wait_seconds: float = 1.5,
     ):
         """
         Постійно слухає нові повідомлення у вказаних каналах і викликає
@@ -203,7 +205,6 @@ class CarParserService:
         """
         for ch in channels:
             await self._ensure_joined_cached(ch)
-
         entities = [await self.client.get_entity(ch) for ch in channels]
         channel_by_peer_id: dict[int, str] = {}
         for ch, entity in zip(channels, entities):

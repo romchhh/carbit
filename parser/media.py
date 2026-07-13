@@ -1,11 +1,14 @@
 """
 Завантаження фото з повідомлень (в т.ч. альбомів - кілька фото в одному оголошенні).
 """
+import logging
 import os
 from telethon import TelegramClient
 from telethon.tl.types import Message
 
 from .config import settings
+
+log = logging.getLogger("carbit_parser.media")
 
 
 def _channel_dir(channel: str) -> str:
@@ -25,7 +28,7 @@ async def download_photos(
     """
     messages - список Telethon Message з одного оголошення (може бути 1 або кілька,
     якщо це альбом). Повертає список локальних шляхів до збережених фото.
-    За замовчуванням — не більше settings.max_photos_per_listing (5).
+    За замовчуванням — не більше settings.max_photos_per_listing (3).
     """
     limit = max_photos if max_photos is not None else settings.max_photos_per_listing
     paths = []
@@ -46,6 +49,12 @@ async def download_photos(
             saved = await client.download_media(msg, file=full_path)
             if saved:
                 paths.append(saved)
-        except Exception:
+        except Exception as exc:
+            log.warning(
+                "Не вдалось завантажити фото msg=%s channel=%s: %s",
+                getattr(msg, "id", "?"),
+                channel,
+                exc,
+            )
             continue
     return paths

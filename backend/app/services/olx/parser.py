@@ -207,15 +207,140 @@ def _city_from_embedded(raw: dict) -> Optional[str]:
     location = raw.get("location")
     if not isinstance(location, dict):
         return None
+
+    # Новий формат OLX (2026): flat keys cityName / regionName / pathName
+    for key in ("cityName", "city_name", "pathName", "path_name"):
+        value = location.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
     city = location.get("city")
     if isinstance(city, dict):
-        return city.get("name") or city.get("normalizedName")
-    region = location.get("region")
+        name = city.get("name") or city.get("normalizedName")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    if isinstance(city, str) and city.strip():
+        return city.strip()
+
+    region = location.get("region") or location.get("regionName")
     if isinstance(region, dict):
-        return region.get("name")
-    return location.get("name")
+        name = region.get("name") or region.get("normalizedName")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    if isinstance(region, str) and region.strip():
+        return region.strip()
+
+    name = location.get("name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return None
 
 
+def _location_parts_from_listing(listing: OlxListing) -> dict[str, str]:
+    parts: dict[str, str] = {}
+    if listing.city:
+        parts["city"] = str(listing.city).strip().lower()
+    raw = listing.raw_params if isinstance(listing.raw_params, dict) else {}
+    location = raw.get("location")
+    if not isinstance(location, dict):
+        return parts
+
+    for dest, keys in (
+        ("city", ("cityName", "city_name")),
+        ("region", ("regionName", "region_name")),
+        ("district", ("districtName", "district_name")),
+        ("path", ("pathName", "path_name")),
+    ):
+        for key in keys:
+            value = location.get(key)
+            if isinstance(value, str) and value.strip():
+                parts[dest] = value.strip().lower()
+                break
+
+    city = location.get("city")
+    if "city" not in parts:
+        if isinstance(city, dict):
+            for key in ("name", "normalizedName"):
+                value = city.get(key)
+                if isinstance(value, str) and value.strip():
+                    parts["city"] = value.strip().lower()
+                    break
+        elif isinstance(city, str) and city.strip():
+            parts["city"] = city.strip().lower()
+
+    region = location.get("region")
+    if "region" not in parts and isinstance(region, dict):
+        for key in ("name", "normalizedName"):
+            value = region.get(key)
+            if isinstance(value, str) and value.strip():
+                parts["region"] = value.strip().lower()
+                break
+    return parts
+
+
+def _location_blob_from_listing(listing: OlxListing) -> str:
+    parts = _location_parts_from_listing(listing)
+    return " ".join(parts.values())
+
+
+# city_query slug → ключові слова для пост-фільтра регіону (text_query не додає /q-city/)
+_KYIV_CITY_NAMES = ("київ", "киев", "kyiv", "kiev")
+_KYIV_OBLAST_CITIES = (
+    "бровар",
+    "біла церкв",
+    "белая церк",
+    "ірпін",
+    "ирпен",
+    "буча",
+    "фастів",
+    "фастов",
+    "вишгород",
+    "обухів",
+    "обухов",
+    "боярк",
+    "вишнев",
+    "васильк",
+)
+
+
+def _city_name_is_kyiv(city: str) -> bool:
+    """True лише для м. Київ, не для «Київська область» / Боярка."""
+    if not city:
+        return False
+    # «Київ, Шевченківський» / «Київ»
+    head = city.split(",")[0].strip()
+    for name in _KYIV_CITY_NAMES:
+        if head == name or head.startswith(name + " "):
+            return True
+    return False
+
+
+def _passes_city_query(listing: OlxListing, city_query: str | None) -> bool:
+    if not city_query:
+        return True
+    parts = _location_parts_from_listing(listing)
+    if not parts:
+        # Немає локації в картці — не відсікаємо (краще показати, ніж втратити)
+        return True
+
+    key = city_query.strip().lower()
+    city = parts.get("city") or ""
+    region = parts.get("region") or ""
+    path = parts.get("path") or ""
+    blob = " ".join(parts.values())
+
+    if key == "kyiv":
+        return _city_name_is_kyiv(city)
+
+    if key == "київська-область":
+        if "київськ" in region or "киевск" in region:
+            return True
+        if "київськ" in path or "киевск" in path:
+            return True
+        return any(token in city or token in blob for token in _KYIV_OBLAST_CITIES)
+
+    needle = key.replace("-", " ").strip()
+    return bool(needle) and (needle in blob or key in blob)
 def _photo_from_embedded(raw: dict) -> Optional[str]:
     photos = raw.get("photos") or raw.get("images") or []
     if isinstance(photos, list):
@@ -408,6 +533,78 @@ def _try_extract_embedded_json(html: str) -> list[dict]:
     return unique
 
 
+def _listings_from_json_ld(html: str) -> list[OlxListing]:
+    """Fallback: schema.org AggregateOffer у application/ld+json (коли state порожній)."""
+    listings: list[OlxListing] = []
+    seen: set[str] = set()
+    for match in re.finditer(
+        r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html,
+        re.DOTALL | re.IGNORECASE,
+    ):
+        raw = match.group(1).strip()
+        if not raw or "AggregateOffer" not in raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict) or data.get("@type") != "Product":
+            continue
+        offers_wrap = data.get("offers")
+        if not isinstance(offers_wrap, dict):
+            continue
+        offers = offers_wrap.get("offers") or offers_wrap.get("itemListElement") or []
+        if not isinstance(offers, list):
+            continue
+        for offer in offers:
+            if not isinstance(offer, dict):
+                continue
+            url = offer.get("url")
+            title = offer.get("name")
+            if not url or not title:
+                continue
+            listing_id = _extract_id_from_url(str(url))
+            if not listing_id or listing_id in seen:
+                continue
+            seen.add(listing_id)
+            price_val = offer.get("price")
+            currency = _normalize_currency(offer.get("priceCurrency"))
+            area = offer.get("areaServed")
+            city = None
+            if isinstance(area, dict):
+                city = area.get("name")
+            elif isinstance(area, str):
+                city = area
+            images = offer.get("image") or []
+            photo = None
+            if isinstance(images, list):
+                for img in images:
+                    if is_valid_image_url(img):
+                        photo = img
+                        break
+            elif is_valid_image_url(images):
+                photo = images
+            year = None
+            year_match = re.search(r"(19[5-9]\d|20[0-4]\d)", str(title))
+            if year_match:
+                year = year_match.group(1)
+            listings.append(
+                OlxListing(
+                    listing_id=listing_id,
+                    title=str(title),
+                    url=str(url),
+                    price=str(int(float(price_val))) if price_val is not None else None,
+                    currency=currency,
+                    year=year,
+                    city=str(city).strip() if city else None,
+                    photo_url=photo,
+                    published=str(offer.get("priceValidUntil") or "") or None,
+                )
+            )
+    return listings
+
+
 def parse_listing_page(html: str) -> list[OlxListing]:
     listings: list[OlxListing] = []
     seen_ids: set[str] = set()
@@ -416,6 +613,15 @@ def parse_listing_page(html: str) -> list[OlxListing]:
     for raw in embedded:
         listing = _listing_from_embedded(raw)
         if not listing or not listing.listing_id or listing.listing_id in seen_ids:
+            continue
+        seen_ids.add(listing.listing_id)
+        listings.append(listing)
+
+    if listings:
+        return listings
+
+    for listing in _listings_from_json_ld(html):
+        if not listing.listing_id or listing.listing_id in seen_ids:
             continue
         seen_ids.add(listing.listing_id)
         listings.append(listing)
@@ -443,7 +649,6 @@ def parse_listing_page(html: str) -> list[OlxListing]:
             continue
 
     return listings
-
 
 def _parse_single_card(card) -> Optional[OlxListing]:
     link_tag = card if card.name == "a" else card.find("a", href=True)
@@ -753,7 +958,9 @@ def html_looks_like_results_page(html: str) -> bool:
         'data-testid="l-card"',
         'data-cy="l-card"',
         'id="__NEXT_DATA__"',
+        "window.__PRERENDERED_STATE__",
         "/d/uk/obyavlenie/",
+        "AggregateOffer",
     )
     return any(marker in html for marker in markers)
 
@@ -850,6 +1057,7 @@ _BRAND_TITLE_ALIASES: dict[str, tuple[str, ...]] = {
     "lynk & co": ("lynk", "lynk&co", "lynk and co"),
     "lynk and co": ("lynk", "lynk&co", "lynk and co"),
     "great wall motor": ("great wall", "gwm", "haval"),
+    "zeekr": ("zeekr", "зікр", "зикр", "зеекр"),
 }
 
 # Запчастини / неавто, які OLX підмішує в /q-/ навіть у категорії легкових
@@ -987,6 +1195,9 @@ def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
         if brand_hint or model_hint:
             if not _title_matches_brand_model(listing, brand=brand_hint, model=model_hint):
                 return False
+        # Для /q-brand/ місто не в URL — фільтруємо локацію тут
+        if not _passes_city_query(listing, params.city_query):
+            return False
 
     if not passes_post_filters(listing, params):
         return False

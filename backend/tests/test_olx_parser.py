@@ -109,6 +109,58 @@ def test_parse_card_html_mileage():
     assert listing.mileage == "145000 км"
 
 
+def test_embedded_city_name_flat_location():
+    raw = {
+        "id": 777,
+        "url": "/d/uk/obyavlenie/zeekr-001-IDabc.html",
+        "title": "Zeekr 001 2024",
+        "createdTime": "2026-07-01T10:00:00Z",
+        "price": {"regularPrice": {"value": 34000, "currency": "USD"}},
+        "location": {
+            "cityName": "Київ",
+            "regionName": "Київська область",
+            "districtName": "Шевченківський",
+            "pathName": "Київська область, Київ, Шевченківський",
+        },
+    }
+    listing = _listing_from_embedded(raw)
+    assert listing is not None
+    assert listing.city == "Київ"
+
+
+def test_passes_olx_filters_text_search_city_kyiv():
+    listing = OlxListing(
+        title="Zeekr 001 WE 2025",
+        price="20500",
+        currency="USD",
+        city="Боярка",
+        raw_params={
+            "location": {
+                "cityName": "Боярка",
+                "regionName": "Київська область",
+                "pathName": "Київська область, Боярка",
+            }
+        },
+    )
+    params = OlxSearchParams(
+        text_query="Zeekr",
+        brand_label="Zeekr",
+        model_label="001",
+        city_query="київська-область",
+        currency="USD",
+    )
+    assert passes_olx_filters(listing, params)
+
+    kyiv_only = OlxSearchParams(
+        text_query="Zeekr",
+        brand_label="Zeekr",
+        model_label="001",
+        city_query="kyiv",
+        currency="USD",
+    )
+    assert not passes_olx_filters(listing, kyiv_only)
+
+
 def test_passes_olx_filters_mileage_full_km():
     listing = OlxListing(
         title="VW Golf 2015",
