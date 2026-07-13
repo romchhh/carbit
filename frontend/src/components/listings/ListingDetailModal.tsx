@@ -38,7 +38,7 @@ const MODAL_ACTION_CLASS =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface active:bg-surface";
 
 export function ListingDetailModal({
-  listing,
+  listing: listingProp,
   onClose,
   isFavorite = false,
   favoriteLoading = false,
@@ -50,7 +50,7 @@ export function ListingDetailModal({
   const displayCurrency = resolveDisplayCurrency(
     displayCurrencyProp ?? "USD",
   );
-  const [liveListing, setLiveListing] = useState<Listing | null>(listing);
+  const [liveListing, setLiveListing] = useState<Listing | null>(listingProp);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
   const galleryRef = useRef<HTMLDivElement>(null);
@@ -58,18 +58,18 @@ export function ListingDetailModal({
   const dragStartY = useRef<number | null>(null);
   photoIndexRef.current = photoIndex;
 
-  const activeListing = liveListing ?? listing;
+  const listing = liveListing ?? listingProp;
 
   useEffect(() => {
-    setLiveListing(listing);
+    setLiveListing(listingProp);
     setPhotoIndex(0);
-  }, [listing?.id]);
+  }, [listingProp?.id]);
 
   useEffect(() => {
-    if (!listing) return;
+    if (!listingProp) return;
     const needsPhotos =
-      listing.source === "telegram" &&
-      (!listing.images || listing.images.length === 0);
+      listingProp.source === "telegram" &&
+      (!listingProp.images || listingProp.images.length === 0);
 
     if (!needsPhotos) {
       setPhotosLoading(false);
@@ -84,9 +84,9 @@ export function ListingDetailModal({
     const poll = async () => {
       try {
         if (attempts === 0) {
-          await listingsApi.ensurePhotos(listing.id);
+          await listingsApi.ensurePhotos(listingProp.id);
         } else {
-          const fresh = await listingsApi.get(listing.id);
+          const fresh = await listingsApi.get(listingProp.id);
           if (cancelled) return;
           if (fresh.images?.length) {
             setLiveListing(fresh);
@@ -111,14 +111,14 @@ export function ListingDetailModal({
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [listing?.id, listing?.source, listing?.images?.length, onListingUpdate]);
+  }, [listingProp?.id, listingProp?.source, listingProp?.images?.length, onListingUpdate]);
 
-  const priceLabel = activeListing
+  const priceLabel = listing
     ? formatListingPrice(
-        activeListing.price,
-        activeListing.currency,
+        listing.price,
+        listing.currency,
         displayCurrency,
-        activeListing.source_data,
+        listing.source_data,
       )
     : "";
 
@@ -148,11 +148,11 @@ export function ListingDetailModal({
   );
 
   useEffect(() => {
-    if (!activeListing) return;
+    if (!listing) return;
     lockBodyScroll();
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      const count = activeListing.images.length;
+      const count = listing.images.length;
       if (count <= 1) return;
       if (e.key === "ArrowLeft") {
         scrollToPhoto((photoIndexRef.current - 1 + count) % count);
@@ -166,11 +166,11 @@ export function ListingDetailModal({
       unlockBodyScroll();
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [activeListing, onClose, scrollToPhoto]);
+  }, [listing, onClose, scrollToPhoto]);
 
   useEffect(() => {
     const container = galleryRef.current;
-    if (!container || !activeListing || activeListing.images.length <= 1) return;
+    if (!container || !listing || listing.images.length <= 1) return;
 
     const slides = Array.from(container.children) as HTMLElement[];
     const observer = new IntersectionObserver(
@@ -189,16 +189,15 @@ export function ListingDetailModal({
 
     slides.forEach(slide => observer.observe(slide));
     return () => observer.disconnect();
-  }, [activeListing]);
+  }, [listing]);
 
   useEffect(() => {
-    if (!activeListing) return;
+    if (!listing) return;
     galleryRef.current?.scrollTo({ left: 0 });
-  }, [activeListing?.id]);
+  }, [listing?.id]);
 
-  if (!activeListing) return null;
+  if (!listing) return null;
 
-  const listing = activeListing;
   const photos = listing.images.length ? listing.images : [];
   const hasAutoRiaDetails =
     listing.source === "auto_ria" &&
