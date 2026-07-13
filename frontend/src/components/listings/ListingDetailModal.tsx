@@ -20,6 +20,7 @@ import { hasVinCheck } from "@/lib/vin-check";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
 import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
+import { listings as listingsApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -30,6 +31,7 @@ type Props = {
   onToggleFavorite?: () => void;
   favoriteError?: string | null;
   displayCurrency?: DisplayCurrency;
+  onListingUpdate?: (listing: Listing) => void;
 };
 
 const MODAL_ACTION_CLASS =
@@ -43,23 +45,82 @@ export function ListingDetailModal({
   onToggleFavorite,
   favoriteError,
   displayCurrency: displayCurrencyProp,
+  onListingUpdate,
 }: Props) {
   const displayCurrency = resolveDisplayCurrency(
     displayCurrencyProp ?? "USD",
   );
-  const priceLabel = listing
-    ? formatListingPrice(
-        listing.price,
-        listing.currency,
-        displayCurrency,
-        listing.source_data,
-      )
-    : "";
+  const [liveListing, setLiveListing] = useState<Listing | null>(listing);
+  const [photosLoading, setPhotosLoading] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
   const galleryRef = useRef<HTMLDivElement>(null);
   const photoIndexRef = useRef(photoIndex);
   const dragStartY = useRef<number | null>(null);
   photoIndexRef.current = photoIndex;
+
+  const activeListing = liveListing ?? listing;
+
+  useEffect(() => {
+    setLiveListing(listing);
+    setPhotoIndex(0);
+  }, [listing?.id]);
+
+  useEffect(() => {
+    if (!listing) return;
+    const needsPhotos =
+      listing.source === "telegram" &&
+      (!listing.images || listing.images.length === 0);
+
+    if (!needsPhotos) {
+      setPhotosLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    let timer: number | undefined;
+    setPhotosLoading(true);
+
+    const poll = async () => {
+      try {
+        if (attempts === 0) {
+          await listingsApi.ensurePhotos(listing.id);
+        } else {
+          const fresh = await listingsApi.get(listing.id);
+          if (cancelled) return;
+          if (fresh.images?.length) {
+            setLiveListing(fresh);
+            onListingUpdate?.(fresh);
+            setPhotosLoading(false);
+            return;
+          }
+        }
+      } catch {
+        /* worker може ще не підхопити */
+      }
+      attempts += 1;
+      if (!cancelled && attempts < 12) {
+        timer = window.setTimeout(poll, 1500);
+      } else if (!cancelled) {
+        setPhotosLoading(false);
+      }
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [listing?.id, listing?.source, listing?.images?.length, onListingUpdate]);
+
+  const priceLabel = activeListing
+    ? formatListingPrice(
+        activeListing.price,
+        activeListing.currency,
+        displayCurrency,
+        activeListing.source_data,
+      )
+    : "";
 
   const scrollToPhoto = useCallback((index: number) => {
     setPhotoIndex(index);
@@ -87,12 +148,11 @@ export function ListingDetailModal({
   );
 
   useEffect(() => {
-    if (!listing) return;
-    setPhotoIndex(0);
+    if (!activeListing) return;
     lockBodyScroll();
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      const count = listing.images.length;
+      const count = activeListing.images.length;
       if (count <= 1) return;
       if (e.key === "ArrowLeft") {
         scrollToPhoto((photoIndexRef.current - 1 + count) % count);
@@ -106,11 +166,11 @@ export function ListingDetailModal({
       unlockBodyScroll();
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [listing, onClose, scrollToPhoto]);
+  }, [activeListing, onClose, scrollToPhoto]);
 
   useEffect(() => {
     const container = galleryRef.current;
-    if (!container || !listing || listing.images.length <= 1) return;
+    if (!container || !activeListing || activeListing.images.length <= 1) return;
 
     const slides = Array.from(container.children) as HTMLElement[];
     const observer = new IntersectionObserver(
@@ -129,15 +189,16 @@ export function ListingDetailModal({
 
     slides.forEach(slide => observer.observe(slide));
     return () => observer.disconnect();
-  }, [listing]);
+  }, [activeListing]);
 
   useEffect(() => {
-    if (!listing) return;
+    if (!activeListing) return;
     galleryRef.current?.scrollTo({ left: 0 });
-  }, [listing?.id]);
+  }, [activeListing?.id]);
 
-  if (!listing) return null;
+  if (!activeListing) return null;
 
+  const listing = activeListing;
   const photos = listing.images.length ? listing.images : [];
   const hasAutoRiaDetails =
     listing.source === "auto_ria" &&
@@ -260,8 +321,15 @@ export function ListingDetailModal({
                 ))}
               </div>
             ) : (
-              <div className="flex h-full items-center justify-center text-[13px] text-muted">
-                Фото відсутнє
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted">
+                {photosLoading ? (
+                  <>
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-emerald/30 border-t-emerald" />
+                    <span>Підвантажуємо фото…</span>
+                  </>
+                ) : (
+                  "Фото відсутнє"
+                )}
               </div>
             )}
 
@@ -309,8 +377,15 @@ export function ListingDetailModal({
                       priority
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-[13px] text-muted">
-                      Фото відсутнє
+                    <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted">
+                      {photosLoading ? (
+                        <>
+                          <span className="h-5 w-5 animate-spin rounded-full border-2 border-emerald/30 border-t-emerald" />
+                          <span>Підвантажуємо фото…</span>
+                        </>
+                      ) : (
+                        "Фото відсутнє"
+                      )}
                     </div>
                   )}
                   {photos.length > 1 && (

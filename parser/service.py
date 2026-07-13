@@ -31,8 +31,9 @@ from .channel_links import is_numeric_channel_id, public_telegram_message_url
 from .config import settings
 from .telegram_client import build_client, ensure_joined
 from .extractor import extract_car_data, is_valid_car_listing
-from .media import download_photos
+from .media import download_photos_by_ids
 from .dedupe import DedupeStore
+from .channel_media_store import ChannelMediaStore
 from .models import CarListing
 
 log = logging.getLogger("carbit_parser.service")
@@ -43,6 +44,7 @@ class CarParserService:
     def __init__(self, *, fresh_dedupe: bool = False, skip_dedupe: bool = False):
         self.client = build_client()
         self.dedupe = DedupeStore()
+        self.media_store = ChannelMediaStore()
         if fresh_dedupe:
             self.dedupe.clear()
         self.skip_dedupe = skip_dedupe
@@ -106,19 +108,27 @@ class CarParserService:
         return "\n".join(parts)
 
     async def _process_group(self, channel: str, group_messages: list) -> Optional[CarListing]:
-        """group_messages - список Message з однаковим grouped_id (або 1 повідомлення)."""
+        """group_messages - список Message з однаковим grouped_id (або 1 повідомлення).
+
+        Фото НЕ качаємо тут (lazy): лише валідуємо текст і зберігаємо refs.
+        """
         channel = await self._normalize_channel(channel)
         group_messages = sorted(group_messages, key=lambda m: m.id)
         primary = next((m for m in group_messages if (m.text or "").strip()), group_messages[0])
         text = self._merge_group_text(group_messages)
+        ids = [m.id for m in group_messages]
+        max_id = max(ids) if ids else 0
 
         if not text.strip() and not any(m.photo for m in group_messages):
             self.last_parse_stats["empty"] = self.last_parse_stats.get("empty", 0) + 1
+            if max_id:
+                self.media_store.advance_cursor(channel, max_id)
             return None
 
-        ids = [m.id for m in group_messages]
         if not self.skip_dedupe and self.dedupe.is_seen(channel, primary.id):
             self.last_parse_stats["dedupe"] = self.last_parse_stats.get("dedupe", 0) + 1
+            if max_id:
+                self.media_store.advance_cursor(channel, max_id)
             return None
 
         listing = extract_car_data(
@@ -132,22 +142,36 @@ class CarParserService:
         )
 
         if not is_valid_car_listing(listing):
-            # Відсічені спам/неавто — позначаємо, щоб не ганяти знову.
-            # Валідні — тільки після успішного download (інакше crash = назавжди lost).
             if not self.skip_dedupe:
                 self.dedupe.mark_seen(channel, ids)
+            if max_id:
+                self.media_store.advance_cursor(channel, max_id)
             self.last_parse_stats["invalid"] = self.last_parse_stats.get("invalid", 0) + 1
             return None
 
-        listing.photos = await download_photos(self.client, channel, group_messages)
+        # Lazy photos: без download на парсі — лише refs для worker/API
+        listing.photos = []
+        safe_channel = channel.lstrip("@").replace("/", "_").replace(" ", "_")
+        self.media_store.save_photo_refs(
+            f"telegram_{safe_channel}_{primary.id}",
+            channel,
+            ids,
+        )
         if not self.skip_dedupe:
             self.dedupe.mark_seen(channel, ids)
+        if max_id:
+            self.media_store.advance_cursor(channel, max_id)
         self.last_parse_stats["valid"] = self.last_parse_stats.get("valid", 0) + 1
         return listing
+
+    async def download_listing_photos(self, listing_id: str, channel: str, message_ids: list[int]) -> list[str]:
+        """Завантажує ≤ TELEGRAM_MAX_PHOTOS для listing (викликає worker)."""
+        return await download_photos_by_ids(self.client, channel, message_ids)
+
     async def parse_channel_history(self, channel: str, limit: int = 200) -> list:
         """
-        Розбирає останні `limit` повідомлень каналу і повертає список CarListing.
-        Автоматично вступає в канал, якщо акаунт ще не є учасником.
+        Інкрементальний скан: лише повідомлення новіші за cursor каналу.
+        Перший запуск (cursor=0) — останні `limit` повідомлень.
         """
         joined = await self._ensure_joined_cached(channel)
         if not joined:
@@ -158,8 +182,11 @@ class CarParserService:
         if getattr(entity, "username", None):
             self._slug_cache[channel.strip()] = entity.username
 
+        normalized = await self._normalize_channel(channel)
+        cursor = 0 if self.skip_dedupe else self.media_store.get_cursor(normalized)
         raw_messages = []
-        async for msg in self.client.iter_messages(entity, limit=limit):
+        # min_id=cursor → лише id > cursor (після першого bootstrap)
+        async for msg in self.client.iter_messages(entity, limit=limit, min_id=cursor):
             raw_messages.append(msg)
 
         self.last_parse_stats = {
@@ -169,11 +196,11 @@ class CarParserService:
             "empty": 0,
             "invalid": 0,
             "valid": 0,
+            "cursor_from": cursor,
         }
 
-        # групуємо по grouped_id (альбоми), одиничні повідомлення - group_id=None -> кожне окремо
-        groups = {}
-        singles = []
+        groups: dict = {}
+        singles: list = []
         for m in raw_messages:
             if m.grouped_id:
                 groups.setdefault(m.grouped_id, []).append(m)
@@ -189,8 +216,20 @@ class CarParserService:
             if listing:
                 results.append(listing)
 
-        # від найновіших до найстаріших
+        if raw_messages:
+            batch_max = max(m.id for m in raw_messages)
+            self.media_store.advance_cursor(normalized, batch_max)
+            self.last_parse_stats["cursor_to"] = self.media_store.get_cursor(normalized)
+
         results.sort(key=lambda l: l.posted_at or datetime.min, reverse=True)
+        log.info(
+            "History %s: msgs=%s valid=%s cursor %s→%s",
+            normalized,
+            len(raw_messages),
+            self.last_parse_stats.get("valid", 0),
+            cursor,
+            self.last_parse_stats.get("cursor_to", cursor),
+        )
         return results
 
     async def listen(

@@ -120,6 +120,9 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
     if not vin:
         vin = extract_vin(raw_text, listing.brand, listing.model)
 
+    message_ids = list(listing.group_message_ids or []) or [listing.message_id]
+    photos_pending = not bool(images)
+
     return ListingOut(
         id=telegram_listing_id(listing.channel, listing.message_id),
         source="telegram",
@@ -146,6 +149,8 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
         source_data={
             "channel": listing.channel,
             "message_id": listing.message_id,
+            "photo_message_ids": message_ids,
+            "photos_pending": photos_pending,
             "confidence": listing.confidence,
             "needs_review": listing.needs_review,
             "condition_flags": listing.condition_flags,

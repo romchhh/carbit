@@ -6,6 +6,10 @@ from app.models.models import Listing, SearchQuery
 from app.schemas.schemas import PaginatedListings, ListingOut
 from app.services.listings.serialize import listing_to_out
 from app.services.parser.results import get_search_results_from_db
+from app.services.telegram_channels.lazy_photos import (
+    enqueue_listing_photos,
+    listing_needs_photos,
+)
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
@@ -41,4 +45,31 @@ async def get_listing(
     listing = await db.get(Listing, listing_id)
     if not listing:
         raise HTTPException(404, "Listing not found")
+    # Відкрили картку без фото → ставимо в чергу воркера
+    if listing_needs_photos(listing):
+        enqueue_listing_photos(listing.id)
     return listing_to_out(listing)
+
+
+@router.post("/{listing_id}/ensure-photos", response_model=ListingOut)
+async def ensure_listing_photos(
+    listing_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Ставить lazy-download у чергу Telegram worker і повертає поточний стан."""
+    listing = await db.get(Listing, listing_id)
+    if not listing:
+        raise HTTPException(404, "Listing not found")
+    if listing_needs_photos(listing):
+        enqueue_listing_photos(listing.id)
+    out = listing_to_out(listing)
+    if not out.images:
+        out = out.model_copy(
+            update={
+                "source_data": {
+                    **(out.source_data or {}),
+                    "photos_pending": True,
+                }
+            }
+        )
+    return out

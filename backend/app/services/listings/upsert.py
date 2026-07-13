@@ -90,6 +90,9 @@ async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
     }
 
     if listing:
+        # Не затираємо вже завантажені lazy-фото порожнім масивом з повторного ingest
+        if listing.images and not (data.images or []):
+            payload["images"] = listing.images
         for key, value in payload.items():
             setattr(listing, key, value)
     else:

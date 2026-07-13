@@ -24,6 +24,10 @@ def listing_to_out(listing: Listing) -> ListingOut:
 
     vin = extract_vin(listing.description, listing.title) or getattr(listing, "vin", None)
 
+    source_data = None
+    if source == "telegram" and not (listing.images or []):
+        source_data = {"photos_pending": True}
+
     return ListingOut(
         id=listing.id,
         source=source,
@@ -44,7 +48,7 @@ def listing_to_out(listing: Listing) -> ListingOut:
         vin=(vin or None),
         vin_checked=None,
         vin_check_url=None,
-        source_data=None,
+        source_data=source_data,
         price_history=listing.price_history or [],
         is_duplicate=bool(listing.is_duplicate),
         duplicate_of=getattr(listing, "duplicate_of", None),

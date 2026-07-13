@@ -137,6 +137,8 @@ export const searches = {
 // ── Listings ──────────────────────────────────────────
 export const listings = {
   get: (id: string) => request<Listing>(`/listings/${id}`),
+  ensurePhotos: (id: string) =>
+    request<Listing>(`/listings/${id}/ensure-photos`, { method: "POST" }),
 };
 
 // ── Live search (AUTO.RIA + OLX) ──────────────────────

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TypeGuard
 from urllib.parse import urlencode, urljoin
 
 from bs4 import BeautifulSoup
@@ -126,7 +126,7 @@ VIN_PATTERN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")  # legacy; prefer extract_v
 PLACEHOLDER_IMAGE_MARKERS = ("no_thumbnail", "/app/static/")
 
 
-def is_valid_image_url(url: str | None) -> bool:
+def is_valid_image_url(url: object) -> TypeGuard[str]:
     if not url or not isinstance(url, str):
         return False
     normalized = url.strip()
@@ -776,14 +776,15 @@ def parse_listing_details(html: str) -> dict:
                 photos.append(src)
     if not photos:
         og_image = soup.select_one('meta[property="og:image"]')
-        if og_image and is_valid_image_url(og_image.get("content")):
-            photos.append(og_image["content"])
+        content = og_image.get("content") if og_image else None
+        if is_valid_image_url(content):
+            photos.append(content)
 
     price_tag = soup.select_one('[data-testid="ad-price"]') or soup.select_one('[data-cy="ad-price"]')
     price_text = price_tag.get_text(strip=True) if price_tag else None
     price, currency = _split_price(price_text)
 
-    specs: dict[str, str] = {}
+    specs: dict[str, str | list[str]] = {}
     param_rows = soup.select('[data-testid="ad-parameters-container"] p, [data-testid="ad-parameter"]')
     for row in param_rows:
         text = row.get_text(" ", strip=True)
@@ -791,18 +792,25 @@ def parse_listing_details(html: str) -> dict:
             key, _, value = text.partition(":")
             specs[key.strip()] = value.strip()
         elif text:
-            specs.setdefault("_unlabeled", []).append(text) if isinstance(
-                specs.get("_unlabeled"), list
-            ) else specs.update({"_unlabeled": [text]})
+            existing = specs.get("_unlabeled")
+            if isinstance(existing, list):
+                existing.append(text)
+            else:
+                specs["_unlabeled"] = [text]
 
     vin = None
     for value in specs.values():
-        if isinstance(value, str):
+        candidates = value if isinstance(value, list) else [value]
+        for item in candidates:
+            if not isinstance(item, str):
+                continue
             from app.services.vin import extract_vin
 
-            vin = extract_vin(value)
+            vin = extract_vin(item)
             if vin:
                 break
+        if vin:
+            break
     if not vin and description:
         from app.services.vin import extract_vin
 
@@ -1305,7 +1313,10 @@ def has_next_page(html: str, current_page: int) -> bool:
     pagination_links = soup.select('a[href*="page="]')
     max_page_found = current_page
     for anchor in pagination_links:
-        match = re.search(r"page=(\d+)", anchor.get("href", ""))
+        href = anchor.get("href")
+        if not isinstance(href, str):
+            continue
+        match = re.search(r"page=(\d+)", href)
         if match:
             max_page_found = max(max_page_found, int(match.group(1)))
     return max_page_found > current_page
