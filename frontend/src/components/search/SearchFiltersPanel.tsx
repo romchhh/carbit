@@ -5,6 +5,7 @@ import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
+import { IosToggle } from "@/components/ui/IosToggle";
 import { cn } from "@/lib/utils";
 import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
 import { UKRAINE_REGIONS } from "@/lib/search-data/regions";
@@ -17,6 +18,8 @@ import {
   formatPriceInput,
   type SearchFilterState,
 } from "@/lib/search-catalog";
+import type { SearchFreshness } from "@/lib/search-preview";
+import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 
 type Props = {
   filters: SearchFilterState;
@@ -34,6 +37,8 @@ type Props = {
   saveLimitReached?: boolean;
   telegramConnected?: boolean;
   wide?: boolean;
+  freshness?: SearchFreshness;
+  onFreshnessChange?: (freshness: SearchFreshness) => void;
 };
 
 export function SearchFiltersPanel({
@@ -44,7 +49,7 @@ export function SearchFiltersPanel({
   onSave,
   searching,
   searchButtonLabel = "Шукати",
-  searchingButtonLabel = "Шукаємо...",
+  searchingButtonLabel = "На ринку…",
   saving,
   saveSuccess,
   saveError,
@@ -52,6 +57,8 @@ export function SearchFiltersPanel({
   searchError,
   telegramConnected,
   wide,
+  freshness = "all",
+  onFreshnessChange,
 }: Props) {
   const [advanced, setAdvanced] = useState(false);
   const models = filters.brand ? getModelsForBrand(filters.brand) : [];
@@ -72,6 +79,8 @@ export function SearchFiltersPanel({
     filters.brand && filters.model
       ? `${filters.brand} ${filters.model}`
       : filters.brand || "";
+
+  const onlyNew = freshness === "new";
 
   return (
     <div className={cn("w-full", wide ? "max-w-none" : "max-w-[640px]")} data-tour="search-filters">
@@ -162,7 +171,7 @@ export function SearchFiltersPanel({
                 label: option.label,
               }))}
               onCurrencyChange={value => {
-                const next = value === "UAH" ? "UAH" : "USD";
+                const next = resolveDisplayCurrency(value) as DisplayCurrency;
                 const defaults = DEFAULT_PRICE_BY_CURRENCY[next];
                 update({
                   currency: next,
@@ -183,19 +192,6 @@ export function SearchFiltersPanel({
           />
         </div>
 
-        {onSave && (
-          <div className="border-t border-border/60 bg-white px-4 py-4 sm:px-5" data-tour="save-search">
-            <SaveSearchCTA
-              onSave={onSave}
-              saving={saving}
-              successMessage={saveSuccess}
-              errorMessage={saveError}
-              limitReached={saveLimitReached}
-              telegramConnected={telegramConnected}
-            />
-          </div>
-        )}
-
         <div className="space-y-2 border-t border-border/60 bg-white px-4 py-4 sm:px-5">
           <button
             type="button"
@@ -211,7 +207,7 @@ export function SearchFiltersPanel({
         <AdvancedSearchPanel filters={filters} onChange={onChange} onReset={onReset} />
       )}
 
-      <div className="mt-4 space-y-2 rounded-[1.35rem] border border-border/80 bg-white px-4 py-4 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:px-5">
+      <div className="mt-4 space-y-3 rounded-[1.35rem] border border-border/80 bg-white px-4 py-4 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:px-5">
         {searchError && (
           <div
             role="alert"
@@ -236,6 +232,50 @@ export function SearchFiltersPanel({
             {searching ? searchingButtonLabel : searchButtonLabel}
           </span>
         </button>
+
+        {onFreshnessChange && (
+          <div
+            className={cn(
+              "flex items-center justify-between gap-4 rounded-2xl border px-4 py-3.5 transition-colors",
+              onlyNew
+                ? "border-emerald/30 bg-emerald/5"
+                : "border-border/80 bg-surface/50",
+            )}
+          >
+            <div className="min-w-0">
+              <p className="text-[14px] font-bold text-ink">
+                {onlyNew ? "Тільки свіжі" : "Шукати всі"}
+              </p>
+              <p className="mt-0.5 text-[12px] leading-snug text-muted">
+                {onlyNew
+                  ? "Лише оголошення за останні 7 днів"
+                  : "Увесь ринок без обмеження по даті"}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <IosToggle
+                checked={onlyNew}
+                disabled={searching}
+                aria-label="Тільки нові оголошення"
+                onChange={checked => onFreshnessChange(checked ? "new" : "all")}
+              />
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+                {onlyNew ? "вкл" : "викл"}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {onSave && (
+          <SaveSearchCTA
+            onSave={onSave}
+            saving={saving}
+            successMessage={saveSuccess}
+            errorMessage={saveError}
+            limitReached={saveLimitReached}
+            telegramConnected={telegramConnected}
+          />
+        )}
       </div>
     </div>
   );

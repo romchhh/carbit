@@ -16,10 +16,11 @@ from app.services.telegram_channels.ingest import search_telegram_listings
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
 OLX_SEARCH_TIMEOUT_SECONDS = 15.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»)
-SOURCE_POOL_CAP = 300
-TELEGRAM_POOL_CAP = 800
-TELEGRAM_MAX_SCAN = 3000
+SOURCE_POOL_CAP = 80
+TELEGRAM_POOL_CAP = 200
+TELEGRAM_MAX_SCAN = 1200
 AUTO_RIA_PAGE_SIZE = 50
+AUTO_RIA_POOL_TIMEOUT_SECONDS = 40.0
 TELEGRAM_POOL_TIMEOUT_SECONDS = 12.0
 
 

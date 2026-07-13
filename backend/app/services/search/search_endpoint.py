@@ -88,6 +88,17 @@ def _outcome_sources(statuses) -> list[SourceStatusOut]:
     return out
 
 
+def _page_from_cached_pool(
+    cached_pool: dict,
+    *,
+    page: int,
+    per_page: int,
+) -> PaginatedListings:
+    page_result = slice_pool(cached_pool, page=page, per_page=per_page)
+    page_result.items = [slim_listing_for_list(item) for item in page_result.items]
+    return sanitize_paginated_listings(page_result)
+
+
 async def run_live_search(
     filters: SearchFilters,
     *,
@@ -103,13 +114,16 @@ async def run_live_search(
     # 1) Пул у KV — «Показати ще» без повторних запитів до OLX/AUTO.RIA
     cached_pool = await get_live_pool(filters, sort_by)
     if cached_pool is not None:
-        page_result = slice_pool(cached_pool, page=page, per_page=per_page)
-        page_result.items = [slim_listing_for_list(item) for item in page_result.items]
-        return sanitize_paginated_listings(page_result)
+        return _page_from_cached_pool(cached_pool, page=page, per_page=per_page)
 
     async with acquire_live_search_slot():
+        # Stampede guard: інший запит міг уже заповнити кеш, поки ми чекали слот
+        cached_pool = await get_live_pool(filters, sort_by)
+        if cached_pool is not None:
+            return _page_from_cached_pool(cached_pool, page=page, per_page=per_page)
+
         try:
-            # Завжди тягнемо великий пул (page=1), далі ріжемо локально
+            # Завжди тягнемо пул (page=1), далі ріжемо локально
             outcome = await search_listings_outcome(
                 filters,
                 page=1,
@@ -152,25 +166,25 @@ async def run_live_search(
                 "Пошук тимчасово недоступний. Спробуйте ще раз за хвилину.",
             ) from exc
 
-    pool_items = mark_duplicates_in_pool(list(outcome.result.items))
-    sources = _outcome_sources(outcome.sources)
-    partial = any(s.error for s in sources) and any(s.item_count > 0 for s in sources)
-    logger.info(
-        "live_search ok user=%s page=%s pool=%s partial=%s sources=%s",
-        user_id,
-        page,
-        len(pool_items),
-        partial,
-        [(s.source, s.item_count, s.error) for s in sources],
-    )
+        pool_items = mark_duplicates_in_pool(list(outcome.result.items))
+        sources = _outcome_sources(outcome.sources)
+        partial = any(s.error for s in sources) and any(s.item_count > 0 for s in sources)
+        logger.info(
+            "live_search ok user=%s page=%s pool=%s partial=%s sources=%s",
+            user_id,
+            page,
+            len(pool_items),
+            partial,
+            [(s.source, s.item_count, s.error) for s in sources],
+        )
 
-    await set_live_pool(
-        filters,
-        sort_by,
-        items=pool_items,
-        sources=sources,
-        partial=partial,
-    )
+        await set_live_pool(
+            filters,
+            sort_by,
+            items=pool_items,
+            sources=sources,
+            partial=partial,
+        )
 
     total = len(pool_items)
     start = (page - 1) * per_page

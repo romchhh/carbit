@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
-import { SearchPreviewNotice } from "@/components/search/SearchPreviewNotice";
 import { SearchProgressBar } from "@/components/search/SearchProgressBar";
 import { SearchResultsSkeleton } from "@/components/search/SearchResultsSkeleton";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
@@ -12,6 +11,12 @@ import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import type { ExportListing } from "@/lib/export-listings";
 import { SEARCH_HOURLY_LIMIT, SEARCH_PAGE_SIZE, type SearchFreshness } from "@/lib/search-preview";
+import {
+  flavorForLoadMore,
+  flavorForPartial,
+  flavorForRefresh,
+} from "@/lib/search-flavor";
+import type { DisplayCurrency } from "@/lib/display-currency";
 import type { Listing, SourceStatus } from "@/types/api";
 import { cn } from "@/lib/utils";
 
@@ -53,12 +58,10 @@ type Props = {
   sourceStatuses?: SourceStatus[];
   partial?: boolean;
   fromCache?: boolean;
+  displayCurrency?: DisplayCurrency;
   onSortChange: (sort: SortOption) => void;
   onFreshnessChange: (freshness: SearchFreshness) => void;
   onLoadMore?: () => void;
-  onSave?: () => void;
-  saving?: boolean;
-  telegramConnected?: boolean;
 };
 
 export function SearchPreviewResults({
@@ -75,12 +78,9 @@ export function SearchPreviewResults({
   sourceStatuses,
   partial,
   fromCache,
+  displayCurrency = "USD",
   onSortChange,
-  onFreshnessChange,
   onLoadMore,
-  onSave,
-  saving,
-  telegramConnected,
 }: Props) {
   const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } = useListingFavorites(
     results.map(item => item.id),
@@ -91,11 +91,14 @@ export function SearchPreviewResults({
   const nextBatch = Math.min(SEARCH_PAGE_SIZE, remaining);
 
   const pendingSources = (sourceStatuses ?? []).filter(s => s.error);
+  const pendingKey = pendingSources.map(s => s.source).join("|");
+  const partialLine = useMemo(() => flavorForPartial(pendingKey.length + total), [pendingKey, total]);
+  const loadMoreLabel = useMemo(() => flavorForLoadMore(results.length), [results.length]);
+  const refreshLabel = useMemo(() => flavorForRefresh(total), [total]);
+
   const partialHint =
     partial && pendingSources.length > 0
-      ? pendingSources
-          .map(s => `${sourceLabel(s.source)} ще не відповів`)
-          .join(" · ")
+      ? `${partialLine} (${pendingSources.map(s => sourceLabel(s.source)).join(", ")})`
       : null;
 
   const openListing = (listing: Listing) => {
@@ -106,35 +109,6 @@ export function SearchPreviewResults({
   return (
     <>
       <div ref={resultsRef} className="mt-6 scroll-mt-24 sm:mt-8">
-        <div className="mb-3 flex flex-wrap gap-2">
-          {(
-            [
-              { value: "all" as const, label: "Шукати всі" },
-              { value: "new" as const, label: "Тільки нові (7 днів)" },
-            ] as const
-          ).map(option => (
-            <button
-              key={option.value}
-              type="button"
-              disabled={searching || loadingMore}
-              onClick={() => onFreshnessChange(option.value)}
-              title={
-                option.value === "all"
-                  ? "AUTO.RIA + OLX + Telegram без обмеження по даті"
-                  : "Лише оголошення за останні 7 днів"
-              }
-              className={cn(
-                "rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors",
-                freshness === option.value
-                  ? "border-emerald bg-emerald/10 text-emerald-dark"
-                  : "border-border bg-white text-muted hover:border-ink/20 hover:text-ink",
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
         <SearchResultsToolbar
           running={running}
           total={total}
@@ -144,7 +118,7 @@ export function SearchPreviewResults({
           exportItems={exportItems}
           exportName="search"
           loading={searching}
-            idleLabel="Натисніть «Шукати», щоб побачити авто з AUTO.RIA, OLX і Telegram за вашими фільтрами"
+          idleLabel="Натисніть «Шукати» — підемо гуляти авторинками за вас"
         />
 
         {error && (
@@ -161,22 +135,20 @@ export function SearchPreviewResults({
             role="status"
             className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900"
           >
-            Показано часткові результати. {partialHint}. Решту можна підвантажити пізніше.
-            {fromCache ? " Результати з кешу." : ""}
+            {partialHint}
+            {fromCache ? " Трохи підглянули в свіжий кеш, щоб не ганяти зайве." : ""}
           </div>
         )}
 
         <SearchProgressBar
           active={searching || Boolean(loadingMore)}
-          compact={running && !searching}
+          compact={false}
           label={
             loadingMore
-              ? fromCache
-                ? `Завантажуємо ще ${nextBatch} з кешу…`
-                : `Завантажуємо ще ${nextBatch}…`
-              : running
-                ? "Оновлюємо результати…"
-                : "Шукаємо на AUTO.RIA та OLX…"
+              ? loadMoreLabel
+              : searching && running
+                ? refreshLabel
+                : undefined
           }
           hint={loadingMore ? null : undefined}
           className="mb-4"
@@ -186,36 +158,46 @@ export function SearchPreviewResults({
           <SearchResultsSkeleton count={3} />
         ) : !running ? (
           <div className="rounded-2xl border border-dashed border-border bg-surface/40 px-5 py-10 text-center sm:bg-white sm:px-6 sm:py-12">
-            <p className="text-[15px] font-semibold text-ink">Результати з&apos;являться тут</p>
+            <p className="text-[15px] font-semibold text-ink">Авторинок ще порожній</p>
             <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-muted">
-              Оберіть фільтри і натисніть «Шукати» — покажемо всі доступні авто з AUTO.RIA,
-              OLX і Telegram по 20 з можливістю підвантажити ще.
+              Оберіть фільтри і тисніть «Шукати» — обійдемо AUTO.RIA, OLX і Telegram,
+              ніби це один великий автобазар.
             </p>
             <p className="mt-3 text-[11px] text-muted">
-              До {SEARCH_HOURLY_LIMIT} запитів на годину
+              До {SEARCH_HOURLY_LIMIT} прогулянок ринком на годину — ноги теж втомлюються
             </p>
           </div>
         ) : results.length === 0 ? (
           <div className="rounded-2xl border border-border bg-white px-5 py-10 text-center sm:px-6 sm:py-12">
-            <p className="text-[15px] font-semibold text-ink">За цими фільтрами поки нічого немає</p>
+            <p className="text-[15px] font-semibold text-ink">На цьому ряду порожньо</p>
             <p className="mt-2 text-[13px] text-muted">
               {freshness === "new"
-                ? "Спробуйте «Шукати всі» або збережіть моніторинг — сповістимо, коли зʼявиться нове."
-                : "Збережіть пошук — ми повідомимо в Telegram, коли зʼявиться нова пропозиція."}
+                ? "Вимкніть «Тільки свіжі» або підключіть моніторинг — свиснемо, коли з’явиться нове."
+                : "Підключіть моніторинг — напишемо в Telegram, щойно хтось виставить цікаве."}
             </p>
           </div>
         ) : (
           <>
             <div
               className={cn(
-                "-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:gap-3 sm:px-0",
-                searching && "pointer-events-none opacity-60",
+                "relative -mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:gap-3 sm:px-0",
+                searching && "opacity-70",
               )}
+              aria-busy={searching || loadingMore}
             >
+              {searching && (
+                <div
+                  role="status"
+                  className="sticky top-16 z-10 mb-1 rounded-xl border border-emerald/25 bg-white/95 px-3 py-2 text-center text-[12px] font-medium text-emerald-dark shadow-sm backdrop-blur-sm"
+                >
+                  Ще шукаємо на ринку — сторінку можна гортати
+                </div>
+              )}
               {results.map(item => (
                 <ListingCard
                   key={item.id}
                   listing={item}
+                  displayCurrency={displayCurrency}
                   onClick={() => openListing(item)}
                   isFavorite={favoriteIds.has(item.id)}
                   favoriteLoading={loadingIds.has(item.id)}
@@ -232,20 +214,11 @@ export function SearchPreviewResults({
                 className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[13px] font-semibold text-muted transition-colors hover:border-ink/20 hover:text-ink disabled:opacity-60"
               >
                 {loadingMore
-                  ? "Завантаження…"
-                  : `Показати ще ${nextBatch}${total > 0 ? ` · ${results.length} з ${total.toLocaleString("uk-UA")}` : ""}`}
+                  ? "Йдемо далі по ряду…"
+                  : `Ще поторгуватись${nextBatch > 0 ? ` · +${nextBatch}` : ""}${
+                      total > 0 ? ` · ${results.length} з ${total.toLocaleString("uk-UA")}` : ""
+                    }`}
               </button>
-            )}
-
-            {onSave && (
-              <SearchPreviewNotice
-                total={total}
-                shown={results.length}
-                freshness={freshness}
-                onSave={onSave}
-                saving={saving}
-                telegramConnected={telegramConnected}
-              />
             )}
           </>
         )}
@@ -253,6 +226,7 @@ export function SearchPreviewResults({
 
       <ListingDetailModal
         listing={selectedListing}
+        displayCurrency={displayCurrency}
         onClose={() => {
           clearError();
           setSelectedListing(null);

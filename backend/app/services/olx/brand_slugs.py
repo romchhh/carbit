@@ -97,6 +97,32 @@ BRAND_TO_SLUG: dict[str, str] = {
     "volvo": "volvo",
     "zaz": "zaz",
     "zeekr": "zeekr",
+    "nio": "nio",
+    "xpeng": "xpeng",
+    "li auto": "li-auto",
+    "li": "li-auto",
+    "voyah": "voyah",
+    "avatr": "avatr",
+    "deepal": "deepal",
+    "aito": "aito",
+    "hongqi": "hongqi",
+    "leapmotor": "leapmotor",
+    "skywell": "skywell",
+    "seres": "seres",
+    "ora": "ora",
+    "tank": "tank",
+    "gwm": "gwm",
+    "jaecoo": "jaecoo",
+    "omoda": "omoda",
+    "jetour": "jetour",
+    "exeed": "exeed",
+    "lucid": "lucid",
+    "rivian": "rivian",
+    "vinfast": "vinfast",
+    "polestar": "polestar",
+    "lynk & co": "lynk-and-co",
+    "lynk and co": "lynk-and-co",
+    "wey": "wey",
     # Ukrainian / Russian
     "ауді": "audi",
     "ауди": "audi",
@@ -273,6 +299,95 @@ _SERIES_RE = re.compile(
     r"^(\d+)\s*(?:series|серії|серии|серія|серия|seriya|seriya)?$",
     re.IGNORECASE,
 )
+
+
+# Slug у path OLX, які дають 404 (перевірено live 2026-07). Шукаємо через /q-.../
+OLX_TEXT_SEARCH_SLUGS = frozenset(
+    {
+        "aito",
+        "avatr",
+        "baic",
+        "bugatti",
+        "changan",
+        "cupra",
+        "daf",
+        "datsun",
+        "deepal",
+        "dfsk",
+        "dongfeng",
+        "ds",
+        "exeed",
+        "forthing",
+        "foton",
+        "gac",
+        "genesis",
+        "gwm",
+        "haval",
+        "hongqi",
+        "jaecoo",
+        "jetour",
+        "lada",
+        "leapmotor",
+        "li-auto",
+        "lucid",
+        "lynk-and-co",
+        "man",
+        "nio",
+        "omoda",
+        "ora",
+        "rivian",
+        "scania",
+        "seres",
+        "skywell",
+        "tank",
+        "vinfast",
+        "voyah",
+        "wey",
+        "xpeng",
+        "zeekr",
+    }
+)
+
+# Додаткові нормалізовані імена (як у фільтрі FE), якщо slug інший
+OLX_TEXT_SEARCH_NAMES = frozenset(
+    {
+        "li auto",
+        "li",
+        "lynk & co",
+        "lynk and co",
+        "great wall motor",
+        "gwm",
+        "x peng",
+        "xpeng",
+        "nio",
+        "zeekr",
+        "jaecoo",
+        "omoda",
+        "jetour",
+        "haval",
+        "changan",
+        "dongfeng",
+        "voyah",
+        "skywell",
+        "cupra",
+        "genesis",
+        "baic",
+        "gac",
+        "foton",
+        "lada",
+        "ваз",
+        "лада",
+    }
+)
+
+
+def brand_uses_olx_text_search(brand: str) -> bool:
+    """True, якщо /brand/ на OLX.ua не працює → потрібен текстовий /q-.../."""
+    key = _norm(brand)
+    if key in OLX_TEXT_SEARCH_NAMES or key in OLX_TEXT_SEARCH_SLUGS:
+        return True
+    slug = BRAND_TO_SLUG.get(key) or slugify(brand)
+    return bool(slug) and slug in OLX_TEXT_SEARCH_SLUGS
 
 
 def resolve_olx_brand_slug(brand: str) -> str:

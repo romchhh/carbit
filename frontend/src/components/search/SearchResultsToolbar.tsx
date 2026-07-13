@@ -65,7 +65,7 @@ export function SearchResultsToolbar({
                 <>
                   <span className="flex items-center gap-2 font-medium text-emerald-dark">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-emerald" />
-                    Результати пошуку
+                    Улов з ринку
                   </span>
                   <span className="text-border">·</span>
                 </>
@@ -89,7 +89,7 @@ export function SearchResultsToolbar({
               )}
             </div>
           ) : (
-            <span className="text-muted">{loading ? "Пошук…" : idleLabel}</span>
+            <span className="text-muted">{loading ? "Вже на ринку…" : idleLabel}</span>
           )}
         </div>
 

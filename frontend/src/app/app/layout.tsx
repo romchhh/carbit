@@ -106,11 +106,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eef0f4] lg:rounded-[28px] lg:border lg:border-border/50 lg:bg-white lg:shadow-island">
               <div className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-6 lg:px-12 lg:py-8 lg:pb-8 lg:pt-0">
                 <div className="app-mobile-content mx-auto flex w-full max-w-[980px] flex-col">
-                  <div className="mb-5 lg:mb-6">
+                  {children}
+
+                  <div className="mt-5 lg:mt-6">
                     <PwaInstallPrompt />
                   </div>
-
-                  {children}
                 </div>
               </div>
             </div>

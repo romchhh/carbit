@@ -1,13 +1,11 @@
-import asyncio
 import logging
-import random
 
-from sqlalchemy import select, func
+from sqlalchemy import asc, desc, func, nulls_last, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Notification, NotificationType, User, Listing, SearchQuery
 from app.schemas.schemas import NotificationOut
-from app.services.currency import format_display_price, resolve_display_currency
+from app.services.currency import format_display_price
 from app.services.listings.serialize import listing_to_out
 from app.services.notifications.freshness import (
     coerce_notification_max_hours,
@@ -35,7 +33,8 @@ async def create_listing_notification(
         else listing.url
     )
 
-    display_currency = resolve_display_currency(getattr(user, "preferred_currency", None))
+    # Telegram-картки завжди в $ (основна валюта продукту)
+    display_currency = "USD"
     price_label = format_display_price(listing.price, listing.currency, display_currency)
 
     notification = Notification(
@@ -101,7 +100,6 @@ async def create_listing_notification(
                 "url": listing_url,
             }
             search_name = search.name if search else "Carbit"
-            await asyncio.sleep(random.uniform(1, 3))
             result = await telegram_client.send_listing_card(
                 user.telegram_id,
                 listing_data,
@@ -126,18 +124,16 @@ async def get_unread_count(db: AsyncSession, user_id: str) -> int:
 
 
 async def mark_all_read(db: AsyncSession, user_id: str) -> int:
-    result = await db.scalars(
-        select(Notification).where(
+    result = await db.execute(
+        update(Notification)
+        .where(
             Notification.user_id == user_id,
             Notification.is_read.is_(False),
         )
+        .values(is_read=True)
     )
-    count = 0
-    for n in result.all():
-        n.is_read = True
-        count += 1
     await db.flush()
-    return count
+    return int(getattr(result, "rowcount", 0) or 0)
 
 
 def notification_to_out(notification: Notification, listing: Listing | None = None) -> NotificationOut:
@@ -157,19 +153,16 @@ def notification_to_out(notification: Notification, listing: Listing | None = No
     )
 
 
-def _sort_notification_rows(
-    rows: list[tuple[Notification, Listing | None]],
-    sort_by: str,
-) -> list[tuple[Notification, Listing | None]]:
+def _notification_order_by(sort_by: str):
     if sort_by == "price_asc":
-        return sorted(rows, key=lambda row: row[1].price if row[1] else 0)
+        return (nulls_last(asc(Listing.price)), desc(Notification.created_at))
     if sort_by == "price_desc":
-        return sorted(rows, key=lambda row: row[1].price if row[1] else 0, reverse=True)
+        return (nulls_last(desc(Listing.price)), desc(Notification.created_at))
     if sort_by == "year_desc":
-        return sorted(rows, key=lambda row: row[1].year if row[1] else 0, reverse=True)
+        return (nulls_last(desc(Listing.year)), desc(Notification.created_at))
     if sort_by == "mileage_asc":
-        return sorted(rows, key=lambda row: row[1].mileage if row[1] else 0)
-    return sorted(rows, key=lambda row: row[0].created_at, reverse=True)
+        return (nulls_last(asc(Listing.mileage)), desc(Notification.created_at))
+    return (desc(Notification.created_at),)
 
 
 async def list_user_notifications(
@@ -181,20 +174,27 @@ async def list_user_notifications(
     unread_only: bool = False,
     sort_by: str = "newest",
 ) -> tuple[list[NotificationOut], int, int]:
+    filters = [Notification.user_id == user_id]
+    if unread_only:
+        filters.append(Notification.is_read.is_(False))
+
+    total = (
+        await db.scalar(
+            select(func.count()).select_from(Notification).where(*filters)
+        )
+        or 0
+    )
+    unread = await get_unread_count(db, user_id)
+
+    offset = max(page - 1, 0) * per_page
     stmt = (
         select(Notification, Listing)
         .outerjoin(Listing, Notification.listing_id == Listing.id)
-        .where(Notification.user_id == user_id)
+        .where(*filters)
+        .order_by(*_notification_order_by(sort_by))
+        .offset(offset)
+        .limit(per_page)
     )
-    if unread_only:
-        stmt = stmt.where(Notification.is_read.is_(False))
-
     rows = (await db.execute(stmt)).all()
-    sorted_rows = _sort_notification_rows(list(rows), sort_by)
-    total = len(sorted_rows)
-    unread = await get_unread_count(db, user_id)
-
-    start = (page - 1) * per_page
-    page_rows = sorted_rows[start : start + per_page]
-    items = [notification_to_out(n, listing) for n, listing in page_rows]
-    return items, total, unread
+    items = [notification_to_out(n, listing) for n, listing in rows]
+    return items, int(total), unread

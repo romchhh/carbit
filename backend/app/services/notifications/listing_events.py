@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, Notification, NotificationType, SearchListing, SearchQuery, User
-from app.services.currency import format_display_price, resolve_display_currency
+from app.services.currency import format_display_price
 from app.services.telegram.client import telegram_client
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,8 @@ async def notify_listing_events(
 
     sent = 0
     for _sl, search, user in rows:
-        display_currency = resolve_display_currency(getattr(user, "preferred_currency", None))
+        # Telegram-алерти завжди в $
+        display_currency = "USD"
         if price_dropped and old_price is not None:
             old_label = format_display_price(old_price, old_currency or listing.currency, display_currency)
             new_label = format_display_price(listing.price, listing.currency, display_currency)

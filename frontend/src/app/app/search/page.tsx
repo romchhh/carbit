@@ -27,6 +27,7 @@ export default function SearchPage() {
     sourceStatuses,
     partial,
     fromCache,
+    displayCurrency,
     resultsRef,
     runSearch,
     changeSort,
@@ -99,6 +100,8 @@ export default function SearchPage() {
           saveError={saveError}
           saveLimitReached={saveLimitReached}
           telegramConnected={user?.telegram_connected}
+          freshness={freshness}
+          onFreshnessChange={changeFreshness}
         />
       </div>
 
@@ -116,12 +119,10 @@ export default function SearchPage() {
         sourceStatuses={sourceStatuses}
         partial={partial}
         fromCache={fromCache}
+        displayCurrency={displayCurrency}
         onSortChange={changeSort}
         onFreshnessChange={changeFreshness}
         onLoadMore={loadMore}
-        onSave={handleSave}
-        saving={saving}
-        telegramConnected={user?.telegram_connected}
       />
     </div>
   );

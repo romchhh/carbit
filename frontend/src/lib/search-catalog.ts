@@ -54,7 +54,7 @@ export const COLOR_OPTIONS = [
   "Зелений", "Жовтий", "Помаранчевий", "Коричневий", "Бежевий", "Фіолетовий",
 ] as const;
 
-export const VEHICLE_TYPE_OPTIONS = ["Легкові", "Мото", "Вантажні", "Причепи", "Автобуси", "Сільгосп", "Спецтехніка"] as const;
+export const VEHICLE_TYPE_OPTIONS = ["Легкові", "Вантажні"] as const;
 
 export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
   { value: "all", label: "Всі" },

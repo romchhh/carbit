@@ -19,8 +19,7 @@ import {
 import { hasVinCheck } from "@/lib/vin-check";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
-import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
-import { useAuth } from "@/contexts/AuthProvider";
+import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -30,6 +29,7 @@ type Props = {
   favoriteLoading?: boolean;
   onToggleFavorite?: () => void;
   favoriteError?: string | null;
+  displayCurrency?: DisplayCurrency;
 };
 
 const MODAL_ACTION_CLASS =
@@ -42,13 +42,16 @@ export function ListingDetailModal({
   favoriteLoading = false,
   onToggleFavorite,
   favoriteError,
+  displayCurrency: displayCurrencyProp,
 }: Props) {
-  const { user } = useAuth();
+  const displayCurrency = resolveDisplayCurrency(
+    displayCurrencyProp ?? "USD",
+  );
   const priceLabel = listing
     ? formatListingPrice(
         listing.price,
         listing.currency,
-        resolveDisplayCurrency(user?.preferred_currency),
+        displayCurrency,
         listing.source_data,
       )
     : "";

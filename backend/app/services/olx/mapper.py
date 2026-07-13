@@ -17,7 +17,11 @@ from app.services.olx.constants import (
 )
 from app.services.olx.dates import resolve_olx_published_at, resolve_olx_refreshed_at
 from app.services.olx.parser import OlxListing, OlxSearchParams, is_valid_image_url
-from app.services.olx.brand_slugs import resolve_olx_brand_slug, resolve_olx_model_slug
+from app.services.olx.brand_slugs import (
+    brand_uses_olx_text_search,
+    resolve_olx_brand_slug,
+    resolve_olx_model_slug,
+)
 from app.services.olx.constants import MODEL_SLUG_ALIASES
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
 
@@ -36,10 +40,23 @@ def model_slug(model: str, *, brand: str = "") -> str:
 def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxSearchParams:
     params = OlxSearchParams(max_pages=max_pages)
 
-    if filters.brand:
-        params.brand = brand_slug(filters.brand)
-    if filters.model:
-        params.model = model_slug(filters.model, brand=filters.brand or "")
+    brand_raw = (filters.brand or "").strip()
+    model_raw = (filters.model or "").strip()
+
+    if brand_raw:
+        params.brand_label = brand_raw
+    if model_raw:
+        params.model_label = model_raw
+
+    if brand_raw and brand_uses_olx_text_search(brand_raw):
+        # Немає taxonomy-path: /q-{brand}/ + пост-фільтр моделі.
+        # Brand+model у q- часто дає порожню/сміттєву видачу (Jaecoo J7 → junk).
+        params.text_query = brand_raw
+    else:
+        if brand_raw:
+            params.brand = brand_slug(brand_raw)
+        if model_raw:
+            params.model = model_slug(model_raw, brand=brand_raw)
 
     if filters.category and filters.category != "all":
         params.condition = CATEGORY_TO_CONDITION.get(filters.category)

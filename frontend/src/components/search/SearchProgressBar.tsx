@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SEARCH_PAGE_SIZE } from "@/lib/search-preview";
+import { SEARCH_HINTS, SEARCH_LABELS } from "@/lib/search-flavor";
 import { cn } from "@/lib/utils";
 
 type Props = {
   active: boolean;
+  /** Якщо передано — фіксований заголовок; інакше крутимо креативні варіанти. */
   label?: string;
   hint?: string | null;
   className?: string;
@@ -14,13 +15,14 @@ type Props = {
 
 export function SearchProgressBar({
   active,
-  label = "Шукаємо авто…",
+  label,
   hint,
   className,
   compact = false,
 }: Props) {
   const [visible, setVisible] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [flavorIndex, setFlavorIndex] = useState(0);
   const wasActive = useRef(false);
 
   useEffect(() => {
@@ -28,8 +30,9 @@ export function SearchProgressBar({
       wasActive.current = true;
       setVisible(true);
       setProgress(10);
+      setFlavorIndex(Math.floor(Math.random() * SEARCH_LABELS.length));
 
-      const interval = window.setInterval(() => {
+      const progressInterval = window.setInterval(() => {
         setProgress(current => {
           if (current >= 92) return current;
           const increment = current < 30 ? 9 : current < 60 ? 5 : current < 85 ? 2 : 0.6;
@@ -37,7 +40,14 @@ export function SearchProgressBar({
         });
       }, 320);
 
-      return () => window.clearInterval(interval);
+      const flavorInterval = window.setInterval(() => {
+        setFlavorIndex(current => (current + 1) % SEARCH_LABELS.length);
+      }, 2800);
+
+      return () => {
+        window.clearInterval(progressInterval);
+        window.clearInterval(flavorInterval);
+      };
     }
 
     if (!wasActive.current) return;
@@ -54,10 +64,10 @@ export function SearchProgressBar({
 
   if (!visible) return null;
 
-  const defaultHint =
-    hint === undefined
-      ? `Покажемо перші ${SEARCH_PAGE_SIZE} авто — решту можна підвантажити кнопкою «Показати ще»`
-      : hint;
+  const rotatingLabel = SEARCH_LABELS[flavorIndex % SEARCH_LABELS.length]!;
+  const rotatingHint = SEARCH_HINTS[flavorIndex % SEARCH_HINTS.length]!;
+  const displayLabel = label ?? rotatingLabel;
+  const displayHint = hint === undefined ? rotatingHint : hint;
 
   return (
     <div
@@ -73,7 +83,15 @@ export function SearchProgressBar({
       aria-valuemax={100}
     >
       <div className={cn("flex items-center justify-between gap-3", !compact && "mb-3")}>
-        <p className={cn("font-medium text-ink", compact ? "text-[12px]" : "text-[13px]")}>{label}</p>
+        <p
+          key={displayLabel}
+          className={cn(
+            "font-medium text-ink transition-opacity duration-300",
+            compact ? "text-[12px]" : "text-[13px]",
+          )}
+        >
+          {displayLabel}
+        </p>
         <span className="text-[11px] tabular-nums text-muted">{Math.round(progress)}%</span>
       </div>
       <div className={cn("overflow-hidden rounded-full bg-surface", compact ? "h-1.5" : "h-2")}>
@@ -82,8 +100,13 @@ export function SearchProgressBar({
           style={{ width: `${progress}%` }}
         />
       </div>
-      {!compact && defaultHint && (
-        <p className="mt-2.5 text-[11px] leading-relaxed text-muted">{defaultHint}</p>
+      {!compact && displayHint && (
+        <p
+          key={displayHint}
+          className="mt-2.5 text-[11px] leading-relaxed text-muted transition-opacity duration-300"
+        >
+          {displayHint}
+        </p>
       )}
     </div>
   );

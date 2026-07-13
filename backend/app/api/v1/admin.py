@@ -13,7 +13,8 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_admin_token, get_current_admin, get_current_admin_flexible
 from app.models.models import User, SearchQuery, Notification, Favorite, PlanTier
-from app.services.billing.plans import PLANS, get_plan
+from app.services.billing.plans import PLANS, get_plan, activate_plan
+from app.services.billing.notify import notify_plan_activated
 from app.services.rate_limit import client_ip, enforce_rate_limit
 from app.services.telegram.client import telegram_client
 from app.services.user_avatar import admin_user_avatar_api_path, sync_telegram_avatar
@@ -283,16 +284,23 @@ async def admin_update_user(
     if not user:
         raise HTTPException(404, "User not found")
 
+    plan_changed = False
+    previous_plan: str | None = None
     if body.plan is not None:
+        previous_plan = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
         try:
-            user.plan = PlanTier(body.plan)
-            user.plan_expires_at = now_kyiv() + timedelta(days=30)
+            activate_plan(user, body.plan)
         except ValueError:
             raise HTTPException(400, "Invalid plan")
+        plan_changed = True
     if body.is_active is not None:
         user.is_active = body.is_active
 
     await db.flush()
+
+    if plan_changed:
+        await notify_plan_activated(db, user, previous_plan=previous_plan)
+
     sc = await db.scalar(
         select(func.count()).select_from(SearchQuery).where(SearchQuery.user_id == user.id)
     ) or 0

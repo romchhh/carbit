@@ -43,23 +43,23 @@ export function SearchPreviewNotice({
               <IconBell size={18} />
             </span>
             <p className="text-[15px] font-bold leading-snug text-ink sm:text-[16px]">
-              Шукаєте далі автоматично?
+              Нехай ринок шукає за вас?
             </p>
           </div>
           <p className="mt-2 max-w-[540px] text-[13px] leading-relaxed text-muted sm:text-[14px]">
             {freshness === "new"
-              ? "Це оголошення за останній тиждень. "
-              : "Це всі доступні авто за вашими фільтрами. "}
+              ? "Це свіжина за тиждень — як ранок на автобазарі. "
+              : "Обійшли майданчики за вашими фільтрами. "}
             {remaining > 0 ? (
               <>
-                Ще можна підвантажити{" "}
+                Ще можна заглянути в наступний ряд — там ще{" "}
                 <strong className="font-semibold text-ink">
                   {remaining.toLocaleString("uk-UA")}+
                 </strong>
                 .{" "}
               </>
             ) : null}
-            Збережіть моніторинг — нові пропозиції приходитимуть у Telegram, щойно зʼявляться на ринку.
+            Збережіть моніторинг — нові лоти самі постукають у Telegram.
           </p>
           {!telegramConnected && (
             <p className="mt-2 text-[12px] text-[#229ED9]">

@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 LIVE_POOL_PREFIX = "live-pool:"
 LIVE_POOL_TTL_SECONDS = 180  # 3 хвилини
-# Достатньо для ~15 сторінок по 20 у preview
-LIVE_POOL_SIZE = 300
+# ~4 сторінки по 20 у preview — cold search без 300×hydrate
+LIVE_POOL_SIZE = 80
 
 
 def live_pool_cache_key(filters: SearchFilters, sort_by: str) -> str:

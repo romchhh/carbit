@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+from types import TracebackType
 
 import httpx
 
@@ -12,6 +13,25 @@ from app.services.telegram.admin_alerts import notify_admin_parsing_error
 
 
 class OlxClient:
+    """HTTP-клієнт OLX. У межах одного search — один AsyncClient (reuse connections)."""
+
+    def __init__(self) -> None:
+        self._client: httpx.AsyncClient | None = None
+
+    async def __aenter__(self) -> OlxClient:
+        self._client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True)
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
     async def fetch_html(self, url: str) -> str:
         for attempt in range(1, MAX_RETRIES + 1):
             headers = {
@@ -20,8 +40,13 @@ class OlxClient:
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             }
             try:
-                async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
-                    response = await client.get(url, headers=headers)
+                if self._client is not None:
+                    response = await self._client.get(url, headers=headers)
+                else:
+                    async with httpx.AsyncClient(
+                        timeout=REQUEST_TIMEOUT, follow_redirects=True
+                    ) as client:
+                        response = await client.get(url, headers=headers)
             except httpx.TimeoutException as exc:
                 if attempt == MAX_RETRIES:
                     message = f"Таймаут при завантаженні OLX: {url}"

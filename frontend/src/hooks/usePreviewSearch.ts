@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useRef, useState } from "react";
 import { listingSearch, fx, getApiErrorMessage } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthProvider";
 import {
   DEFAULT_FILTERS,
   DEFAULT_PRICE_BY_CURRENCY,
@@ -19,27 +18,9 @@ import { resolveDisplayCurrency } from "@/lib/display-currency";
 import type { Listing, SourceStatus } from "@/types/api";
 
 export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAULT_FILTERS }) {
-  const { user } = useAuth();
   const resultsRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState<SearchFilterState>(initialFilters);
-  const currencySynced = useRef(false);
   const searchGen = useRef(0);
-
-  useEffect(() => {
-    if (!user || currencySynced.current) return;
-    currencySynced.current = true;
-    const preferred = resolveDisplayCurrency(user.preferred_currency);
-    setFilters(prev => {
-      if (prev.currency === preferred) return prev;
-      const defaults = DEFAULT_PRICE_BY_CURRENCY[preferred];
-      return {
-        ...prev,
-        currency: preferred,
-        priceFrom: defaults.from,
-        priceTo: defaults.to,
-      };
-    });
-  }, [user]);
   const [results, setResults] = useState<Listing[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -79,9 +60,6 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       } else {
         setSearching(true);
         setError(null);
-        requestAnimationFrame(() => {
-          resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
       }
 
       try {
@@ -94,18 +72,21 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           "preview",
         );
         if (gen !== searchGen.current) return;
-        setResults(prev => (append ? [...prev, ...data.items] : data.items));
-        setTotal(data.total);
-        setPage(data.page);
-        setPages(data.pages);
-        setSourceStatuses(data.sources ?? []);
-        setPartial(Boolean(data.partial));
-        setFromCache(Boolean(data.from_cache));
-        setFilters({ ...nextFilters });
-        setSort(nextSort);
-        setFreshness(nextFreshness);
-        setRunning(true);
-        setError(null);
+
+        startTransition(() => {
+          setResults(prev => (append ? [...prev, ...data.items] : data.items));
+          setTotal(data.total);
+          setPage(data.page);
+          setPages(data.pages);
+          setSourceStatuses(data.sources ?? []);
+          setPartial(Boolean(data.partial));
+          setFromCache(Boolean(data.from_cache));
+          setFilters({ ...nextFilters });
+          setSort(nextSort);
+          setFreshness(nextFreshness);
+          setRunning(true);
+          setError(null);
+        });
       } catch (err) {
         if (gen !== searchGen.current) return;
         if (!append) {
@@ -164,13 +145,11 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   }, [fetchPage, filters, freshness, loadingMore, page, pages, running, searching, sort]);
 
   const reset = useCallback(() => {
-    const preferred = resolveDisplayCurrency(user?.preferred_currency);
-    const defaults = DEFAULT_PRICE_BY_CURRENCY[preferred];
     setFilters({
       ...DEFAULT_FILTERS,
-      currency: preferred,
-      priceFrom: defaults.from,
-      priceTo: defaults.to,
+      currency: "USD",
+      priceFrom: DEFAULT_PRICE_BY_CURRENCY.USD.from,
+      priceTo: DEFAULT_PRICE_BY_CURRENCY.USD.to,
     });
     setResults([]);
     setTotal(0);
@@ -183,7 +162,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setFreshness("all");
     setRunning(false);
     setError(null);
-  }, [user?.preferred_currency]);
+  }, []);
 
   return {
     filters,
@@ -202,6 +181,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     sourceStatuses,
     partial,
     fromCache,
+    displayCurrency: resolveDisplayCurrency(filters.currency),
     resultsRef,
     runSearch,
     changeSort,

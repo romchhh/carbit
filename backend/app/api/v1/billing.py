@@ -7,6 +7,7 @@ from app.core.security import get_current_admin, get_current_user_id
 from app.models.models import User
 from app.schemas.schemas import PlanOut, SubscriptionOut, SubscribeRequest
 from app.services.billing.plans import list_plans, get_plan, activate_plan, enforce_plan_expiry
+from app.services.billing.notify import notify_plan_activated
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -85,11 +86,13 @@ async def admin_activate_plan(
     user = await db.get(User, target_user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    previous_plan = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
     try:
         activate_plan(user, body.plan)
     except ValueError:
         raise HTTPException(400, "Unknown plan")
     await db.flush()
+    await notify_plan_activated(db, user, previous_plan=previous_plan)
     plan = get_plan(user.plan.value)
     return SubscriptionOut(
         plan=user.plan.value,

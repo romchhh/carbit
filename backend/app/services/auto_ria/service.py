@@ -54,7 +54,8 @@ async def _search_auto_ria_body(
     search_result = (search_data.get("result") or {}).get("search_result") or {}
     total = int(search_result.get("count") or 0)
     raw_ids = search_result.get("ids") or []
-    auto_ids = [str(item) for item in raw_ids if item]
+    # Не гідратимо більше, ніж потрібно для поточної сторінки/пулу
+    auto_ids = [str(item) for item in raw_ids if item][: max(per_page, 0)]
 
     sem = asyncio.Semaphore(4)
 

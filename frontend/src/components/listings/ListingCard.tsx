@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { Badge } from "@/components/ui/Badge";
-import { IconArrowRight } from "@/components/icons";
+import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
@@ -10,7 +11,7 @@ import { SourceBadge } from "@/components/listings/SourceBadge";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { hasVinCheck } from "@/lib/vin-check";
 import { cn, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
-import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
+import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
 
@@ -21,6 +22,8 @@ type Props = {
   isFavorite?: boolean;
   favoriteLoading?: boolean;
   onToggleFavorite?: () => void;
+  /** Валюта відображення ($ за замовчуванням). */
+  displayCurrency?: DisplayCurrency;
 };
 
 function shortRegion(region: string) {
@@ -35,9 +38,12 @@ export function ListingCard({
   isFavorite = false,
   favoriteLoading = false,
   onToggleFavorite,
+  displayCurrency: displayCurrencyProp,
 }: Props) {
   const { user } = useAuth();
-  const displayCurrency = resolveDisplayCurrency(user?.preferred_currency);
+  const displayCurrency = resolveDisplayCurrency(
+    displayCurrencyProp ?? user?.preferred_currency ?? "USD",
+  );
   const images = Array.isArray(listing.images) ? listing.images : [];
   const price = Number(listing.price) || 0;
   const priceLabel = formatListingPrice(
@@ -57,6 +63,22 @@ export function ListingCard({
       ? refreshedAgoLabel(listing.refreshed_at)
       : "";
   const timeBadgeDate = listing.refreshed_at || listing.published_at;
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const photoCount = images.length;
+  const safeIndex = photoCount > 0 ? ((photoIndex % photoCount) + photoCount) % photoCount : 0;
+  const currentPhoto = photoCount > 0 ? images[safeIndex] : null;
+  const showGalleryNav = photoCount > 1;
+
+  const goPhoto = (delta: number) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPhotoIndex(prev => {
+      const next = prev + delta;
+      if (next < 0) return photoCount - 1;
+      if (next >= photoCount) return 0;
+      return next;
+    });
+  };
 
   return (
     <article
@@ -86,6 +108,8 @@ export function ListingCard({
             fill
             className="object-cover"
             sizes="100vw"
+            loading="lazy"
+            decoding="async"
             unoptimized
           />
         ) : (
@@ -114,15 +138,17 @@ export function ListingCard({
         </div>
       </div>
 
-      {/* Desktop: thumbnail left */}
+      {/* Desktop: thumbnail left with photo arrows */}
       <div className="relative hidden h-36 w-52 shrink-0 overflow-hidden rounded-xl bg-surface sm:block">
-        {images[0] ? (
+        {currentPhoto ? (
           <Image
-            src={images[0]}
+            src={currentPhoto}
             alt={listing.title}
             fill
             className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
             sizes="208px"
+            loading="lazy"
+            decoding="async"
             unoptimized
           />
         ) : (
@@ -131,7 +157,7 @@ export function ListingCard({
           </div>
         )}
         {onToggleFavorite && (
-          <div className="absolute right-2 top-2">
+          <div className="absolute right-2 top-2 z-[1]">
             <ListingFavoriteButton
               active={isFavorite}
               loading={favoriteLoading}
@@ -140,7 +166,38 @@ export function ListingCard({
             />
           </div>
         )}
-        <div className="absolute bottom-2 left-2">
+        {showGalleryNav && (
+          <>
+            <button
+              type="button"
+              aria-label="Попереднє фото"
+              onClick={goPhoto(-1)}
+              className={cn(
+                "absolute left-1.5 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center",
+                "rounded-full bg-ink/70 text-white opacity-0 shadow-sm backdrop-blur-sm transition-opacity",
+                "hover:bg-ink/85 group-hover:opacity-100 focus:opacity-100 focus:outline-none",
+              )}
+            >
+              <IconArrowLeft size={14} />
+            </button>
+            <button
+              type="button"
+              aria-label="Наступне фото"
+              onClick={goPhoto(1)}
+              className={cn(
+                "absolute right-1.5 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center",
+                "rounded-full bg-ink/70 text-white opacity-0 shadow-sm backdrop-blur-sm transition-opacity",
+                "hover:bg-ink/85 group-hover:opacity-100 focus:opacity-100 focus:outline-none",
+              )}
+            >
+              <IconArrowRight size={14} />
+            </button>
+            <span className="absolute bottom-2 right-2 z-[1] rounded-full bg-ink/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white backdrop-blur-sm">
+              {safeIndex + 1}/{photoCount}
+            </span>
+          </>
+        )}
+        <div className="absolute bottom-2 left-2 z-[1]">
           <PublishedTimeBadge date={timeBadgeDate} short />
         </div>
       </div>

@@ -23,6 +23,11 @@ from app.services.olx.constants import (
 class OlxSearchParams:
     brand: Optional[str] = None
     model: Optional[str] = None
+    # Людські назви для пост-фільтра (коли URL іде через q-текст)
+    brand_label: Optional[str] = None
+    model_label: Optional[str] = None
+    # Текстовий пошук OLX: /q-zeekr-001/ — для марок без taxonomy-path
+    text_query: Optional[str] = None
     condition: Optional[str] = None
     city_query: Optional[str] = None
     price_from: Optional[int] = None
@@ -136,17 +141,23 @@ def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
 
     Рік, пробіг, паливо тощо в query OLX часто ламають SSR — їх фільтруємо
     пост-фільтром у passes_olx_filters(). Сортування та валюта в query працюють.
+
+    Якщо марки немає в taxonomy OLX (Zeekr тощо) — text_query → /q-zeekr-001/.
     """
     path_parts = [CATEGORY_PATH.strip("/")]
 
-    if params.brand:
+    text_q = (params.text_query or "").strip().lower().replace(" ", "-")
+    if text_q:
+        path_parts.append(f"q-{text_q}")
+    elif params.brand:
         path_parts.append(params.brand.lower().strip())
         if params.model:
             path_parts.append(params.model.lower().strip())
 
     path = "/" + "/".join(path_parts) + "/"
 
-    if params.city_query:
+    # Місто як q- працює лише разом із brand-path; для text_query фільтруємо місто постфактум
+    if params.city_query and not text_q:
         path = path.rstrip("/") + f"/q-{params.city_query.lower().strip()}/"
 
     query: dict[str, str] = {"currency": (params.currency or "UAH").upper()}
@@ -714,18 +725,15 @@ def apply_details_to_listing(listing: OlxListing, details: dict) -> None:
 
 
 def listing_needs_enrichment(listing: OlxListing, params: OlxSearchParams | None = None) -> bool:
+    """Деталі сторінки — лише коли без них неможливо застосувати фільтри."""
     if not listing.url:
         return False
     if params and params.needs_detail_fetch():
         return True
-    if not _listing_price(listing):
-        return True
-    if not _listing_year(listing):
-        return True
-    if not is_valid_image_url(listing.photo_url) and not any(
-        is_valid_image_url(url) for url in (listing.photos or [])
-    ):
-        return True
+    # Ціна потрібна для price_from/price_to; рік/фото для списку не тягнемо окремо
+    if params and (params.price_from is not None or params.price_to is not None):
+        if not _listing_price(listing):
+            return True
     return False
 
 
@@ -834,7 +842,152 @@ def _matches_keyword_filter(text: str, key: str | None, mapping: dict[str, tuple
     return any(word in text for word in keywords)
 
 
+# Аліаси марки в заголовку (text_query /q-.../)
+_BRAND_TITLE_ALIASES: dict[str, tuple[str, ...]] = {
+    "li auto": ("li auto", "lixiang", "li xiang", "li-auto", "лі авто", "ли авто"),
+    "li": ("li auto", "lixiang", "li xiang", "li-auto"),
+    "xpeng": ("xpeng", "x peng", "xiao peng"),
+    "lynk & co": ("lynk", "lynk&co", "lynk and co"),
+    "lynk and co": ("lynk", "lynk&co", "lynk and co"),
+    "great wall motor": ("great wall", "gwm", "haval"),
+}
+
+# Запчастини / неавто, які OLX підмішує в /q-/ навіть у категорії легкових
+_NON_CAR_TITLE_RE = re.compile(
+    r"(?i)(?:"
+    r"коврик|килимок|килимки|автоковрик|eva\b|єва\b|"
+    r"фара\b|бампер|крило\b|капот|решітк|решетк|"
+    r"запчаст|розборк|фаркоп|обвес|спойлер|дифузор|"
+    r"шина\b|шини\b|диск[аи]\b|проставк|"
+    r"скутер|мопед|квадроцикл|"
+    r"квартир|жк\s|житлов|"
+    r"українізац|русифікац|"
+    r"зарядн\w*\s+станц|конструктор"
+    r")"
+)
+
+_PARTS_SPEC_MARKERS = (
+    "тип запчастини",
+    "тип килимків",
+    "код запчастини",
+)
+
+# Категорії OLX поза легковими авто (підмішані extended search)
+_NON_CAR_CATEGORY_IDS = frozenset(
+    {
+        1463,  # диски
+        1459,  # шини
+        1941,  # електроскутери
+        2158,  # килимки
+        2186,  # фаркопи
+        2418,  # бампери
+        2421,  # захист двигуна
+        2458,  # запчастини GW/Haval
+        2515,  # проставки
+        2544,  # фари
+    }
+)
+
+
+def _brand_aliases(brand: str) -> tuple[str, ...]:
+    key = brand.strip().lower()
+    aliases = _BRAND_TITLE_ALIASES.get(key)
+    if aliases:
+        return aliases
+    return (key,) if key else ()
+
+
+def _title_has_brand(title: str, brand: str) -> bool:
+    for alias in _brand_aliases(brand):
+        if " " in alias or "-" in alias:
+            if alias in title:
+                return True
+            continue
+        if re.search(rf"(?<![\w]){re.escape(alias)}(?![\w])", title, re.IGNORECASE):
+            return True
+    return False
+
+
+def _title_has_model(title: str, model: str, *, brand: str | None = None) -> bool:
+    model_l = model.strip().lower()
+    if not model_l:
+        return True
+    if re.fullmatch(r"\d+[a-z]?", model_l):
+        return bool(
+            re.search(rf"(?<![\w]){re.escape(model_l)}(?![\w])", title, re.IGNORECASE)
+        )
+    if model_l in title:
+        return True
+    # J7 / C5 / X3 → «Jaecoo 7», «Omoda C5»
+    letter_num = re.fullmatch(r"([a-z]+)(\d+[a-z]?)", model_l)
+    if letter_num:
+        letter, num = letter_num.group(1), letter_num.group(2)
+        if re.search(
+            rf"(?<![\w]){re.escape(letter)}-?{re.escape(num)}(?![\w])",
+            title,
+            re.IGNORECASE,
+        ):
+            return True
+        brand_l = (brand or "").strip().lower()
+        if brand_l and re.search(
+            rf"(?<![\w]){re.escape(brand_l)}\s+{re.escape(num)}(?![\w])",
+            title,
+            re.IGNORECASE,
+        ):
+            return True
+    return False
+
+
+def _is_non_car_listing(listing: OlxListing) -> bool:
+    title = listing.title or ""
+    if _NON_CAR_TITLE_RE.search(title):
+        return True
+
+    specs = listing.specs or {}
+    spec_keys = " ".join(str(k).lower() for k in specs)
+    if any(marker in spec_keys for marker in _PARTS_SPEC_MARKERS):
+        return True
+
+    raw = listing.raw_params if isinstance(listing.raw_params, dict) else {}
+    category = raw.get("category")
+    if isinstance(category, dict):
+        cat_id = category.get("id")
+        if isinstance(cat_id, int) and cat_id in _NON_CAR_CATEGORY_IDS:
+            return True
+
+    url = (listing.url or "").lower()
+    if "extended_search_extended_category" in url:
+        return True
+    return False
+
+
+def _title_matches_brand_model(
+    listing: OlxListing,
+    *,
+    brand: str | None,
+    model: str | None,
+) -> bool:
+    """Для text_query / fallback — відсікаємо зайве з повнотекстової видачі OLX."""
+    title = (listing.title or "").lower()
+    if not title:
+        return False
+    if brand and not _title_has_brand(title, brand):
+        return False
+    if model and not _title_has_model(title, model, brand=brand):
+        return False
+    return True
+
+
 def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
+    brand_hint = params.brand_label or None
+    model_hint = params.model_label or None
+    if params.text_query:
+        if _is_non_car_listing(listing):
+            return False
+        if brand_hint or model_hint:
+            if not _title_matches_brand_model(listing, brand=brand_hint, model=model_hint):
+                return False
+
     if not passes_post_filters(listing, params):
         return False
 
