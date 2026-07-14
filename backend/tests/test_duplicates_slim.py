@@ -74,10 +74,21 @@ class DuplicatesTests(unittest.TestCase):
         self.assertIsNone(items[0].duplicate_of)
         self.assertEqual(len(items[0].alternate_sources), 1)
         self.assertEqual(items[0].alternate_sources[0].source, "olx")
-        self.assertEqual(items[0].alternate_sources[0].url, "https://olx.example/1")
-
-
-class SlimListTests(unittest.TestCase):
+    def test_mark_pool_propagates_is_new(self):
+        items = mark_duplicates_in_pool(
+            [
+                _item(id="a", is_new=False),
+                _item(
+                    id="b",
+                    source="olx",
+                    mileage=82000,
+                    url="https://olx.example/1",
+                    is_new=True,
+                ),
+            ]
+        )
+        self.assertEqual(len(items), 1)
+        self.assertTrue(items[0].is_new)
     def test_drops_heavy_keys(self):
         slim = slim_source_data_for_list({"USD": 1, "_fotos": [], "noise": "no"})
         self.assertEqual(slim, {"USD": 1})

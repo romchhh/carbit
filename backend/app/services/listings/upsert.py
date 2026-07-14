@@ -115,3 +115,29 @@ async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
         )
 
     return listing
+
+
+async def upsert_listing_with_mirrors(db: AsyncSession, data: ListingOut) -> Listing:
+    """Upsert канонічного оголошення + дзеркал з `alternate_sources`."""
+    listing = await upsert_listing(db, data)
+    for alt in data.alternate_sources or []:
+        if not alt.url or not alt.source:
+            continue
+        mirror_id = (alt.id or "").strip()
+        if not mirror_id or mirror_id == listing.id:
+            continue
+        mirror = data.model_copy(
+            update={
+                "id": mirror_id,
+                "source": alt.source,
+                "url": alt.url,
+                "images": [],
+                "source_data": None,
+                "price_history": [],
+                "alternate_sources": [],
+                "is_duplicate": True,
+                "duplicate_of": listing.id,
+            }
+        )
+        await upsert_listing(db, mirror)
+    return listing

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ApiError, billing as billingApi } from "@/lib/api";
 import { submitLiqPayCheckout } from "@/lib/liqpay-checkout";
+import { Alert } from "@/components/ui/Alert";
 import { cn } from "@/lib/utils";
 import type { UpgradeQuote } from "@/types/api";
 
@@ -82,75 +83,86 @@ export function UpgradeOffer({
 
   if (!open) return null;
 
+  const heading =
+    title ?? (quote ? `Перейдіть на «${quote.target_plan_name}»` : "Збільште ліміт моніторингів");
+
   return (
-    <div
-      className={cn(
-        "rounded-2xl border border-emerald/25 bg-emerald-light/40 px-4 py-4 sm:px-5",
-        className,
-      )}
-    >
-      <p className="text-[14px] font-bold text-ink">
-        {title ?? (quote ? `Перейдіть на «${quote.target_plan_name}»` : "Збільште ліміт моніторингів")}
-      </p>
-
-      {fetching && <p className="mt-2 text-[12px] text-muted">Рахуємо доплату…</p>}
-
-      {quote && !fetching && (
-        <div className={cn("mt-2 space-y-1.5 text-[12px] leading-snug text-muted", compact && "space-y-1")}>
-          <p>
-            До {quote.target_searches_limit} активних моніторингів · тариф{" "}
-            <span className="font-semibold text-ink">{formatUah(quote.target_price_uah)}</span> /{" "}
-            {quote.target_period_days} днів
-          </p>
-          {quote.credit_uah > 0 ? (
+    <div className={cn("space-y-2", className)}>
+      <Alert
+        variant="warning"
+        role="alert"
+        title={heading}
+        action={
+          <button
+            type="button"
+            disabled={loading || fetching || !quote}
+            onClick={() => void startCheckout()}
+            className={cn(
+              "inline-flex w-full items-center justify-center rounded-full bg-amber-600 px-4 py-2 text-[12px] font-bold text-white transition-colors hover:bg-amber-700 sm:w-auto",
+              "disabled:cursor-not-allowed disabled:opacity-60",
+              !compact && "sm:min-w-[180px] sm:px-5 sm:py-2.5 sm:text-[13px]",
+            )}
+          >
+            {loading
+              ? "Відкриваємо оплату…"
+              : quote?.is_free_upgrade
+                ? "Активувати апгрейд"
+                : quote
+                  ? `Оформити · ${formatUah(quote.amount_due_uah)}`
+                  : "Оформити підписку"}
+          </button>
+        }
+      >
+        {fetching && <p>Рахуємо доплату…</p>}
+        {quote && !fetching && (
+          <div className="space-y-1">
             <p>
-              Залишок «{quote.current_plan_name}»: {quote.days_remaining} дн. ≈{" "}
-              <span className="font-semibold text-ink">{formatUah(quote.credit_uah)}</span> кредиту
-              (ціна ÷ {quote.period_days} × дні). Доплата сьогодні:{" "}
-              <span className="font-bold text-emerald-dark">{formatUah(quote.amount_due_uah)}</span>
-              {!quote.enable_subscribe && (
-                <> · потім повна ціна перед наступним періодом</>
-              )}
+              До {quote.target_searches_limit} активних моніторингів · тариф{" "}
+              <span className="font-semibold text-amber-950">
+                {formatUah(quote.target_price_uah)}
+              </span>{" "}
+              / {quote.target_period_days} днів
             </p>
-          ) : quote.is_free_upgrade ? (
-            <p className="font-semibold text-emerald-dark">Залишок повністю покриває апгрейд — без доплати.</p>
-          ) : (
+            {quote.credit_uah > 0 ? (
+              <p>
+                Залишок «{quote.current_plan_name}»: {quote.days_remaining} дн. ≈{" "}
+                <span className="font-semibold text-amber-950">
+                  {formatUah(quote.credit_uah)}
+                </span>{" "}
+                кредиту. Доплата сьогодні:{" "}
+                <span className="font-bold text-amber-950">
+                  {formatUah(quote.amount_due_uah)}
+                </span>
+                {!quote.enable_subscribe && <> · далі — повна ціна</>}
+              </p>
+            ) : quote.is_free_upgrade ? (
+              <p className="font-semibold text-amber-950">
+                Залишок повністю покриває апгрейд — без доплати.
+              </p>
+            ) : (
+              <p>
+                До сплати:{" "}
+                <span className="font-bold text-amber-950">
+                  {formatUah(quote.amount_due_uah)}
+                </span>
+              </p>
+            )}
             <p>
-              До сплати:{" "}
-              <span className="font-bold text-emerald-dark">{formatUah(quote.amount_due_uah)}</span>
+              <Link
+                href="/app/billing"
+                className="font-semibold underline-offset-2 hover:underline"
+              >
+                Усі тарифи
+              </Link>
             </p>
-          )}
-        </div>
+          </div>
+        )}
+      </Alert>
+      {error && (
+        <Alert variant="danger" role="alert" title="Не вдалося відкрити оплату">
+          {error}
+        </Alert>
       )}
-
-      {error && <p className="mt-2 text-[12px] font-medium text-red-600">{error}</p>}
-
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <button
-          type="button"
-          disabled={loading || fetching || !quote}
-          onClick={() => void startCheckout()}
-          className={cn(
-            "inline-flex items-center justify-center rounded-full bg-emerald px-5 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-emerald-dark",
-            "disabled:cursor-not-allowed disabled:opacity-60",
-            !compact && "w-full sm:w-auto sm:min-w-[200px] py-3 text-[14px]",
-          )}
-        >
-          {loading
-            ? "Відкриваємо оплату…"
-            : quote?.is_free_upgrade
-              ? "Активувати апгрейд"
-              : quote
-                ? `Оформити · ${formatUah(quote.amount_due_uah)}`
-                : "Оформити підписку"}
-        </button>
-        <Link
-          href="/app/billing"
-          className="text-center text-[12px] font-semibold text-emerald-dark underline-offset-2 hover:underline sm:text-left"
-        >
-          Усі тарифи
-        </Link>
-      </div>
     </div>
   );
 }

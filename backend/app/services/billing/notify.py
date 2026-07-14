@@ -187,6 +187,7 @@ async def notify_subscription_cancelled(
     user: User,
     *,
     reason: str = "user",
+    note: str | None = None,
 ) -> bool:
     cabinet = _cabinet_billing()
     expires = _format_expires(user)
@@ -197,11 +198,25 @@ async def notify_subscription_cancelled(
         "user": "Скасовано вами.",
         "past_due": "Скасовано через невдалі оплати.",
         "expired": "Період підписки завершився.",
-    }.get(reason, "")
+        "price": "Причина: занадто дорого.",
+        "limits": "Причина: мало моніторингів / обмеження тарифу.",
+        "results": "Причина: погано знаходить потрібні авто.",
+        "usage": "Причина: рідко користуюся.",
+        "tech": "Причина: технічні проблеми / незручний інтерфейс.",
+        "other": "Причина: інше.",
+    }.get(reason, f"Причина: {reason}." if reason else "Скасовано вами.")
     tg_text = (
         "🔕 <b>Автоплатіж скасовано</b>\n\n"
         f"{reason_line}\n"
     )
+    if note and note.strip():
+        safe_note = (
+            note.strip()[:400]
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        tg_text += f"Коментар: <i>{safe_note}</i>\n"
     if expires:
         tg_text += f"Платний доступ до: <b>{expires}</b>\n"
     else:
@@ -214,7 +229,11 @@ async def notify_subscription_cancelled(
         title=title,
         body=body,
         tg_text=tg_text,
-        payload={"event": "subscription_cancelled", "reason": reason},
+        payload={
+            "event": "subscription_cancelled",
+            "reason": reason,
+            "note": (note or "").strip()[:500] or None,
+        },
     )
 
 

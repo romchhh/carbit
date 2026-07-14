@@ -134,7 +134,22 @@ async def get_search_results_from_db(
         )
         for listing, sl in rows
     ]
-    items = _sort_items(paired, sort_by, prefer_new=True)
+    from app.services.listings.duplicates import collapse_listings_with_db_mirrors
+
+    collapsed = await collapse_listings_with_db_mirrors(db, [item for item, _ in paired])
+    pub_by_id = {item.id: pub for item, pub in paired}
+    sorted_pairs: list[tuple[ListingOut, datetime]] = []
+    for item in collapsed:
+        pub = pub_by_id.get(item.id)
+        if pub is None:
+            for alt in item.alternate_sources or []:
+                if alt.id and alt.id in pub_by_id:
+                    pub = pub_by_id[alt.id]
+                    break
+        if pub is None:
+            pub = as_kyiv(item.published_at)
+        sorted_pairs.append((item, pub))
+    items = _sort_items(sorted_pairs, sort_by, prefer_new=True)
 
     total = len(items)
     start = (page - 1) * per_page

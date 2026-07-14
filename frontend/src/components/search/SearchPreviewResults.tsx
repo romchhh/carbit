@@ -9,7 +9,7 @@ import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
-import type { ExportListing } from "@/lib/export-listings";
+import { listingsToExportItems } from "@/lib/export-listings";
 import { SEARCH_HOURLY_LIMIT, SEARCH_PAGE_SIZE, type SearchFreshness } from "@/lib/search-preview";
 import {
   flavorForLoadMore,
@@ -25,23 +25,6 @@ function sourceLabel(source: string): string {
   if (source === "auto_ria" || source === "AUTO.RIA") return "AUTO.RIA";
   if (source === "telegram" || source === "Telegram") return "Telegram";
   return source.toUpperCase();
-}
-
-function toExportItems(items: Listing[]): ExportListing[] {
-  return items.map(item => ({
-    id: item.id,
-    title: item.title,
-    year: item.year,
-    mileage: item.mileage,
-    price: item.price,
-    currency: item.currency,
-    region: item.region,
-    src: sourceLabel(item.source),
-    fuel: item.fuel,
-    trans: item.transmission,
-    desc: item.description ?? undefined,
-    url: item.url,
-  }));
 }
 
 type Props = {
@@ -86,7 +69,7 @@ export function SearchPreviewResults({
     results.map(item => item.id),
   );
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
-  const exportItems = useMemo(() => toExportItems(results), [results]);
+  const exportItems = useMemo(() => listingsToExportItems(results), [results]);
   const remaining = Math.max(0, total - results.length);
   const nextBatch = Math.min(SEARCH_PAGE_SIZE, remaining);
 
@@ -109,17 +92,17 @@ export function SearchPreviewResults({
   return (
     <>
       <div ref={resultsRef} id="search-results" className="mt-6 scroll-mt-28 sm:mt-8 sm:scroll-mt-24">
-        <SearchResultsToolbar
-          running={running}
-          total={total}
-          shown={results.length}
-          sort={sort}
-          onSortChange={onSortChange}
-          exportItems={exportItems}
-          exportName="search"
-          loading={searching}
-          idleLabel="Натисніть «Шукати» — підемо гуляти авторинками за вас"
-        />
+        {running && (
+          <SearchResultsToolbar
+            running={running}
+            total={total}
+            shown={results.length}
+            sort={sort}
+            onSortChange={onSortChange}
+            exportItems={exportItems}
+            exportName="search"
+          />
+        )}
 
         {error && (
           <div

@@ -7,8 +7,9 @@ import { exportListings, type ExportFormat, type ExportListing } from "@/lib/exp
 import { cn } from "@/lib/utils";
 
 const FORMATS: { id: ExportFormat; label: string; hint: string }[] = [
-  { id: "csv", label: "CSV", hint: "Таблиця для Excel / Google Sheets" },
-  { id: "excel", label: "Excel", hint: "Файл .xls для Microsoft Excel" },
+  { id: "excel", label: "Excel", hint: "Рівна таблиця з фото · .xls" },
+  { id: "html", label: "HTML-звіт", hint: "Гарна таблиця з фото в браузері" },
+  { id: "csv", label: "CSV", hint: "Усі поля · для Google Sheets" },
 ];
 
 type Props = {
@@ -67,7 +68,7 @@ export function ExportMenu({ items, filename = "carbit-export", className, iconS
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-border/70 bg-white py-1 shadow-card">
+        <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl border border-border/70 bg-white py-1 shadow-card">
           <div className="border-b border-border/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
             Формат файлу
           </div>

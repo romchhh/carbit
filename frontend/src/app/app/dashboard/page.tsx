@@ -56,6 +56,7 @@ export default function DashboardPage() {
   const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } = useSaveSearch(created => {
     setSearches(prev => [created, ...prev]);
   });
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     searchesApi.list()
@@ -72,6 +73,24 @@ export default function DashboardPage() {
   const limit = user.searches_limit;
   const remaining = Math.max(0, limit - activeCount);
   const totalNew = searches.reduce((sum, s) => sum + s.new_count, 0);
+
+  const setActive = async (search: SearchQuery, active: boolean) => {
+    if (search.is_active === active || togglingId) return;
+    if (active && remaining <= 0) return;
+    setTogglingId(search.id);
+    const previous = searches;
+    setSearches(list =>
+      list.map(item => (item.id === search.id ? { ...item, is_active: active } : item)),
+    );
+    try {
+      const updated = await searchesApi.update(search.id, { is_active: active });
+      setSearches(list => list.map(item => (item.id === updated.id ? updated : item)));
+    } catch {
+      setSearches(previous);
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   const handleSearch = () => {
     clearSaveMessages();
@@ -190,7 +209,13 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-3">
             {searches.slice(0, 3).map(s => (
-              <MonitorSearchCard key={s.id} search={s} alwaysLink={false} />
+              <MonitorSearchCard
+                key={s.id}
+                search={s}
+                alwaysLink={false}
+                toggling={togglingId === s.id}
+                onActiveChange={active => void setActive(s, active)}
+              />
             ))}
             {searches.length > 3 && (
               <Link

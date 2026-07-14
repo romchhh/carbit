@@ -5,6 +5,7 @@ from app.core.security import get_current_user_id
 from app.models.models import Listing, SearchQuery
 from app.schemas.schemas import PaginatedListings, ListingOut
 from app.services.listings.serialize import listing_to_out
+from app.services.listings.duplicates import listing_out_with_mirrors
 from app.services.parser.results import get_search_results_from_db
 from app.services.telegram_channels.lazy_photos import (
     enqueue_listing_photos,
@@ -48,7 +49,7 @@ async def get_listing(
     # Відкрили картку без фото → ставимо в чергу воркера
     if listing_needs_photos(listing):
         enqueue_listing_photos(listing.id)
-    return listing_to_out(listing)
+    return await listing_out_with_mirrors(db, listing)
 
 
 @router.post("/{listing_id}/ensure-photos", response_model=ListingOut)
@@ -62,7 +63,7 @@ async def ensure_listing_photos(
         raise HTTPException(404, "Listing not found")
     if listing_needs_photos(listing):
         enqueue_listing_photos(listing.id)
-    out = listing_to_out(listing)
+    out = await listing_out_with_mirrors(db, listing)
     if not out.images:
         out = out.model_copy(
             update={

@@ -22,7 +22,6 @@ type Props = {
   exportName: string;
   isActive?: boolean;
   newCount?: number;
-  loading?: boolean;
   idleLabel?: string;
 };
 
@@ -36,7 +35,6 @@ export function SearchResultsToolbar({
   exportName,
   isActive,
   newCount,
-  loading,
   idleLabel = "Натисніть «Шукати»",
 }: Props) {
   return (
@@ -89,7 +87,7 @@ export function SearchResultsToolbar({
               )}
             </div>
           ) : (
-            <span className="text-muted">{loading ? "Вже на ринку…" : idleLabel}</span>
+            <span className="text-muted">{idleLabel}</span>
           )}
         </div>
 

@@ -153,13 +153,111 @@ def mark_duplicates_in_pool(items: list[ListingOut]) -> list[ListingOut]:
                 ListingSourceLink(source=member.source, url=member.url, id=member.id)
             )
 
+        # is_new — якщо будь-який член групи був новим у моніторингу
+        is_new = any(bool(getattr(m, "is_new", None)) for m in group)
+
         result.append(
             canonical.model_copy(
                 update={
                     "is_duplicate": False,
                     "duplicate_of": None,
                     "alternate_sources": alternates,
+                    "is_new": True if is_new else canonical.is_new,
                 }
             )
         )
     return result
+
+
+async def collapse_listings_with_db_mirrors(
+    db: AsyncSession,
+    items: list[ListingOut],
+) -> list[ListingOut]:
+    """
+    Як mark_duplicates_in_pool, але підтягує дзеркала з БД
+    (duplicate_of / VIN / brand+model+year), щоб іконки джерел
+    були і в моніторингах/обраному/сповіщеннях.
+    """
+    if not items:
+        return []
+
+    from sqlalchemy import or_, and_
+
+    from app.services.listings.serialize import listing_to_out
+
+    orig_ids = {item.id for item in items}
+    pool_by_id: dict[str, ListingOut] = {item.id: item for item in items}
+
+    vins = sorted(
+        {
+            (item.vin or "").strip().upper()
+            for item in items
+            if item.vin and len((item.vin or "").strip()) == 17
+        }
+    )
+    parent_ids = [item.duplicate_of for item in items if item.duplicate_of]
+
+    clauses = []
+    if orig_ids:
+        clauses.append(Listing.duplicate_of.in_(list(orig_ids)))
+    if parent_ids:
+        clauses.append(Listing.id.in_(parent_ids))
+    if vins:
+        clauses.append(Listing.vin.in_(vins))
+
+    if clauses:
+        rows = (
+            await db.scalars(select(Listing).where(or_(*clauses)).limit(800))
+        ).all()
+        for row in rows:
+            if row.id in pool_by_id:
+                continue
+            pool_by_id[row.id] = listing_to_out(row)
+
+    # Soft-match: ті самі brand/model/year з іншого джерела (без VIN / duplicate_of).
+    fingerprint_keys: set[tuple[str, str, int]] = set()
+    for item in items:
+        brand = (item.brand or "").strip()
+        model = (item.model or "").strip()
+        year = int(item.year or 0)
+        if brand and model and year:
+            fingerprint_keys.add((brand, model, year))
+
+    soft_clauses = [
+        and_(Listing.brand == brand, Listing.model == model, Listing.year == year)
+        for brand, model, year in fingerprint_keys
+    ]
+    if soft_clauses:
+        soft_rows = (
+            await db.scalars(
+                select(Listing)
+                .where(or_(*soft_clauses), Listing.id.notin_(list(pool_by_id.keys()) or [""]))
+                .limit(600)
+            )
+        ).all()
+        for row in soft_rows:
+            if row.id in pool_by_id:
+                continue
+            candidate = listing_to_out(row)
+            if any(listings_look_same(candidate, item) for item in items):
+                pool_by_id[row.id] = candidate
+
+    collapsed = mark_duplicates_in_pool(list(pool_by_id.values()))
+
+    kept: list[ListingOut] = []
+    for card in collapsed:
+        member_ids = {card.id}
+        for alt in card.alternate_sources or []:
+            if alt.id:
+                member_ids.add(alt.id)
+        if member_ids & orig_ids:
+            kept.append(card)
+    return kept
+
+
+async def listing_out_with_mirrors(db: AsyncSession, listing: Listing) -> ListingOut:
+    from app.services.listings.serialize import listing_to_out
+
+    out = listing_to_out(listing)
+    collapsed = await collapse_listings_with_db_mirrors(db, [out])
+    return collapsed[0] if collapsed else out

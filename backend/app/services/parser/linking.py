@@ -91,9 +91,12 @@ async def seed_search_baseline(
     *,
     limit: int = 40,
 ) -> int:
-    """Прив’язує авто з першого пошуку до моніторингу без позначки «нове»."""
+    """Прив’язує авто з першого пошуку до моніторингу без позначки «нове».
+
+    Також upsert-ить `alternate_sources`, щоб у БД були дзеркала для іконок джерел.
+    """
     from app.schemas.schemas import ListingOut
-    from app.services.listings.upsert import upsert_listing
+    from app.services.listings.upsert import upsert_listing_with_mirrors
 
     linked = 0
     for raw in items[:limit]:
@@ -101,7 +104,7 @@ async def seed_search_baseline(
             data = raw if isinstance(raw, ListingOut) else ListingOut.model_validate(raw)
         except Exception:
             continue
-        listing = await upsert_listing(db, data)
+        listing = await upsert_listing_with_mirrors(db, data)
         created, _ = await link_listing_to_search(
             db,
             search=search,

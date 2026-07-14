@@ -10,6 +10,7 @@ from app.schemas.schemas import (
     CheckoutOut,
     PlanOut,
     SubscribeRequest,
+    UnsubscribeRequest,
     SubscriptionOut,
     BillingPaymentOut,
     UpgradeQuoteOut,
@@ -230,10 +231,11 @@ async def subscribe(
 
 @router.post("/unsubscribe", response_model=SubscriptionOut)
 async def unsubscribe(
+    body: UnsubscribeRequest = UnsubscribeRequest(),
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Скасувати рекурент LiqPay і перейти на Free (доступ до кінця оплаченого періоду залишається)."""
+    """Скасувати рекурент LiqPay (доступ до кінця оплаченого періоду залишається)."""
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
@@ -241,6 +243,8 @@ async def unsubscribe(
     previous_plan = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
     await cancel_active_subscriptions(db, user.id)
     # Не зрізаємо одразу план — user користується до plan_expires_at
+    feedback_reason = body.reason or "user"
+    feedback_note = body.note
     if active is None and previous_plan != "free":
         # Немає LiqPay-підписки — просто даунгрейд
         activate_plan(user, "free")
@@ -248,7 +252,12 @@ async def unsubscribe(
     else:
         from app.services.billing.notify import notify_subscription_cancelled
 
-        await notify_subscription_cancelled(db, user, reason="user")
+        await notify_subscription_cancelled(
+            db,
+            user,
+            reason=feedback_reason,
+            note=feedback_note,
+        )
     await db.commit()
     return await _subscription_out(db, user)
 

@@ -56,7 +56,10 @@ class SeedBaselineTests(unittest.IsolatedAsyncioTestCase):
         db.add = MagicMock()
         db.flush = AsyncMock()
 
-        with patch("app.services.listings.upsert.upsert_listing", AsyncMock(return_value=listing)):
+        with patch(
+            "app.services.listings.upsert.upsert_listing_with_mirrors",
+            AsyncMock(return_value=listing),
+        ):
             linked = await seed_search_baseline(db, search, [_listing()])
 
         self.assertEqual(linked, 1)
@@ -64,6 +67,45 @@ class SeedBaselineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(search.total_count, 1)
         added = db.add.call_args[0][0]
         self.assertFalse(added.is_new)
+
+    async def test_seed_passes_alternate_sources_to_upsert(self):
+        from app.schemas.schemas import ListingSourceLink
+        from app.services.parser.linking import seed_search_baseline
+
+        search = MagicMock()
+        search.id = "search-1"
+        search.new_count = 0
+        search.total_count = 0
+
+        db = AsyncMock()
+        db.scalar = AsyncMock(return_value=None)
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        upsert = AsyncMock(side_effect=lambda _db, data: MagicMock(id=data.id))
+        with patch("app.services.listings.upsert.upsert_listing_with_mirrors", upsert):
+            linked = await seed_search_baseline(
+                db,
+                search,
+                [
+                    _listing(
+                        alternate_sources=[
+                            ListingSourceLink(
+                                source="olx",
+                                url="https://olx.example/1",
+                                id="olx_1",
+                            )
+                        ]
+                    )
+                ],
+            )
+
+        self.assertEqual(linked, 1)
+        self.assertEqual(upsert.await_count, 1)
+        payload = upsert.await_args.args[1]
+        self.assertEqual(payload.id, "auto_ria_1")
+        self.assertEqual(len(payload.alternate_sources), 1)
+        self.assertEqual(payload.alternate_sources[0].id, "olx_1")
 
 
 if __name__ == "__main__":

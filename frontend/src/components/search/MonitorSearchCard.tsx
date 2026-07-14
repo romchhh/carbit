@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { IconArrowRight, IconZap } from "@/components/icons";
 import { Badge } from "@/components/ui/Badge";
+import { IosToggle } from "@/components/ui/IosToggle";
 import { AppSection } from "@/components/layout/AppPage";
 import { formatSearchDesc } from "@/lib/format-search-desc";
 import { cn } from "@/lib/utils";
@@ -13,21 +14,28 @@ type Props = {
   search: SearchQuery;
   /** Якщо false — кнопка «Відкрити» лише для активних (дашборд). */
   alwaysLink?: boolean;
+  toggling?: boolean;
+  onActiveChange?: (active: boolean) => void;
 };
 
-export function MonitorSearchCard({ search: s, alwaysLink = true }: Props) {
+export function MonitorSearchCard({
+  search: s,
+  alwaysLink = true,
+  toggling = false,
+  onActiveChange,
+}: Props) {
   const href = `/app/monitors/${s.id}`;
   const showOpen = alwaysLink || s.is_active;
 
-  const body = (
+  return (
     <AppSection
       className={cn(
         "!bg-white p-4 transition-colors hover:border-emerald/30 sm:p-5",
-        !s.is_active && "opacity-60",
+        !s.is_active && "opacity-70",
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
+        <Link href={href} className="flex min-w-0 flex-1 items-start gap-3">
           <div className="relative h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-xl bg-surface ring-1 ring-border/70 sm:h-16 sm:w-24">
             {s.preview_image ? (
               <Image
@@ -61,9 +69,23 @@ export function MonitorSearchCard({ search: s, alwaysLink = true }: Props) {
             </div>
             <p className="mt-1 truncate text-[12px] text-muted">{formatSearchDesc(s.filters)}</p>
           </div>
-        </div>
+        </Link>
 
-        <div className="flex items-center justify-between gap-4 sm:justify-end">
+        <div className="flex items-center justify-between gap-3 sm:justify-end sm:gap-4">
+          {onActiveChange && (
+            <div className="flex items-center gap-2">
+              <IosToggle
+                checked={s.is_active}
+                disabled={toggling}
+                aria-label={s.is_active ? "Вимкнути моніторинг" : "Увімкнути моніторинг"}
+                onChange={onActiveChange}
+              />
+              <span className="hidden text-[11px] font-medium text-muted sm:inline">
+                {s.is_active ? "Активний" : "Пауза"}
+              </span>
+            </div>
+          )}
+
           <div className="text-left sm:text-right">
             <div
               className={cn(
@@ -71,36 +93,21 @@ export function MonitorSearchCard({ search: s, alwaysLink = true }: Props) {
                 s.is_active ? "text-emerald-dark" : "text-muted",
               )}
             >
-              {s.is_active ? s.total_count : "—"}
+              {s.total_count}
             </div>
             <div className="mt-1 text-[10px] uppercase tracking-wide text-muted">авто</div>
           </div>
+
           {showOpen && (
-            alwaysLink ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald/10 px-3 py-2 text-[12px] font-semibold text-emerald-dark">
-                Відкрити <IconArrowRight size={11} />
-              </span>
-            ) : (
-              <Link
-                href={href}
-                className="inline-flex items-center gap-1 rounded-full bg-emerald/10 px-3 py-2 text-[12px] font-semibold text-emerald-dark transition-colors hover:bg-emerald/15"
-              >
-                Відкрити <IconArrowRight size={11} />
-              </Link>
-            )
+            <Link
+              href={href}
+              className="inline-flex items-center gap-1 rounded-full bg-emerald/10 px-3 py-2 text-[12px] font-semibold text-emerald-dark transition-colors hover:bg-emerald/15"
+            >
+              Відкрити <IconArrowRight size={11} />
+            </Link>
           )}
         </div>
       </div>
     </AppSection>
   );
-
-  if (alwaysLink) {
-    return (
-      <Link href={href} className="block">
-        {body}
-      </Link>
-    );
-  }
-
-  return body;
 }

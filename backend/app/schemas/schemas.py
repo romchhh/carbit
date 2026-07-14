@@ -373,6 +373,13 @@ class SubscribeRequest(BaseModel):
     apply_credit: bool = True
 
 
+class UnsubscribeRequest(BaseModel):
+    """Скасування автопродовження з причиною відтоку."""
+
+    reason: Optional[str] = None
+    note: Optional[str] = None
+
+
 class UpgradeQuoteOut(BaseModel):
     current_plan: str
     current_plan_name: str

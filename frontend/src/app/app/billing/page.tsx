@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/Button";
 import { billing as billingApi, ApiError } from "@/lib/api";
 import type { Plan, Subscription } from "@/types/api";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -94,7 +93,7 @@ function BillingPageInner() {
     () =>
       toCabinetCards(plans, {
         currentPlanId,
-        loadingId: loading && loading !== "unsubscribe" ? loading : null,
+        loadingId: loading,
         liqpayEnabled,
       }),
     [plans, currentPlanId, loading, liqpayEnabled],
@@ -148,21 +147,6 @@ function BillingPageInner() {
     }
   };
 
-  const cancelRecurring = async () => {
-    setLoading("unsubscribe");
-    setError("");
-    try {
-      const sub = await billingApi.unsubscribe();
-      setSubscription(sub);
-      await refreshUser();
-      setSuccess("Автопродовження скасовано. Доступ збережеться до кінця оплаченого періоду.");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не вдалося скасувати підписку");
-    } finally {
-      setLoading(null);
-    }
-  };
-
   return (
     <AppPage wide title="Підписка" description="Тарифи Carbit — моніторинг AUTO.RIA, OLX і Telegram" tourId="tour-section-billing">
       {subscription?.is_trial_active && (
@@ -205,7 +189,7 @@ function BillingPageInner() {
         <ul className="mt-4 grid gap-2 text-[12px] text-muted sm:grid-cols-3">
           <li className="rounded-lg bg-white/80 px-3 py-2">✓ AUTO.RIA + OLX в одному кабінеті</li>
           <li className="rounded-lg bg-white/80 px-3 py-2">✓ Миттєві сповіщення в Telegram</li>
-          <li className="rounded-lg bg-white/80 px-3 py-2">✓ Скасування автопродовження в 1 клік</li>
+          <li className="rounded-lg bg-white/80 px-3 py-2">✓ Скасування автопродовження в кабінеті</li>
         </ul>
       </div>
 
@@ -232,24 +216,18 @@ function BillingPageInner() {
         <PricingPlans variant="cabinet" plans={cards} onSelect={id => void orderPlan(id)} />
       </div>
 
-      {subscription && subscription.plan !== "free" && (
-        <div className="mt-8 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[12px] text-muted">
-            Автопродовження через LiqPay. Можна скасувати — доступ лишиться до{" "}
-            {subscription.plan_expires_at
-              ? new Date(subscription.plan_expires_at).toLocaleDateString("uk-UA")
-              : "кінця періоду"}
-            .
-          </p>
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={loading === "unsubscribe"}
-            onClick={() => void cancelRecurring()}
-          >
-            Скасувати автопродовження
-          </Button>
-        </div>
+      {subscription && subscription.plan !== "free" && subscription.recurring_active && (
+        <p className="mt-8 text-[12px] text-muted">
+          Автопродовження через LiqPay увімкнено
+          {subscription.plan_expires_at
+            ? ` · наступне списання біля ${new Date(subscription.plan_expires_at).toLocaleDateString("uk-UA")}`
+            : ""}
+          . Скасувати можна в{" "}
+          <Link href="/app/account#account-plan" className="font-semibold text-emerald-dark hover:underline">
+            профілі → Підписка
+          </Link>
+          .
+        </p>
       )}
 
       <div className="mt-8 flex flex-col items-center gap-3 text-center">

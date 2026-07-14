@@ -10,7 +10,7 @@ from app.services.notifications.service import (
     get_unread_count,
     list_user_notifications,
     mark_all_read,
-    notification_to_out,
+    notification_to_out_with_mirrors,
 )
 from app.services.demo.seed import seed_demo_listings
 
@@ -67,7 +67,7 @@ async def mark_read(
     n.is_read = True
     await db.flush()
     listing = await db.get(Listing, n.listing_id) if n.listing_id else None
-    return notification_to_out(n, listing)
+    return await notification_to_out_with_mirrors(db, n, listing)
 
 
 @router.post("/read-all")

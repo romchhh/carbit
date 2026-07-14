@@ -136,7 +136,12 @@ async def mark_all_read(db: AsyncSession, user_id: str) -> int:
     return int(getattr(result, "rowcount", 0) or 0)
 
 
-def notification_to_out(notification: Notification, listing: Listing | None = None) -> NotificationOut:
+def notification_to_out(
+    notification: Notification,
+    listing: Listing | None = None,
+    *,
+    listing_out=None,
+) -> NotificationOut:
     ntype = notification.type.value if hasattr(notification.type, "value") else str(notification.type)
     return NotificationOut(
         id=notification.id,
@@ -149,8 +154,19 @@ def notification_to_out(notification: Notification, listing: Listing | None = No
         is_read=notification.is_read,
         sent_telegram=notification.sent_telegram,
         created_at=notification.created_at,
-        listing=listing_to_out(listing) if listing else None,
+        listing=listing_out if listing_out is not None else (listing_to_out(listing) if listing else None),
     )
+
+
+async def notification_to_out_with_mirrors(
+    db: AsyncSession,
+    notification: Notification,
+    listing: Listing | None = None,
+) -> NotificationOut:
+    from app.services.listings.duplicates import listing_out_with_mirrors
+
+    listing_out = await listing_out_with_mirrors(db, listing) if listing else None
+    return notification_to_out(notification, listing, listing_out=listing_out)
 
 
 def _notification_order_by(sort_by: str):
@@ -196,5 +212,8 @@ async def list_user_notifications(
         .limit(per_page)
     )
     rows = (await db.execute(stmt)).all()
-    items = [notification_to_out(n, listing) for n, listing in rows]
+    items = [
+        await notification_to_out_with_mirrors(db, n, listing)
+        for n, listing in rows
+    ]
     return items, int(total), unread

@@ -154,6 +154,11 @@ export const searches = {
         seed_listings: seedListings.slice(0, 40).map(slimListingForSeed),
       }),
     }),
+  update: (id: string, body: { name?: string; is_active?: boolean }) =>
+    request<SearchQuery>(`/searches/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 };
 
 function slimListingForSeed(listing: Listing): Record<string, unknown> {
@@ -179,7 +184,16 @@ function slimListingForSeed(listing: Listing): Record<string, unknown> {
     price_history: [],
     is_duplicate: listing.is_duplicate ?? false,
     duplicate_of: listing.duplicate_of ?? null,
-    alternate_sources: [],
+    alternate_sources: Array.isArray(listing.alternate_sources)
+      ? listing.alternate_sources
+          .filter((row) => row?.source && row?.url)
+          .slice(0, 6)
+          .map((row) => ({
+            source: row.source,
+            url: row.url,
+            id: row.id ?? null,
+          }))
+      : [],
     published_at: listing.published_at,
     refreshed_at: listing.refreshed_at ?? null,
     found_at: listing.found_at,
@@ -275,8 +289,11 @@ export const billing = {
     request<UpgradeQuote>(
       plan ? `/billing/upgrade-quote?plan=${encodeURIComponent(plan)}` : "/billing/upgrade-quote",
     ),
-  unsubscribe: () =>
-    request<Subscription>("/billing/unsubscribe", { method: "POST" }),
+  unsubscribe: (body?: { reason?: string; note?: string }) =>
+    request<Subscription>("/billing/unsubscribe", {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
 };
 
 // ── Telegram ──────────────────────────────────────────

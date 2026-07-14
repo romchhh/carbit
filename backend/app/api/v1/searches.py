@@ -124,10 +124,12 @@ async def create_search(
     db: AsyncSession = Depends(get_db),
 ):
     user = await _get_user(user_id, db)
-    count = await db.scalar(
-        select(func.count()).select_from(SearchQuery).where(SearchQuery.user_id == user_id)
+    active_count = await db.scalar(
+        select(func.count())
+        .select_from(SearchQuery)
+        .where(SearchQuery.user_id == user_id, SearchQuery.is_active.is_(True))
     )
-    if count >= user.searches_limit:
+    if (active_count or 0) >= user.searches_limit:
         raise HTTPException(403, f"Plan limit reached ({user.searches_limit} searches)")
 
     sq = SearchQuery(user_id=user_id, name=body.name, filters=body.filters.model_dump(exclude_none=True))
@@ -152,11 +154,26 @@ async def update_search(
     if not sq or sq.user_id != user_id:
         raise HTTPException(404, "Search not found")
 
-    for field, val in body.model_dump(exclude_none=True).items():
+    updates = body.model_dump(exclude_none=True)
+    if updates.get("is_active") is True and not sq.is_active:
+        user = await _get_user(user_id, db)
+        active_count = await db.scalar(
+            select(func.count())
+            .select_from(SearchQuery)
+            .where(SearchQuery.user_id == user_id, SearchQuery.is_active.is_(True))
+        )
+        if (active_count or 0) >= user.searches_limit:
+            raise HTTPException(403, f"Plan limit reached ({user.searches_limit} searches)")
+
+    for field, val in updates.items():
         if field == "filters":
             setattr(sq, field, val.model_dump(exclude_none=True) if hasattr(val, "model_dump") else val)
         else:
             setattr(sq, field, val)
+
+    if updates.get("is_active") is True:
+        schedule_parse_search(sq.id)
+
     return await search_query_to_out(db, sq)
 
 

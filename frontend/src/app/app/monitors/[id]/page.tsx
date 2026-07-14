@@ -10,31 +10,8 @@ import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
 import { formatSearchDesc } from "@/lib/format-search-desc";
 import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
-import type { ExportListing } from "@/lib/export-listings";
+import { listingsToExportItems } from "@/lib/export-listings";
 import type { Listing, SearchQuery } from "@/types/api";
-
-function sourceLabel(source: string): string {
-  if (source === "olx") return "OLX";
-  if (source === "auto_ria") return "AUTO.RIA";
-  return source.toUpperCase();
-}
-
-function toExportItems(items: Listing[]): ExportListing[] {
-  return items.map(item => ({
-    id: item.id,
-    title: item.title,
-    year: item.year,
-    mileage: item.mileage,
-    price: item.price,
-    currency: item.currency,
-    region: item.region,
-    src: sourceLabel(item.source),
-    fuel: item.fuel,
-    trans: item.transmission,
-    desc: item.description ?? undefined,
-    url: item.url,
-  }));
-}
 
 export default function MonitorDetailPage({
   params,
@@ -101,7 +78,7 @@ export default function MonitorDetailPage({
     void loadResults(searchId, 1, sort, false);
   }, [searchId, sort, loadResults]);
 
-  const exportItems = useMemo(() => toExportItems(results), [results]);
+  const exportItems = useMemo(() => listingsToExportItems(results), [results]);
   const exportName = (search?.name || "monitoring").replace(/\s+/g, "-").toLowerCase();
   const hasMore = page < pages;
   const {

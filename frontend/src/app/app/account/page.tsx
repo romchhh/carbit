@@ -36,6 +36,8 @@ import {
   AppStatGrid,
 } from "@/components/layout/AppPage";
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
+import { CancelRenewalDialog } from "@/components/billing/CancelRenewalDialog";
+import { Alert } from "@/components/ui/Alert";
 import { getPricingPlan, formatPlanPrice, planMonitorLimit } from "@/lib/plan-catalog";
 import type { DashboardStats, Subscription } from "@/types/api";
 
@@ -58,6 +60,10 @@ export default function AccountPage() {
   const [bindLoading, setBindLoading] = useState(false);
   const [bindError, setBindError] = useState("");
   const [bindSuccess, setBindSuccess] = useState("");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [cancelSuccess, setCancelSuccess] = useState("");
 
   useEffect(() => {
     billingApi.subscription().then(setSubscription).catch(() => {});
@@ -178,34 +184,34 @@ export default function AccountPage() {
     router.push("/app/dashboard");
   };
 
-  const jumpLinks = [
-    { href: "#account-profile", label: "Профіль" },
-    { href: "#account-overview", label: "Огляд" },
-    { href: "#account-plan", label: "Підписка" },
-    { href: "#account-telegram", label: "Telegram" },
-    { href: "#account-help", label: "Допомога" },
-  ] as const;
+  const confirmCancelRenewal = async (payload: { reason: string; note: string }) => {
+    setCancelLoading(true);
+    setCancelError("");
+    try {
+      const sub = await billingApi.unsubscribe({
+        reason: payload.reason,
+        note: payload.note || undefined,
+      });
+      setSubscription(sub);
+      await refreshUser();
+      setCancelOpen(false);
+      setCancelSuccess(
+        "Автопродовження скасовано. Доступ збережеться до кінця оплаченого періоду.",
+      );
+    } catch (err) {
+      setCancelError(
+        err instanceof ApiError ? err.message : "Не вдалося скасувати автопродовження",
+      );
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   return (
     <AppPage
       title="Акаунт"
       description="Профіль, підписка, сповіщення та налаштування кабінету"
     >
-      <nav
-        aria-label="Розділи акаунта"
-        className="mb-5 flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {jumpLinks.map(link => (
-          <a
-            key={link.href}
-            href={link.href}
-            className="shrink-0 rounded-full border border-border/80 bg-white px-3 py-1.5 text-[12px] font-semibold text-muted transition hover:border-emerald/40 hover:text-ink"
-          >
-            {link.label}
-          </a>
-        ))}
-      </nav>
-
       <div className="space-y-7">
         <AppSectionGroup id="account-profile" label="Профіль">
           <AppSection className="!bg-white">
@@ -492,13 +498,24 @@ export default function AccountPage() {
                     </Button>
                   </Link>
                 </div>
-                {user.plan !== "pro" && (
-                  <p className="text-[12px] text-muted">
-                    Потрібно більше слотів? Наступний рівень — до{" "}
-                    {planMonitorLimit(user.plan === "lite" ? "standard" : "pro")} моніторингів. При
-                    апгрейді залишок поточного періоду зараховується в доплату.
-                  </p>
-                )}
+              {user.plan !== "pro" && (
+                <Alert
+                  variant="info"
+                  title={`Потрібно більше ніж ${user.searches_limit}?`}
+                  action={
+                    <Link
+                      href="/app/billing"
+                      className="inline-flex items-center justify-center rounded-full bg-sky-600 px-4 py-2 text-[12px] font-bold text-white hover:bg-sky-700"
+                    >
+                      Змінити тариф
+                    </Link>
+                  }
+                >
+                  Наступний рівень — до{" "}
+                  {planMonitorLimit(user.plan === "lite" ? "standard" : "pro")} моніторингів. При
+                  апгрейді залишок поточного періоду зараховується в доплату.
+                </Alert>
+              )}
               </div>
             )}
           </AppSection>
@@ -596,6 +613,45 @@ export default function AccountPage() {
                   );
                 })}
               </ul>
+            )}
+
+            {cancelSuccess && (
+              <Alert variant="success" className="mt-5" title="Готово">
+                {cancelSuccess}
+              </Alert>
+            )}
+
+            {user.plan !== "free" && subscription?.recurring_active && (
+              <details className="mt-6 rounded-xl border border-dashed border-border/80 bg-surface/40 px-3.5 py-3">
+                <summary className="cursor-pointer list-none text-[12px] text-muted marker:content-none [&::-webkit-details-marker]:hidden">
+                  <span className="underline-offset-2 hover:text-ink hover:underline">
+                    Керування автопродовженням
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+                  <p className="text-[12px] leading-relaxed text-muted">
+                    Можна зупинити щомісячні списання. Оплачений період лишиться активним до{" "}
+                    {subscription.plan_expires_at
+                      ? new Date(subscription.plan_expires_at).toLocaleDateString("uk-UA", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })
+                      : "його завершення"}
+                    .
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCancelError("");
+                      setCancelOpen(true);
+                    }}
+                    className="text-[12px] font-medium text-muted underline-offset-2 transition hover:text-red-600 hover:underline"
+                  >
+                    Скасувати автопродовження…
+                  </button>
+                </div>
+              </details>
             )}
           </AppSection>
         </AppSectionGroup>
@@ -723,6 +779,17 @@ export default function AccountPage() {
           </AppSection>
         </AppSectionGroup>
       </div>
+
+      <CancelRenewalDialog
+        open={cancelOpen}
+        expiresAt={subscription?.plan_expires_at}
+        loading={cancelLoading}
+        error={cancelError}
+        onClose={() => {
+          if (!cancelLoading) setCancelOpen(false);
+        }}
+        onConfirm={payload => void confirmCancelRenewal(payload)}
+      />
     </AppPage>
   );
 }

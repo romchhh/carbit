@@ -20,6 +20,8 @@ export default function MonitorsPage() {
   const { user } = useAuth();
   const [searches, setSearches] = useState<SearchQuery[]>([]);
   const [loading, setLoading] = useState(true);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
 
   useEffect(() => {
     searchesApi
@@ -35,6 +37,33 @@ export default function MonitorsPage() {
   const remaining = Math.max(0, user.searches_limit - activeCount);
   const totalNew = searches.reduce((sum, s) => sum + (s.new_count || 0), 0);
   const limitReached = remaining <= 0;
+
+  const setActive = async (search: SearchQuery, active: boolean) => {
+    if (search.is_active === active || togglingId) return;
+    if (active && remaining <= 0) {
+      setToggleError(
+        "Ліміт активних моніторингів вичерпано — підвищіть план або поставте інший на паузу.",
+      );
+      return;
+    }
+    setToggleError(null);
+    setTogglingId(search.id);
+    const previous = searches;
+    setSearches(list =>
+      list.map(item => (item.id === search.id ? { ...item, is_active: active } : item)),
+    );
+    try {
+      const updated = await searchesApi.update(search.id, { is_active: active });
+      setSearches(list => list.map(item => (item.id === updated.id ? updated : item)));
+    } catch (err) {
+      setSearches(previous);
+      setToggleError(
+        err instanceof Error ? err.message : "Не вдалося змінити статус моніторингу",
+      );
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   return (
     <AppPage tourId="tour-section-monitors">
@@ -55,6 +84,15 @@ export default function MonitorsPage() {
           </Button>
         </Link>
       </div>
+
+      {toggleError && (
+        <div
+          role="alert"
+          className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700"
+        >
+          {toggleError}
+        </div>
+      )}
 
       {limitReached ? (
         <UpgradeOffer className="mb-5" title="Ліміт моніторингів вичерпано" />
@@ -95,7 +133,12 @@ export default function MonitorsPage() {
       ) : (
         <div className="space-y-3">
           {searches.map(s => (
-            <MonitorSearchCard key={s.id} search={s} />
+            <MonitorSearchCard
+              key={s.id}
+              search={s}
+              toggling={togglingId === s.id}
+              onActiveChange={active => void setActive(s, active)}
+            />
           ))}
         </div>
       )}

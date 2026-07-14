@@ -6,7 +6,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.models import Favorite, Listing
 from app.schemas.schemas import FavoriteOut, FavoriteCreate, FavoriteCheckBatch
-from app.services.listings.upsert import upsert_listing
+from app.services.listings.upsert import upsert_listing_with_mirrors
+from app.services.listings.duplicates import listing_out_with_mirrors
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
 
@@ -28,12 +29,14 @@ async def list_favorites(
     for fav in favorites:
         listing = await db.get(Listing, fav.listing_id)
         if listing:
-            out.append(FavoriteOut(
-                id=fav.id,
-                listing_id=fav.listing_id,
-                listing=listing,
-                created_at=fav.created_at,
-            ))
+            out.append(
+                FavoriteOut(
+                    id=fav.id,
+                    listing_id=fav.listing_id,
+                    listing=await listing_out_with_mirrors(db, listing),
+                    created_at=fav.created_at,
+                )
+            )
     return out
 
 
@@ -66,12 +69,14 @@ async def add_favorite(
     listing = await db.get(Listing, body.listing_id)
     if not listing:
         if body.listing:
-            listing = await upsert_listing(db, body.listing)
+            listing = await upsert_listing_with_mirrors(db, body.listing)
         else:
             raise HTTPException(
                 400,
                 "Оголошення ще не в базі. Передайте дані listing для збереження з AUTO.RIA.",
             )
+    elif body.listing and body.listing.alternate_sources:
+        listing = await upsert_listing_with_mirrors(db, body.listing)
 
     existing = await db.scalar(
         select(Favorite).where(
@@ -83,14 +88,19 @@ async def add_favorite(
         return FavoriteOut(
             id=existing.id,
             listing_id=existing.listing_id,
-            listing=listing,
+            listing=await listing_out_with_mirrors(db, listing),
             created_at=existing.created_at,
         )
 
     fav = Favorite(user_id=user_id, listing_id=body.listing_id)
     db.add(fav)
     await db.flush()
-    return FavoriteOut(id=fav.id, listing_id=fav.listing_id, listing=listing, created_at=fav.created_at)
+    return FavoriteOut(
+        id=fav.id,
+        listing_id=fav.listing_id,
+        listing=await listing_out_with_mirrors(db, listing),
+        created_at=fav.created_at,
+    )
 
 
 @router.delete("/{listing_id}", status_code=status.HTTP_204_NO_CONTENT)
