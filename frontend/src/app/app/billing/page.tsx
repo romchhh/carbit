@@ -84,18 +84,18 @@ function BillingPageInner() {
         return;
       }
 
-      if (!liqpayEnabled) {
-        const sub = await billingApi.subscribe(planId);
-        setSubscription(sub);
-        await refreshUser();
-        setSuccess(`План «${sub.plan_name}» активовано.`);
-        return;
-      }
-
+      // Платні плани — лише через LiqPay Checkout (не через /subscribe).
       const checkout = await billingApi.checkout(planId);
       submitLiqPayCheckout(checkout.checkout_url, checkout.data, checkout.signature);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Помилка оплати");
+      const msg = err instanceof ApiError ? err.message : "Помилка оплати";
+      if (err instanceof ApiError && (err.status === 503 || /не налаштовано|не підключен/i.test(msg))) {
+        setError(
+          "LiqPay не налаштовано на сервері. Додайте LIQPAY_PUBLIC_KEY і LIQPAY_PRIVATE_KEY у .env і перезапустіть backend.",
+        );
+      } else {
+        setError(msg);
+      }
       setLoading(null);
     }
   };
@@ -168,7 +168,7 @@ function BillingPageInner() {
                   loading={loading === plan.id}
                   onClick={() => void orderPlan(plan.id)}
                 >
-                  {liqpayEnabled ? "Оплатити LiqPay" : "Замовити"}
+                  {liqpayEnabled ? "Оплатити LiqPay" : "Оплатити"}
                 </Button>
               )}
               {!isCurrent && plan.id === "free" && (
@@ -187,7 +187,7 @@ function BillingPageInner() {
         })}
       </div>
 
-      {liqpayEnabled && subscription && subscription.plan !== "free" && (
+      {subscription && subscription.plan !== "free" && (
         <div className="mt-5 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[12px] text-muted">
             Автопродовження через LiqPay. Можна скасувати — доступ лишиться до{" "}
@@ -210,17 +210,17 @@ function BillingPageInner() {
       <div className="mt-8 flex flex-col items-center gap-3 text-center">
         <LiqPayLogo height={28} />
         <p className="max-w-md text-[12px] text-muted">
-          {liqpayEnabled
-            ? "Оплата карткою Visa/Mastercard через захищений Checkout LiqPay. Рекурентна підписка — щомісяця."
-            : (
-              <>
-                Оплата через LiqPay підключається. Деталі — на сторінці{" "}
-                <Link href="/payment" className="text-emerald-dark underline">
-                  Оплата і повернення
-                </Link>
-                .
-              </>
-            )}
+          Оплата карткою Visa/Mastercard через захищений Checkout LiqPay. Рекурентна підписка — щомісяця.
+          {!liqpayEnabled && (
+            <>
+              {" "}
+              Якщо оплата не відкривається — перевірте ключі LiqPay у{" "}
+              <Link href="/payment" className="text-emerald-dark underline">
+                Оплата і повернення
+              </Link>
+              .
+            </>
+          )}
         </p>
       </div>
     </AppPage>

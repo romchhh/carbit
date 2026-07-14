@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     # Observability
     SENTRY_DSN: str = ""
 
+    @field_validator("LIQPAY_PUBLIC_KEY", "LIQPAY_PRIVATE_KEY", mode="before")
+    @classmethod
+    def strip_liqpay_keys(cls, value: object) -> str:
+        if value is None:
+            return ""
+        text = str(value).strip().strip('"').strip("'")
+        return text
+
     @model_validator(mode="after")
     def resolve_paths(self) -> "Settings":
         self.DATABASE_URL = resolve_database_url(self.DATABASE_URL)
@@ -103,8 +111,12 @@ class Settings(BaseSettings):
         media_path.mkdir(parents=True, exist_ok=True)
         self.TELEGRAM_MEDIA_DIR = str(media_path.resolve())
         if not self.PUBLIC_API_BASE:
+            # Не використовуємо внутрішній Docker URL (http://backend:...) для LiqPay callback.
             backend = os.getenv("BACKEND_URL", "").strip().rstrip("/")
-            self.PUBLIC_API_BASE = backend or f"{self.FRONTEND_URL.rstrip('/')}/api/v1"
+            if backend and "://" in backend and "backend:" not in backend and "localhost" not in backend:
+                self.PUBLIC_API_BASE = backend
+            else:
+                self.PUBLIC_API_BASE = f"{self.FRONTEND_URL.rstrip('/')}/api/v1"
         return self
 
 

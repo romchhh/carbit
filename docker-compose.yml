@@ -50,6 +50,10 @@ services:
       TELEGRAM_MEDIA_DIR: /app/media
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      LIQPAY_PUBLIC_KEY: ${LIQPAY_PUBLIC_KEY:-}
+      LIQPAY_PRIVATE_KEY: ${LIQPAY_PRIVATE_KEY:-}
+      FRONTEND_URL: ${FRONTEND_URL:-https://carbit.info}
+      PUBLIC_API_BASE: ${PUBLIC_API_BASE:-https://carbit.info/api/v1}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:

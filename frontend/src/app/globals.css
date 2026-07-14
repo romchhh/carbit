@@ -217,6 +217,7 @@
     .app-mobile-content {
       padding-left: max(1rem, var(--safe-left));
       padding-right: max(1rem, var(--safe-right));
+      padding-top: 0.75rem;
     }
   }
 
