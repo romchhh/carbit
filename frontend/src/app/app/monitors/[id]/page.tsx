@@ -130,7 +130,6 @@ export default function MonitorDetailPage({
 
       <SearchResultsToolbar
         running={!loading && !error && results.length > 0}
-        loading={loading}
         total={total}
         shown={results.length}
         sort={sort}
