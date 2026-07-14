@@ -1,13 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
-import { IconBell, IconZap } from "@/components/icons";
+import { IconBell, IconCreditCard, IconZap } from "@/components/icons";
 import { SOURCE_LOGOS } from "@/lib/brand-assets";
+import { formatPlanPrice, planDisplayName } from "@/lib/plan-catalog";
 import { cn } from "@/lib/utils";
 
 type Props = {
   firstName: string;
   activeSearches: number;
   searchesLimit: number;
+  planId: string;
+  isTrial?: boolean;
   telegramConnected?: boolean;
   unreadNotifications?: number;
   className?: string;
@@ -17,11 +20,15 @@ export function DashboardWelcomeHero({
   firstName,
   activeSearches,
   searchesLimit,
+  planId,
+  isTrial = false,
   telegramConnected = false,
   unreadNotifications = 0,
   className,
 }: Props) {
   const remaining = Math.max(0, searchesLimit - activeSearches);
+  const isFree = planId === "free";
+  const nearLimit = remaining <= 2;
 
   return (
     <section
@@ -43,7 +50,24 @@ export function DashboardWelcomeHero({
       />
 
       <div className="relative">
-        <h1 className="mt-1.5 text-[24px] font-black leading-tight tracking-tight text-ink sm:text-[30px]">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald/25 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-emerald-dark">
+            <IconZap size={12} />
+            {planDisplayName(planId)}
+            {isTrial ? " · Trial" : ""}
+          </span>
+          {(isFree || nearLimit) && (
+            <Link
+              href="/app/billing"
+              className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-emerald-dark"
+            >
+              <IconCreditCard size={12} />
+              {isFree ? `Підписка від ${formatPlanPrice("lite")}` : "Збільшити ліміт"}
+            </Link>
+          )}
+        </div>
+
+        <h1 className="mt-2.5 text-[24px] font-black leading-tight tracking-tight text-ink sm:text-[30px]">
           Привіт,{" "}
           <span className="bg-gradient-to-r from-emerald-dark to-emerald bg-clip-text text-transparent">
             {firstName}
@@ -54,6 +78,12 @@ export function DashboardWelcomeHero({
           <span className="font-medium text-ink">AUTO.RIA</span>,{" "}
           <span className="font-medium text-ink">OLX</span> і надсилає нові авто в{" "}
           <span className="font-medium text-ink">Telegram</span>
+          {isFree ? (
+            <>
+              . На безкоштовному тарифі — до {searchesLimit} моніторингу; Старт дає 10 за{" "}
+              {formatPlanPrice("lite")}
+            </>
+          ) : null}
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-1.5 sm:gap-2">

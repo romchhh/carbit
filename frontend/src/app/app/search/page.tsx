@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -79,9 +80,19 @@ export default function SearchPage() {
             <strong className="font-medium text-ink">нові</strong> оголошення в Telegram.
           </p>
         </div>
-        <span className="w-fit rounded-lg border border-border bg-surface px-3 py-1.5 text-[11px] text-muted sm:bg-white sm:text-[12px]">
-          До <strong className="text-ink">{user?.searches_limit ?? "—"}</strong> збережених
-          моніторингів
+        <span className="flex w-fit flex-col items-end gap-1 sm:items-end">
+          <span className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[11px] text-muted sm:bg-white sm:text-[12px]">
+            До <strong className="text-ink">{user?.searches_limit ?? "—"}</strong> збережених
+            моніторингів
+          </span>
+          {user && (
+            <Link
+              href="/app/billing"
+              className="text-[11px] font-semibold text-emerald-dark hover:underline"
+            >
+              {user.plan === "free" ? "Оформити підписку →" : "Змінити тариф →"}
+            </Link>
+          )}
         </span>
       </div>
 

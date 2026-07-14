@@ -140,7 +140,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden lg:px-6 lg:py-5">
         <div className="flex min-h-0 flex-1 gap-4 overflow-hidden lg:items-start lg:gap-5">
-          <DashboardSidebar searchesUsed={searchesUsed} searchesLimit={user.searches_limit} />
+          <DashboardSidebar
+            searchesUsed={searchesUsed}
+            searchesLimit={user.searches_limit}
+            planId={user.plan}
+            isTrial={Boolean(user.is_trial_active)}
+          />
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:h-[calc(100vh-2.5rem)]">
             <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eef0f4] lg:rounded-[28px] lg:border lg:border-border/50 lg:bg-white lg:shadow-island">

@@ -40,10 +40,10 @@ export function avatarColorClass(name: string): string {
 }
 
 export const PLAN_LABELS: Record<string, string> = {
-  free: "Безкоштовний",
-  lite: "Лайт",
-  standard: "Стандарт",
-  pro: "Про",
+  free: "Безкоштовно",
+  lite: "Старт",
+  standard: "Про",
+  pro: "Бізнес",
 };
 
 export function timeAgo(date: string | null | undefined) {

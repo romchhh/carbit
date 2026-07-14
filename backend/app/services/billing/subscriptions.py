@@ -48,6 +48,7 @@ async def get_active_subscription(
         .where(
             BillingSubscription.user_id == user_id,
             BillingSubscription.status == SubscriptionStatus.active,
+            BillingSubscription.periodicity == "month",
         )
         .order_by(BillingSubscription.created_at.desc())
     )
@@ -58,36 +59,61 @@ async def create_checkout(
     db: AsyncSession,
     user: User,
     plan_id: str,
+    *,
+    apply_credit: bool = True,
 ) -> dict:
     if not liqpay_configured():
         raise LiqPayNotConfiguredError("LiqPay не налаштовано")
     if plan_id == "free":
         raise ValueError("Free план не потребує оплати")
     plan = get_plan(plan_id)
-    amount = int(plan.get("price_uah") or 0)
-    if amount <= 0:
+    list_price = int(plan.get("price_uah") or 0)
+    if list_price <= 0:
         raise ValueError("Невідомий або безкоштовний план")
+
+    credit = 0
+    amount = list_price
+    enable_subscribe = True
+    if apply_credit:
+        from app.services.billing.upgrade import compute_upgrade_quote
+
+        quote = compute_upgrade_quote(user, plan_id)
+        if quote["is_free_upgrade"]:
+            raise ValueError("FREE_UPGRADE")
+        credit = int(quote["credit_uah"])
+        amount = max(1, int(quote["amount_due_uah"]))
+        enable_subscribe = bool(quote["enable_subscribe"])
 
     order_id = make_order_id(user.id, plan_id)
     start = now_kyiv().strftime("%Y-%m-%d %H:%M:%S")
     api_base = settings.PUBLIC_API_BASE.rstrip("/")
     frontend = settings.FRONTEND_URL.rstrip("/")
 
+    if credit > 0:
+        description = (
+            f"Carbit: апгрейд до {plan['name']} "
+            f"(кредит залишку {credit} грн, доплата {amount} грн)"
+        )
+    else:
+        description = f"Carbit: тариф {plan['name']} (щомісячна підписка)"
+
     # Client-Server Checkout: action=pay + subscribe=1 (не server-server action=subscribe).
     # Інакше LiqPay інколи віддає 403 на кроці /checkout/card/...
+    # Якщо є кредит — лише one-time pay, щоб рекурент не списував знижену суму.
     params: dict = {
         "action": "pay",
         "amount": amount,
         "currency": "UAH",
-        "description": f"Carbit: тариф {plan['name']} (щомісячна підписка)",
+        "description": description,
         "order_id": order_id,
-        "subscribe": "1",
-        "subscribe_date_start": start,
-        "subscribe_periodicity": "month",
         "server_url": f"{api_base}/billing/liqpay/callback",
         "result_url": f"{frontend}/app/billing?paid=1",
         "language": "uk",
     }
+    if enable_subscribe:
+        params["subscribe"] = "1"
+        params["subscribe_date_start"] = start
+        params["subscribe_periodicity"] = "month"
     if settings.LIQPAY_PUBLIC_KEY.strip().startswith("sandbox_"):
         params["sandbox"] = 1
     data, signature = encode_checkout(params)
@@ -98,7 +124,7 @@ async def create_checkout(
         plan=plan_id,
         amount=amount,
         currency="UAH",
-        periodicity="month",
+        periodicity="month" if enable_subscribe else "once",
         status=SubscriptionStatus.pending,
     )
     db.add(sub)
@@ -113,6 +139,9 @@ async def create_checkout(
         "currency": "UAH",
         "plan": plan_id,
         "plan_name": plan["name"],
+        "credit_uah": credit,
+        "list_price_uah": list_price,
+        "enable_subscribe": enable_subscribe,
     }
 
 
@@ -174,6 +203,7 @@ async def apply_successful_payment(
         other.cancelled_at = now_kyiv()
 
     was_active = sub.status == SubscriptionStatus.active
+    is_once = (sub.periodicity or "month") == "once"
     sub.status = SubscriptionStatus.active
     sub.last_status = status_raw
     sub.failed_charges = 0
@@ -186,11 +216,17 @@ async def apply_successful_payment(
 
     activate_plan(user, sub.plan)
     # Рекурентне списання → продовжити ще на period_days від зараз
-    if was_active and previous_plan == sub.plan:
+    if was_active and previous_plan == sub.plan and not is_once:
         days = int(get_plan(sub.plan).get("period_days") or 30)
         user.plan_expires_at = now_kyiv() + timedelta(days=days)
 
     await record_billing_payment(db, sub=sub, payload=payload, status="success")
+
+    # Одноразова доплата апгрейду — не лишаємо «active» рекурент (інакше UI думає що є підписка).
+    if is_once:
+        sub.status = SubscriptionStatus.cancelled
+        sub.cancelled_at = now_kyiv()
+
     await db.flush()
     if not was_active or previous_plan != sub.plan:
         await notify_plan_activated(db, user, previous_plan=previous_plan)

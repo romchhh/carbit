@@ -21,6 +21,7 @@ import type {
   TelegramConnectLink,
   TelegramStatus,
   TokenResponse,
+  UpgradeQuote,
   User,
 } from "@/types/api";
 
@@ -265,8 +266,15 @@ export const billing = {
   subscription: () => request<Subscription>("/billing/subscription"),
   subscribe: (plan: string) =>
     request<Subscription>("/billing/subscribe", { method: "POST", body: JSON.stringify({ plan }) }),
-  checkout: (plan: string) =>
-    request<LiqPayCheckout>("/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) }),
+  checkout: (plan: string, applyCredit = true) =>
+    request<LiqPayCheckout>("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan, apply_credit: applyCredit }),
+    }),
+  upgradeQuote: (plan?: string) =>
+    request<UpgradeQuote>(
+      plan ? `/billing/upgrade-quote?plan=${encodeURIComponent(plan)}` : "/billing/upgrade-quote",
+    ),
   unsubscribe: () =>
     request<Subscription>("/billing/unsubscribe", { method: "POST" }),
 };

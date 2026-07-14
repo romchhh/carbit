@@ -184,6 +184,29 @@ export interface LiqPayCheckout {
   currency: string;
   plan: string;
   plan_name: string;
+  credit_uah?: number;
+  list_price_uah?: number | null;
+  enable_subscribe?: boolean;
+  free_upgrade?: boolean;
+}
+
+export interface UpgradeQuote {
+  current_plan: string;
+  current_plan_name: string;
+  current_price_uah: number;
+  target_plan: string;
+  target_plan_name: string;
+  target_price_uah: number;
+  target_searches_limit: number;
+  days_remaining: number;
+  period_days: number;
+  target_period_days: number;
+  credit_uah: number;
+  amount_due_uah: number;
+  enable_subscribe: boolean;
+  is_upgrade: boolean;
+  is_free_upgrade: boolean;
+  recommended: boolean;
 }
 
 export interface TelegramConnectLink {

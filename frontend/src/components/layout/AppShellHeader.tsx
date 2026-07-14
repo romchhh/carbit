@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
+import { PLAN_LABELS, cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useAuth } from "@/contexts/AuthProvider";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
@@ -78,16 +78,28 @@ export function AppShellHeader({ unreadNotifications = 0, className }: Props) {
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-border/70 bg-white py-1 shadow-card">
+              <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-border/70 bg-white py-1 shadow-card">
                 <div className="border-b border-border/60 px-3 py-2.5">
                   <div className="truncate text-[13px] font-semibold text-ink">{user.name}</div>
                   <div className="truncate text-[11px] text-muted">{user.email}</div>
+                  <div className="mt-1 text-[11px] font-semibold text-emerald-dark">
+                    Тариф: {PLAN_LABELS[user.plan] ?? user.plan}
+                  </div>
                 </div>
                 <Link href="/app/account" data-tour="nav-account" className="block px-3 py-2.5 text-[13px] text-ink transition-colors hover:bg-surface" onClick={() => setMenuOpen(false)}>
                   Акаунт
                 </Link>
-                <Link href="/app/billing" className="block px-3 py-2.5 text-[13px] text-ink transition-colors hover:bg-surface" onClick={() => setMenuOpen(false)}>
-                  Підписка
+                <Link
+                  href="/app/billing"
+                  className={cn(
+                    "block px-3 py-2.5 text-[13px] transition-colors hover:bg-surface",
+                    user.plan === "free"
+                      ? "font-bold text-emerald-dark"
+                      : "text-ink",
+                  )}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {user.plan === "free" ? "Оформити підписку" : "Підписка та тарифи"}
                 </Link>
                 <button
                   type="button"

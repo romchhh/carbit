@@ -370,6 +370,26 @@ class SubscriptionOut(BaseModel):
 
 class SubscribeRequest(BaseModel):
     plan: str = Field(pattern=r"^(free|lite|standard|pro)$")
+    apply_credit: bool = True
+
+
+class UpgradeQuoteOut(BaseModel):
+    current_plan: str
+    current_plan_name: str
+    current_price_uah: int
+    target_plan: str
+    target_plan_name: str
+    target_price_uah: int
+    target_searches_limit: int
+    days_remaining: int
+    period_days: int
+    target_period_days: int
+    credit_uah: int
+    amount_due_uah: int
+    enable_subscribe: bool
+    is_upgrade: bool
+    is_free_upgrade: bool
+    recommended: bool = False
 
 
 class CheckoutOut(BaseModel):
@@ -381,6 +401,10 @@ class CheckoutOut(BaseModel):
     currency: str
     plan: str
     plan_name: str
+    credit_uah: int = 0
+    list_price_uah: int | None = None
+    enable_subscribe: bool = True
+    free_upgrade: bool = False
 
 
 # Telegram

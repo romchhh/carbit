@@ -10,6 +10,8 @@ import {
   AppPage,
 } from "@/components/layout/AppPage";
 import { MonitorSearchCard } from "@/components/search/MonitorSearchCard";
+import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
+import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 import { useAuth } from "@/contexts/AuthProvider";
 import { searches as searchesApi } from "@/lib/api";
 import type { SearchQuery } from "@/types/api";
@@ -32,6 +34,7 @@ export default function MonitorsPage() {
   const activeCount = searches.filter(s => s.is_active).length;
   const remaining = Math.max(0, user.searches_limit - activeCount);
   const totalNew = searches.reduce((sum, s) => sum + (s.new_count || 0), 0);
+  const limitReached = remaining <= 0;
 
   return (
     <AppPage>
@@ -52,6 +55,28 @@ export default function MonitorsPage() {
           </Button>
         </Link>
       </div>
+
+      {limitReached ? (
+        <UpgradeOffer className="mb-5" title="Ліміт моніторингів вичерпано" />
+      ) : remaining <= 2 ? (
+        <SubscriptionPitch
+          className="mb-5"
+          variant="compact"
+          planId={user.plan}
+          searchesLimit={user.searches_limit}
+          searchesUsed={activeCount}
+          isTrial={Boolean(user.is_trial_active)}
+        />
+      ) : user.plan === "free" ? (
+        <SubscriptionPitch
+          className="mb-5"
+          variant="compact"
+          planId={user.plan}
+          searchesLimit={user.searches_limit}
+          searchesUsed={activeCount}
+          isTrial={Boolean(user.is_trial_active)}
+        />
+      ) : null}
 
       {loading ? (
         <AppLoading />

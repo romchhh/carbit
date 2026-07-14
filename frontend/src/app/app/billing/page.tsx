@@ -12,31 +12,7 @@ import { AppPage, AppSection } from "@/components/layout/AppPage";
 import { LiqPayLogo } from "@/components/brand/LiqPayLogo";
 import { PricingPlans, type PricingCardModel } from "@/components/pricing/PricingPlans";
 import { PRICING_PLANS } from "@/lib/pricing-plans";
-
-function submitLiqPayCheckout(checkoutUrl: string, data: string, signature: string) {
-  // Повний form POST — не відкривати старе checkout-посилання в новій вкладці
-  // (сесія короткоживуча → часто 403 Forbidden на /checkout/card/...).
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = checkoutUrl;
-  form.acceptCharset = "utf-8";
-  form.style.display = "none";
-
-  const dataInput = document.createElement("input");
-  dataInput.type = "hidden";
-  dataInput.name = "data";
-  dataInput.value = data;
-  form.appendChild(dataInput);
-
-  const signInput = document.createElement("input");
-  signInput.type = "hidden";
-  signInput.name = "signature";
-  signInput.value = signature;
-  form.appendChild(signInput);
-
-  document.body.appendChild(form);
-  form.submit();
-}
+import { submitLiqPayCheckout } from "@/lib/liqpay-checkout";
 
 function formatPrice(uah: number): string {
   if (uah <= 0) return "0";
@@ -139,7 +115,25 @@ function BillingPageInner() {
       }
 
       // Платні плани — лише через LiqPay Checkout (не через /subscribe).
-      const checkout = await billingApi.checkout(planId);
+      // apply_credit: при апгрейді з оплаченого тарифу — доплата з урахуванням залишку днів.
+      const checkout = await billingApi.checkout(planId, true);
+      if (checkout.free_upgrade) {
+        await refreshUser();
+        await load();
+        setSuccess(
+          `Тариф «${checkout.plan_name}» активовано без доплати — залишок попереднього покрив апгрейд.`,
+        );
+        setLoading(null);
+        return;
+      }
+      if (checkout.credit_uah && checkout.credit_uah > 0) {
+        setSuccess(
+          `Зараховано залишок ${checkout.credit_uah} грн. До сплати ${checkout.amount} грн` +
+            (checkout.enable_subscribe === false
+              ? ". Автопродовження увімкніть пізніше за повною ціною."
+              : "."),
+        );
+      }
       submitLiqPayCheckout(checkout.checkout_url, checkout.data, checkout.signature);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Помилка оплати";
@@ -170,16 +164,50 @@ function BillingPageInner() {
   };
 
   return (
-    <AppPage wide title="Підписка" description="Оберіть тариф під ваші задачі" tourId="tour-section-billing">
+    <AppPage wide title="Підписка" description="Тарифи Carbit — моніторинг AUTO.RIA, OLX і Telegram" tourId="tour-section-billing">
       {subscription?.is_trial_active && (
         <AppSection className="mb-5 flex items-center gap-3 !border-emerald/20 !bg-emerald-light/30">
           <IconZap size={18} className="shrink-0 text-emerald-dark" />
           <div>
             <div className="text-[14px] font-semibold text-ink">Trial активний</div>
-            <div className="text-[12px] text-muted">3 дні безкоштовного доступу</div>
+            <div className="text-[12px] text-muted">
+              Після trial оберіть платний тариф — ліміт пошуків зросте, сповіщення лишаться в Telegram
+            </div>
           </div>
         </AppSection>
       )}
+
+      <div className="mb-6 rounded-2xl border border-border/60 bg-surface/50 px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Зараз</div>
+            <div className="mt-1 text-[18px] font-black text-ink">
+              {subscription?.plan_name ?? user?.plan ?? "—"}
+              {subscription?.is_trial_active ? (
+                <span className="ml-2 text-[12px] font-semibold text-emerald-dark">Trial</span>
+              ) : null}
+            </div>
+            <p className="mt-1 max-w-lg text-[13px] text-muted">
+              До {subscription?.searches_limit ?? user?.searches_limit ?? "—"} активних моніторингів.
+              Оплата раз на 30 днів через LiqPay; при апгрейді залишок днів поточного тарифу
+              зараховується в доплату.
+            </p>
+          </div>
+          {subscription?.plan_expires_at && subscription.plan !== "free" && (
+            <div className="rounded-xl bg-white px-3 py-2 text-right shadow-sm">
+              <div className="text-[11px] text-muted">Діє до</div>
+              <div className="text-[13px] font-semibold text-ink">
+                {new Date(subscription.plan_expires_at).toLocaleDateString("uk-UA")}
+              </div>
+            </div>
+          )}
+        </div>
+        <ul className="mt-4 grid gap-2 text-[12px] text-muted sm:grid-cols-3">
+          <li className="rounded-lg bg-white/80 px-3 py-2">✓ AUTO.RIA + OLX в одному кабінеті</li>
+          <li className="rounded-lg bg-white/80 px-3 py-2">✓ Миттєві сповіщення в Telegram</li>
+          <li className="rounded-lg bg-white/80 px-3 py-2">✓ Скасування автопродовження в 1 клік</li>
+        </ul>
+      </div>
 
       {success && (
         <p className="mb-4 rounded-xl border border-emerald/25 bg-emerald-light/40 px-3 py-2 text-[13px] text-emerald-dark">
@@ -190,7 +218,17 @@ function BillingPageInner() {
         <p className="mb-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[13px] text-red-600">{error}</p>
       )}
 
-      <div className="pt-2">
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-[16px] font-bold text-ink">Оберіть тариф</h2>
+          <p className="mt-0.5 text-[12px] text-muted">Натисніть картку — відкриється безпечна оплата LiqPay</p>
+        </div>
+        <Link href="/pricing" className="shrink-0 text-[12px] font-semibold text-emerald-dark hover:underline">
+          Порівняльна таблиця →
+        </Link>
+      </div>
+
+      <div className="pt-1">
         <PricingPlans variant="cabinet" plans={cards} onSelect={id => void orderPlan(id)} />
       </div>
 

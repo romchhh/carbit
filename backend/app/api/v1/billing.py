@@ -12,6 +12,7 @@ from app.schemas.schemas import (
     SubscribeRequest,
     SubscriptionOut,
     BillingPaymentOut,
+    UpgradeQuoteOut,
 )
 from app.services.billing.liqpay import LiqPayNotConfiguredError, liqpay_configured
 from app.services.billing.notify import notify_plan_activated
@@ -23,6 +24,7 @@ from app.services.billing.subscriptions import (
     get_active_subscription,
     handle_callback,
 )
+from app.services.billing.upgrade import compute_upgrade_quote, recommended_upgrade_plan
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -97,6 +99,30 @@ async def get_subscription(
     return await _subscription_out(db, user)
 
 
+@router.get("/upgrade-quote", response_model=UpgradeQuoteOut)
+async def upgrade_quote(
+    plan: str | None = None,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Калькуляція апгрейду: кредит за невикористані дні + доплата."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if enforce_plan_expiry(user):
+        await db.flush()
+
+    target = plan or recommended_upgrade_plan(user)
+    if not target:
+        raise HTTPException(400, "Немає вищого тарифу для апгрейду")
+    try:
+        quote = compute_upgrade_quote(user, target)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    recommended = target == recommended_upgrade_plan(user)
+    return UpgradeQuoteOut(**quote, recommended=recommended)
+
+
 @router.post("/checkout", response_model=CheckoutOut)
 async def checkout(
     body: SubscribeRequest,
@@ -114,11 +140,46 @@ async def checkout(
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    if enforce_plan_expiry(user):
+        await db.flush()
+
+    # Якщо залишок поточного тарифу повністю покриває новий — активуємо без LiqPay.
+    if body.apply_credit:
+        try:
+            quote = compute_upgrade_quote(user, body.plan)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if quote["is_free_upgrade"]:
+            previous_plan = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
+            await cancel_active_subscriptions(db, user.id)
+            activate_plan(user, body.plan)
+            await db.flush()
+            if body.plan != previous_plan:
+                await notify_plan_activated(db, user, previous_plan=previous_plan)
+            await db.commit()
+            plan = get_plan(body.plan)
+            return CheckoutOut(
+                order_id="",
+                checkout_url="",
+                data="",
+                signature="",
+                amount=0,
+                currency="UAH",
+                plan=body.plan,
+                plan_name=plan["name"],
+                credit_uah=int(quote["credit_uah"]),
+                list_price_uah=int(quote["target_price_uah"]),
+                enable_subscribe=False,
+                free_upgrade=True,
+            )
+
     try:
-        result = await create_checkout(db, user, body.plan)
+        result = await create_checkout(db, user, body.plan, apply_credit=body.apply_credit)
     except LiqPayNotConfiguredError:
         raise HTTPException(503, "LiqPay не налаштовано")
     except ValueError as exc:
+        if str(exc) == "FREE_UPGRADE":
+            raise HTTPException(400, "Апгрейд покривається залишком — оновіть сторінку") from exc
         raise HTTPException(400, str(exc)) from exc
     await db.commit()
     return CheckoutOut(**result)

@@ -10,6 +10,8 @@ import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarous
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
 import { MonitorSearchCard } from "@/components/search/MonitorSearchCard";
+import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
+import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 import { useAuth } from "@/contexts/AuthProvider";
 import { usePreviewSearch } from "@/hooks/usePreviewSearch";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
@@ -92,9 +94,22 @@ export default function DashboardPage() {
         firstName={firstName}
         activeSearches={activeCount}
         searchesLimit={limit}
+        planId={user.plan}
+        isTrial={Boolean(user.is_trial_active)}
         telegramConnected={user.telegram_connected}
         unreadNotifications={stats?.unread_notifications ?? 0}
       />
+
+      {(user.plan === "free" || (remaining <= 2 && remaining > 0)) && (
+        <SubscriptionPitch
+          className="mb-6"
+          variant="compact"
+          planId={user.plan}
+          searchesLimit={limit}
+          searchesUsed={activeCount}
+          isTrial={Boolean(user.is_trial_active)}
+        />
+      )}
 
       <div className="mb-8">
         <h2 className="text-[17px] font-bold text-ink">Новий моніторинг</h2>
@@ -156,6 +171,10 @@ export default function DashboardPage() {
           </Button>
         </Link>
       </div>
+
+      {remaining <= 0 && (
+        <UpgradeOffer className="mb-5 mt-4" title="Ліміт моніторингів вичерпано" compact />
+      )}
 
       <div className="mt-4">
         {loading ? (

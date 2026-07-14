@@ -17,6 +17,8 @@ import {
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { getTelegramBotMention, getTelegramBotUrl } from "@/lib/telegram";
 import { AppPage, AppSection, AppStatCard, AppStatGrid } from "@/components/layout/AppPage";
+import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
+import { getPricingPlan, formatPlanPrice, planMonitorLimit } from "@/lib/plan-catalog";
 import type { DashboardStats, Subscription } from "@/types/api";
 
 export default function AccountPage() {
@@ -293,11 +295,26 @@ export default function AccountPage() {
               <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">Тариф</div>
               <div className="mt-1 text-[20px] font-black text-ink">{planLabel}</div>
               {subscription?.is_trial_active && (
-                <div className="mt-1 text-[12px] text-emerald-dark">Trial · 3 дні безкоштовно</div>
+                <div className="mt-1 text-[12px] text-emerald-dark">Trial · обмежений безкоштовний доступ</div>
+              )}
+              {user.plan !== "free" && subscription?.plan_expires_at && (
+                <div className="mt-1 text-[12px] text-muted">
+                  Доступ до{" "}
+                  {new Date(subscription.plan_expires_at).toLocaleDateString("uk-UA", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                  {subscription.recurring_active ? " · автопродовження увімкнено" : ""}
+                </div>
               )}
             </div>
-            <Badge variant="emerald"><IconZap size={10} className="mr-1" />Активний</Badge>
+            <Badge variant="emerald">
+              <IconZap size={10} className="mr-1" />
+              {user.plan === "free" ? "Free" : "Активний"}
+            </Badge>
           </div>
+
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {[
               [String(user.searches_limit), "запитів"],
@@ -310,13 +327,92 @@ export default function AccountPage() {
               </div>
             ))}
           </div>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Link href="/app/billing">
-              <Button variant="primary" size="md" className="gap-1.5"><IconCreditCard size={13} /> Підписка</Button>
-            </Link>
-            <Link href="/pricing"><Button variant="secondary" size="md">Тарифи</Button></Link>
-          </div>
+
+          {(() => {
+            const meta = getPricingPlan(user.plan);
+            const features = meta?.features?.slice(0, 4) ?? [];
+            if (features.length === 0) return null;
+            return (
+              <ul className="mt-4 space-y-1.5">
+                {features.map(f => (
+                  <li key={f} className="flex gap-2 text-[12px] text-muted">
+                    <span className="mt-0.5 text-emerald-dark">✓</span>
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+
+          {user.plan === "free" ? (
+            <div className="mt-5 space-y-3">
+              <Link
+                href="/app/billing"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald px-5 py-4 text-[16px] font-black text-white shadow-lg shadow-emerald/25 transition hover:bg-emerald-dark"
+              >
+                <IconCreditCard size={18} />
+                Оформити підписку
+              </Link>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {(
+                  [
+                    ["lite", "Старт", "10 пошуків"],
+                    ["standard", "Про", "30 пошуків"],
+                    ["pro", "Бізнес", "100 пошуків"],
+                  ] as const
+                ).map(([id, name, slots]) => (
+                  <Link
+                    key={id}
+                    href="/app/billing"
+                    className="rounded-xl border border-border/70 bg-surface px-3 py-2.5 text-center transition hover:border-emerald/40"
+                  >
+                    <div className="text-[12px] font-bold text-ink">{name}</div>
+                    <div className="mt-0.5 text-[13px] font-black text-emerald-dark">
+                      {formatPlanPrice(id)}
+                    </div>
+                    <div className="text-[10px] text-muted">{slots}</div>
+                  </Link>
+                ))}
+              </div>
+              <p className="text-center text-[12px] text-muted">
+                Оплата карткою через LiqPay · скасування в будь-який момент
+              </p>
+            </div>
+          ) : (
+            <div className="mt-5 space-y-3">
+              <div className="flex flex-wrap gap-3">
+                <Link href="/app/billing">
+                  <Button variant="emerald" size="md" className="gap-1.5">
+                    <IconCreditCard size={13} /> Змінити тариф
+                  </Button>
+                </Link>
+                <Link href="/pricing">
+                  <Button variant="secondary" size="md">
+                    Порівняти тарифи
+                  </Button>
+                </Link>
+              </div>
+              {user.plan !== "pro" && (
+                <p className="text-[12px] text-muted">
+                  Потрібно більше слотів? Наступний рівень — до{" "}
+                  {planMonitorLimit(user.plan === "lite" ? "standard" : "pro")} моніторингів. При
+                  апгрейді залишок поточного періоду зараховується в доплату.
+                </p>
+              )}
+            </div>
+          )}
         </AppSection>
+
+        {user.plan !== "free" && user.plan !== "pro" && (
+          <SubscriptionPitch
+            className="mt-1"
+            variant="banner"
+            planId={user.plan}
+            searchesLimit={user.searches_limit}
+            searchesUsed={stats?.active_searches ?? 0}
+            isTrial={Boolean(subscription?.is_trial_active)}
+          />
+        )}
 
         <AppSection className="!bg-white">
           <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">

@@ -9,15 +9,17 @@ import { primaryNav, secondaryNav, type NavBadgeKey } from "@/lib/dashboard-nav"
 import { FAVORITES_CHANGED_EVENT } from "@/hooks/useListingFavorite";
 import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notifications-events";
 import { notifications as notificationsApi, favorites as favoritesApi, searches as searchesApi } from "@/lib/api";
+import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 
 type Props = {
   searchesUsed: number;
   searchesLimit: number;
+  planId: string;
+  isTrial?: boolean;
 };
 
-export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
+export function DashboardSidebar({ searchesUsed, searchesLimit, planId, isTrial }: Props) {
   const pathname = usePathname();
-  const pct = searchesLimit > 0 ? Math.round((searchesUsed / searchesLimit) * 100) : 0;
   const [badges, setBadges] = useState<Record<NavBadgeKey, number>>({
     favorites: 0,
     notifications: 0,
@@ -114,26 +116,13 @@ export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
         </nav>
 
         <div className="border-t border-border/50 p-4">
-          <div className="rounded-2xl bg-surface p-4">
-            <div className="mb-2 flex justify-between text-[12px]">
-              <span className="text-muted">Запити</span>
-              <span className="font-semibold text-ink">
-                {searchesUsed}/{searchesLimit}
-              </span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-border">
-              <div
-                className="h-full rounded-full bg-emerald transition-all"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <Link
-              href="/app/billing"
-              className="mt-3 block text-[11px] font-semibold text-emerald-dark hover:underline"
-            >
-              Збільшити ліміт →
-            </Link>
-          </div>
+          <SubscriptionPitch
+            variant="sidebar"
+            planId={planId}
+            searchesLimit={searchesLimit}
+            searchesUsed={searchesUsed}
+            isTrial={isTrial}
+          />
         </div>
       </div>
     </aside>
