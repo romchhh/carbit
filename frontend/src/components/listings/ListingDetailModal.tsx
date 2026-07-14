@@ -621,7 +621,7 @@ export function ListingDetailModal({
                 className={index === 0 ? "flex-1 sm:min-w-[240px]" : "sm:w-auto"}
               >
                 <Button
-                  variant={index === 0 ? "emerald" : "outline"}
+                  variant={index === 0 ? "emerald" : "secondary"}
                   size="lg"
                   className={cn(
                     "w-full gap-2 py-3 text-[15px] font-bold",

@@ -252,7 +252,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               {listingSourceLinks(listing).map((link, index) => (
                 <a key={`${link.source}-${link.url}-m`} href={link.url} target="_blank" rel="noopener noreferrer">
                   <Button
-                    variant={index === 0 ? "emerald" : "outline"}
+                    variant={index === 0 ? "emerald" : "secondary"}
                     size="lg"
                     className="w-full gap-2 py-3 text-[15px] font-bold"
                   >
@@ -359,7 +359,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               {listingSourceLinks(listing).map((link, index) => (
                 <a key={`${link.source}-${link.url}-d`} href={link.url} target="_blank" rel="noopener noreferrer">
                   <Button
-                    variant={index === 0 ? "emerald" : "outline"}
+                    variant={index === 0 ? "emerald" : "secondary"}
                     size="lg"
                     className="w-full gap-2 py-3 text-[15px] font-bold"
                   >
