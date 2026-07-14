@@ -100,7 +100,9 @@ export function FilterOptionsPopover({
                   onClick={() => select("")}
                   className={cn(
                     "block w-full px-4 py-2.5 text-left text-[14px] transition-colors hover:bg-surface",
-                    !value ? "font-semibold text-emerald-dark" : "text-muted",
+                    !value || value === emptyLabel
+                      ? "font-semibold text-emerald-dark"
+                      : "text-muted",
                   )}
                 >
                   {emptyLabel}

@@ -41,6 +41,7 @@ class ResetPasswordRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    remember: bool = True
 
 
 class TelegramLoginRequest(BaseModel):

@@ -4,12 +4,11 @@ from typing import Optional
 import bcrypt
 from jose import jwt, JWTError
 from fastapi import Cookie, Depends, HTTPException, Query, Request, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.auth_cookies import ADMIN_COOKIE_NAME, AUTH_COOKIE_NAME
 from app.core.config import settings
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 optional_bearer = HTTPBearer(auto_error=False)
 
 
@@ -34,7 +33,14 @@ def _extract_bearer_or_cookie(
     return None
 
 
-async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> str:
+async def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer),
+    cookie_token: str | None = Cookie(None, alias=AUTH_COOKIE_NAME),
+) -> str:
+    """Accept Bearer OR HttpOnly cookie — same session for middleware and API."""
+    token = _extract_bearer_or_cookie(credentials, cookie_token)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
         return _decode_user_id(token)
     except JWTError:
@@ -79,9 +85,6 @@ def create_admin_token(expires_delta: Optional[timedelta] = None) -> str:
     )
 
 
-admin_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/admin/auth/login")
-
-
 def _decode_admin(token: str) -> str:
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     if payload.get("role") != "admin":
@@ -89,7 +92,14 @@ def _decode_admin(token: str) -> str:
     return payload.get("sub", "admin")
 
 
-async def get_current_admin(token: str = Depends(admin_oauth2_scheme)) -> str:
+async def get_current_admin(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer),
+    cookie_token: str | None = Cookie(None, alias=ADMIN_COOKIE_NAME),
+) -> str:
+    """Accept Bearer OR HttpOnly admin cookie."""
+    token = _extract_bearer_or_cookie(credentials, cookie_token)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
         return _decode_admin(token)
     except JWTError:

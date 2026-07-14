@@ -9,10 +9,18 @@ interface AdminAuthContextValue {
   isAuthenticated: boolean;
   isReady: boolean;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
+
+async function clearServerAdminSession() {
+  try {
+    await adminApi.logout();
+  } catch {
+    /* ignore */
+  }
+}
 
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -20,8 +28,27 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    setIsAuthenticated(!!getAdminToken());
-    setIsReady(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        await adminApi.me();
+        if (!cancelled) setIsAuthenticated(true);
+      } catch (err) {
+        if (err instanceof AdminApiError && (err.status === 401 || err.status === 403)) {
+          await clearServerAdminSession();
+          clearAdminToken();
+          if (!cancelled) setIsAuthenticated(false);
+        } else {
+          // Мережева помилка — не викидаємо з сесії лише через storage
+          if (!cancelled) setIsAuthenticated(!!getAdminToken());
+        }
+      } finally {
+        if (!cancelled) setIsReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
@@ -31,7 +58,8 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/admin");
   }, [router]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await clearServerAdminSession();
     clearAdminToken();
     setIsAuthenticated(false);
     router.push("/admin/login");

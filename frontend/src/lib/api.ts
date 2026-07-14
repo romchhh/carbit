@@ -75,8 +75,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────
 export const auth = {
-  login: (body: { email: string; password: string }) =>
+  login: (body: { email: string; password: string; remember?: boolean }) =>
     request<TokenResponse>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+  logout: () =>
+    request<{ message: string }>("/auth/logout", { method: "POST" }),
   oauthExchange: (code: string) =>
     request<TokenResponse>("/auth/oauth/exchange", {
       method: "POST",

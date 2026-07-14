@@ -172,7 +172,7 @@ export function SearchPreviewResults({
             <p className="text-[15px] font-semibold text-ink">На цьому ряду порожньо</p>
             <p className="mt-2 text-[13px] text-muted">
               {freshness === "new"
-                ? "Вимкніть «Тільки свіжі» або підключіть моніторинг — свиснемо, коли з’явиться нове."
+                ? "Увімкніть «Шукати всі» або підключіть моніторинг — свиснемо, коли з’явиться нове."
                 : "Підключіть моніторинг — напишемо в Telegram, щойно хтось виставить цікаве."}
             </p>
           </div>
@@ -211,18 +211,18 @@ export function SearchPreviewResults({
                 type="button"
                 onClick={onLoadMore}
                 disabled={loadingMore || searching}
-                className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[13px] font-semibold text-muted transition-colors hover:border-ink/20 hover:text-ink disabled:opacity-60"
+                className="mt-6 w-full rounded-2xl bg-emerald py-3.5 text-[14px] font-semibold text-white shadow-md shadow-emerald/25 transition-colors hover:bg-emerald-dark disabled:opacity-60"
               >
                 {loadingMore ? (
-                  "Йдемо далі по ряду…"
+                  "Завантаження…"
                 ) : (
                   <span className="inline-flex items-center justify-center gap-1.5">
-                    <span>Ще поторгуватись</span>
+                    <span>Показати ще</span>
                     {nextBatch > 0 && (
-                      <span className="font-bold text-emerald">+{nextBatch}</span>
+                      <span className="font-bold">+{nextBatch}</span>
                     )}
                     {total > 0 && (
-                      <span>
+                      <span className="font-medium text-white/80">
                         · {results.length} з {total.toLocaleString("uk-UA")}
                       </span>
                     )}

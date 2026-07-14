@@ -5,6 +5,10 @@ export function OperatorRequisites() {
         <strong className="text-ink">Суб&apos;єкт:</strong> ФОП Білоус Олександр Володимирович
       </li>
       <li>
+        <strong className="text-ink">Юридична адреса:</strong>{" "}
+        02055, м. Київ, вул. Урлівська, 20, кв. 79
+      </li>
+      <li>
         <strong className="text-ink">Код отримувача:</strong> 3016616759
       </li>
       <li>

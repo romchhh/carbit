@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { billing as billingApi, ApiError } from "@/lib/api";
@@ -98,7 +99,11 @@ export default function BillingPage() {
       </div>
 
       <p className="mt-6 text-center text-[12px] text-muted">
-        Оплата через LiqPay / Mono Pay — незабаром. Зараз платний план активує підтримка після оплати.
+        Оплата через LiqPay — увімкнемо після модерації. Зараз платний план активує підтримка після оплати (див.{" "}
+        <Link href="/payment" className="text-emerald-dark underline">
+          Оплата і повернення
+        </Link>
+        ).
       </p>
     </AppPage>
   );

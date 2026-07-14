@@ -232,7 +232,10 @@ const sections = [
             Email: <a href="mailto:info@13vplus.com">info@13vplus.com</a>
           </li>
           <li>
-            Умови використання: <a href="/terms">carbit.telebots.site/terms</a>
+            Умови використання: <a href="/terms">carbit.info/terms</a>
+          </li>
+          <li>
+            Оплата і повернення: <a href="/payment">carbit.info/payment</a>
           </li>
         </ul>
         <p className="mt-3">Реквізити ФОП:</p>

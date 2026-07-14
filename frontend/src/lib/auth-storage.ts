@@ -2,7 +2,11 @@ const TOKEN_KEY = "autoradar_token";
 const REMEMBER_ME_KEY = "autoradar_remember_me";
 const SAVED_EMAIL_KEY = "autoradar_saved_email";
 
-/** Auth cookie is HttpOnly (set by API). JS only keeps a copy for Bearer headers. */
+/**
+ * JS copy of JWT for Authorization Bearer.
+ * Справжня сесія — HttpOnly cookie (ставиться/знімається тільки API).
+ * Не намагаємось чистити HttpOnly з JS — для цього є POST /auth/logout.
+ */
 
 export function setToken(token: string, remember = true) {
   localStorage.removeItem(TOKEN_KEY);
@@ -25,8 +29,6 @@ export function getToken(): string | null {
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
-  // Best-effort clear of legacy non-HttpOnly cookie if present
-  document.cookie = "autoradar_token=; path=/; max-age=0";
 }
 
 export function saveLoginCredentials(email: string, remember: boolean) {

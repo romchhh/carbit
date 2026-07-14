@@ -1,6 +1,6 @@
 const ADMIN_TOKEN_KEY = "autoradar_admin_token";
 
-/** Admin cookie is HttpOnly (set by API). */
+/** JS copy for Bearer. HttpOnly cookie знімається лише через POST /admin/auth/logout. */
 
 export function setAdminToken(token: string) {
   localStorage.setItem(ADMIN_TOKEN_KEY, token);
@@ -13,5 +13,4 @@ export function getAdminToken(): string | null {
 
 export function clearAdminToken() {
   localStorage.removeItem(ADMIN_TOKEN_KEY);
-  document.cookie = "autoradar_admin_token=; path=/; max-age=0";
 }

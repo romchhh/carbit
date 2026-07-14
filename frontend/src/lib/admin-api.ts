@@ -69,6 +69,9 @@ export const adminApi = {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
+  logout: () =>
+    request<{ message: string }>("/admin/auth/logout", { method: "POST" }),
+  me: () => request<{ ok: boolean; role: string }>("/admin/auth/me"),
   dashboard: () => request<AdminDashboard>("/admin/dashboard"),
   users: (page = 1, search = "", plan = "") => {
     const params = new URLSearchParams({ page: String(page), per_page: "20" });

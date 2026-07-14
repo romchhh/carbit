@@ -11,11 +11,12 @@ import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
 import { UKRAINE_REGIONS } from "@/lib/search-data/regions";
 import {
   CATEGORY_OPTIONS,
-  DEFAULT_FILTERS,
   DEFAULT_PRICE_BY_CURRENCY,
   PRICE_CURRENCY_OPTIONS,
   VEHICLE_TYPE_OPTIONS,
+  YEAR_PLACEHOLDERS,
   formatPriceInput,
+  formatYearInput,
   type SearchFilterState,
 } from "@/lib/search-catalog";
 import type { SearchFreshness } from "@/lib/search-preview";
@@ -80,7 +81,7 @@ export function SearchFiltersPanel({
       ? `${filters.brand} ${filters.model}`
       : filters.brand || "";
 
-  const onlyNew = freshness === "new";
+  const searchAll = freshness === "all";
 
   return (
     <div className={cn("w-full", wide ? "max-w-none" : "max-w-[640px]")} data-tour="search-filters">
@@ -150,9 +151,9 @@ export function SearchFiltersPanel({
               from={filters.yearFrom}
               to={filters.yearTo}
               onChange={(yearFrom, yearTo) => update({ yearFrom, yearTo })}
-              format={v => v.replace(/[^\d]/g, "").slice(0, 4)}
-              placeholderFrom={DEFAULT_FILTERS.yearFrom}
-              placeholderTo={DEFAULT_FILTERS.yearTo}
+              format={formatYearInput}
+              placeholderFrom={YEAR_PLACEHOLDERS.from}
+              placeholderTo={YEAR_PLACEHOLDERS.to}
             />
             <FilterRangePopover
               label="Ціна"
@@ -172,11 +173,10 @@ export function SearchFiltersPanel({
               }))}
               onCurrencyChange={value => {
                 const next = resolveDisplayCurrency(value) as DisplayCurrency;
-                const defaults = DEFAULT_PRICE_BY_CURRENCY[next];
                 update({
                   currency: next,
-                  priceFrom: defaults.from,
-                  priceTo: defaults.to,
+                  priceFrom: "",
+                  priceTo: "",
                 });
               }}
             />
@@ -184,11 +184,20 @@ export function SearchFiltersPanel({
 
           <FilterOptionsPopover
             label="Регіон"
-            value={filters.region === "Вся Україна" ? "" : filters.region}
+            value={
+              !filters.region || filters.region === "Вся Україна"
+                ? "Всі регіони"
+                : filters.region
+            }
             options={[...UKRAINE_REGIONS.filter(r => r !== "Вся Україна")]}
-            onChange={region => update({ region: region || "Вся Україна" })}
+            onChange={region =>
+              update({
+                region:
+                  !region || region === "Всі регіони" ? "Вся Україна" : region,
+              })
+            }
             searchable
-            emptyLabel="Вся Україна"
+            emptyLabel="Всі регіони"
           />
         </div>
 
@@ -237,30 +246,27 @@ export function SearchFiltersPanel({
           <div
             className={cn(
               "flex items-center justify-between gap-4 rounded-2xl border px-4 py-3.5 transition-colors",
-              onlyNew
+              searchAll
                 ? "border-emerald/30 bg-emerald/5"
                 : "border-border/80 bg-surface/50",
             )}
           >
             <div className="min-w-0">
               <p className="text-[14px] font-bold text-ink">
-                {onlyNew ? "Тільки свіжі" : "Шукати всі"}
-              </p>
-              <p className="mt-0.5 text-[12px] leading-snug text-muted">
-                {onlyNew
-                  ? "Лише оголошення за останні 7 днів"
-                  : "Увесь ринок без обмеження по даті"}
+                {searchAll
+                  ? "Шукати всі / Увесь ринок без обмеження по даті"
+                  : "Тільки свіжі / Лише оголошення за останні 7 днів"}
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
               <IosToggle
-                checked={onlyNew}
+                checked={searchAll}
                 disabled={searching}
-                aria-label="Тільки нові оголошення"
-                onChange={checked => onFreshnessChange(checked ? "new" : "all")}
+                aria-label="Шукати всі оголошення без обмеження по даті"
+                onChange={checked => onFreshnessChange(checked ? "all" : "new")}
               />
               <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
-                {onlyNew ? "вкл" : "викл"}
+                {searchAll ? "вкл" : "викл"}
               </span>
             </div>
           </div>

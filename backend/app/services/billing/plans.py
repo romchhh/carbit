@@ -6,46 +6,77 @@ PLANS: dict[str, dict] = {
     "free": {
         "id": "free",
         "name": "Безкоштовно",
-        "description": "Для ознайомлення з сервісом",
+        "description": "Пробний доступ на 7 днів",
         "searches_limit": 1,
+        "accounts_limit": 1,
         "requests_month": 1_000,
         "requests_hour": 30,
         "price_uah": 0,
-        "features": ["1 пошуковий запит", "Telegram-сповіщення", "3 дні trial Pro (ліміт пошуків Pro)"],
+        "period_days": 7,
+        "features": [
+            "Пробний період 7 днів",
+            "До 1 активного моніторингу",
+            "1 акаунт",
+            "Веб-кабінет і сповіщення",
+        ],
     },
     "lite": {
         "id": "lite",
-        "name": "Lite",
-        "description": "Для перекупників-початківців",
-        "searches_limit": 3,
-        "requests_month": 20_000,
+        "name": "Старт",
+        "description": "До 10 активних моніторингів, 1 акаунт",
+        "searches_limit": 10,
+        "accounts_limit": 1,
+        "requests_month": 50_000,
         "requests_hour": 2_000,
-        "price_uah": 500,
-        "features": ["3 пошукові запити", "Швидкі сповіщення", "Ризик-оцінка"],
+        "price_uah": 390,
+        "period_days": 30,
+        "features": [
+            "30 днів доступу",
+            "До 10 активних моніторингів",
+            "1 акаунт",
+            "Telegram-сповіщення",
+            "Веб-кабінет",
+        ],
     },
     "standard": {
         "id": "standard",
-        "name": "Стандарт",
-        "description": "Для підбору одного авто",
-        "searches_limit": 10,
-        "requests_month": 100_000,
+        "name": "Про",
+        "description": "До 30 активних моніторингів, до 3 акаунтів",
+        "searches_limit": 30,
+        "accounts_limit": 3,
+        "requests_month": 150_000,
         "requests_hour": 5_000,
-        "price_uah": 2_000,
-        "features": ["10 пошукових запитів", "Пріоритетні сповіщення", "Експорт CSV"],
+        "price_uah": 790,
+        "period_days": 30,
+        "features": [
+            "30 днів доступу",
+            "До 30 активних моніторингів",
+            "До 3 акаунтів",
+            "Telegram-сповіщення",
+            "Анти-дубль оголошень",
+        ],
     },
     "pro": {
         "id": "pro",
-        "name": "Pro",
-        "description": "Для професійних підбірників",
-        "searches_limit": 50,
+        "name": "Бізнес",
+        "description": "До 100 активних моніторингів, до 5 акаунтів",
+        "searches_limit": 100,
+        "accounts_limit": 5,
         "requests_month": 500_000,
         "requests_hour": 10_000,
-        "price_uah": 6_000,
-        "features": ["50 пошукових запитів", "Миттєві сповіщення", "API доступ (незабаром)"],
+        "price_uah": 1_790,
+        "period_days": 30,
+        "features": [
+            "30 днів доступу",
+            "До 100 активних моніторингів",
+            "До 5 акаунтів",
+            "Telegram-сповіщення",
+            "Пріоритетна обробка пошуків",
+        ],
     },
 }
 
-TRIAL_PLAN_ID = "pro"
+TRIAL_PLAN_ID = "lite"
 
 
 def get_plan(plan_id: str) -> dict:
@@ -57,7 +88,7 @@ def list_plans() -> list[dict]:
 
 
 def effective_searches_limit(user) -> int:
-    """Ліміт пошуків з урахуванням активного trial Pro і expiry платного плану."""
+    """Ліміт пошуків з урахуванням активного trial і expiry платного плану."""
     if enforce_plan_expiry(user):
         pass
     if getattr(user, "is_trial_active", False) and user.plan.value == "free":
@@ -90,4 +121,5 @@ def activate_plan(user, plan_id: str) -> None:
     if plan_id == "free":
         user.plan_expires_at = None
     else:
-        user.plan_expires_at = now_kyiv() + timedelta(days=30)
+        days = int(PLANS[plan_id].get("period_days") or 30)
+        user.plan_expires_at = now_kyiv() + timedelta(days=days)

@@ -2,13 +2,12 @@ import logging
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.auth_cookies import attach_auth_cookie
+from app.core.auth_cookies import AUTH_COOKIE_MAX_AGE, attach_auth_cookie, clear_auth_cookie
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token, get_current_user_id, get_current_user_id_flexible
@@ -142,7 +141,16 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
 
-    return token_json_response(create_access_token(user.id))
+    max_age = AUTH_COOKIE_MAX_AGE if body.remember else None
+    return token_json_response(create_access_token(user.id), max_age=max_age)
+
+
+@router.post("/logout", response_model=MessageResponse)
+async def logout():
+    """Знімає HttpOnly cookie — єдиний спосіб коректно вийти з сесії."""
+    response = JSONResponse(content={"message": "ok"})
+    clear_auth_cookie(response)
+    return response
 
 
 class OAuthExchangeRequest(BaseModel):

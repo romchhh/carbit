@@ -75,6 +75,9 @@ export const DEFAULT_PRICE_BY_CURRENCY = {
   UAH: { from: "400 000", to: "900 000" },
 } as const;
 
+/** Підказки для placeholder — не підставляються як значення фільтра. */
+export const YEAR_PLACEHOLDERS = { from: "2018", to: "2024" } as const;
+
 export const DEFAULT_FILTERS: SearchFilterState = {
   name: "",
   category: "all",
@@ -82,10 +85,10 @@ export const DEFAULT_FILTERS: SearchFilterState = {
   region: "м. Київ",
   brand: "",
   model: "",
-  yearFrom: "2018",
-  yearTo: "2024",
-  priceFrom: DEFAULT_PRICE_BY_CURRENCY.USD.from,
-  priceTo: DEFAULT_PRICE_BY_CURRENCY.USD.to,
+  yearFrom: "",
+  yearTo: "",
+  priceFrom: "",
+  priceTo: "",
   currency: "USD",
   mileageFrom: "",
   mileageTo: "",
@@ -145,9 +148,15 @@ export function parseThousandsKm(value: string): number | null {
 }
 
 export function formatPriceInput(value: string): string {
-  const num = parseNumberInput(value);
-  if (num == null) return value.replace(/[^\d]/g, "");
+  const digits = value.replace(/[^\d]/g, "");
+  if (!digits) return "";
+  const num = Number(digits);
+  if (!Number.isFinite(num)) return digits;
   return num.toLocaleString("uk-UA");
+}
+
+export function formatYearInput(value: string): string {
+  return value.replace(/[^\d]/g, "").slice(0, 4);
 }
 
 function regionMatches(listingRegion: string, filterRegion: string): boolean {

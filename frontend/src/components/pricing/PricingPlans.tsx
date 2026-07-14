@@ -19,7 +19,7 @@ export function PricingPlans({ variant = "page" }: PricingPlansProps) {
           : "grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6",
       )}
     >
-      {PRICING_PLANS.map(({ name, price, period, features, missing, cta, href, accent, popular }) => (
+      {PRICING_PLANS.map(({ name, description, price, period, features, missing, cta, href, accent, popular }) => (
         <article
           key={name}
           className={cn(
@@ -47,6 +47,10 @@ export function PricingPlans({ variant = "page" }: PricingPlansProps) {
             {name}
           </h3>
 
+          <p className={cn("mt-2 text-[12px] leading-snug", isHome ? "line-clamp-2" : "text-[13px]", accent ? "text-white/55" : "text-muted")}>
+            {description}
+          </p>
+
           <div className={cn("flex items-end gap-1.5", isHome ? "mt-3" : "mt-5")}>
             <span
               className={cn(
@@ -57,8 +61,10 @@ export function PricingPlans({ variant = "page" }: PricingPlansProps) {
             >
               {price}
             </span>
-            {price !== "0" && !isHome && (
-              <span className={cn("pb-2 text-[15px] font-medium", accent ? "text-white/40" : "text-muted")}>грн</span>
+            {price !== "0" && (
+              <span className={cn("pb-1 text-[13px] font-medium sm:pb-2 sm:text-[15px]", accent ? "text-white/40" : "text-muted")}>
+                грн
+              </span>
             )}
           </div>
 

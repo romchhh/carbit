@@ -60,8 +60,9 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:3000",
-        "https://carbit.telebots.site",
         "https://carbit.info",
+        "https://www.carbit.info",
+        "https://carbit.telebots.site",
     ]
 
     # Email (Resend)

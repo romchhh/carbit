@@ -1,10 +1,29 @@
 import Link from "next/link";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
+import { LiqPayLogo } from "@/components/brand/LiqPayLogo";
+import { SUPPORT_EMAIL } from "@/lib/pricing-plans";
 
 const columns = [
-  { title: "Продукт", links: [{ label: "Пошук", href: "/app/search" }, { label: "Тарифи", href: "/pricing" }, { label: "API", href: "#" }] },
-  { title: "Компанія", links: [{ label: "Про нас", href: "#" }, { label: "Блог", href: "#" }, { label: "Контакти", href: "#" }] },
-  { title: "Підтримка", links: [{ label: "Довідка", href: "#" }, { label: "Документація", href: "#" }, { label: "Статус", href: "#" }] },
+  {
+    title: "Продукт",
+    links: [
+      { label: "Пошук", href: "/app/search" },
+      { label: "Тарифи", href: "/pricing" },
+      { label: "Оплата і повернення", href: "/payment" },
+    ],
+  },
+  {
+    title: "Документи",
+    links: [
+      { label: "Умови використання", href: "/terms" },
+      { label: "Конфіденційність", href: "/privacy" },
+      { label: "Оплата і повернення", href: "/payment" },
+    ],
+  },
+  {
+    title: "Підтримка",
+    links: [{ label: SUPPORT_EMAIL, href: `mailto:${SUPPORT_EMAIL}` }],
+  },
 ];
 
 export function Footer() {
@@ -18,6 +37,23 @@ export function Footer() {
           <p className="mt-3 text-[12px] text-white/50 leading-snug max-w-[280px] sm:max-w-none">
             Агрегатор оголошень авторинку України для перекупників та підбірників.
           </p>
+          <p className="mt-3 text-[11px] text-white/40 leading-snug max-w-[280px] sm:max-w-none">
+            ФОП Білоус О. В.
+            <br />
+            02055, м. Київ, вул. Урлівська, 20, кв. 79
+          </p>
+          <div className="mt-4 flex flex-col items-center gap-2 sm:items-start">
+            <span className="text-[10px] uppercase tracking-wider text-white/35">Оплата через</span>
+            <a
+              href="https://www.liqpay.ua"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="LiqPay"
+              className="opacity-90 transition-opacity hover:opacity-100"
+            >
+              <LiqPayLogo variant="white" height={22} />
+            </a>
+          </div>
         </div>
         {columns.map(({ title, links }) => (
           <div key={title} className="flex flex-col items-center sm:items-start">
@@ -37,7 +73,10 @@ export function Footer() {
       <div className="border-t border-white/10">
         <div className="max-w-[1280px] mx-auto px-5 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span className="text-[12px] text-white/40">© 2026 Carbit</span>
-          <div className="flex gap-4 text-[12px] text-white/40">
+          <div className="flex flex-wrap justify-center gap-4 text-[12px] text-white/40">
+            <Link href="/payment" className="hover:text-white transition-colors">
+              Оплата і повернення
+            </Link>
             <Link href="/terms" className="hover:text-white transition-colors">
               Умови використання
             </Link>

@@ -8,11 +8,12 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 
-from app.core.auth_cookies import attach_admin_cookie
+from app.core.auth_cookies import attach_admin_cookie, clear_admin_cookie
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_admin_token, get_current_admin, get_current_admin_flexible
 from app.models.models import User, SearchQuery, Notification, Favorite, PlanTier
+from app.schemas.schemas import MessageResponse
 from app.services.billing.plans import PLANS, get_plan, activate_plan
 from app.services.billing.notify import notify_plan_activated
 from app.services.rate_limit import client_ip, enforce_rate_limit
@@ -128,6 +129,19 @@ async def admin_login(body: AdminLoginRequest, request: Request):
     response = JSONResponse(content={"access_token": token, "token_type": "bearer"})
     attach_admin_cookie(response, token)
     return response
+
+
+@router.post("/auth/logout", response_model=MessageResponse)
+async def admin_logout():
+    response = JSONResponse(content={"message": "ok"})
+    clear_admin_cookie(response)
+    return response
+
+
+@router.get("/auth/me")
+async def admin_me(_: str = Depends(get_current_admin)):
+    """Перевірка живої admin-сесії (Bearer або cookie)."""
+    return {"ok": True, "role": "admin"}
 
 
 @router.get("/dashboard", response_model=AdminDashboardOut)

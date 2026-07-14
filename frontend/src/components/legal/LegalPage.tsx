@@ -55,6 +55,9 @@ export function LegalPage({ title, subtitle, updated, sections }: LegalPageProps
               <a href="mailto:info@13vplus.com">info@13vplus.com</a>
             </p>
             <div className="flex gap-4 text-[13px]">
+              <Link href="/payment" className="text-ink font-medium hover:text-emerald-dark transition-colors">
+                Оплата
+              </Link>
               <Link href="/terms" className="text-ink font-medium hover:text-emerald-dark transition-colors">
                 Умови
               </Link>

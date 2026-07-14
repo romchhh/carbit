@@ -40,7 +40,7 @@ git push
 
 
 
-Ось покрокова інструкція для оновлення **carbit.telebots.site** (або будь-якого production-сервера).
+Ось покрокова інструкція для оновлення **carbit.info** (або будь-якого production-сервера).
 
 ## 1. Підключення до сервера
 
@@ -66,9 +66,9 @@ git pull
 Мінімум для поточної версії:
 
 ```env
-FRONTEND_URL=https://carbit.telebots.site
+FRONTEND_URL=https://carbit.info
 NEXT_PUBLIC_API_URL=/api/v1
-GOOGLE_REDIRECT_URI=https://carbit.telebots.site/api/v1/auth/google/callback
+GOOGLE_REDIRECT_URI=https://carbit.info/api/v1/auth/google/callback
 
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_BOT_USERNAME=Car_Bit_Bot

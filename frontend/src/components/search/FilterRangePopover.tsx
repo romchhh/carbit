@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { FilterRow } from "@/components/search/FilterRow";
+import { FormattedNumberInput } from "@/components/search/FormattedNumberInput";
 import { cn } from "@/lib/utils";
 
 type CurrencyOption = { value: string; label: string };
@@ -56,14 +57,6 @@ export function FilterRangePopover({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const handleFrom = (value: string) => {
-    onChange(format ? format(value) : value, to);
-  };
-
-  const handleTo = (value: string) => {
-    onChange(from, format ? format(value) : value);
-  };
-
   const display = displayRange(from, to, suffix);
 
   return (
@@ -97,21 +90,21 @@ export function FilterRangePopover({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <input
+            <FormattedNumberInput
               value={from}
-              onChange={e => handleFrom(e.target.value)}
+              onChange={next => onChange(next, to)}
+              format={format}
               placeholder={placeholderFrom}
               className="input-field"
-              inputMode="numeric"
               autoFocus
             />
             <span className="text-[12px] text-muted">—</span>
-            <input
+            <FormattedNumberInput
               value={to}
-              onChange={e => handleTo(e.target.value)}
+              onChange={next => onChange(from, next)}
+              format={format}
               placeholder={placeholderTo}
               className="input-field"
-              inputMode="numeric"
             />
           </div>
           <button

@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { useRouter } from "next/navigation";
 import * as api from "@/lib/api";
 import { ApiError } from "@/lib/api";
-import { clearToken, getToken, saveLoginCredentials, setToken } from "@/lib/auth-storage";
+import { clearToken, getRememberMePreference, saveLoginCredentials, setToken } from "@/lib/auth-storage";
 import { markOnboardingPending } from "@/lib/onboarding";
 import type { User } from "@/types/api";
 
@@ -16,7 +16,7 @@ interface AuthContextValue {
   sendRegisterCode: (email: string, name: string, password: string) => Promise<void>;
   verifyRegisterCode: (email: string, code: string) => Promise<void>;
   resendRegisterCode: (email: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (body: { name?: string; preferred_currency?: string }) => Promise<void>;
   loginWithToken: (token: string, remember?: boolean) => Promise<void>;
@@ -26,6 +26,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+async function clearServerSession() {
+  try {
+    await api.auth.logout();
+  } catch {
+    /* cookie може вже бути відсутнім */
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,15 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const refreshUser = useCallback(async () => {
-    if (!getToken()) {
-      setUser(null);
-      return;
-    }
-
+    // Cookie або Bearer — бекенд приймає обидва; не виходимо лише через відсутність localStorage
     try {
       setUser(await api.auth.me());
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
+        await clearServerSession();
         clearToken();
         setUser(null);
       }
@@ -57,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
 
   const login = async (email: string, password: string, remember = true) => {
-    const { access_token } = await api.auth.login({ email, password });
+    const { access_token } = await api.auth.login({ email, password, remember });
     setToken(access_token, remember);
     saveLoginCredentials(email, remember);
     setUser(await api.auth.me());
@@ -78,7 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await api.auth.registerResendCode(email);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await clearServerSession();
     clearToken();
     setUser(null);
     router.push("/auth/login");
@@ -88,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(await api.auth.updateProfile(body));
   };
 
-  const loginWithToken = async (token: string, remember = true) => {
+  const loginWithToken = async (token: string, remember = getRememberMePreference()) => {
     setToken(token, remember);
     setUser(await api.auth.me());
   };

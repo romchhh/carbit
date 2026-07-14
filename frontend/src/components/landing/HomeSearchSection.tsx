@@ -7,15 +7,18 @@ import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { useAuth } from "@/contexts/AuthProvider";
 import { DEFAULT_FILTERS, type SearchFilterState } from "@/lib/search-catalog";
 import { saveSearchDraft } from "@/lib/search-draft";
+import type { SearchFreshness } from "@/lib/search-preview";
 
 export function HomeSearchSection() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [filters, setFilters] = useState<SearchFilterState>({ ...DEFAULT_FILTERS });
+  const [freshness, setFreshness] = useState<SearchFreshness>("all");
   const [authOpen, setAuthOpen] = useState(false);
 
   const handleReset = () => {
     setFilters({ ...DEFAULT_FILTERS });
+    setFreshness("all");
   };
 
   const handleSearch = () => {
@@ -53,6 +56,8 @@ export function HomeSearchSection() {
             onChange={setFilters}
             onReset={handleReset}
             onSearch={handleSearch}
+            freshness={freshness}
+            onFreshnessChange={setFreshness}
           />
         </div>
       </section>
