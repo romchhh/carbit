@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 
 from app.schemas.schemas import PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.mapper import sort_listings
+from app.services.olx.brand_slugs import resolve_olx_brand_slug
 from app.services.olx.client import OlxClient
 from app.services.olx.constants import MAX_DELAY, MIN_DELAY
 from app.services.olx.mapper import filters_to_olx_params, olx_listing_to_listing_out
@@ -27,14 +29,24 @@ from app.services.telegram.admin_alerts import notify_admin_parsing_error
 
 
 def _switch_params_to_text_query(params: OlxSearchParams, filters: SearchFilters) -> OlxSearchParams:
-    """Fallback, коли /brand/model/ на OLX дає 404 → /q-{brand}/ + пост-фільтр."""
+    """Fallback, коли /brand/model/ на OLX дає 404 → /q-{brand}/ або /q-{brand}-{model}/."""
     brand = (filters.brand or "").strip()
-    if not brand:
+    model = (filters.model or "").strip()
+    if not brand and not model:
         return params
-    params.text_query = brand
-    params.brand_label = brand
-    if filters.model:
-        params.model_label = filters.model.strip()
+    brand_q = resolve_olx_brand_slug(brand) if brand else ""
+    if brand_q and model and re.fullmatch(r"\d+[a-z]?", model, re.IGNORECASE):
+        params.text_query = f"{brand_q} {model}"
+    elif brand_q:
+        params.text_query = brand_q
+    elif model:
+        params.text_query = model
+    else:
+        params.text_query = brand
+    if brand:
+        params.brand_label = brand
+    if model:
+        params.model_label = model
     params.brand = None
     params.model = None
     return params
@@ -57,10 +69,26 @@ async def _fetch_olx_search_html(
             and not params.text_query
             and (filters.brand or filters.model)
         ):
+            bad_url = url
             params = _switch_params_to_text_query(params, filters)
             url = build_search_url(params, page=page)
-            html = await client.fetch_html(url)
-            return html, params, url
+            try:
+                html = await client.fetch_html(url)
+                return html, params, url
+            except OlxError as retry_exc:
+                await notify_admin_parsing_error(
+                    source="OLX",
+                    error=f"OLX 404 і після fallback: {retry_exc}",
+                    url=url,
+                    details=f"Перший URL: {bad_url}",
+                )
+                raise
+        if exc.status_code == 404:
+            await notify_admin_parsing_error(
+                source="OLX",
+                error=str(exc),
+                url=url,
+            )
         raise
 
 

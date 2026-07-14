@@ -62,6 +62,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     await clearServerAdminSession();
     clearAdminToken();
     setIsAuthenticated(false);
+    if (typeof window !== "undefined") {
+      window.location.assign("/admin/login");
+      return;
+    }
     router.push("/admin/login");
   }, [router]);
 

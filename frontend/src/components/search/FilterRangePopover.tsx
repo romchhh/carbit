@@ -13,6 +13,9 @@ type Props = {
   to: string;
   onChange: (from: string, to: string) => void;
   format?: (value: string) => string;
+  /** Нормалізація при закритті / «Готово» (swap від↔до, clamp). */
+  normalize?: (from: string, to: string) => { from: string; to: string };
+  hint?: string;
   placeholderFrom?: string;
   placeholderTo?: string;
   suffix?: string;
@@ -35,6 +38,8 @@ export function FilterRangePopover({
   to,
   onChange,
   format,
+  normalize,
+  hint,
   placeholderFrom,
   placeholderTo,
   suffix,
@@ -46,16 +51,41 @@ export function FilterRangePopover({
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [draftFrom, setDraftFrom] = useState(from);
+  const [draftTo, setDraftTo] = useState(to);
+
+  useEffect(() => {
+    if (!open) {
+      setDraftFrom(from);
+      setDraftTo(to);
+    }
+  }, [from, to, open]);
+
+  const commit = (nextFrom = draftFrom, nextTo = draftTo) => {
+    const normalized = normalize
+      ? normalize(nextFrom, nextTo)
+      : { from: nextFrom, to: nextTo };
+    onChange(normalized.from, normalized.to);
+    setDraftFrom(normalized.from);
+    setDraftTo(normalized.to);
+    return normalized;
+  };
+
+  const close = () => {
+    commit();
+    setOpen(false);
+  };
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
+        if (open) close();
       }
     };
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, draftFrom, draftTo, normalize]);
 
   const display = displayRange(from, to, suffix);
 
@@ -91,8 +121,8 @@ export function FilterRangePopover({
           </div>
           <div className="flex items-center gap-2">
             <FormattedNumberInput
-              value={from}
-              onChange={next => onChange(next, to)}
+              value={draftFrom}
+              onChange={setDraftFrom}
               format={format}
               placeholder={placeholderFrom}
               className="input-field"
@@ -100,16 +130,19 @@ export function FilterRangePopover({
             />
             <span className="text-[12px] text-muted">—</span>
             <FormattedNumberInput
-              value={to}
-              onChange={next => onChange(from, next)}
+              value={draftTo}
+              onChange={setDraftTo}
               format={format}
               placeholder={placeholderTo}
               className="input-field"
             />
           </div>
+          {hint && (
+            <p className="mt-2 text-[11px] leading-snug text-muted">{hint}</p>
+          )}
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={close}
             className="mt-3 w-full rounded-full bg-emerald py-2 text-[13px] font-semibold text-white hover:bg-emerald-dark transition-colors"
           >
             Готово

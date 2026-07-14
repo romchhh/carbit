@@ -4,6 +4,8 @@ import { startTransition, useCallback, useRef, useState } from "react";
 import { listingSearch, fx, getApiErrorMessage } from "@/lib/api";
 import {
   DEFAULT_FILTERS,
+  normalizePriceRange,
+  normalizeYearRange,
   type SearchFilterState,
   type SortOption,
 } from "@/lib/search-catalog";
@@ -46,7 +48,16 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
 
   const buildRequestFilters = useCallback(
     (nextFilters: SearchFilterState, nextFreshness: SearchFreshness) => {
-      const payload = toBackendSearchFilters(nextFilters);
+      const years = normalizeYearRange(nextFilters.yearFrom, nextFilters.yearTo);
+      const prices = normalizePriceRange(nextFilters.priceFrom, nextFilters.priceTo);
+      const sanitized: SearchFilterState = {
+        ...nextFilters,
+        yearFrom: years.from,
+        yearTo: years.to,
+        priceFrom: prices.from,
+        priceTo: prices.to,
+      };
+      const payload = toBackendSearchFilters(sanitized);
       if (nextFreshness === "new") {
         payload.published_within_days = SEARCH_NEW_WITHIN_DAYS;
       }
@@ -204,7 +215,17 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
 
   const runSearch = useCallback(
     async (nextFilters: SearchFilterState, nextFreshness: SearchFreshness = freshness) => {
-      await fetchInitial(nextFilters, sort, nextFreshness);
+      const years = normalizeYearRange(nextFilters.yearFrom, nextFilters.yearTo);
+      const prices = normalizePriceRange(nextFilters.priceFrom, nextFilters.priceTo);
+      const sanitized = {
+        ...nextFilters,
+        yearFrom: years.from,
+        yearTo: years.to,
+        priceFrom: prices.from,
+        priceTo: prices.to,
+      };
+      setFilters(sanitized);
+      await fetchInitial(sanitized, sort, nextFreshness);
     },
     [fetchInitial, freshness, sort],
   );

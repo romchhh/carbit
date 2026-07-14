@@ -52,9 +52,12 @@ export function LegalPage({ title, subtitle, updated, sections }: LegalPageProps
           <div className="mt-16 pt-8 border-t border-border/60 flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
             <p className="text-[14px] text-muted">
               Питання? Напишіть на{" "}
-              <a href="mailto:info@13vplus.com">info@13vplus.com</a>
+              <a href="mailto:Carbit.ceo@gmail.com">Carbit.ceo@gmail.com</a>
             </p>
             <div className="flex gap-4 text-[13px]">
+              <Link href="/oferta" className="text-ink font-medium hover:text-emerald-dark transition-colors">
+                Оферта
+              </Link>
               <Link href="/payment" className="text-ink font-medium hover:text-emerald-dark transition-colors">
                 Оплата
               </Link>

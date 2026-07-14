@@ -413,6 +413,10 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
 
               <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
                 Продовжуючи, ви погоджуєтесь з{" "}
+                <Link href="/oferta" className="text-emerald-dark hover:underline" onClick={onClose}>
+                  офертою
+                </Link>
+                {", "}
                 <Link href="/terms" className="text-emerald-dark hover:underline" onClick={onClose}>
                   умовами
                 </Link>{" "}

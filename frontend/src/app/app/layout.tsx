@@ -26,9 +26,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isPublicListing) return;
     if (!initialized || loading || user) return;
+    // Hard redirect — soft replace знову потрапляє під middleware /app і зависає на лоадері
     const redirect = pathname.startsWith("/app") ? pathname : "/app/dashboard";
-    router.replace(`/auth/login?redirect=${encodeURIComponent(redirect)}`);
-  }, [initialized, loading, user, pathname, router, isPublicListing]);
+    window.location.replace(`/auth/login?redirect=${encodeURIComponent(redirect)}`);
+  }, [initialized, loading, user, pathname, isPublicListing]);
 
   useEffect(() => {
     if (isOnboardingRoute) {

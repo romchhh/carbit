@@ -142,7 +142,7 @@ def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
     Рік, пробіг, паливо тощо в query OLX часто ламають SSR — їх фільтруємо
     пост-фільтром у passes_olx_filters(). Сортування та валюта в query працюють.
 
-    Якщо марки немає в taxonomy OLX (Zeekr тощо) — text_query → /q-zeekr-001/.
+    Якщо марки немає в taxonomy OLX (Zeekr тощо) — text_query → /q-zeekr/ або /q-zeekr-001/.
     """
     path_parts = [CATEGORY_PATH.strip("/")]
 

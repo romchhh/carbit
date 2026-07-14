@@ -69,8 +69,11 @@ class OlxClient:
                 await asyncio.sleep(5 * attempt)
                 continue
 
+            # 404 часто = немає brand-path (Zeekr тощо); caller робить fallback на /q-.../
+            # і сам вирішує, чи сповіщати адміна.
             message = f"OLX повернув статус {response.status_code}"
-            await notify_admin_parsing_error(source="OLX", error=message, url=url)
+            if response.status_code != 404:
+                await notify_admin_parsing_error(source="OLX", error=message, url=url)
             raise OlxError(message, status_code=response.status_code)
 
         message = "Не вдалося завантажити сторінку OLX"

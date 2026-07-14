@@ -15,6 +15,7 @@ const columns = [
   {
     title: "Документи",
     links: [
+      { label: "Публічна оферта", href: "/oferta" },
       { label: "Умови використання", href: "/terms" },
       { label: "Конфіденційність", href: "/privacy" },
       { label: "Оплата і повернення", href: "/payment" },
@@ -74,6 +75,9 @@ export function Footer() {
         <div className="max-w-[1280px] mx-auto px-5 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span className="text-[12px] text-white/40">© 2026 Carbit</span>
           <div className="flex flex-wrap justify-center gap-4 text-[12px] text-white/40">
+            <Link href="/oferta" className="hover:text-white transition-colors">
+              Публічна оферта
+            </Link>
             <Link href="/payment" className="hover:text-white transition-colors">
               Оплата і повернення
             </Link>

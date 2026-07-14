@@ -41,8 +41,10 @@ def attach_auth_cookie(
 
 
 def clear_auth_cookie(response: Response) -> None:
-    # Атрибути мають збігатися з set_cookie, інакше Secure cookie не знімається
-    response.delete_cookie(key=AUTH_COOKIE_NAME, **_cookie_base())
+    base = _cookie_base()
+    response.delete_cookie(key=AUTH_COOKIE_NAME, **base)
+    # Дубль: деякі проксі/браузери надійніше знімають через явне max_age=0
+    response.set_cookie(key=AUTH_COOKIE_NAME, value="", max_age=0, expires=0, **base)
 
 
 def attach_admin_cookie(
@@ -62,4 +64,6 @@ def attach_admin_cookie(
 
 
 def clear_admin_cookie(response: Response) -> None:
-    response.delete_cookie(key=ADMIN_COOKIE_NAME, **_cookie_base())
+    base = _cookie_base()
+    response.delete_cookie(key=ADMIN_COOKIE_NAME, **base)
+    response.set_cookie(key=ADMIN_COOKIE_NAME, value="", max_age=0, expires=0, **base)

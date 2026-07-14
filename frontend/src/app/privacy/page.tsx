@@ -141,7 +141,7 @@ const sections = [
           Ми застосовуємо технічні та організаційні заходи: шифрування з&apos;єднань (HTTPS),
           обмеження доступу, хешування паролів, резервне копіювання. Жодна система не є абсолютно
           безпечною — повідомляйте нас про підозрілі інциденти на{" "}
-          <a href="mailto:info@13vplus.com">info@13vplus.com</a>.
+          <a href="mailto:Carbit.ceo@gmail.com">Carbit.ceo@gmail.com</a>.
         </p>
       </>
     ),
@@ -161,7 +161,7 @@ const sections = [
         </ul>
         <p>
           Для реалізації прав напишіть на{" "}
-          <a href="mailto:info@13vplus.com">info@13vplus.com</a>. Ми відповімо протягом 30 днів.
+          <a href="mailto:Carbit.ceo@gmail.com">Carbit.ceo@gmail.com</a>. Ми відповімо протягом 30 днів.
           Ви також можете звернутись до Уповноваженого ВРУ з прав людини.
         </p>
       </>
@@ -229,7 +229,7 @@ const sections = [
         <p>Контакт з питань захисту даних:</p>
         <ul>
           <li>
-            Email: <a href="mailto:info@13vplus.com">info@13vplus.com</a>
+            Email: <a href="mailto:Carbit.ceo@gmail.com">Carbit.ceo@gmail.com</a>
           </li>
           <li>
             Умови використання: <a href="/terms">carbit.info/terms</a>

@@ -3,7 +3,6 @@ import type { NextRequest } from "next/server";
 
 const AUTH_COOKIE = "autoradar_token";
 const ADMIN_COOKIE = "autoradar_admin_token";
-const PUBLIC_AUTH_PATHS = ["/auth/login", "/auth/telegram", "/auth/reset-password", "/auth/oauth", "/auth/telegram/login"];
 
 export function middleware(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE)?.value;
@@ -12,7 +11,7 @@ export function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/admin")) {
     if (pathname === "/admin/login") {
-      if (adminToken) return NextResponse.redirect(new URL("/admin", request.url));
+      // Не bounce по cookie — клієнт перевіряє сесію (інакше цикл після logout)
       return NextResponse.next();
     }
     if (!adminToken) {
@@ -22,7 +21,6 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/app")) {
-    // Публічні сторінки оголошень — без логіну
     if (pathname.startsWith("/app/listing/")) {
       return NextResponse.next();
     }
@@ -33,17 +31,19 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  if (PUBLIC_AUTH_PATHS.some(p => pathname.startsWith(p)) && token) {
-    const redirect = request.nextUrl.searchParams.get("redirect");
-    const destination = redirect?.startsWith("/app") ? redirect : "/app/dashboard";
-    if (pathname.startsWith("/auth/login")) {
-      return NextResponse.redirect(new URL(destination, request.url));
-    }
-  }
+  // /auth/login більше не редіректимо через наявність cookie:
+  // після logout Set-Cookie може не встигнути / не знятись → цикл /app ↔ login + вічний лоадер.
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/auth/login", "/auth/telegram/:path*", "/auth/reset-password", "/auth/oauth/:path*", "/admin/:path*"],
+  matcher: [
+    "/app/:path*",
+    "/auth/login",
+    "/auth/telegram/:path*",
+    "/auth/reset-password",
+    "/auth/oauth/:path*",
+    "/admin/:path*",
+  ],
 };

@@ -77,6 +77,11 @@ export const DEFAULT_PRICE_BY_CURRENCY = {
 
 /** Підказки для placeholder — не підставляються як значення фільтра. */
 export const YEAR_PLACEHOLDERS = { from: "2018", to: "2024" } as const;
+export const YEAR_MIN = 1950;
+
+export function yearMax(): number {
+  return new Date().getFullYear() + 1;
+}
 
 export const DEFAULT_FILTERS: SearchFilterState = {
   name: "",
@@ -156,7 +161,37 @@ export function formatPriceInput(value: string): string {
 }
 
 export function formatYearInput(value: string): string {
-  return value.replace(/[^\d]/g, "").slice(0, 4);
+  const digits = value.replace(/[^\d]/g, "").slice(0, 4);
+  if (digits.length < 4) return digits;
+  const n = Number(digits);
+  const max = yearMax();
+  if (!Number.isFinite(n)) return "";
+  if (n < YEAR_MIN) return String(YEAR_MIN);
+  if (n > max) return String(max);
+  return digits;
+}
+
+/** Після введення: обмежити межі і поміняти місцями, якщо «від» > «до». */
+export function normalizeYearRange(from: string, to: string): { from: string; to: string } {
+  let a = formatYearInput(from);
+  let b = formatYearInput(to);
+  const na = parseNumberInput(a);
+  const nb = parseNumberInput(b);
+  if (na != null && nb != null && na > nb) {
+    return { from: String(nb), to: String(na) };
+  }
+  return { from: a, to: b };
+}
+
+export function normalizePriceRange(from: string, to: string): { from: string; to: string } {
+  let a = formatPriceInput(from);
+  let b = formatPriceInput(to);
+  const na = parseNumberInput(a);
+  const nb = parseNumberInput(b);
+  if (na != null && nb != null && na > nb) {
+    return { from: formatPriceInput(String(nb)), to: formatPriceInput(String(na)) };
+  }
+  return { from: a, to: b };
 }
 
 function regionMatches(listingRegion: string, filterRegion: string): boolean {

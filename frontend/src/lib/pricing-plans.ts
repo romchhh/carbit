@@ -107,4 +107,4 @@ export const PRICING_COMPARE = [
 
 export const PRICING_PLAN_HEADERS = ["Безкоштовно", "Старт", "Про", "Бізнес"] as const;
 
-export const SUPPORT_EMAIL = "info@13vplus.com";
+export const SUPPORT_EMAIL = "Carbit.ceo@gmail.com";

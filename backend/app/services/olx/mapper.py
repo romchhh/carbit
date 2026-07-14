@@ -49,9 +49,14 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
         params.model_label = model_raw
 
     if brand_raw and brand_uses_olx_text_search(brand_raw):
-        # Немає taxonomy-path: /q-{brand}/ + пост-фільтр моделі.
-        # Brand+model у q- часто дає порожню/сміттєву видачу (Jaecoo J7 → junk).
-        params.text_query = brand_raw
+        # Немає taxonomy-path OLX (Zeekr тощо) → /q-zeekr/ або /q-zeekr-001/.
+        # Цифрові моделі додаємо в q (001); літерні (J7) — лише пост-фільтр,
+        # бо brand+model у q часто дає сміття (Jaecoo J7).
+        brand_q = brand_slug(brand_raw) or brand_raw
+        if model_raw and re.fullmatch(r"\d+[a-z]?", model_raw.strip(), re.IGNORECASE):
+            params.text_query = f"{brand_q} {model_raw.strip()}"
+        else:
+            params.text_query = brand_q
     else:
         if brand_raw:
             params.brand = brand_slug(brand_raw)

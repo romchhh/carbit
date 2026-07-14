@@ -14,9 +14,13 @@ import {
   DEFAULT_PRICE_BY_CURRENCY,
   PRICE_CURRENCY_OPTIONS,
   VEHICLE_TYPE_OPTIONS,
+  YEAR_MIN,
   YEAR_PLACEHOLDERS,
   formatPriceInput,
   formatYearInput,
+  normalizePriceRange,
+  normalizeYearRange,
+  yearMax,
   type SearchFilterState,
 } from "@/lib/search-catalog";
 import type { SearchFreshness } from "@/lib/search-preview";
@@ -152,6 +156,8 @@ export function SearchFiltersPanel({
               to={filters.yearTo}
               onChange={(yearFrom, yearTo) => update({ yearFrom, yearTo })}
               format={formatYearInput}
+              normalize={normalizeYearRange}
+              hint={`Допустимо ${YEAR_MIN}–${yearMax()}. Якщо «від» більше за «до» — поміняємо місцями.`}
               placeholderFrom={YEAR_PLACEHOLDERS.from}
               placeholderTo={YEAR_PLACEHOLDERS.to}
             />
@@ -161,6 +167,8 @@ export function SearchFiltersPanel({
               to={filters.priceTo}
               onChange={(priceFrom, priceTo) => update({ priceFrom, priceTo })}
               format={formatPriceInput}
+              normalize={normalizePriceRange}
+              hint="Якщо «від» більше за «до» — поміняємо місцями."
               placeholderFrom={DEFAULT_PRICE_BY_CURRENCY[filters.currency].from}
               placeholderTo={DEFAULT_PRICE_BY_CURRENCY[filters.currency].to}
               suffix={

@@ -87,6 +87,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await clearServerSession();
     clearToken();
     setUser(null);
+    // Hard navigation — інакше AppLayout лишається на /app з user=null (вічний лоадер)
+    if (typeof window !== "undefined") {
+      window.location.assign("/auth/login");
+      return;
+    }
     router.push("/auth/login");
   };
 

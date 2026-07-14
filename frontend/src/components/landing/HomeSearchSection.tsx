@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AuthGateModal } from "@/components/auth/AuthGateModal";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { useAuth } from "@/contexts/AuthProvider";
-import { DEFAULT_FILTERS, type SearchFilterState } from "@/lib/search-catalog";
+import { DEFAULT_FILTERS, normalizePriceRange, normalizeYearRange, type SearchFilterState } from "@/lib/search-catalog";
 import { saveSearchDraft } from "@/lib/search-draft";
 import type { SearchFreshness } from "@/lib/search-preview";
 
@@ -22,7 +22,17 @@ export function HomeSearchSection() {
   };
 
   const handleSearch = () => {
-    saveSearchDraft(filters);
+    const years = normalizeYearRange(filters.yearFrom, filters.yearTo);
+    const prices = normalizePriceRange(filters.priceFrom, filters.priceTo);
+    const sanitized = {
+      ...filters,
+      yearFrom: years.from,
+      yearTo: years.to,
+      priceFrom: prices.from,
+      priceTo: prices.to,
+    };
+    setFilters(sanitized);
+    saveSearchDraft(sanitized);
 
     if (user) {
       router.push("/app/search");

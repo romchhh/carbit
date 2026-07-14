@@ -41,16 +41,29 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         params = filters_to_olx_params(
             SearchFilters(brand="Zeekr", model="001", currency="USD")
         )
-        self.assertEqual(params.text_query, "Zeekr")
+        self.assertEqual(params.text_query, "zeekr 001")
         self.assertEqual(params.model_label, "001")
+        url = build_search_url(params)
+        self.assertIn("/q-zeekr-001/", url)
+        self.assertNotIn("/zeekr/001/", url)
+
+    def test_zeekr_without_model(self):
+        params = filters_to_olx_params(SearchFilters(brand="Zeekr", currency="UAH"))
+        self.assertEqual(params.text_query, "zeekr")
         self.assertIn("/q-zeekr/", build_search_url(params))
-        self.assertNotIn("001", build_search_url(params))
+
+    def test_cyrillic_zeekr_uses_text(self):
+        self.assertTrue(brand_uses_olx_text_search("Зікр"))
+        params = filters_to_olx_params(
+            SearchFilters(brand="Зікр", model="001", currency="UAH")
+        )
+        self.assertIn("/q-zeekr-001/", build_search_url(params))
 
     def test_haval_url(self):
         params = filters_to_olx_params(
             SearchFilters(brand="Haval", model="Jolion", currency="USD")
         )
-        self.assertEqual(params.text_query, "Haval")
+        self.assertEqual(params.text_query, "haval")
         self.assertIn("/q-haval/", build_search_url(params))
 
     def test_post_filter_keeps_model(self):

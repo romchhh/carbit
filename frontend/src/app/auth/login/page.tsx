@@ -79,7 +79,7 @@ function SocialButton({
 function AuthForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { login, sendRegisterCode, verifyRegisterCode, resendRegisterCode, forgotPassword } = useAuth();
+  const { login, sendRegisterCode, verifyRegisterCode, resendRegisterCode, forgotPassword, user, loading: authLoading, initialized } = useAuth();
 
   const [tab, setTab] = useState<Tab>("login");
   const [registerStep, setRegisterStep] = useState<RegisterStep>("form");
@@ -102,6 +102,15 @@ function AuthForm() {
     if (savedEmail) setEmail(savedEmail);
   }, []);
 
+  const redirect = searchParams.get("redirect");
+  const plan = searchParams.get("plan");
+  const destination = redirect?.startsWith("/app") ? redirect : "/app/dashboard";
+
+  useEffect(() => {
+    if (!initialized || authLoading || !user) return;
+    router.replace(destination);
+  }, [initialized, authLoading, user, router, destination]);
+
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     const stepParam = searchParams.get("step");
@@ -118,10 +127,6 @@ function AuthForm() {
       }
     }
   }, [searchParams]);
-
-  const redirect = searchParams.get("redirect");
-  const plan = searchParams.get("plan");
-  const destination = redirect?.startsWith("/app") ? redirect : "/app/dashboard";
 
   const handleTabChange = (next: Tab) => {
     setTab(next);
@@ -538,6 +543,10 @@ function AuthForm() {
 
       <p className="mt-5 text-center text-[12px] text-muted leading-relaxed px-4">
         Продовжуючи, ви приймаєте{" "}
+        <Link href="/oferta" className="text-ink font-medium hover:text-emerald-dark transition-colors">
+          Оферту
+        </Link>
+        {", "}
         <Link href="/terms" className="text-ink font-medium hover:text-emerald-dark transition-colors">
           Умови
         </Link>{" "}
