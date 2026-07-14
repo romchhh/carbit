@@ -16,18 +16,20 @@ import {
 } from "@/lib/display-currency";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { getTelegramBotMention, getTelegramBotUrl } from "@/lib/telegram";
-import { AppPage, AppSection } from "@/components/layout/AppPage";
-import type { Subscription } from "@/types/api";
+import { AppPage, AppSection, AppStatCard, AppStatGrid } from "@/components/layout/AppPage";
+import type { DashboardStats, Subscription } from "@/types/api";
 
 export default function AccountPage() {
   const { user, updateProfile, logout, refreshUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
+  const [currency, setCurrency] = useState<DisplayCurrency>("USD");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [connectUrl, setConnectUrl] = useState<string | null>(null);
   const [tgLoading, setTgLoading] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [polling, setPolling] = useState(false);
   const [bindEmail, setBindEmail] = useState("");
   const [bindCode, setBindCode] = useState("");
@@ -35,11 +37,10 @@ export default function AccountPage() {
   const [bindLoading, setBindLoading] = useState(false);
   const [bindError, setBindError] = useState("");
   const [bindSuccess, setBindSuccess] = useState("");
-  const [currencySaving, setCurrencySaving] = useState(false);
-  const [currencyError, setCurrencyError] = useState("");
 
   useEffect(() => {
     billingApi.subscription().then(setSubscription).catch(() => {});
+    usersApi.dashboard().then(setStats).catch(() => {});
   }, [user]);
 
   const pollTelegramStatus = useCallback(async () => {
@@ -60,31 +61,33 @@ export default function AccountPage() {
   if (!user) return null;
 
   const planLabel = PLAN_LABELS[user.plan] ?? user.plan;
+  const displayCurrency = resolveDisplayCurrency(user.preferred_currency);
+  const currencyOption = DISPLAY_CURRENCY_OPTIONS.find(o => o.value === displayCurrency);
 
-  const startEdit = () => { setName(user.name); setError(""); setEditing(true); };
+  const startEdit = () => {
+    setName(user.name);
+    setCurrency(resolveDisplayCurrency(user.preferred_currency));
+    setError("");
+    setEditing(true);
+  };
 
   const saveProfile = async () => {
-    if (!name.trim()) { setError("Введіть ім'я"); return; }
+    if (!name.trim()) {
+      setError("Введіть ім'я");
+      return;
+    }
     setSaving(true);
+    setError("");
     try {
-      await updateProfile({ name: name.trim() });
+      await updateProfile({
+        name: name.trim(),
+        preferred_currency: currency,
+      });
       setEditing(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не вдалося зберегти");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const saveCurrency = async (currency: DisplayCurrency) => {
-    setCurrencyError("");
-    setCurrencySaving(true);
-    try {
-      await updateProfile({ preferred_currency: currency });
-    } catch (err) {
-      setCurrencyError(err instanceof ApiError ? err.message : "Не вдалося зберегти валюту");
-    } finally {
-      setCurrencySaving(false);
     }
   };
 
@@ -161,12 +164,62 @@ export default function AccountPage() {
             />
             <div className="min-w-0 flex-1">
               {editing ? (
-                <div className="space-y-2">
-                  <input type="text" value={name} onChange={e => setName(e.target.value)} className="auth-input w-full" autoFocus />
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
+                      Імʼя
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      className="auth-input w-full"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
+                      Валюта цін
+                    </div>
+                    <p className="mt-1 text-[12px] text-muted">
+                      Для оголошень, фільтрів і Telegram
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                      {DISPLAY_CURRENCY_OPTIONS.map(option => {
+                        const active = currency === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            disabled={saving}
+                            onClick={() => setCurrency(option.value)}
+                            className={cn(
+                              "rounded-xl border px-3.5 py-2 text-left transition-colors",
+                              active
+                                ? "border-emerald bg-emerald-light/40 text-ink"
+                                : "border-border/80 bg-white text-muted hover:border-emerald/30 hover:text-ink",
+                            )}
+                          >
+                            <div className="text-[13px] font-bold">{option.label}</div>
+                            <div className="text-[11px] opacity-70">{option.suffix}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                   {error && <p className="text-[12px] text-red-600">{error}</p>}
                   <div className="flex gap-2">
-                    <Button variant="primary" size="sm" loading={saving} onClick={saveProfile}>Зберегти</Button>
-                    <Button variant="secondary" size="sm" onClick={() => setEditing(false)} disabled={saving}>Скасувати</Button>
+                    <Button variant="primary" size="sm" loading={saving} onClick={saveProfile}>
+                      Зберегти
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setEditing(false)}
+                      disabled={saving}
+                    >
+                      Скасувати
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -175,6 +228,13 @@ export default function AccountPage() {
                     <div className="text-[16px] font-bold text-ink">{user.name}</div>
                     <div className="mt-0.5 text-[12px] text-muted">
                       {user.email_verified ? user.email : "Email не вказано"}
+                    </div>
+                    <div className="mt-1.5 text-[12px] text-muted">
+                      Валюта:{" "}
+                      <span className="font-semibold text-ink">
+                        {currencyOption?.label ?? displayCurrency}
+                        {currencyOption ? ` (${currencyOption.suffix})` : ""}
+                      </span>
                     </div>
                   </div>
                   <Button variant="secondary" size="sm" className="w-fit shrink-0 gap-1.5" onClick={startEdit}>
@@ -186,37 +246,46 @@ export default function AccountPage() {
           </div>
         </AppSection>
 
-        <AppSection className="!bg-white">
-          <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">Валюта цін</div>
-          <p className="mt-1 text-[13px] text-muted">
-            Ціни оголошень, фільтрів і сповіщень у Telegram
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {DISPLAY_CURRENCY_OPTIONS.map(option => {
-              const active = resolveDisplayCurrency(user.preferred_currency) === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  disabled={currencySaving}
-                  onClick={() => saveCurrency(option.value)}
-                  className={cn(
-                    "rounded-xl border px-4 py-2.5 text-left transition-colors",
-                    active
-                      ? "border-emerald bg-emerald-light/40 text-ink"
-                      : "border-border/80 bg-white text-muted hover:border-emerald/30 hover:text-ink",
-                  )}
-                >
-                  <div className="text-[14px] font-bold">{option.label}</div>
-                  <div className="text-[11px] opacity-70">{option.suffix}</div>
-                </button>
-              );
-            })}
-          </div>
-          {currencyError && (
-            <p className="mt-3 text-[12px] text-red-600">{currencyError}</p>
-          )}
-        </AppSection>
+        {stats && (
+          <AppSection className="!bg-white" data-tour="tour-section-stats">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
+                  Статистика
+                </div>
+                <p className="mt-1 text-[13px] text-muted">
+                  Тариф: {PLAN_LABELS[stats.plan] ?? stats.plan}
+                  {stats.is_trial_active ? " · Trial" : ""}
+                  {" · "}ліміт {stats.searches_limit} запитів
+                </p>
+              </div>
+            </div>
+            <AppStatGrid>
+              <AppStatCard
+                label="Активних"
+                value={stats.active_searches}
+                sub={`з ${stats.searches_limit}`}
+              />
+              <AppStatCard
+                label="Нових сьогодні"
+                value={stats.new_listings_today}
+                sub={`${stats.new_listings_yesterday} вчора`}
+                accent={stats.new_listings_today > 0}
+              />
+              <AppStatCard
+                label="В обраному"
+                value={stats.favorites_count}
+                sub="авто"
+              />
+              <AppStatCard
+                label="Непрочитаних"
+                value={stats.unread_notifications}
+                sub="сповіщень"
+                accent={stats.unread_notifications > 0}
+              />
+            </AppStatGrid>
+          </AppSection>
+        )}
 
         <AppSection className="!bg-white">
           <div className="flex items-start justify-between gap-4">
@@ -229,7 +298,7 @@ export default function AccountPage() {
             </div>
             <Badge variant="emerald"><IconZap size={10} className="mr-1" />Активний</Badge>
           </div>
-          <div className="mt-5 grid grid-cols-3 gap-3">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {[
               [String(user.searches_limit), "запитів"],
               ["3", "джерела"],
@@ -247,6 +316,90 @@ export default function AccountPage() {
             </Link>
             <Link href="/pricing"><Button variant="secondary" size="md">Тарифи</Button></Link>
           </div>
+        </AppSection>
+
+        <AppSection className="!bg-white">
+          <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
+            Оплата
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl bg-surface px-3.5 py-3">
+              <div className="text-[11px] text-muted">Наступний платіж</div>
+              <div className="mt-1 text-[15px] font-semibold text-ink">
+                {subscription?.next_payment_at
+                  ? new Date(subscription.next_payment_at).toLocaleDateString("uk-UA", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })
+                  : subscription?.plan_expires_at && user.plan !== "free"
+                    ? `Доступ до ${new Date(subscription.plan_expires_at).toLocaleDateString("uk-UA")}`
+                    : "—"}
+              </div>
+              {subscription?.recurring_active ? (
+                <div className="mt-0.5 text-[11px] text-emerald-dark">Автопродовження увімкнено</div>
+              ) : user.plan !== "free" ? (
+                <div className="mt-0.5 text-[11px] text-muted">Без автопродовження</div>
+              ) : null}
+            </div>
+            <div className="rounded-xl bg-surface px-3.5 py-3">
+              <div className="text-[11px] text-muted">Картка</div>
+              <div className="mt-1 text-[15px] font-semibold tracking-wide text-ink">
+                {subscription?.card_mask || "Не привʼязана"}
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted">LiqPay · Visa / Mastercard</div>
+            </div>
+          </div>
+
+          <div className="mt-5 text-[13px] font-semibold text-ink">Історія платежів</div>
+          {(subscription?.payments?.length ?? 0) === 0 ? (
+            <p className="mt-2 text-[13px] text-muted">
+              Поки немає платежів. Після оплати тарифу записи зʼявляться тут.
+            </p>
+          ) : (
+            <ul className="mt-3 divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70">
+              {(subscription?.payments ?? []).map(payment => {
+                const ok = payment.status === "success";
+                return (
+                  <li
+                    key={payment.id}
+                    className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-semibold text-ink">
+                        {payment.plan_name}
+                        {payment.card_mask ? (
+                          <span className="ml-2 font-medium text-muted">{payment.card_mask}</span>
+                        ) : null}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-muted">
+                        {new Date(payment.paid_at).toLocaleString("uk-UA", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[14px] font-bold text-ink">
+                        {payment.amount.toLocaleString("uk-UA")} {payment.currency}
+                      </div>
+                      <div
+                        className={cn(
+                          "text-[11px] font-medium",
+                          ok ? "text-emerald-dark" : "text-red-600",
+                        )}
+                      >
+                        {ok ? "Успішно" : "Невдало"}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </AppSection>
 
         {!user.email_verified && (

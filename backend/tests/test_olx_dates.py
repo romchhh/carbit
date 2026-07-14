@@ -91,6 +91,37 @@ class OlxPublishedDateTests(unittest.TestCase):
         )
         self.assertEqual(dt, self.now - timedelta(minutes=12))
 
+    def test_does_not_prefer_refresh_over_card_date_text(self):
+        refresh = "2026-07-14T12:00:00+03:00"
+        dt = resolve_olx_published_at(
+            published="Київ - 3 липня 2026",
+            raw_params={"lastRefreshTime": refresh},
+            now=self.now,
+        )
+        self.assertEqual(dt, datetime(2026, 7, 3, 12, 0, tzinfo=KYIV_TZ))
+
+    def test_refresh_iso_alone_without_created_falls_back_to_iso(self):
+        """Немає createdTime — беремо ISO з поля published (краще ніж «зараз»)."""
+        refresh = "2026-06-22T00:07:18+03:00"
+        dt = resolve_olx_published_at(
+            published=refresh,
+            raw_params={"lastRefreshTime": refresh},
+            now=self.now,
+        )
+        self.assertEqual(dt, datetime(2026, 6, 22, 0, 7, 18, tzinfo=KYIV_TZ))
+
+    def test_created_beats_refresh_in_raw(self):
+        raw = {
+            "createdTime": "2025-01-10T08:00:00+02:00",
+            "lastRefreshTime": "2026-07-14T12:00:00+03:00",
+        }
+        dt = resolve_olx_published_at(
+            published="2026-07-14T12:00:00+03:00",
+            raw_params=raw,
+            now=self.now,
+        )
+        self.assertEqual(dt, datetime(2025, 1, 10, 8, 0, tzinfo=KYIV_TZ))
+
 
 if __name__ == "__main__":
     unittest.main()

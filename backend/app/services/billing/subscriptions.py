@@ -29,6 +29,7 @@ from app.services.billing.notify import (
 )
 from app.services.billing.plans import activate_plan, get_plan
 from app.services.billing.maintenance import MAX_FAILED_CHARGES
+from app.services.billing.payments import extract_card_mask, record_billing_payment
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,7 @@ async def apply_successful_payment(
     status_raw = str(payload.get("status") or "")
     card_token = payload.get("card_token") or payload.get("token")
     payment_id = payload.get("payment_id") or payload.get("transaction_id")
+    card_mask = extract_card_mask(payload)
 
     # Інші активні підписки цього юзера скасовуємо в LiqPay
     others = await db.scalars(
@@ -179,6 +181,8 @@ async def apply_successful_payment(
         sub.card_token = str(card_token)
     if payment_id:
         sub.liqpay_payment_id = str(payment_id)
+    if card_mask:
+        sub.card_mask = card_mask
 
     activate_plan(user, sub.plan)
     # Рекурентне списання → продовжити ще на period_days від зараз
@@ -186,6 +190,7 @@ async def apply_successful_payment(
         days = int(get_plan(sub.plan).get("period_days") or 30)
         user.plan_expires_at = now_kyiv() + timedelta(days=days)
 
+    await record_billing_payment(db, sub=sub, payload=payload, status="success")
     await db.flush()
     if not was_active or previous_plan != sub.plan:
         await notify_plan_activated(db, user, previous_plan=previous_plan)
@@ -196,6 +201,7 @@ async def handle_failed_recurring(
     *,
     sub: BillingSubscription,
     status_raw: str,
+    payload: dict | None = None,
 ) -> dict:
     """Невдале списання: лічильник → після N спроб unsubscribe + TG."""
     user = await db.get(User, sub.user_id)
@@ -203,10 +209,13 @@ async def handle_failed_recurring(
     sub.failed_charges = int(sub.failed_charges or 0) + 1
     attempt = sub.failed_charges
     will_cancel = attempt >= MAX_FAILED_CHARGES
+    fail_payload = dict(payload or {})
+    fail_payload.setdefault("status", status_raw)
 
     if sub.status != SubscriptionStatus.active and sub.status != SubscriptionStatus.past_due:
         # pending checkout failure
         sub.status = SubscriptionStatus.failed
+        await record_billing_payment(db, sub=sub, payload=fail_payload, status="failure")
         await db.flush()
         return {"ok": True, "status": status_raw, "failed_charges": attempt, "cancelled": False}
 
@@ -220,6 +229,7 @@ async def handle_failed_recurring(
         sub.status = SubscriptionStatus.cancelled
         sub.cancelled_at = now_kyiv()
 
+    await record_billing_payment(db, sub=sub, payload=fail_payload, status="failure")
     await db.flush()
 
     if user:
@@ -266,7 +276,9 @@ async def handle_callback(db: AsyncSession, data: str, signature: str) -> dict:
         return {"ok": True, "status": status_raw, "order_id": order_id}
 
     if status_raw in {"failure", "error", "reversed", "expired"}:
-        return await handle_failed_recurring(db, sub=sub, status_raw=status_raw)
+        return await handle_failed_recurring(
+            db, sub=sub, status_raw=status_raw, payload=payload
+        )
 
     if status_raw == "unsubscribed":
         already_cancelled = sub.status == SubscriptionStatus.cancelled

@@ -230,10 +230,17 @@ def resolve_olx_published_at(
     if from_created:
         return from_created
 
-    # Fallback: текст «Опубліковано…» або будь-який timestamp
+    # Fallback: текст «Опубліковано…» / хвостик локації. Не плутаємо з lastRefresh.
     if published:
         from_iso = _parse_iso_datetime(published)
-        if from_iso:
+        refresh_from_raw = _extract_timestamp_from_raw(raw_params, keys=REFRESH_TIME_KEYS)
+        iso_looks_like_refresh = bool(
+            from_iso
+            and refresh_from_raw
+            and abs((from_iso - refresh_from_raw).total_seconds()) < 60
+        )
+
+        if from_iso and not iso_looks_like_refresh:
             return from_iso
 
         from_text = parse_olx_published_text(published, now=current)
@@ -252,10 +259,10 @@ def resolve_olx_published_at(
                     return from_tail_iso
                 break
 
-    from_any = _extract_timestamp_from_raw(raw_params, keys=TIME_FIELD_KEYS)
-    if from_any:
-        return from_any
+        if from_iso:
+            return from_iso
 
+    # Не підставляємо lastRefreshTime як дату публікації — це «підняття».
     return current
 
 

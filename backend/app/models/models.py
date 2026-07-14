@@ -238,6 +238,8 @@ class BillingSubscription(Base):
         default=SubscriptionStatus.pending,
     )
     card_token: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Маска картки з LiqPay (напр. 424242******4242) — для кабінету.
+    card_mask: Mapped[str | None] = mapped_column(String, nullable=True)
     liqpay_payment_id: Mapped[str | None] = mapped_column(String, nullable=True)
     last_status: Mapped[str | None] = mapped_column(String, nullable=True)
     # Поспільні невдалі рекурентні списання (скидається на success).
@@ -247,3 +249,31 @@ class BillingSubscription(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="billing_subscriptions")
+    payments: Mapped[list["BillingPayment"]] = relationship(
+        back_populates="subscription",
+        cascade="all, delete-orphan",
+    )
+
+
+class BillingPayment(Base):
+    """Історія платежів / списань LiqPay (callback)."""
+
+    __tablename__ = "billing_payments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    subscription_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("billing_subscriptions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    order_id: Mapped[str] = mapped_column(String, index=True)
+    plan: Mapped[str] = mapped_column(String)
+    amount: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String, default="UAH")
+    status: Mapped[str] = mapped_column(String)  # success | failure | ...
+    liqpay_payment_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    card_mask: Mapped[str | None] = mapped_column(String, nullable=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
+
+    subscription: Mapped["BillingSubscription | None"] = relationship(back_populates="payments")

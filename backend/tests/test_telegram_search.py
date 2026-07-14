@@ -83,6 +83,29 @@ class TelegramSearchTests(unittest.TestCase):
         self.assertFalse(listing_out_matches_filters(item, filters))
 
 
+    def test_description_keyword_matches_brand(self):
+        item = type("Item", (), {
+            "brand": "",
+            "model": "",
+            "title": "Продам",
+            "year": 2020,
+            "price": 500_000,
+            "currency": "UAH",
+            "mileage": 20_000,
+            "region": "Україна",
+            "source": "telegram",
+            "fuel": "",
+            "transmission": "",
+            "description": "Продам Zeekr 001 повний привід",
+        })()
+        filters = SearchFilters.model_validate({
+            "brand": "Zeekr",
+            "model": "001",
+            "sources": ["telegram"],
+        })
+        self.assertTrue(listing_out_matches_filters(item, filters))
+
+
 async def _count_porsche_in_db() -> int:
     async with AsyncSessionLocal() as db:
         filters = SearchFilters.model_validate({
@@ -94,7 +117,9 @@ async def _count_porsche_in_db() -> int:
             "region": "м. Київ",
             "sources": ["telegram"],
         })
-        result = await search_telegram_listings(db, filters, per_page=50)
+        result = await search_telegram_listings(
+            db, filters, per_page=50, keyword_refresh=False
+        )
         return len(result.items)
 
 

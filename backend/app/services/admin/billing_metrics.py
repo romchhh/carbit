@@ -27,6 +27,7 @@ def serialize_billing_sub(sub: BillingSubscription) -> dict:
         "last_status": sub.last_status,
         "failed_charges": int(sub.failed_charges or 0),
         "liqpay_payment_id": sub.liqpay_payment_id,
+        "card_mask": sub.card_mask,
         "created_at": as_kyiv(sub.created_at).isoformat() if sub.created_at else None,
         "updated_at": as_kyiv(sub.updated_at).isoformat() if sub.updated_at else None,
         "cancelled_at": as_kyiv(sub.cancelled_at).isoformat() if sub.cancelled_at else None,

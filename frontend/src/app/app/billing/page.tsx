@@ -1,17 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { billing as billingApi, ApiError } from "@/lib/api";
 import type { Plan, Subscription } from "@/types/api";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
-import { IconZap, IconCheck } from "@/components/icons";
+import { IconZap } from "@/components/icons";
 import { AppPage, AppSection } from "@/components/layout/AppPage";
 import { LiqPayLogo } from "@/components/brand/LiqPayLogo";
+import { PricingPlans, type PricingCardModel } from "@/components/pricing/PricingPlans";
+import { PRICING_PLANS } from "@/lib/pricing-plans";
 
 function submitLiqPayCheckout(checkoutUrl: string, data: string, signature: string) {
   // Повний form POST — не відкривати старе checkout-посилання в новій вкладці
@@ -36,6 +36,48 @@ function submitLiqPayCheckout(checkoutUrl: string, data: string, signature: stri
 
   document.body.appendChild(form);
   form.submit();
+}
+
+function formatPrice(uah: number): string {
+  if (uah <= 0) return "0";
+  return uah.toLocaleString("uk-UA");
+}
+
+function toCabinetCards(
+  apiPlans: Plan[],
+  opts: {
+    currentPlanId: string | undefined;
+    loadingId: string | null;
+    liqpayEnabled: boolean;
+  },
+): PricingCardModel[] {
+  const { currentPlanId, loadingId, liqpayEnabled } = opts;
+  return apiPlans.map(api => {
+    const meta = PRICING_PLANS.find(p => p.id === api.id);
+    const current = currentPlanId === api.id;
+    const isFree = api.id === "free";
+    return {
+      id: api.id,
+      name: meta?.name ?? api.name,
+      description: meta?.description ?? api.description,
+      price: formatPrice(api.price_uah),
+      period: meta?.period ?? (api.price_uah > 0 ? "грн / 30 днів" : "7 днів"),
+      features: meta?.features?.length ? meta.features : api.features,
+      missing: meta?.missing ?? [],
+      accent: meta?.accent ?? false,
+      popular: meta?.popular ?? false,
+      current,
+      loading: loadingId === api.id,
+      disabled: current || loadingId === api.id,
+      cta: current
+        ? "Ваш тариф"
+        : isFree
+          ? "Перейти на Free"
+          : liqpayEnabled
+            ? "Оплатити LiqPay"
+            : "Оплатити",
+    };
+  });
 }
 
 function BillingPageInner() {
@@ -70,8 +112,20 @@ function BillingPageInner() {
   }, [searchParams, refreshUser]);
 
   const liqpayEnabled = Boolean(subscription?.liqpay_enabled);
+  const currentPlanId = subscription?.plan ?? user?.plan;
+
+  const cards = useMemo(
+    () =>
+      toCabinetCards(plans, {
+        currentPlanId,
+        loadingId: loading && loading !== "unsubscribe" ? loading : null,
+        liqpayEnabled,
+      }),
+    [plans, currentPlanId, loading, liqpayEnabled],
+  );
 
   const orderPlan = async (planId: string) => {
+    if (planId === currentPlanId) return;
     setLoading(planId);
     setError("");
     setSuccess("");
@@ -136,59 +190,12 @@ function BillingPageInner() {
         <p className="mb-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[13px] text-red-600">{error}</p>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {plans.map(plan => {
-          const isCurrent = subscription?.plan === plan.id || user?.plan === plan.id;
-          return (
-            <AppSection
-              key={plan.id}
-              className={cn("flex flex-col !bg-white", isCurrent && "!border-emerald/40 ring-2 ring-emerald/15")}
-            >
-              <div className="mb-4">
-                {isCurrent && <Badge variant="emerald" className="mb-2">Поточний</Badge>}
-                <div className="text-[17px] font-black text-ink">{plan.name}</div>
-                <div className="mt-0.5 text-[12px] text-muted">{plan.description}</div>
-              </div>
-              <div className="mb-1 text-[26px] font-black text-ink">
-                {plan.price_uah === 0 ? "0" : plan.price_uah.toLocaleString("uk-UA")}
-                {plan.price_uah > 0 && <span className="text-[13px] font-medium text-muted"> грн/міс</span>}
-              </div>
-              <ul className="my-4 flex-1 space-y-1.5">
-                {plan.features.map(f => (
-                  <li key={f} className="flex items-start gap-1.5 text-[12px] text-muted">
-                    <IconCheck size={12} className="mt-0.5 shrink-0 text-emerald" />{f}
-                  </li>
-                ))}
-              </ul>
-              {!isCurrent && plan.id !== "free" && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="w-full"
-                  loading={loading === plan.id}
-                  onClick={() => void orderPlan(plan.id)}
-                >
-                  {liqpayEnabled ? "Оплатити LiqPay" : "Оплатити"}
-                </Button>
-              )}
-              {!isCurrent && plan.id === "free" && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="w-full"
-                  loading={loading === plan.id}
-                  onClick={() => void orderPlan("free")}
-                >
-                  Перейти на Free
-                </Button>
-              )}
-            </AppSection>
-          );
-        })}
+      <div className="pt-2">
+        <PricingPlans variant="cabinet" plans={cards} onSelect={id => void orderPlan(id)} />
       </div>
 
       {subscription && subscription.plan !== "free" && (
-        <div className="mt-5 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-8 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[12px] text-muted">
             Автопродовження через LiqPay. Можна скасувати — доступ лишиться до{" "}
             {subscription.plan_expires_at

@@ -45,6 +45,19 @@ class ChannelMediaStore:
                     enqueued_at TEXT NOT NULL,
                     attempts INTEGER NOT NULL DEFAULT 0
                 );
+                CREATE TABLE IF NOT EXISTS keyword_search_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    query TEXT NOT NULL,
+                    channel TEXT NOT NULL,
+                    limit_n INTEGER NOT NULL DEFAULT 40,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    found INTEGER NOT NULL DEFAULT 0,
+                    error TEXT,
+                    enqueued_at TEXT NOT NULL,
+                    finished_at TEXT
+                );
+                CREATE INDEX IF NOT EXISTS ix_keyword_search_status
+                    ON keyword_search_queue (status, enqueued_at);
                 """
             )
             conn.commit()
@@ -192,3 +205,143 @@ class ChannelMediaStore:
                 )
             conn.commit()
             return ids
+
+    def enqueue_keyword_searches(
+        self,
+        query: str,
+        channels: list[str],
+        *,
+        limit: int = 40,
+        cooldown_seconds: int = 120,
+    ) -> list[int]:
+        """Ставить keyword-scan по кожному каналу. Повертає id джобів для очікування."""
+        query = (query or "").strip()
+        if not query or not channels:
+            return []
+
+        limit = max(10, min(int(limit), 100))
+        cooldown_seconds = max(30, int(cooldown_seconds))
+        job_ids: list[int] = []
+        now = _utcnow()
+
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            for channel in channels:
+                ch = (channel or "").strip()
+                if not ch:
+                    continue
+                # Активний той самий запит — чекаємо його
+                cur = conn.execute(
+                    """
+                    SELECT id FROM keyword_search_queue
+                    WHERE query=? AND channel=? AND status IN ('pending', 'running')
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (query, ch),
+                )
+                row = cur.fetchone()
+                if row:
+                    job_ids.append(int(row[0]))
+                    continue
+
+                # Свіжий done — не ганяємо Telethon знову
+                cur = conn.execute(
+                    """
+                    SELECT id, finished_at FROM keyword_search_queue
+                    WHERE query=? AND channel=? AND status='done'
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (query, ch),
+                )
+                done = cur.fetchone()
+                if done and done[1]:
+                    try:
+                        finished = datetime.fromisoformat(str(done[1]))
+                        if finished.tzinfo is None:
+                            finished = finished.replace(tzinfo=timezone.utc)
+                        age = (datetime.now(timezone.utc) - finished).total_seconds()
+                        if age < cooldown_seconds:
+                            job_ids.append(int(done[0]))
+                            continue
+                    except ValueError:
+                        pass
+
+                cur = conn.execute(
+                    """
+                    INSERT INTO keyword_search_queue
+                        (query, channel, limit_n, status, found, enqueued_at)
+                    VALUES (?, ?, ?, 'pending', 0, ?)
+                    """,
+                    (query, ch, limit, now),
+                )
+                job_ids.append(int(cur.lastrowid))
+            conn.commit()
+        return job_ids
+
+    def claim_keyword_jobs(self, *, limit: int = 4) -> list[dict]:
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute(
+                """
+                SELECT id, query, channel, limit_n FROM keyword_search_queue
+                WHERE status='pending'
+                ORDER BY enqueued_at ASC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+            jobs: list[dict] = []
+            for row in rows:
+                job_id = int(row[0])
+                conn.execute(
+                    "UPDATE keyword_search_queue SET status='running' WHERE id=?",
+                    (job_id,),
+                )
+                jobs.append(
+                    {
+                        "id": job_id,
+                        "query": str(row[1]),
+                        "channel": str(row[2]),
+                        "limit": int(row[3] or 40),
+                    }
+                )
+            conn.commit()
+            return jobs
+
+    def finish_keyword_job(
+        self,
+        job_id: int,
+        *,
+        found: int = 0,
+        error: str | None = None,
+    ) -> None:
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE keyword_search_queue
+                SET status=?, found=?, error=?, finished_at=?
+                WHERE id=?
+                """,
+                (
+                    "error" if error else "done",
+                    int(found or 0),
+                    (error or None),
+                    _utcnow(),
+                    int(job_id),
+                ),
+            )
+            conn.commit()
+
+    def keyword_jobs_pending(self, job_ids: list[int]) -> bool:
+        if not job_ids:
+            return False
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            placeholders = ",".join("?" for _ in job_ids)
+            cur = conn.execute(
+                f"""
+                SELECT 1 FROM keyword_search_queue
+                WHERE id IN ({placeholders}) AND status IN ('pending', 'running')
+                LIMIT 1
+                """,
+                [int(x) for x in job_ids],
+            )
+            return cur.fetchone() is not None

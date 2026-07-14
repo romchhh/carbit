@@ -30,6 +30,8 @@ export interface SearchQuery {
   total_count: number;
   last_checked_at: string | null;
   created_at: string;
+  /** Фото найновішого авто в моніторингу. */
+  preview_image?: string | null;
 }
 
 export interface ListingSourceLink {
@@ -146,6 +148,19 @@ export interface Plan {
   features: string[];
 }
 
+export interface BillingPayment {
+  id: string;
+  order_id: string;
+  plan: string;
+  plan_name: string;
+  amount: number;
+  currency: string;
+  status: string;
+  card_mask?: string | null;
+  description?: string | null;
+  paid_at: string;
+}
+
 export interface Subscription {
   plan: string;
   plan_name: string;
@@ -154,6 +169,10 @@ export interface Subscription {
   trial_ends_at: string | null;
   is_trial_active: boolean;
   liqpay_enabled?: boolean;
+  next_payment_at?: string | null;
+  card_mask?: string | null;
+  recurring_active?: boolean;
+  payments?: BillingPayment[];
 }
 
 export interface LiqPayCheckout {

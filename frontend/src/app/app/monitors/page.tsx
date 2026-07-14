@@ -2,17 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { IconPlus, IconZap, IconArrowRight } from "@/components/icons";
+import { IconPlus } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import {
   AppEmpty,
   AppLoading,
   AppPage,
-  AppSection,
 } from "@/components/layout/AppPage";
-import { formatSearchDesc } from "@/lib/format-search-desc";
-import { cn } from "@/lib/utils";
+import { MonitorSearchCard } from "@/components/search/MonitorSearchCard";
 import { useAuth } from "@/contexts/AuthProvider";
 import { searches as searchesApi } from "@/lib/api";
 import type { SearchQuery } from "@/types/api";
@@ -73,55 +70,7 @@ export default function MonitorsPage() {
       ) : (
         <div className="space-y-3">
           {searches.map(s => (
-            <Link key={s.id} href={`/app/monitors/${s.id}`} className="block">
-              <AppSection
-                className={cn(
-                  "!bg-white p-4 transition-colors hover:border-emerald/30 sm:p-5",
-                  !s.is_active && "opacity-60",
-                )}
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <span
-                      className={cn(
-                        "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-                        s.is_active ? "bg-emerald" : "bg-border",
-                      )}
-                    />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[15px] font-semibold text-ink">{s.name}</span>
-                        {s.new_count > 0 && (
-                          <Badge variant="ink" className="gap-1">
-                            <IconZap size={9} /> {s.new_count} нові
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="mt-1 truncate text-[12px] text-muted">
-                        {formatSearchDesc(s.filters)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 sm:justify-end">
-                    <div className="text-left sm:text-right">
-                      <div
-                        className={cn(
-                          "text-[20px] font-black leading-none",
-                          s.is_active ? "text-emerald-dark" : "text-muted",
-                        )}
-                      >
-                        {s.is_active ? s.total_count : "—"}
-                      </div>
-                      <div className="mt-1 text-[10px] uppercase tracking-wide text-muted">авто</div>
-                    </div>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald/10 px-3 py-2 text-[12px] font-semibold text-emerald-dark">
-                      Відкрити <IconArrowRight size={11} />
-                    </span>
-                  </div>
-                </div>
-              </AppSection>
-            </Link>
+            <MonitorSearchCard key={s.id} search={s} />
           ))}
         </div>
       )}

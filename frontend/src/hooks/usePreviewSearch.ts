@@ -36,7 +36,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
   const [sort, setSort] = useState<SortOption>("newest");
-  const [freshness, setFreshness] = useState<SearchFreshness>("all");
+  const [freshness, setFreshness] = useState<SearchFreshness>("new");
   const [running, setRunning] = useState(false);
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -268,7 +268,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setPartial(false);
     setFromCache(false);
     setSort("newest");
-    setFreshness("all");
+    setFreshness("new");
     setRunning(false);
     setError(null);
     loadedCountRef.current = 0;

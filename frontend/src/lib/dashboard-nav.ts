@@ -2,7 +2,6 @@ import {
   IconSearch,
   IconHeart,
   IconBell,
-  IconChart,
   IconCreditCard,
   IconGear,
   IconZap,
@@ -33,7 +32,6 @@ export const primaryNav: DashboardNavItem[] = [
   },
   { href: "/app/favorites", icon: IconHeart, label: "Обране", shortLabel: "Обране", badgeKey: "favorites", tourId: "nav-favorites" },
   { href: "/app/notifications", icon: IconBell, label: "Сповіщення", shortLabel: "Алерти", badgeKey: "notifications", badgeAccent: true, tourId: "nav-notifications" },
-  { href: "/app/stats", icon: IconChart, label: "Статистика", shortLabel: "Стат.", tourId: "nav-stats" },
 ];
 
 export const secondaryNav: DashboardNavItem[] = [

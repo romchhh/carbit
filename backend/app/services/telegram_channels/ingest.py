@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +18,8 @@ from app.services.telegram_channels.mapper import (
     listing_out_matches_filters,
     telegram_listing_id,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _save_photo_refs_from_car(car_listing) -> str:
@@ -107,6 +111,7 @@ def _telegram_sql_prefilters(filters: SearchFilters):
             or_(
                 Listing.brand.ilike(like),
                 Listing.title.ilike(like),
+                Listing.description.ilike(like),
             )
         )
 
@@ -117,6 +122,7 @@ def _telegram_sql_prefilters(filters: SearchFilters):
             or_(
                 Listing.model.ilike(like),
                 Listing.title.ilike(like),
+                Listing.description.ilike(like),
             )
         )
 
@@ -147,7 +153,18 @@ async def search_telegram_listings(
     per_page: int = 20,
     sort_by: str = "newest",
     max_scan: int = 3000,
+    keyword_refresh: bool = True,
 ) -> PaginatedListings:
+    if keyword_refresh:
+        try:
+            from app.services.telegram_channels.keyword_refresh import (
+                refresh_telegram_by_keywords,
+            )
+
+            await refresh_telegram_by_keywords(filters)
+        except Exception:
+            logger.exception("Telegram keyword refresh failed")
+
     rows = await db.scalars(
         select(Listing)
         .where(_telegram_sql_prefilters(filters))

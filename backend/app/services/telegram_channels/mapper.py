@@ -170,7 +170,7 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
 def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> bool:
     if filters.brand:
         brand = norm_text(filters.brand)
-        haystack = norm_text(f"{item.brand} {item.title}")
+        haystack = norm_text(f"{item.brand} {item.title} {item.description or ''}")
         if brand not in haystack:
             item_brand = norm_text(item.brand)
             if not item_brand or (brand not in item_brand and item_brand not in brand):
@@ -178,7 +178,7 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
 
     if filters.model:
         model = norm_text(filters.model)
-        haystack = norm_text(f"{item.model} {item.title}")
+        haystack = norm_text(f"{item.model} {item.title} {item.description or ''}")
         if model not in haystack:
             return False
 

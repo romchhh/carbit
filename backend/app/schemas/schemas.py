@@ -193,6 +193,8 @@ class SearchQueryOut(BaseModel):
     total_count: int
     last_checked_at: Optional[datetime]
     created_at: datetime
+    # Перше фото найновішого авто в моніторингу (для прев’ю в списку).
+    preview_image: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -335,6 +337,21 @@ class PlanOut(BaseModel):
     features: list[str]
 
 
+class BillingPaymentOut(BaseModel):
+    id: str
+    order_id: str
+    plan: str
+    plan_name: str
+    amount: int
+    currency: str
+    status: str
+    card_mask: str | None = None
+    description: str | None = None
+    paid_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class SubscriptionOut(BaseModel):
     plan: str
     plan_name: str
@@ -343,6 +360,12 @@ class SubscriptionOut(BaseModel):
     trial_ends_at: datetime | None
     is_trial_active: bool
     liqpay_enabled: bool = False
+    # Наступне списання / кінець оплаченого періоду.
+    next_payment_at: datetime | None = None
+    # Маска картки LiqPay (•••• 4242).
+    card_mask: str | None = None
+    recurring_active: bool = False
+    payments: list[BillingPaymentOut] = Field(default_factory=list)
 
 
 class SubscribeRequest(BaseModel):

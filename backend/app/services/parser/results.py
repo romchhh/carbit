@@ -8,9 +8,63 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, SearchListing, SearchQuery
-from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
+from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters, SearchQueryOut
 from app.services.listings.serialize import listing_to_out
 from app.services.parser.filter_groups import filters_group_key
+
+
+def _first_image_url(images: object) -> str | None:
+    if not isinstance(images, list):
+        return None
+    for item in images:
+        if isinstance(item, str) and item.strip():
+            return item.strip()
+    return None
+
+
+async def preview_images_for_searches(
+    db: AsyncSession,
+    search_ids: list[str],
+) -> dict[str, str]:
+    """URL першого фото найновішого оголошення на кожний моніторинг."""
+    if not search_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(SearchListing.search_id, Listing.images, Listing.published_at)
+            .join(Listing, Listing.id == SearchListing.listing_id)
+            .where(SearchListing.search_id.in_(search_ids))
+            .order_by(Listing.published_at.desc())
+        )
+    ).all()
+    previews: dict[str, str] = {}
+    for search_id, images, _published in rows:
+        if search_id in previews:
+            continue
+        url = _first_image_url(images)
+        if url:
+            previews[search_id] = url
+    return previews
+
+
+async def search_query_to_out(db: AsyncSession, search: SearchQuery) -> SearchQueryOut:
+    previews = await preview_images_for_searches(db, [search.id])
+    return SearchQueryOut.model_validate(search).model_copy(
+        update={"preview_image": previews.get(search.id)}
+    )
+
+
+async def search_queries_to_out(
+    db: AsyncSession,
+    searches: list[SearchQuery],
+) -> list[SearchQueryOut]:
+    previews = await preview_images_for_searches(db, [s.id for s in searches])
+    return [
+        SearchQueryOut.model_validate(s).model_copy(
+            update={"preview_image": previews.get(s.id)}
+        )
+        for s in searches
+    ]
 
 
 def _sort_items(

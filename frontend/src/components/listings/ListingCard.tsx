@@ -63,7 +63,8 @@ export function ListingCard({
     listing.refreshed_at && listing.refreshed_at !== listing.published_at
       ? refreshedAgoLabel(listing.refreshed_at)
       : "";
-  const timeBadgeDate = listing.refreshed_at || listing.published_at;
+  // На фото — дата публікації, не lastRefresh (підняття на OLX).
+  const timeBadgeDate = listing.published_at;
   const hasMirrorSources = (listing.alternate_sources?.length ?? 0) > 0;
   const isNewForMonitor = Boolean(listing.is_new);
   const [photoIndex, setPhotoIndex] = useState(0);

@@ -5,8 +5,8 @@ import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
-import { IosToggle } from "@/components/ui/IosToggle";
 import { cn } from "@/lib/utils";
+import { SEARCH_NEW_WITHIN_DAYS } from "@/lib/search-preview";
 import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
 import { UKRAINE_REGIONS } from "@/lib/search-data/regions";
 import {
@@ -62,7 +62,7 @@ export function SearchFiltersPanel({
   searchError,
   telegramConnected,
   wide,
-  freshness = "all",
+  freshness = "new",
   onFreshnessChange,
 }: Props) {
   const [advanced, setAdvanced] = useState(false);
@@ -157,7 +157,7 @@ export function SearchFiltersPanel({
               onChange={(yearFrom, yearTo) => update({ yearFrom, yearTo })}
               format={formatYearInput}
               normalize={normalizeYearRange}
-              hint={`Допустимо ${YEAR_MIN}–${yearMax()}. Якщо «від» більше за «до» — поміняємо місцями.`}
+              hint={`Допустимо ${YEAR_MIN}–${yearMax()}.`}
               placeholderFrom={YEAR_PLACEHOLDERS.from}
               placeholderTo={YEAR_PLACEHOLDERS.to}
             />
@@ -168,7 +168,6 @@ export function SearchFiltersPanel({
               onChange={(priceFrom, priceTo) => update({ priceFrom, priceTo })}
               format={formatPriceInput}
               normalize={normalizePriceRange}
-              hint="Якщо «від» більше за «до» — поміняємо місцями."
               placeholderFrom={DEFAULT_PRICE_BY_CURRENCY[filters.currency].from}
               placeholderTo={DEFAULT_PRICE_BY_CURRENCY[filters.currency].to}
               suffix={
@@ -251,32 +250,57 @@ export function SearchFiltersPanel({
         </button>
 
         {onFreshnessChange && (
-          <div
-            className={cn(
-              "flex items-center justify-between gap-4 rounded-2xl border px-4 py-3.5 transition-colors",
-              searchAll
-                ? "border-emerald/30 bg-emerald/5"
-                : "border-border/80 bg-surface/50",
-            )}
-          >
-            <div className="min-w-0">
-              <p className="text-[14px] font-bold text-ink">
-                {searchAll
-                  ? "Шукати всі / Увесь ринок без обмеження по даті"
-                  : "Тільки свіжі / Лише оголошення за останні 7 днів"}
-              </p>
+          <div className="rounded-2xl border border-border/80 bg-surface/40 px-3.5 py-3.5 sm:px-4">
+            <p className="text-[13px] font-semibold text-ink">Що показувати?</p>
+            <div
+              role="radiogroup"
+              aria-label="Обмеження по даті публікації"
+              className="mt-2.5 grid grid-cols-2 gap-1.5 rounded-full bg-white p-1 ring-1 ring-border/80"
+            >
+              {(
+                [
+                  { value: "new" as const, label: "Тільки нові" },
+                  { value: "all" as const, label: "Усі пропозиції" },
+                ] as const
+              ).map(option => {
+                const selected = freshness === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={searching}
+                    onClick={() => onFreshnessChange(option.value)}
+                    className={cn(
+                      "rounded-full px-3 py-2.5 text-[13px] font-semibold transition-colors",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40",
+                      "disabled:cursor-not-allowed disabled:opacity-60",
+                      selected
+                        ? "bg-emerald text-white shadow-sm shadow-emerald/25"
+                        : "bg-transparent text-ink/70 hover:text-ink",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1">
-              <IosToggle
-                checked={searchAll}
-                disabled={searching}
-                aria-label="Шукати всі оголошення без обмеження по даті"
-                onChange={checked => onFreshnessChange(checked ? "all" : "new")}
-              />
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
-                {searchAll ? "вкл" : "викл"}
-              </span>
-            </div>
+            <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
+              {searchAll ? (
+                <>
+                  <span className="font-medium text-ink/80">Усі пропозиції</span>
+                  {" — "}
+                  весь ринок без обмеження по даті публікації.
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-ink/80">Тільки нові</span>
+                  {" — "}
+                  оголошення за останні {SEARCH_NEW_WITHIN_DAYS} днів (рекомендовано).
+                </>
+              )}
+            </p>
           </div>
         )}
 

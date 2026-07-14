@@ -14,7 +14,12 @@ from app.schemas.schemas import (
     SearchQueryUpdate,
 )
 from app.services.parser.linking import seed_search_baseline
-from app.services.parser.results import get_search_results_from_db, mark_search_listings_seen
+from app.services.parser.results import (
+    get_search_results_from_db,
+    mark_search_listings_seen,
+    search_queries_to_out,
+    search_query_to_out,
+)
 from app.services.parser.tasks import schedule_parse_search
 from app.services.search.search_endpoint import run_live_search
 
@@ -36,7 +41,7 @@ async def list_searches(
     result = await db.scalars(
         select(SearchQuery).where(SearchQuery.user_id == user_id).order_by(SearchQuery.created_at.desc())
     )
-    return result.all()
+    return await search_queries_to_out(db, list(result.all()))
 
 
 @router.post("/live", response_model=PaginatedListings)
@@ -68,7 +73,7 @@ async def get_search(
     sq = await db.get(SearchQuery, search_id)
     if not sq or sq.user_id != user_id:
         raise HTTPException(404, "Search not found")
-    return sq
+    return await search_query_to_out(db, sq)
 
 
 @router.get("/{search_id}/results", response_model=SearchLiveResultsOut)
@@ -96,7 +101,7 @@ async def get_search_results(
     if mark_seen:
         await mark_search_listings_seen(db, sq)
 
-    return SearchLiveResultsOut(search=sq, results=results)
+    return SearchLiveResultsOut(search=await search_query_to_out(db, sq), results=results)
 
 
 @router.post("/{search_id}/seen", response_model=SearchQueryOut)
@@ -109,7 +114,7 @@ async def mark_search_seen(
     if not sq or sq.user_id != user_id:
         raise HTTPException(404, "Search not found")
     await mark_search_listings_seen(db, sq)
-    return sq
+    return await search_query_to_out(db, sq)
 
 
 @router.post("", response_model=SearchQueryOut, status_code=201)
@@ -133,7 +138,7 @@ async def create_search(
         await seed_search_baseline(db, sq, body.seed_listings)
 
     schedule_parse_search(sq.id)
-    return sq
+    return await search_query_to_out(db, sq)
 
 
 @router.patch("/{search_id}", response_model=SearchQueryOut)
@@ -152,7 +157,7 @@ async def update_search(
             setattr(sq, field, val.model_dump(exclude_none=True) if hasattr(val, "model_dump") else val)
         else:
             setattr(sq, field, val)
-    return sq
+    return await search_query_to_out(db, sq)
 
 
 @router.delete("/{search_id}", status_code=204)

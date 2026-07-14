@@ -107,10 +107,17 @@ class CarParserService:
                 parts.append(chunk)
         return "\n".join(parts)
 
-    async def _process_group(self, channel: str, group_messages: list) -> Optional[CarListing]:
+    async def _process_group(
+        self,
+        channel: str,
+        group_messages: list,
+        *,
+        touch_cursor: bool = True,
+    ) -> Optional[CarListing]:
         """group_messages - список Message з однаковим grouped_id (або 1 повідомлення).
 
         Фото НЕ качаємо тут (lazy): лише валідуємо текст і зберігаємо refs.
+        touch_cursor=False — для keyword-пошуку по історії (не зсуваємо інкрементальний cursor).
         """
         channel = await self._normalize_channel(channel)
         group_messages = sorted(group_messages, key=lambda m: m.id)
@@ -121,13 +128,13 @@ class CarParserService:
 
         if not text.strip() and not any(m.photo for m in group_messages):
             self.last_parse_stats["empty"] = self.last_parse_stats.get("empty", 0) + 1
-            if max_id:
+            if touch_cursor and max_id:
                 self.media_store.advance_cursor(channel, max_id)
             return None
 
         if not self.skip_dedupe and self.dedupe.is_seen(channel, primary.id):
             self.last_parse_stats["dedupe"] = self.last_parse_stats.get("dedupe", 0) + 1
-            if max_id:
+            if touch_cursor and max_id:
                 self.media_store.advance_cursor(channel, max_id)
             return None
 
@@ -144,7 +151,7 @@ class CarParserService:
         if not is_valid_car_listing(listing):
             if not self.skip_dedupe:
                 self.dedupe.mark_seen(channel, ids)
-            if max_id:
+            if touch_cursor and max_id:
                 self.media_store.advance_cursor(channel, max_id)
             self.last_parse_stats["invalid"] = self.last_parse_stats.get("invalid", 0) + 1
             return None
@@ -159,7 +166,7 @@ class CarParserService:
         )
         if not self.skip_dedupe:
             self.dedupe.mark_seen(channel, ids)
-        if max_id:
+        if touch_cursor and max_id:
             self.media_store.advance_cursor(channel, max_id)
         self.last_parse_stats["valid"] = self.last_parse_stats.get("valid", 0) + 1
         return listing
@@ -229,6 +236,72 @@ class CarParserService:
             self.last_parse_stats.get("valid", 0),
             cursor,
             self.last_parse_stats.get("cursor_to", cursor),
+        )
+        return results
+
+    async def search_channel_by_keywords(
+        self,
+        channel: str,
+        query: str,
+        *,
+        limit: int = 50,
+    ) -> list:
+        """Пошук по історії каналу за ключовими словами (Telethon search).
+
+        Не чіпає інкрементальний cursor — лише підтягує релевантні пости в індекс.
+        """
+        query = (query or "").strip()
+        if not query:
+            return []
+
+        joined = await self._ensure_joined_cached(channel)
+        if not joined:
+            log.warning("Keyword search: пропускаю %s — немає доступу", channel)
+            return []
+
+        entity = await self.client.get_entity(channel)
+        if getattr(entity, "username", None):
+            self._slug_cache[channel.strip()] = entity.username
+
+        normalized = await self._normalize_channel(channel)
+        raw_messages = []
+        async for msg in self.client.iter_messages(entity, search=query, limit=limit):
+            raw_messages.append(msg)
+
+        self.last_parse_stats = {
+            "messages": len(raw_messages),
+            "groups": 0,
+            "dedupe": 0,
+            "empty": 0,
+            "invalid": 0,
+            "valid": 0,
+            "query": query,
+        }
+
+        groups: dict = {}
+        singles: list = []
+        for m in raw_messages:
+            if m.grouped_id:
+                groups.setdefault(m.grouped_id, []).append(m)
+            else:
+                singles.append([m])
+
+        all_groups = list(groups.values()) + singles
+        self.last_parse_stats["groups"] = len(all_groups)
+
+        results = []
+        for group in all_groups:
+            listing = await self._process_group(channel, group, touch_cursor=False)
+            if listing:
+                results.append(listing)
+
+        results.sort(key=lambda l: l.posted_at or datetime.min, reverse=True)
+        log.info(
+            "Keyword search %s q=%r: msgs=%s valid=%s",
+            normalized,
+            query,
+            len(raw_messages),
+            self.last_parse_stats.get("valid", 0),
         )
         return results
 

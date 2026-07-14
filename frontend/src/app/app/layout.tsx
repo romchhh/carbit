@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { DashboardSidebar, useDashboardBadges } from "@/components/layout/DashboardSidebar";
 import { DashboardMobileNav } from "@/components/layout/DashboardMobileNav";
@@ -13,6 +13,21 @@ import { useAuth } from "@/contexts/AuthProvider";
 import * as api from "@/lib/api";
 import { completeOnboarding, shouldShowOnboarding } from "@/lib/onboarding";
 
+function isNestedScrollable(node: HTMLElement, root: HTMLElement): boolean {
+  let current: HTMLElement | null = node;
+  while (current && current !== root) {
+    const { overflowY } = window.getComputedStyle(current);
+    if (
+      (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+      current.scrollHeight > current.clientHeight + 1
+    ) {
+      return true;
+    }
+    current = current.parentElement;
+  }
+  return false;
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -22,6 +37,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const badges = useDashboardBadges();
   const isOnboardingRoute = pathname === "/app/onboarding";
   const isPublicListing = pathname.startsWith("/app/listing/");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isPublicListing) return;
@@ -50,6 +67,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const timer = window.setTimeout(() => setTourActive(true), 500);
     return () => window.clearTimeout(timer);
   }, [user, pathname, tourActive]);
+
+  // Сірий canvas / поля навколо острова не в overflow-y — прокидаємо wheel у контент.
+  useEffect(() => {
+    const root = rootRef.current;
+    const scrollEl = mainScrollRef.current;
+    if (!root || !scrollEl) return;
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.defaultPrevented) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (scrollEl.contains(target)) return;
+      if (isNestedScrollable(target as HTMLElement, root)) return;
+      scrollEl.scrollTop += event.deltaY;
+    };
+
+    root.addEventListener("wheel", onWheel, { passive: true });
+    return () => root.removeEventListener("wheel", onWheel);
+  }, [user, isOnboardingRoute, isPublicListing]);
 
   const finishOnboarding = async () => {
     try {
@@ -95,7 +131,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const firstName = user.name.split(" ")[0];
 
   return (
-    <div className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white lg:relative lg:min-h-screen lg:h-screen lg:bg-canvas">
+    <div
+      ref={rootRef}
+      className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white lg:relative lg:min-h-screen lg:h-screen lg:bg-canvas"
+    >
       <div className="app-pwa-statusbar lg:hidden" aria-hidden />
       <AppShellHeader unreadNotifications={badges.notifications} />
 
@@ -105,7 +144,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:h-[calc(100vh-2.5rem)]">
             <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eef0f4] lg:rounded-[28px] lg:border lg:border-border/50 lg:bg-white lg:shadow-island">
-              <div className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-6 lg:px-12 lg:pb-8 lg:pt-8">
+              <div
+                ref={mainScrollRef}
+                className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-6 lg:px-12 lg:pb-8 lg:pt-8"
+              >
                 <div className="app-mobile-content mx-auto flex w-full max-w-[980px] flex-col">
                   {children}
 

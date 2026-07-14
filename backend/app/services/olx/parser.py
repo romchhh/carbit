@@ -411,13 +411,8 @@ def _listing_from_embedded(raw: dict) -> Optional[OlxListing]:
 
     price, currency = _price_from_embedded(raw)
     year, mileage, specs = _params_from_embedded(raw.get("params"))
-    # На картках OLX показує lastRefreshTime («Сьогодні о …»); createdTime — перша публікація.
-    created = (
-        raw.get("lastRefreshTime")
-        or raw.get("last_refresh_time")
-        or raw.get("createdTime")
-        or raw.get("created_time")
-    )
+    # published_at = перша публікація (createdTime). lastRefreshTime — окремо в raw_params.
+    created = raw.get("createdTime") or raw.get("created_time")
 
     title = raw.get("title")
     if not year and title:
@@ -934,11 +929,15 @@ def apply_details_to_listing(listing: OlxListing, details: dict) -> None:
         if value and key not in listing.raw_params:
             listing.raw_params[key] = value
 
-    iso_from_details = details.get("lastRefreshTime") or details.get("createdTime")
-    if _is_better_published(iso_from_details, listing.published):
-        listing.published = str(iso_from_details)
+    # Не підміняємо «Опубліковано…» / createdTime на lastRefreshTime (підняття ≠ дата публікації).
+    created_iso = details.get("createdTime")
+    if _is_better_published(created_iso, listing.published):
+        listing.published = str(created_iso)
     elif _is_better_published(details.get("published"), listing.published):
         listing.published = details.get("published")
+    elif not listing.published and details.get("lastRefreshTime"):
+        # Немає created/тексту — лишаємо refresh лише як крайній fallback у raw_params.
+        pass
 
     specs = listing.specs or {}
     if not listing.year:

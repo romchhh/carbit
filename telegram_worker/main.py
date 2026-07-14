@@ -78,6 +78,52 @@ async def process_photo_queue(service, *, limit: int = 5) -> int:
     return done
 
 
+async def process_keyword_queue(service, *, limit: int = 4) -> int:
+    """Telethon search по історії каналів за brand/model з live-пошуку."""
+    from app.services.telegram_channels.bootstrap import ensure_parser_path
+
+    ensure_parser_path()
+    from parser.channel_media_store import ChannelMediaStore
+
+    store = ChannelMediaStore()
+    jobs = store.claim_keyword_jobs(limit=limit)
+    if not jobs:
+        return 0
+
+    done = 0
+    for job in jobs:
+        job_id = int(job["id"])
+        query = str(job["query"])
+        channel = str(job["channel"])
+        per_channel = int(job.get("limit") or 40)
+        try:
+            listings = await service.search_channel_by_keywords(
+                channel,
+                query,
+                limit=per_channel,
+            )
+            async with AsyncSessionLocal() as db:
+                for listing in listings:
+                    item, _new, _sent, matched = await ingest_telegram_listing(
+                        db, listing, notify=False, link_searches=True
+                    )
+                    if matched and not item.images:
+                        await attach_photos_to_listing(db, service, item.id)
+                await db.commit()
+            store.finish_keyword_job(job_id, found=len(listings))
+            done += 1
+            logger.info(
+                "Keyword search %s q=%r → %s listings",
+                channel,
+                query,
+                len(listings),
+            )
+        except Exception as exc:
+            logger.exception("Keyword search failed for %s q=%r", channel, query)
+            store.finish_keyword_job(job_id, found=0, error=str(exc)[:300])
+    return done
+
+
 async def main() -> None:
     if not app_settings.TELEGRAM_ENABLED:
         logger.error("TELEGRAM_ENABLED=false — worker stopped")
@@ -124,12 +170,19 @@ async def main() -> None:
 
     async def heartbeat_loop() -> None:
         while True:
+            busy = False
             try:
-                await process_photo_queue(service, limit=5)
+                if await process_keyword_queue(service, limit=4):
+                    busy = True
+            except Exception:
+                logger.exception("Keyword queue tick failed")
+            try:
+                if await process_photo_queue(service, limit=5):
+                    busy = True
             except Exception:
                 logger.exception("Photo queue tick failed")
             await beat("telegram_worker")
-            await asyncio.sleep(15)
+            await asyncio.sleep(1 if busy else 4)
 
     asyncio.create_task(heartbeat_loop())
     await service.listen(channels, on_new_listing)

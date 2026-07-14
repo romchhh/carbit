@@ -33,7 +33,7 @@ export function IosToggle({
         "relative inline-flex h-[31px] w-[51px] shrink-0 items-center rounded-full transition-colors duration-200 ease-out",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40 focus-visible:ring-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        checked ? "bg-[#34C759]" : "bg-[#E5E5EA]",
+        checked ? "bg-emerald" : "bg-[#E5E5EA]",
         className,
       )}
     >

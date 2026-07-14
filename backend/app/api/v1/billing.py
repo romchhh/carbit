@@ -11,9 +11,11 @@ from app.schemas.schemas import (
     PlanOut,
     SubscribeRequest,
     SubscriptionOut,
+    BillingPaymentOut,
 )
 from app.services.billing.liqpay import LiqPayNotConfiguredError, liqpay_configured
 from app.services.billing.notify import notify_plan_activated
+from app.services.billing.payments import list_user_payments
 from app.services.billing.plans import activate_plan, enforce_plan_expiry, get_plan, list_plans
 from app.services.billing.subscriptions import (
     cancel_active_subscriptions,
@@ -25,8 +27,43 @@ from app.services.billing.subscriptions import (
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 
-def _subscription_out(user: User) -> SubscriptionOut:
+def _format_card_mask(mask: str | None) -> str | None:
+    if not mask:
+        return None
+    text = mask.strip()
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if len(digits) >= 4:
+        return f"•••• {digits[-4:]}"
+    if "*" in text or "•" in text:
+        return text
+    return f"•••• {text[-4:]}" if len(text) >= 4 else text
+
+
+async def _subscription_out(db, user) -> SubscriptionOut:
     plan = get_plan(user.plan.value)
+    active = await get_active_subscription(db, user.id)
+    payments = await list_user_payments(db, user.id, limit=20)
+    payment_rows: list[BillingPaymentOut] = []
+    for row in payments:
+        payment_rows.append(
+            BillingPaymentOut(
+                id=row.id,
+                order_id=row.order_id,
+                plan=row.plan,
+                plan_name=get_plan(row.plan).get("name") or row.plan,
+                amount=int(row.amount or 0),
+                currency=(row.currency or "UAH").upper(),
+                status=row.status,
+                card_mask=_format_card_mask(row.card_mask),
+                description=row.description,
+                paid_at=row.paid_at,
+            )
+        )
+
+    next_payment = None
+    if active and user.plan.value != "free" and user.plan_expires_at:
+        next_payment = user.plan_expires_at
+
     return SubscriptionOut(
         plan=user.plan.value,
         plan_name=plan["name"],
@@ -35,6 +72,10 @@ def _subscription_out(user: User) -> SubscriptionOut:
         trial_ends_at=user.trial_ends_at,
         is_trial_active=user.is_trial_active,
         liqpay_enabled=liqpay_configured(),
+        next_payment_at=next_payment,
+        card_mask=_format_card_mask(active.card_mask if active else None),
+        recurring_active=bool(active),
+        payments=payment_rows,
     )
 
 
@@ -53,7 +94,7 @@ async def get_subscription(
         raise HTTPException(404, "User not found")
     if enforce_plan_expiry(user):
         await db.flush()
-    return _subscription_out(user)
+    return await _subscription_out(db, user)
 
 
 @router.post("/checkout", response_model=CheckoutOut)
@@ -123,7 +164,7 @@ async def subscribe(
     if body.plan != previous_plan:
         await notify_plan_activated(db, user, previous_plan=previous_plan)
     await db.commit()
-    return _subscription_out(user)
+    return await _subscription_out(db, user)
 
 
 @router.post("/unsubscribe", response_model=SubscriptionOut)
@@ -148,7 +189,7 @@ async def unsubscribe(
 
         await notify_subscription_cancelled(db, user, reason="user")
     await db.commit()
-    return _subscription_out(user)
+    return await _subscription_out(db, user)
 
 
 @router.post("/liqpay/callback")
@@ -197,4 +238,4 @@ async def admin_activate_plan(
     await db.flush()
     await notify_plan_activated(db, user, previous_plan=previous_plan)
     await db.commit()
-    return _subscription_out(user)
+    return await _subscription_out(db, user)
