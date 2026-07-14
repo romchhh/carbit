@@ -44,6 +44,18 @@ class VinExtractTests(unittest.TestCase):
     def test_spaced_vin(self):
         self.assertEqual(extract_vin("W1N WH5AB1 SX014976"), "W1NWH5AB1SX014976")
 
+    def test_vin_hashtag(self):
+        self.assertEqual(extract_vin("#L6T79ZCE4RP134189 Київ"), "L6T79ZCE4RP134189")
+
+    def test_does_not_invent_vin_from_prose(self):
+        text = """Facelift
+Zeekr 001 Facelift
+2024 рік
+13к пробіг
+електро"""
+        self.assertIsNone(extract_vin(text))
+        self.assertNotEqual(extract_vin(text), "FACELFTZEEKR001FA")
+
 
 if __name__ == "__main__":
     unittest.main()

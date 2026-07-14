@@ -95,8 +95,19 @@ def _build_title(listing: Any) -> str:
         if listing.year:
             return f"{title} {listing.year}"
         return title
-    text = (listing.raw_text or "").strip().split("\n")[0]
-    return text[:120] if text else "Telegram оголошення"
+    text = (listing.raw_text or "").strip()
+    for line in text.split("\n"):
+        candidate = line.strip()
+        if len(candidate) < 4:
+            continue
+        # Пропускаємо службові рядки / одну «хвостову» фічу типу Facelift
+        low = candidate.lower()
+        if low in {"facelift", "restyling", "нова", "продаж", "продаю", "продам"}:
+            continue
+        if candidate.startswith(("💰", "📍", "✍️", "👉", "🚗")):
+            continue
+        return candidate[:120]
+    return "Telegram оголошення"
 
 
 def car_listing_to_listing_out(listing: Any) -> ListingOut:

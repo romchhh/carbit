@@ -108,7 +108,7 @@ export function SearchPreviewResults({
 
   return (
     <>
-      <div ref={resultsRef} className="mt-6 scroll-mt-24 sm:mt-8">
+      <div ref={resultsRef} id="search-results" className="mt-6 scroll-mt-28 sm:mt-8 sm:scroll-mt-24">
         <SearchResultsToolbar
           running={running}
           total={total}

@@ -37,7 +37,7 @@ export function AppShellHeader({ unreadNotifications = 0, className }: Props) {
   return (
     <div
       className={cn(
-        "pointer-events-none fixed inset-x-0 top-[var(--safe-top)] z-30 overflow-visible px-3 pt-2 lg:hidden",
+        "pointer-events-none fixed inset-x-0 top-[var(--safe-top)] z-30 overflow-visible px-2 pt-2 lg:hidden",
         className,
       )}
     >

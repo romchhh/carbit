@@ -98,17 +98,23 @@ USERNAME_RE = re.compile(r"@([A-Za-z0-9_]{4,32})")
 
 MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 MARKDOWN_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
-HASHTAG_RE = re.compile(r"#\w+")
+# Хештег → токен: #Zeekr→Zeekr, #L6T79…→VIN; не видаляємо зміст.
+HASHTAG_RE = re.compile(r"#([A-Za-zА-Яа-яЇїІіЄєҐґ0-9_\-]{1,64})")
 VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 _VIN_LABELED_RE = re.compile(
     r"(?:vin|він|вин(?:[\s\-]*код)?)\s*[:\-–—]?\s*([A-HJ-NPR-Z0-9]{17})",
     re.IGNORECASE,
 )
+_VIN_HASHTAG_RE = re.compile(r"#([A-HJ-NPR-Z0-9]{17})\b", re.IGNORECASE)
 
 
 def _extract_vin(text: str) -> str | None:
     if not text:
         return None
+    for match in _VIN_HASHTAG_RE.finditer(text):
+        candidate = match.group(1).upper()
+        if "I" not in candidate and "O" not in candidate and "Q" not in candidate:
+            return candidate
     labeled = _VIN_LABELED_RE.search(text)
     if labeled:
         candidate = labeled.group(1).upper()
@@ -120,8 +126,26 @@ def _extract_vin(text: str) -> str | None:
             return candidate
     return None
 
+
+def _hashtag_replacer(match: re.Match) -> str:
+    tag = match.group(1)
+    if re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", tag, re.IGNORECASE):
+        return tag.upper()
+    return tag
+
+
 MILEAGE_FULL_KM_RE = re.compile(
     r"(?P<val>\d{2,3}(?:[ .]\d{3})+|\d{4,7})\s*км",
+    re.IGNORECASE,
+)
+
+# UA shorthand: «13к пробіг», «13 к км», «пробіг 13к»
+MILEAGE_SHORT_K_RE = re.compile(
+    r"(?:"
+    r"(?P<val>\d{1,3}(?:[ .,]\d{3})?)\s*[кk]\.?\s*(?:км\b|(?:проб[іi]г|пробег)\b)"
+    r"|"
+    r"(?:проб[іi]г|пробег)\s*:?\s*(?P<val2>\d{1,3}(?:[ .,]\d{3})?)\s*[кk]\.?\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -133,9 +157,9 @@ PRICE_LABEL_RE = re.compile(
 )
 
 MILEAGE_LABEL_RE = re.compile(
-    r"(?:пробіг|пробег|mileage|📏)\s*:?\s*"
-    r"(?P<val>\d{1,3}(?:[ .,]\d{3})?)\s?"
-    r"(?P<unit>тис\.?\s?км|тыс\.?\s?км|км)?",
+    r"(?:пробіг|пробег|mileage|📏)[ \t]*:?[ \t]*"
+    r"(?P<val>\d{1,3}(?:[ .,]\d{3})?)[ \t]*"
+    r"(?P<unit>тис\.?[ \t]?км|тыс\.?[ \t]?км|км)?",
     re.IGNORECASE,
 )
 
@@ -176,12 +200,12 @@ CONDITION_KEYWORDS = {
 
 
 def normalize_listing_text(raw_text: str) -> str:
-    """Прибирає markdown, хештеги і зайві пробіли перед парсингом."""
+    """Прибирає markdown; хештеги лишає як звичайні токени (VIN — окремо)."""
     text = raw_text or ""
     text = MARKDOWN_LINK_RE.sub(r"\1", text)
     text = MARKDOWN_BOLD_RE.sub(r"\1", text)
     text = text.replace("**", "").replace("__", "")
-    text = HASHTAG_RE.sub(" ", text)
+    text = HASHTAG_RE.sub(_hashtag_replacer, text)
     text = re.sub(r"[\u00a0\u202f\u2009]", " ", text)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -308,23 +332,27 @@ def _looks_like_phone_amount(amount: float) -> bool:
 
 
 def _find_price(text: str):
-    label_match = PRICE_LABEL_RE.search(text)
-    if label_match:
+    # Кілька 💰 (стара/нова ціна) — беремо останню валідну (часто акційна).
+    labeled_hits: list[tuple[float, str | None]] = []
+    for label_match in PRICE_LABEL_RE.finditer(text):
         amount = _normalize_amount(label_match.group("amount"))
-        if amount is not None and not _looks_like_phone_amount(amount):
-            cur = (label_match.group("cur") or "").lower()
-            currency = None
-            if cur in ("$", "usd") or "у" in cur:
-                currency = "USD"
-            elif cur in ("€", "eur"):
-                currency = "EUR"
-            elif "грн" in cur or cur == "uah":
-                currency = "UAH"
-            if _price_in_range(amount, currency):
-                if currency is None:
-                    from .currency import infer_currency
-                    currency = infer_currency(amount, None, text)
-                return amount, currency
+        if amount is None or _looks_like_phone_amount(amount):
+            continue
+        cur = (label_match.group("cur") or "").lower()
+        currency = None
+        if cur in ("$", "usd") or "у" in cur:
+            currency = "USD"
+        elif cur in ("€", "eur"):
+            currency = "EUR"
+        elif "грн" in cur or cur == "uah":
+            currency = "UAH"
+        if _price_in_range(amount, currency):
+            if currency is None:
+                from .currency import infer_currency
+                currency = infer_currency(amount, None, text)
+            labeled_hits.append((amount, currency))
+    if labeled_hits:
+        return labeled_hits[-1]
 
     best = None
     best_score = -1
@@ -385,6 +413,13 @@ def _find_mileage(text: str) -> Optional[int]:
             if val < 1000:
                 return int(val * 1000)
             return int(val)
+
+    short = MILEAGE_SHORT_K_RE.search(text)
+    if short:
+        raw = short.group("val") or short.group("val2")
+        val = _normalize_amount(raw) if raw else None
+        if val is not None and 1 <= val <= 999:
+            return int(val * 1000)
 
     m = MILEAGE_RE.search(text)
     if m:
@@ -459,6 +494,9 @@ def extract_car_data(
     )
 
     try:
+        # VIN часто лише в хештегу — шукаємо до і після нормалізації.
+        vin_early = _extract_vin(raw_text or "")
+
         brand, model, brand_pos = _find_brand_model(text_low, text)
         listing.brand = brand
         listing.model = model
@@ -492,7 +530,7 @@ def extract_car_data(
 
         listing.condition_flags = _find_condition_flags(text_low)
 
-        vin = _extract_vin(text)
+        vin = vin_early or _extract_vin(text)
         if vin:
             listing.condition_flags = {**(listing.condition_flags or {}), "vin": vin}
 

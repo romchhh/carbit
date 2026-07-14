@@ -90,7 +90,7 @@ export function SearchFiltersPanel({
   return (
     <div className={cn("w-full", wide ? "max-w-none" : "max-w-[640px]")} data-tour="search-filters">
       <div className="rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] transition-shadow duration-300">
-        <div className="overflow-hidden rounded-t-[1.35rem] border-b border-border/60 bg-surface/70 px-4 py-3.5 sm:px-5">
+        <div className="overflow-hidden rounded-t-[1.35rem] border-b border-border/60 bg-surface/70 px-3 py-3.5 sm:px-5">
           <div className="overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex min-w-max gap-2">
               {CATEGORY_OPTIONS.map(({ value, label }) => {
@@ -115,7 +115,7 @@ export function SearchFiltersPanel({
           </div>
         </div>
 
-        <div className="relative z-20 space-y-2 bg-surface/40 px-4 py-4 sm:px-5 sm:py-5">
+        <div className="relative z-20 space-y-2 bg-surface/40 px-3 py-3.5 sm:px-5 sm:py-5">
           <FilterOptionsPopover
             label="Тип транспорту"
             value={filters.vehicleType}
@@ -208,7 +208,7 @@ export function SearchFiltersPanel({
           />
         </div>
 
-        <div className="relative z-10 space-y-2 overflow-hidden rounded-b-[1.35rem] border-t border-border/60 bg-white px-4 py-4 sm:px-5">
+        <div className="relative z-10 space-y-2 overflow-hidden rounded-b-[1.35rem] border-t border-border/60 bg-white px-3 py-3.5 sm:px-5">
           <button
             type="button"
             onClick={() => setAdvanced(v => !v)}
@@ -223,7 +223,7 @@ export function SearchFiltersPanel({
         <AdvancedSearchPanel filters={filters} onChange={onChange} onReset={onReset} />
       )}
 
-      <div className="mt-4 space-y-3 rounded-[1.35rem] border border-border/80 bg-white px-4 py-4 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:px-5">
+      <div className="mt-4 space-y-3 rounded-[1.35rem] border border-border/80 bg-white px-3 py-3.5 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:px-5">
         {searchError && (
           <div
             role="alert"
@@ -299,7 +299,8 @@ export function SearchFiltersPanel({
                   {" — "}
                   оголошення за останні {SEARCH_NEW_WITHIN_DAYS} днів (рекомендовано).
                 </>
-              )}
+              )}{" "}
+              Застосується після натискання «Шукати».
             </p>
           </div>
         )}

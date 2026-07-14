@@ -10,6 +10,14 @@ _VIN_LABELED_RE = re.compile(
     r"(?:vin|він|вин(?:[\s\-]*код)?)\s*[:\-–—]?\s*([A-HJ-NPR-Z0-9]{17})",
     re.IGNORECASE,
 )
+_VIN_HASHTAG_RE = re.compile(r"#([A-HJ-NPR-Z0-9]{17})\b", re.IGNORECASE)
+# VIN з пробілами/дефісами між групами — НЕ суцільний склеєний текст оголошення.
+_SPACED_VIN_RE = re.compile(
+    r"(?<![A-HJ-NPR-Z0-9])"
+    r"(?:[A-HJ-NPR-Z0-9]{2,8}[\s\-]+){1,6}[A-HJ-NPR-Z0-9]{2,8}"
+    r"(?![A-HJ-NPR-Z0-9])",
+    re.IGNORECASE,
+)
 
 
 def is_valid_vin(value: str | None) -> bool:
@@ -26,7 +34,8 @@ def is_valid_vin(value: str | None) -> bool:
 def extract_vin(*parts: str | None) -> str | None:
     """
     Шукає VIN у переданих фрагментах тексту.
-    Спочатку «VIN: XXX…», потім будь-який валідний 17-символьний код.
+    Порядок: хештег → «VIN: …» → суцільний 17-символьний → spaced групами.
+    Compact по всьому тексту не робимо — дає хибні VIN з «Facelift Zeekr 001…».
     """
     chunks = [str(part) for part in parts if part]
     if not chunks:
@@ -34,6 +43,11 @@ def extract_vin(*parts: str | None) -> str | None:
 
     blob = "\n".join(chunks)
     upper = blob.upper()
+
+    for match in _VIN_HASHTAG_RE.finditer(blob):
+        candidate = match.group(1).upper()
+        if is_valid_vin(candidate):
+            return candidate
 
     labeled = _VIN_LABELED_RE.search(blob)
     if labeled:
@@ -46,10 +60,8 @@ def extract_vin(*parts: str | None) -> str | None:
         if is_valid_vin(candidate):
             return candidate
 
-    # Іноді VIN пишуть з пробілами/дефісами: W1N WH5AB1 SX014976
-    compact = re.sub(r"[^A-HJ-NPR-Z0-9]", "", upper)
-    for i in range(0, max(len(compact) - 16, 0)):
-        candidate = compact[i : i + 17]
+    for match in _SPACED_VIN_RE.finditer(upper):
+        candidate = re.sub(r"[^A-HJ-NPR-Z0-9]", "", match.group(0))
         if is_valid_vin(candidate):
             return candidate
 

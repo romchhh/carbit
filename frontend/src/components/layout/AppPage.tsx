@@ -41,9 +41,59 @@ type AppSectionProps = React.ComponentPropsWithoutRef<"section"> & {
 
 export function AppSection({ children, className, ...props }: AppSectionProps) {
   return (
-    <section className={cn("rounded-2xl border border-border/50 bg-surface/30 p-5 sm:p-6", className)} {...props}>
+    <section
+      className={cn("rounded-2xl border border-border/50 bg-surface/30 p-4 sm:p-6", className)}
+      {...props}
+    >
       {children}
     </section>
+  );
+}
+
+/** Група секцій на сторінці акаунта / довгих формах. */
+export function AppSectionGroup({
+  id,
+  label,
+  children,
+  className,
+}: {
+  id?: string;
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div id={id} className={cn("scroll-mt-28 space-y-3", className)}>
+      <h2 className="px-0.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">{label}</h2>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+export function AppSectionHeading({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        {eyebrow && (
+          <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">{eyebrow}</div>
+        )}
+        <div className={cn("font-black text-ink", eyebrow ? "mt-1 text-[18px] sm:text-[20px]" : "text-[16px]")}>
+          {title}
+        </div>
+        {description && <p className="mt-1 text-[13px] leading-relaxed text-muted">{description}</p>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </div>
   );
 }
 

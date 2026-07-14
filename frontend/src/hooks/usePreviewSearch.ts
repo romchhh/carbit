@@ -111,6 +111,16 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setPages(Math.max(1, Math.ceil(data.total / SEARCH_PAGE_SIZE)));
   };
 
+  const scrollToProgress = useCallback(() => {
+    const el = resultsRef.current;
+    if (!el) return;
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+      }, 40);
+    });
+  }, []);
+
   const fetchInitial = useCallback(
     async (
       nextFilters: SearchFilterState,
@@ -121,6 +131,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       setSearching(true);
       setError(null);
       loadedCountRef.current = 0;
+      scrollToProgress();
 
       try {
         void fx.rates();
@@ -163,7 +174,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         }
       }
     },
-    [searchSlice],
+    [searchSlice, scrollToProgress],
   );
 
   const fetchMore = useCallback(
@@ -241,16 +252,10 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     [fetchInitial, filters, freshness, running],
   );
 
-  const changeFreshness = useCallback(
-    (nextFreshness: SearchFreshness) => {
-      if (!running) {
-        setFreshness(nextFreshness);
-        return;
-      }
-      void fetchInitial(filters, sort, nextFreshness);
-    },
-    [fetchInitial, filters, running, sort],
-  );
+  const changeFreshness = useCallback((nextFreshness: SearchFreshness) => {
+    // Лише оновлює режим — пошук стартує тільки по кнопці «Шукати».
+    setFreshness(nextFreshness);
+  }, []);
 
   const loadMore = useCallback(() => {
     if (!running || loadingMore || searching) return;

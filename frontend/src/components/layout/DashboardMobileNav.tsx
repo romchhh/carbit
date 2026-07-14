@@ -17,7 +17,7 @@ export function DashboardMobileNav({ badges }: Props) {
 
   return (
     <nav
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.35rem,env(safe-area-inset-bottom,0px))] lg:hidden"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-2 pb-[max(0.35rem,env(safe-area-inset-bottom,0px))] lg:hidden"
       aria-label="Навігація кабінету"
     >
       <div className="glass-liquid pointer-events-auto mx-auto flex h-[3.75rem] max-w-lg items-stretch justify-around gap-0.5 rounded-[28px] px-2 py-1.5">

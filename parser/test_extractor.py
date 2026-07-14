@@ -84,6 +84,40 @@ class ExtractorTests(unittest.TestCase):
         self.assertEqual(listing.brand, "Toyota")
         self.assertEqual(listing.year, 2017)
 
+    def test_hashtags_keep_brand_and_vin(self):
+        raw = """#Zeekr #001 Facelift
+
+Zeekr 001 Facelift
+2024 рік
+13к пробіг
+електро
+Повний привід
+
+📍 м. Київ
+
+#L6T79ZCE4RP134189
+
+💰47.000$💰45.000$
+✍️ @KT1255E
+"""
+        listing = _extract(raw)
+        self.assertEqual(listing.brand, "Zeekr")
+        self.assertIn("001", listing.model or "")
+        self.assertEqual(listing.year, 2024)
+        self.assertEqual(listing.mileage_km, 13000)
+        self.assertEqual(listing.fuel_type, "electric")
+        self.assertEqual(listing.drive_type, "awd")
+        self.assertEqual(listing.location_city, "Київ")
+        self.assertEqual(listing.price_amount, 45000)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.condition_flags.get("vin"), "L6T79ZCE4RP134189")
+        self.assertEqual(listing.contact_username, "KT1255E")
+        self.assertNotEqual(listing.condition_flags.get("vin"), "FACELFTZEEKR001FA")
+
+    def test_mileage_short_k(self):
+        listing = _extract("BMW X5 2019\n85к пробіг\n22000$")
+        self.assertEqual(listing.mileage_km, 85000)
+
     def test_year_with_cyrillic_g_suffix(self):
         listing = _extract(
             "MAZDA MX-30 2021г. Электро 35,5 kWt 45 тыс.км. Автомат. "

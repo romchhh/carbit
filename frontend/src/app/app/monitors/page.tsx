@@ -37,7 +37,7 @@ export default function MonitorsPage() {
   const limitReached = remaining <= 0;
 
   return (
-    <AppPage>
+    <AppPage tourId="tour-section-monitors">
       <div className="mb-6 flex items-end justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-black tracking-tight text-ink sm:text-[26px]">

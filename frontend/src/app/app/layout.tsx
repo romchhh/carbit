@@ -11,7 +11,7 @@ import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 import { PwaLoadingScreen } from "@/components/pwa/PwaLoadingScreen";
 import { useAuth } from "@/contexts/AuthProvider";
 import * as api from "@/lib/api";
-import { completeOnboarding, shouldShowOnboarding } from "@/lib/onboarding";
+import { completeOnboarding, ONBOARDING_TOUR_EVENT, shouldShowOnboarding } from "@/lib/onboarding";
 
 function isNestedScrollable(node: HTMLElement, root: HTMLElement): boolean {
   let current: HTMLElement | null = node;
@@ -63,10 +63,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user || tourActive || !shouldShowOnboarding(user)) return;
-    if (pathname !== "/app/dashboard") return;
-    const timer = window.setTimeout(() => setTourActive(true), 500);
+    // Примусовий повтор туру — одразу; перший вхід — зі стартової головної.
+    const force =
+      typeof window !== "undefined" &&
+      sessionStorage.getItem("autoradar_force_tour") === "true";
+    if (!force && pathname !== "/app/dashboard") return;
+    const timer = window.setTimeout(() => setTourActive(true), force ? 120 : 500);
     return () => window.clearTimeout(timer);
   }, [user, pathname, tourActive]);
+
+  useEffect(() => {
+    const onStartTour = () => {
+      if (!user) return;
+      setTourActive(true);
+    };
+    window.addEventListener(ONBOARDING_TOUR_EVENT, onStartTour);
+    return () => window.removeEventListener(ONBOARDING_TOUR_EVENT, onStartTour);
+  }, [user]);
 
   // Сірий canvas / поля навколо острова не в overflow-y — прокидаємо wheel у контент.
   useEffect(() => {
@@ -151,7 +164,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eef0f4] lg:rounded-[28px] lg:border lg:border-border/50 lg:bg-white lg:shadow-island">
               <div
                 ref={mainScrollRef}
-                className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-6 lg:px-12 lg:pb-8 lg:pt-8"
+                className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-4 lg:px-12 lg:pb-8 lg:pt-8"
               >
                 <div className="app-mobile-content mx-auto flex w-full max-w-[980px] flex-col">
                   {children}
