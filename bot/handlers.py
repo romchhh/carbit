@@ -1,10 +1,16 @@
 import logging
 
 from aiogram import Router
-from aiogram.filters import CommandObject, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from backend_api import init_telegram_login, init_telegram_register, link_telegram_account
+from backend_api import (
+    cancel_subscription,
+    get_subscription_status,
+    init_telegram_login,
+    init_telegram_register,
+    link_telegram_account,
+)
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -16,6 +22,15 @@ def _user_meta(message: Message) -> tuple[str, str | None]:
     if not user:
         raise ValueError("Missing sender")
     return str(user.id), user.username
+
+
+def _format_date(iso: str | None) -> str:
+    if not iso:
+        return "—"
+    try:
+        return iso[:10]
+    except Exception:
+        return iso
 
 
 @router.message(CommandStart())
@@ -40,9 +55,85 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     await _handle_register(message, telegram_id, username)
 
 
+@router.message(Command("subscription", "status", "pidpiska"))
+async def cmd_subscription(message: Message) -> None:
+    telegram_id, _ = _user_meta(message)
+    result = await get_subscription_status(telegram_id)
+    if not result:
+        await message.answer("⚠️ Не вдалося отримати статус. Спробуйте пізніше.")
+        return
+    if result.get("error") == "not_registered":
+        await message.answer(
+            "Акаунт не прив’язаний. Натисніть /start або підключіть Telegram у кабінеті.",
+        )
+        return
+    if result.get("error") == "account_deactivated":
+        await message.answer("⚠️ Акаунт деактивовано.")
+        return
+
+    plan_name = result.get("plan_name", "—")
+    expires = _format_date(result.get("plan_expires_at"))
+    if result.get("recurring_active"):
+        recurring = "так"
+    elif result.get("past_due"):
+        recurring = "борг (оплата не пройшла)"
+    else:
+        recurring = "ні"
+    trial = "\n🎁 Trial активний" if result.get("is_trial_active") else ""
+    failed = int(result.get("failed_charges") or 0)
+    failed_line = f"\n⚠️ Невдалих списань підряд: <b>{failed}</b>" if failed else ""
+    billing_url = result.get("billing_url") or f"{settings.FRONTEND_URL}/app/billing"
+
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="💳 Керувати підпискою", url=billing_url)]],
+    )
+    await message.answer(
+        f"📋 <b>Підписка Carbit</b>\n\n"
+        f"Тариф: <b>{plan_name}</b>\n"
+        f"Ліміт моніторингів: <b>{result.get('searches_limit', '—')}</b>\n"
+        f"Діє до: <b>{expires}</b>\n"
+        f"Автоплатіж: <b>{recurring}</b>"
+        f"{trial}{failed_line}\n\n"
+        f"Скасувати автоплатіж: /cancel",
+        reply_markup=markup,
+    )
+
+
+@router.message(Command("cancel", "unsubscribe", "skasuvaty"))
+async def cmd_cancel(message: Message) -> None:
+    telegram_id, _ = _user_meta(message)
+    result = await cancel_subscription(telegram_id)
+    if not result:
+        await message.answer("⚠️ Не вдалося скасувати. Спробуйте пізніше або через кабінет.")
+        return
+    if result.get("error") == "not_registered":
+        await message.answer("Акаунт не прив’язаний. Натисніть /start.")
+        return
+    if result.get("error") == "account_deactivated":
+        await message.answer("⚠️ Акаунт деактивовано.")
+        return
+
+    billing_url = result.get("billing_url") or f"{settings.FRONTEND_URL}/app/billing"
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="Відкрити кабінет", url=billing_url)]],
+    )
+    text = result.get("message") or "Готово."
+    expires = _format_date(result.get("plan_expires_at"))
+    if result.get("already_free"):
+        await message.answer(f"ℹ️ {text}", reply_markup=markup)
+        return
+    extra = f"\nПлатний доступ до: <b>{expires}</b>" if result.get("plan_expires_at") else ""
+    await message.answer(f"✅ {text}{extra}", reply_markup=markup)
+
+
 @router.message()
 async def fallback(message: Message) -> None:
-    await message.answer("Натисніть /start щоб почати роботу з Carbit.")
+    await message.answer(
+        "Команди Carbit:\n"
+        "/start — увійти / зареєструватись\n"
+        "/subscription — статус підписки\n"
+        "/cancel — скасувати автоплатіж",
+    )
 
 
 async def _handle_connect(
@@ -72,6 +163,7 @@ async def _handle_connect(
         f"✅ <b>Telegram підключено!</b>\n\n"
         f"Акаунт: {result.get('user_name', '')}\n"
         f"Тепер нові авто з ваших запитів надходитимуть сюди.\n\n"
+        f"Команди: /subscription · /cancel\n"
         f"Кабінет → {settings.FRONTEND_URL}/app/dashboard",
     )
 
@@ -96,7 +188,8 @@ async def _handle_login(message: Message, telegram_id: str, username: str | None
     )
     await message.answer(
         f"Привіт, <b>{result.get('user_name', '')}</b>!\n\n"
-        "Натисніть кнопку нижче, щоб увійти в Carbit.",
+        "Натисніть кнопку нижче, щоб увійти в Carbit.\n"
+        "Підписка: /subscription · скасувати: /cancel",
         reply_markup=markup,
     )
 
@@ -126,7 +219,8 @@ async def _handle_register(message: Message, telegram_id: str, username: str | N
         )
         await message.answer(
             f"Привіт, <b>{result.get('user_name', display_name)}</b>!\n\n"
-            "У вас уже є акаунт. Натисніть кнопку, щоб увійти в кабінет.",
+            "У вас уже є акаунт. Натисніть кнопку, щоб увійти в кабінет.\n"
+            "Підписка: /subscription · скасувати: /cancel",
             reply_markup=markup,
         )
         return

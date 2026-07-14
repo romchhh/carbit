@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { listings as listingsApi, favorites as favoritesApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
 import { SourceBadge } from "@/components/listings/SourceBadge";
+import { SourceLinks, listingSourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
@@ -227,7 +228,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Mobile summary */}
           <section className="rounded-2xl border border-border/80 bg-white p-4 shadow-sm lg:hidden">
-            <SourceBadge source={listing.source} className="mb-2" />
+            {(listing.alternate_sources?.length ?? 0) > 0 ? (
+              <SourceLinks listing={listing} className="mb-2" />
+            ) : (
+              <SourceBadge source={listing.source} className="mb-2" />
+            )}
             <h1 className="text-[18px] font-bold leading-snug text-ink">{listing.title}</h1>
             <p className="mt-1 text-[12px] text-muted">
               {listing.brand} {listing.model}
@@ -244,12 +249,18 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
             <div className="mt-4 flex flex-col gap-2">
-              <a href={listing.url} target="_blank" rel="noopener noreferrer">
-                <Button variant="emerald" size="lg" className="w-full gap-2 py-3 text-[15px] font-bold">
-                  <IconGlobe size={18} />
-                  {listingOpenLabel(listing.source)}
-                </Button>
-              </a>
+              {listingSourceLinks(listing).map((link, index) => (
+                <a key={`${link.source}-${link.url}-m`} href={link.url} target="_blank" rel="noopener noreferrer">
+                  <Button
+                    variant={index === 0 ? "emerald" : "outline"}
+                    size="lg"
+                    className="w-full gap-2 py-3 text-[15px] font-bold"
+                  >
+                    <IconGlobe size={18} />
+                    {listingOpenLabel(link.source)}
+                  </Button>
+                </a>
+              ))}
               {hasVinCheck(listing) && <VinCheckButton listing={listing} size="md" className="w-full" />}
             </div>
           </section>
@@ -290,14 +301,19 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
           <p className="px-1 pb-2 text-center text-[11px] text-muted lg:pb-0">
             Дані надано{" "}
-            <a
-              href={listingAttributionUrl(listing.source, listing.url)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-dark hover:underline"
-            >
-              {listingSourceSiteName(listing.source)}
-            </a>
+            {listingSourceLinks(listing).map((link, index, arr) => (
+              <span key={`${link.source}-${link.url}-attr`}>
+                {index > 0 ? (index === arr.length - 1 ? " та " : ", ") : null}
+                <a
+                  href={listingAttributionUrl(link.source, link.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-dark hover:underline"
+                >
+                  {listingSourceSiteName(link.source)}
+                </a>
+              </span>
+            ))}
           </p>
         </div>
 
@@ -333,15 +349,25 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
             <div className="mt-4">
-              <SourceBadge source={listing.source} variant="outline" />
+              {(listing.alternate_sources?.length ?? 0) > 0 ? (
+                <SourceLinks listing={listing} />
+              ) : (
+                <SourceBadge source={listing.source} variant="outline" />
+              )}
             </div>
             <div className="mt-5 space-y-2">
-              <a href={listing.url} target="_blank" rel="noopener noreferrer">
-                <Button variant="emerald" size="lg" className="w-full gap-2 py-3 text-[15px] font-bold">
-                  <IconGlobe size={18} />
-                  {listingOpenLabel(listing.source)}
-                </Button>
-              </a>
+              {listingSourceLinks(listing).map((link, index) => (
+                <a key={`${link.source}-${link.url}-d`} href={link.url} target="_blank" rel="noopener noreferrer">
+                  <Button
+                    variant={index === 0 ? "emerald" : "outline"}
+                    size="lg"
+                    className="w-full gap-2 py-3 text-[15px] font-bold"
+                  >
+                    <IconGlobe size={18} />
+                    {listingOpenLabel(link.source)}
+                  </Button>
+                </a>
+              ))}
               {hasVinCheck(listing) && <VinCheckButton listing={listing} size="md" className="w-full" />}
             </div>
           </div>

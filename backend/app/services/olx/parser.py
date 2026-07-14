@@ -144,15 +144,33 @@ def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
 
     Якщо марки немає в taxonomy OLX (Zeekr тощо) — text_query → /q-zeekr/ або /q-zeekr-001/.
     """
+    from app.services.olx.brand_slugs import (
+        brand_uses_olx_text_search,
+        resolve_olx_brand_slug,
+    )
+
     path_parts = [CATEGORY_PATH.strip("/")]
 
     text_q = (params.text_query or "").strip().lower().replace(" ", "-")
+
+    # Захист: навіть якщо вище забули text_query — ніколи не збираємо /zeekr/001/
+    brand = (params.brand or "").strip()
+    model = (params.model or "").strip()
+    brand_hint = (params.brand_label or brand or "").strip()
+    if not text_q and brand_hint and brand_uses_olx_text_search(brand_hint):
+        brand_q = resolve_olx_brand_slug(brand_hint) or brand.lower()
+        if model and re.fullmatch(r"\d+[a-z]?", model, re.IGNORECASE):
+            text_q = f"{brand_q}-{model.lower()}"
+        else:
+            text_q = brand_q.lower().replace(" ", "-")
+        # Не чіпаємо params (пост-фільтр лишає brand_label/model_label)
+
     if text_q:
         path_parts.append(f"q-{text_q}")
-    elif params.brand:
-        path_parts.append(params.brand.lower().strip())
-        if params.model:
-            path_parts.append(params.model.lower().strip())
+    elif brand:
+        path_parts.append(brand.lower())
+        if model:
+            path_parts.append(model.lower())
 
     path = "/" + "/".join(path_parts) + "/"
 

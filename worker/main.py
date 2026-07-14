@@ -24,6 +24,7 @@ from app.services.parser.queue import (  # noqa: E402
 )
 from app.services.parser.runner import run_parser_cycle, run_parser_for_search  # noqa: E402
 from app.services.parser.settings import get_parser_settings  # noqa: E402
+from app.services.billing.maintenance import run_billing_maintenance  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [worker] %(message)s")
@@ -68,6 +69,24 @@ async def drain_jobs() -> None:
                 logger.exception("Parse job failed for search %s", search_id)
 
 
+async def run_billing_once() -> None:
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await run_billing_maintenance(db)
+            await db.commit()
+            if result.get("skipped"):
+                logger.info("Billing maintenance skipped (%s)", result.get("reason"))
+            else:
+                logger.info(
+                    "Billing maintenance: expired=%s past_due=%s",
+                    result.get("expired_plans"),
+                    result.get("past_due_cancelled"),
+                )
+        except Exception:
+            await db.rollback()
+            logger.exception("Billing maintenance failed")
+
+
 async def run_once() -> None:
     owner = f"worker-{uuid.uuid4().hex[:8]}"
     if not await acquire_cycle_lock(owner):
@@ -96,6 +115,10 @@ async def main() -> None:
         await beat("worker")
         settings = await get_parser_settings()
         interval = int(settings.get("interval_seconds", 900))
+        try:
+            await run_billing_once()
+        except Exception:
+            logger.exception("Billing tick failed")
         try:
             await run_once()
         except Exception:

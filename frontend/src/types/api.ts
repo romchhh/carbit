@@ -32,6 +32,12 @@ export interface SearchQuery {
   created_at: string;
 }
 
+export interface ListingSourceLink {
+  source: string;
+  url: string;
+  id?: string | null;
+}
+
 export interface Listing {
   id: string;
   source: string;
@@ -56,6 +62,10 @@ export interface Listing {
   price_history: Record<string, unknown>[];
   is_duplicate: boolean;
   duplicate_of?: string | null;
+  /** Інші джерела того самого авто (іконки-посилання в UI). */
+  alternate_sources?: ListingSourceLink[];
+  /** У результатах моніторингу — нове з моменту збереження / останнього перегляду. */
+  is_new?: boolean | null;
   published_at: string;
   refreshed_at?: string | null;
   found_at: string;
@@ -143,6 +153,18 @@ export interface Subscription {
   plan_expires_at: string | null;
   trial_ends_at: string | null;
   is_trial_active: boolean;
+  liqpay_enabled?: boolean;
+}
+
+export interface LiqPayCheckout {
+  order_id: string;
+  checkout_url: string;
+  data: string;
+  signature: string;
+  amount: number;
+  currency: string;
+  plan: string;
+  plan_name: string;
 }
 
 export interface TelegramConnectLink {

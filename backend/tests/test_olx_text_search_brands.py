@@ -14,6 +14,7 @@ class OlxTextSearchBrandTests(unittest.TestCase):
     def test_known_404_brands_use_text(self):
         for brand in (
             "Zeekr",
+            "BYD",
             "Haval",
             "Genesis",
             "Cupra",
@@ -34,8 +35,17 @@ class OlxTextSearchBrandTests(unittest.TestCase):
             self.assertTrue(brand_uses_olx_text_search(brand), brand)
 
     def test_path_brands_stay_on_taxonomy(self):
-        for brand in ("Toyota", "BMW", "BYD", "Geely", "JAC", "Chery", "Tesla", "MG"):
+        for brand in ("Toyota", "BMW", "Geely", "JAC", "Chery", "Tesla", "MG"):
             self.assertFalse(brand_uses_olx_text_search(brand), brand)
+
+    def test_byd_url(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="BYD", model="Song Plus", currency="UAH")
+        )
+        self.assertEqual(params.text_query, "byd")
+        url = build_search_url(params)
+        self.assertIn("/q-byd/", url)
+        self.assertNotIn("/legkovye-avtomobili/byd/", url)
 
     def test_text_search_uses_brand_only_url(self):
         params = filters_to_olx_params(
@@ -47,10 +57,22 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         self.assertIn("/q-zeekr-001/", url)
         self.assertNotIn("/zeekr/001/", url)
 
-    def test_zeekr_without_model(self):
-        params = filters_to_olx_params(SearchFilters(brand="Zeekr", currency="UAH"))
-        self.assertEqual(params.text_query, "zeekr")
-        self.assertIn("/q-zeekr/", build_search_url(params))
+    def test_build_url_hardens_stale_brand_path(self):
+        """Навіть OlxSearchParams(brand=zeekr, model=001) → /q-zeekr-001/, не /zeekr/001/."""
+        from app.services.olx.parser import OlxSearchParams
+
+        broken = OlxSearchParams(
+            brand="zeekr",
+            model="001",
+            city_query="kyiv",
+            currency="USD",
+            brand_label="Zeekr",
+            model_label="001",
+        )
+        url = build_search_url(broken)
+        self.assertIn("/q-zeekr-001/", url)
+        self.assertNotIn("/zeekr/001/", url)
+        self.assertNotIn("/q-kyiv/", url)
 
     def test_cyrillic_zeekr_uses_text(self):
         self.assertTrue(brand_uses_olx_text_search("Зікр"))

@@ -13,6 +13,7 @@ from app.schemas.schemas import (
     SearchQueryOut,
     SearchQueryUpdate,
 )
+from app.services.parser.linking import seed_search_baseline
 from app.services.parser.results import get_search_results_from_db, mark_search_listings_seen
 from app.services.parser.tasks import schedule_parse_search
 from app.services.search.search_endpoint import run_live_search
@@ -76,6 +77,7 @@ async def get_search_results(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=50),
     sort_by: str = Query("newest"),
+    mark_seen: bool = Query(False),
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -91,10 +93,23 @@ async def get_search_results(
         sort_by=sort_by,
     )
 
-    if page == 1:
+    if mark_seen:
         await mark_search_listings_seen(db, sq)
 
     return SearchLiveResultsOut(search=sq, results=results)
+
+
+@router.post("/{search_id}/seen", response_model=SearchQueryOut)
+async def mark_search_seen(
+    search_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    sq = await db.get(SearchQuery, search_id)
+    if not sq or sq.user_id != user_id:
+        raise HTTPException(404, "Search not found")
+    await mark_search_listings_seen(db, sq)
+    return sq
 
 
 @router.post("", response_model=SearchQueryOut, status_code=201)
@@ -113,6 +128,10 @@ async def create_search(
     sq = SearchQuery(user_id=user_id, name=body.name, filters=body.filters.model_dump(exclude_none=True))
     db.add(sq)
     await db.flush()
+
+    if body.seed_listings:
+        await seed_search_baseline(db, sq, body.seed_listings)
+
     schedule_parse_search(sq.id)
     return sq
 

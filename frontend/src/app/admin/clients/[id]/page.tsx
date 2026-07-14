@@ -2,13 +2,60 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { adminApi, AdminUserDetail } from "@/lib/admin-api";
+import { adminApi, AdminUserDetail, type AdminBillingSubscription } from "@/lib/admin-api";
 import { getAdminToken } from "@/lib/admin-storage";
 import { formatKyivDate } from "@/lib/datetime";
-import { PLAN_LABELS } from "@/lib/utils";
+import { PLAN_LABELS, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Очікує",
+  active: "Активна",
+  past_due: "Прострочена оплата",
+  failed: "Невдала",
+  cancelled: "Скасована",
+};
+
+function statusVariant(status: string): "emerald" | "red" | "outline" {
+  if (status === "active") return "emerald";
+  if (status === "past_due" || status === "failed") return "red";
+  return "outline";
+}
+
+function BillingRow({ sub }: { sub: AdminBillingSubscription }) {
+  return (
+    <div className="rounded-xl border border-border/80 bg-surface/40 px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-semibold text-ink">{sub.plan_name}</span>
+            <Badge variant={statusVariant(sub.status)}>
+              {STATUS_LABELS[sub.status] ?? sub.status}
+            </Badge>
+            {sub.failed_charges > 0 && (
+              <Badge variant="red">{sub.failed_charges} невдалих</Badge>
+            )}
+          </div>
+          <p className="mt-1 font-mono text-[11px] text-muted break-all">{sub.order_id}</p>
+        </div>
+        <div className="text-right">
+          <div className="text-[15px] font-black text-ink">
+            {sub.amount.toLocaleString("uk-UA")} {sub.currency}
+          </div>
+          <div className="text-[11px] text-muted">/{sub.periodicity === "year" ? "рік" : "міс"}</div>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
+        <span>Створено: {formatKyivDate(sub.created_at)}</span>
+        {sub.last_status && <span>LiqPay: {sub.last_status}</span>}
+        {sub.liqpay_payment_id && <span>payment_id: {sub.liqpay_payment_id}</span>}
+        {sub.cancelled_at && <span>Скасовано: {formatKyivDate(sub.cancelled_at)}</span>}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const [user, setUser] = useState<AdminUserDetail | null>(null);
@@ -46,8 +93,11 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
     }
   };
 
+  const summary = user.billing_summary;
+  const billing = user.billing_subscriptions ?? [];
+
   return (
-    <div className="max-w-[800px]">
+    <div className="max-w-[860px]">
       <Link href="/admin/clients" className="text-[13px] text-muted hover:text-ink mb-4 inline-block">← Клієнти</Link>
       <div className="flex items-start justify-between mb-8">
         <div className="flex items-center gap-4">
@@ -60,6 +110,9 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
           <div>
             <h1 className="text-[28px] font-black text-ink">{user.name}</h1>
             <p className="text-[13px] text-muted">{user.email}</p>
+            <p className="mt-1 text-[11px] text-muted">
+              З {formatKyivDate(user.created_at)} · ID {user.id.slice(0, 8)}…
+            </p>
           </div>
         </div>
         <Badge variant={user.is_active ? "emerald" : "red"}>
@@ -96,8 +149,43 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
             </button>
           ))}
         </div>
-        {user.is_trial_active && (
-          <p className="text-[12px] text-emerald-dark">Trial до {formatKyivDate(user.trial_ends_at)}</p>
+        <div className="flex flex-wrap gap-3 text-[12px]">
+          {user.is_trial_active && (
+            <span className="text-emerald-dark">Trial до {formatKyivDate(user.trial_ends_at)}</span>
+          )}
+          {user.plan_expires_at && (
+            <span className={cn(summary?.plan_expired ? "font-semibold text-red-600" : "text-muted")}>
+              План діє до {formatKyivDate(user.plan_expires_at)}
+              {summary?.plan_expired ? " · прострочено" : ""}
+            </span>
+          )}
+          {!user.plan_expires_at && user.plan === "free" && (
+            <span className="text-muted">Без дати закінчення (Free)</span>
+          )}
+        </div>
+      </section>
+
+      <section className="bg-white border border-border rounded-xl p-6 mb-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[15px] font-bold text-ink">Платежі / LiqPay</h2>
+          <div className="flex flex-wrap gap-1.5">
+            {summary?.active_recurring && <Badge variant="emerald">Автоплатіж</Badge>}
+            {summary?.past_due && <Badge variant="red">Past due</Badge>}
+            {summary?.plan_expired && <Badge variant="red">План прострочено</Badge>}
+            {(summary?.failed_charges ?? 0) > 0 && (
+              <Badge variant="red">{summary?.failed_charges} failed</Badge>
+            )}
+          </div>
+        </div>
+
+        {billing.length === 0 ? (
+          <p className="text-[13px] text-muted">Немає записів LiqPay для цього користувача.</p>
+        ) : (
+          <div className="space-y-3">
+            {billing.map(sub => (
+              <BillingRow key={sub.id} sub={sub} />
+            ))}
+          </div>
         )}
       </section>
 
@@ -112,7 +200,7 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
 
       {user.searches.length > 0 && (
         <section className="bg-white border border-border rounded-xl p-6 mb-4">
-          <h2 className="text-[15px] font-bold text-ink mb-3">Пошукові запити</h2>
+          <h2 className="text-[15px] font-bold text-ink mb-3">Моніторинги</h2>
           <div className="space-y-2">
             {user.searches.map(s => (
               <div key={s.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">

@@ -175,7 +175,8 @@ class SearchFilters(BaseModel):
 class SearchQueryCreate(BaseModel):
     name: str
     filters: SearchFilters
-
+    # Авто з першого live-пошуку — базовий знімок (не як «нові»).
+    seed_listings: list[Any] = Field(default_factory=list)
 
 class SearchQueryUpdate(BaseModel):
     name: Optional[str] = None
@@ -197,6 +198,14 @@ class SearchQueryOut(BaseModel):
 
 
 # Listing
+class ListingSourceLink(BaseModel):
+    """Посилання на те саме авто в іншому джерелі (для UI іконок)."""
+
+    source: str
+    url: str
+    id: Optional[str] = None
+
+
 class ListingOut(BaseModel):
     id: str
     source: str
@@ -221,6 +230,9 @@ class ListingOut(BaseModel):
     price_history: list[dict]
     is_duplicate: bool
     duplicate_of: Optional[str] = None
+    alternate_sources: list[ListingSourceLink] = Field(default_factory=list)
+    # Для результатів моніторингу: чи авто ще не переглянуте як «нове».
+    is_new: Optional[bool] = None
     published_at: datetime
     refreshed_at: Optional[datetime] = None
     found_at: datetime
@@ -330,10 +342,22 @@ class SubscriptionOut(BaseModel):
     plan_expires_at: datetime | None
     trial_ends_at: datetime | None
     is_trial_active: bool
+    liqpay_enabled: bool = False
 
 
 class SubscribeRequest(BaseModel):
     plan: str = Field(pattern=r"^(free|lite|standard|pro)$")
+
+
+class CheckoutOut(BaseModel):
+    order_id: str
+    checkout_url: str
+    data: str
+    signature: str
+    amount: int
+    currency: str
+    plan: str
+    plan_name: str
 
 
 # Telegram

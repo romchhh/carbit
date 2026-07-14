@@ -1,4 +1,4 @@
-import { getToken } from "@/lib/auth-storage";
+import { clearToken, getToken } from "@/lib/auth-storage";
 import { getApiUrl } from "@/lib/api-url";
 import { normalizeListingForFavorite } from "@/lib/listing-favorite-payload";
 import { cachedAutoRiaSearch } from "@/lib/auto-ria-search-cache";
@@ -10,6 +10,7 @@ import type {
   DashboardStats,
   Favorite,
   Listing,
+  LiqPayCheckout,
   Notification,
   PaginatedListings,
   PaginatedNotifications,
@@ -51,18 +52,30 @@ async function parseError(res: Response): Promise<string> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
-  const headers = new Headers(options.headers);
-  if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const run = async (withBearer: boolean) => {
+    const headers = new Headers(options.headers);
+    if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
+    if (withBearer) {
+      const token = getToken();
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+    }
 
-  const method = (options.method ?? "GET").toUpperCase();
-  const res = await fetch(`${apiUrl()}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",
-    redirect: method === "GET" || method === "HEAD" ? "follow" : "manual",
-  });
+    const method = (options.method ?? "GET").toUpperCase();
+    return fetch(`${apiUrl()}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+      redirect: method === "GET" || method === "HEAD" ? "follow" : "manual",
+    });
+  };
+
+  let res = await run(true);
+
+  // Протухший Bearer + валідна HttpOnly cookie → retry лише з cookie
+  if (res.status === 401 && getToken()) {
+    clearToken();
+    res = await run(false);
+  }
 
   if (res.status >= 300 && res.status < 400) {
     throw new ApiError(res.status, "Некоректне перенаправлення API. Перезберіть backend і frontend.");
@@ -129,12 +142,48 @@ export const searches = {
     request<SearchLiveResults>(
       `/searches/${id}/results?page=${page}&per_page=${perPage}&sort_by=${sortBy}`,
     ),
-  create: (name: string, filters: BackendSearchFilters) =>
+  markSeen: (id: string) =>
+    request<SearchQuery>(`/searches/${id}/seen`, { method: "POST" }),
+  create: (name: string, filters: BackendSearchFilters, seedListings: Listing[] = []) =>
     request<SearchQuery>("/searches", {
       method: "POST",
-      body: JSON.stringify({ name, filters }),
+      body: JSON.stringify({
+        name,
+        filters,
+        seed_listings: seedListings.slice(0, 40).map(slimListingForSeed),
+      }),
     }),
 };
+
+function slimListingForSeed(listing: Listing): Record<string, unknown> {
+  return {
+    id: listing.id,
+    source: listing.source,
+    title: listing.title,
+    brand: listing.brand,
+    model: listing.model,
+    year: listing.year,
+    price: listing.price,
+    currency: listing.currency,
+    mileage: listing.mileage,
+    fuel: listing.fuel ?? "",
+    transmission: listing.transmission ?? "",
+    region: listing.region ?? "",
+    description: listing.description ?? null,
+    images: Array.isArray(listing.images) ? listing.images.slice(0, 8) : [],
+    url: listing.url,
+    seller_type: listing.seller_type || "private",
+    vin: listing.vin ?? null,
+    source_data: null,
+    price_history: [],
+    is_duplicate: listing.is_duplicate ?? false,
+    duplicate_of: listing.duplicate_of ?? null,
+    alternate_sources: [],
+    published_at: listing.published_at,
+    refreshed_at: listing.refreshed_at ?? null,
+    found_at: listing.found_at,
+  };
+}
 
 // ── Listings ──────────────────────────────────────────
 export const listings = {
@@ -216,6 +265,10 @@ export const billing = {
   subscription: () => request<Subscription>("/billing/subscription"),
   subscribe: (plan: string) =>
     request<Subscription>("/billing/subscribe", { method: "POST", body: JSON.stringify({ plan }) }),
+  checkout: (plan: string) =>
+    request<LiqPayCheckout>("/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) }),
+  unsubscribe: () =>
+    request<Subscription>("/billing/unsubscribe", { method: "POST" }),
 };
 
 // ── Telegram ──────────────────────────────────────────

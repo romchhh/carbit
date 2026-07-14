@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from app.core.timezone import now_kyiv, start_of_kyiv_day
+from app.core.timezone import as_kyiv, now_kyiv, start_of_kyiv_day
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -14,6 +14,11 @@ from app.core.database import get_db
 from app.core.security import create_admin_token, get_current_admin, get_current_admin_flexible
 from app.models.models import User, SearchQuery, Notification, Favorite, PlanTier
 from app.schemas.schemas import MessageResponse
+from app.services.admin.billing_metrics import (
+    billing_overview,
+    list_user_billing,
+    recent_billing_issues,
+)
 from app.services.billing.plans import PLANS, get_plan, activate_plan
 from app.services.billing.notify import notify_plan_activated
 from app.services.rate_limit import client_ip, enforce_rate_limit
@@ -45,6 +50,31 @@ class AdminDashboardOut(BaseModel):
     revenue_month_uah: int
     plan_breakdown: dict[str, int]
     registrations_chart: list[dict]
+    liqpay_active: int = 0
+    liqpay_past_due: int = 0
+    expiring_7d: int = 0
+    expired_plans: int = 0
+    recurring_mrr_uah: int = 0
+
+
+class AdminBillingSubOut(BaseModel):
+    id: str
+    order_id: str
+    plan: str
+    plan_name: str
+    amount: int
+    currency: str
+    periodicity: str
+    status: str
+    last_status: str | None = None
+    failed_charges: int = 0
+    liqpay_payment_id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    cancelled_at: str | None = None
+    user_id: str | None = None
+    user_name: str | None = None
+    user_email: str | None = None
 
 
 class AdminUserOut(BaseModel):
@@ -85,6 +115,8 @@ class AdminUserDetailOut(AdminUserOut):
     notifications_count: int
     favorites_count: int
     searches: list[dict]
+    billing_subscriptions: list[AdminBillingSubOut] = Field(default_factory=list)
+    billing_summary: dict = Field(default_factory=dict)
 
 
 class AdminUserUpdate(BaseModel):
@@ -106,6 +138,19 @@ class SubscriptionRow(BaseModel):
     revenue_uah: int
 
 
+class LiqPayFinanceOut(BaseModel):
+    by_status: dict[str, int]
+    active_recurring: int
+    past_due: int
+    failed: int
+    cancelled: int
+    pending: int
+    recurring_mrr_uah: int
+    failed_charges_total: int
+    expired_plans: int
+    expiring_7d: int
+
+
 class FinanceOut(BaseModel):
     mrr_uah: int
     arr_uah: int
@@ -113,6 +158,8 @@ class FinanceOut(BaseModel):
     trial_count: int
     paid_count: int
     avg_revenue_per_user: float
+    liqpay: LiqPayFinanceOut | None = None
+    issues: list[AdminBillingSubOut] = Field(default_factory=list)
 
 
 @router.post("/auth/login", response_model=AdminTokenResponse)
@@ -198,6 +245,8 @@ async def admin_dashboard(
         ) or 0
         chart.append({"date": day.strftime("%d.%m"), "count": count})
 
+    billing = await billing_overview(db)
+
     return AdminDashboardOut(
         total_users=total_users,
         new_users_today=new_today,
@@ -210,6 +259,11 @@ async def admin_dashboard(
         revenue_month_uah=revenue,
         plan_breakdown=plan_breakdown,
         registrations_chart=chart,
+        liqpay_active=billing["active_recurring"],
+        liqpay_past_due=billing["past_due"],
+        expiring_7d=billing["expiring_7d"],
+        expired_plans=billing["expired_plans"],
+        recurring_mrr_uah=billing["recurring_mrr_uah"],
     )
 
 
@@ -273,6 +327,18 @@ async def admin_user_detail(
         select(func.count()).select_from(SearchQuery).where(SearchQuery.user_id == user_id)
     ) or 0
 
+    billing_rows = await list_user_billing(db, user_id)
+    now = now_kyiv()
+    expires = user.plan_expires_at
+    expired = bool(
+        expires
+        and user.plan != PlanTier.free
+        and as_kyiv(expires) < now
+    )
+    active_recurring = any(row["status"] == "active" for row in billing_rows)
+    past_due = any(row["status"] == "past_due" for row in billing_rows)
+    failed_charges = sum(int(row.get("failed_charges") or 0) for row in billing_rows)
+
     return AdminUserDetailOut(
         **_admin_user_out(user, sc).model_dump(),
         trial_ends_at=user.trial_ends_at,
@@ -284,6 +350,14 @@ async def admin_user_detail(
              "new_count": s.new_count, "total_count": s.total_count}
             for s in searches.all()
         ],
+        billing_subscriptions=[AdminBillingSubOut(**row) for row in billing_rows],
+        billing_summary={
+            "active_recurring": active_recurring,
+            "past_due": past_due,
+            "plan_expired": expired,
+            "failed_charges": failed_charges,
+            "subscriptions_count": len(billing_rows),
+        },
     )
 
 
@@ -408,6 +482,9 @@ async def admin_finance(
 
     total_users = await db.scalar(select(func.count()).select_from(User)) or 1
 
+    overview = await billing_overview(db)
+    issues = await recent_billing_issues(db, limit=20)
+
     return FinanceOut(
         mrr_uah=mrr,
         arr_uah=mrr * 12,
@@ -415,4 +492,6 @@ async def admin_finance(
         trial_count=trial,
         paid_count=paid,
         avg_revenue_per_user=round(mrr / total_users, 2),
+        liqpay=LiqPayFinanceOut(**overview),
+        issues=[AdminBillingSubOut(**row) for row in issues],
     )

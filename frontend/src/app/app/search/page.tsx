@@ -62,7 +62,7 @@ export default function SearchPage() {
   };
 
   const handleSave = () => {
-    void saveSearch(filters);
+    void saveSearch(filters, results);
   };
 
   return (

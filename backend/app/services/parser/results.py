@@ -13,33 +13,46 @@ from app.services.listings.serialize import listing_to_out
 from app.services.parser.filter_groups import filters_group_key
 
 
-def _sort_items(items: list[tuple[ListingOut, datetime]], sort_by: str) -> list[ListingOut]:
+def _sort_items(
+    items: list[tuple[ListingOut, datetime]],
+    sort_by: str,
+    *,
+    prefer_new: bool = False,
+) -> list[ListingOut]:
     from app.services.currency import listing_price_uah
 
+    def new_rank(row: ListingOut) -> int:
+        return 0 if prefer_new and row.is_new else 1
+
     if sort_by == "price_asc":
-        return [
-            item
-            for item, _ in sorted(items, key=lambda row: listing_price_uah(row[0].price, row[0].currency))
-        ]
+        ordered = sorted(
+            items,
+            key=lambda row: (new_rank(row[0]), listing_price_uah(row[0].price, row[0].currency)),
+        )
+        return [item for item, _ in ordered]
     if sort_by == "price_desc":
-        return [
-            item
-            for item, _ in sorted(
-                items,
-                key=lambda row: listing_price_uah(row[0].price, row[0].currency),
-                reverse=True,
-            )
-        ]
+        ordered = sorted(
+            items,
+            key=lambda row: (
+                new_rank(row[0]),
+                -listing_price_uah(row[0].price, row[0].currency),
+            ),
+        )
+        return [item for item, _ in ordered]
     if sort_by == "year_desc":
-        return [item for item, _ in sorted(items, key=lambda row: row[0].year, reverse=True)]
+        ordered = sorted(items, key=lambda row: (new_rank(row[0]), -row[0].year))
+        return [item for item, _ in ordered]
     if sort_by == "mileage_asc":
-        return [item for item, _ in sorted(items, key=lambda row: row[0].mileage)]
+        ordered = sorted(items, key=lambda row: (new_rank(row[0]), row[0].mileage))
+        return [item for item, _ in ordered]
     if sort_by in ("newest", "published_desc"):
-        return [
-            item
-            for item, _ in sorted(items, key=lambda row: as_kyiv(row[0].published_at), reverse=True)
-        ]
-    return [item for item, _ in sorted(items, key=lambda row: row[1], reverse=True)]
+        ordered = sorted(
+            items,
+            key=lambda row: (new_rank(row[0]), -as_kyiv(row[0].published_at).timestamp()),
+        )
+        return [item for item, _ in ordered]
+    ordered = sorted(items, key=lambda row: (new_rank(row[0]), -row[1].timestamp()))
+    return [item for item, _ in ordered]
 
 
 async def get_search_results_from_db(
@@ -60,8 +73,14 @@ async def get_search_results_from_db(
         stmt = stmt.where(SearchListing.is_new.is_(True))
 
     rows = (await db.execute(stmt)).all()
-    paired = [(listing_to_out(listing), as_kyiv(listing.published_at)) for listing, sl in rows]
-    items = _sort_items(paired, sort_by)
+    paired = [
+        (
+            listing_to_out(listing).model_copy(update={"is_new": bool(sl.is_new)}),
+            as_kyiv(listing.published_at),
+        )
+        for listing, sl in rows
+    ]
+    items = _sort_items(paired, sort_by, prefer_new=True)
 
     total = len(items)
     start = (page - 1) * per_page

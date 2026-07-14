@@ -69,3 +69,25 @@ async def init_telegram_register(
             logger.error("Backend register init failed: %s", res.text)
             return None
         return res.json()
+
+
+async def get_subscription_status(telegram_id: str) -> dict | None:
+    url = f"{settings.BACKEND_URL}/internal/bot/subscription"
+    headers = {"X-Internal-Secret": settings.INTERNAL_API_SECRET}
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.post(url, json={"telegram_id": telegram_id}, headers=headers)
+        if res.status_code >= 400:
+            logger.error("Backend subscription status failed: %s", res.text)
+            return None
+        return res.json()
+
+
+async def cancel_subscription(telegram_id: str) -> dict | None:
+    url = f"{settings.BACKEND_URL}/internal/bot/unsubscribe"
+    headers = {"X-Internal-Secret": settings.INTERNAL_API_SECRET}
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.post(url, json={"telegram_id": telegram_id}, headers=headers)
+        if res.status_code >= 400:
+            logger.error("Backend unsubscribe failed: %s", res.text)
+            return None
+        return res.json()

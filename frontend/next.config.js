@@ -26,10 +26,6 @@ const apiUrl = (() => {
   return "http://localhost:8000/api/v1";
 })();
 
-const backendInternal =
-  process.env.BACKEND_INTERNAL_URL?.trim() ||
-  (process.env.NODE_ENV === "production" ? "http://backend:8000" : "http://localhost:8000");
-
 const defaultCache = require("next-pwa/cache");
 
 // Без кешування HTML/RSC — інакше на телефоні «через раз» кнопки та падіння Next.js.
@@ -38,6 +34,16 @@ const runtimeCaching = [
     const cacheName = entry.options?.cacheName;
     return cacheName !== "others" && cacheName !== "next-data";
   }),
+  {
+    urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+    handler: "NetworkOnly",
+    method: "GET",
+  },
+  {
+    urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+    handler: "NetworkOnly",
+    method: "POST",
+  },
   {
     urlPattern: /\/_next\/data\/.+\/.+\.json$/i,
     handler: "NetworkOnly",
@@ -65,9 +71,7 @@ const withPWA = require("next-pwa")({
   runtimeCaching,
 });
 
-// Absolute API URL → браузер б'є backend напряму (CORS). Relative `/api/v1` → Next rewrite.
-const useDirectApi = /^https?:\/\//i.test(apiUrl);
-
+// Absolute API URL → браузер б'є backend напряму (CORS). Relative `/api/v1` → Route Handler proxy.
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
@@ -76,15 +80,7 @@ const nextConfig = {
     NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: telegramBotUsername,
     NEXT_PUBLIC_TELEGRAM_BOT_URL: telegramBotUrl,
   },
-  async rewrites() {
-    if (useDirectApi) return [];
-    return [
-      {
-        source: "/api/v1/:path*",
-        destination: `${backendInternal}/api/v1/:path*`,
-      },
-    ];
-  },
+  // Cookie-aware proxy: src/app/api/v1/[...path]/route.ts
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },

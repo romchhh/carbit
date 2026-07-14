@@ -5,9 +5,10 @@ import {
   IconChart,
   IconCreditCard,
   IconGear,
+  IconZap,
 } from "@/components/icons";
 
-export type NavBadgeKey = "favorites" | "notifications";
+export type NavBadgeKey = "favorites" | "notifications" | "monitors";
 
 export type DashboardNavItem = {
   href: string;
@@ -20,7 +21,16 @@ export type DashboardNavItem = {
 };
 
 export const primaryNav: DashboardNavItem[] = [
-  { href: "/app/dashboard", icon: IconSearch, label: "Мої пошуки", shortLabel: "Пошук", tourId: "nav-dashboard" },
+  { href: "/app/dashboard", icon: IconSearch, label: "Пошук", shortLabel: "Пошук", tourId: "nav-dashboard" },
+  {
+    href: "/app/monitors",
+    icon: IconZap,
+    label: "Мої моніторинги",
+    shortLabel: "Монітори",
+    badgeKey: "monitors",
+    badgeAccent: true,
+    tourId: "nav-monitors",
+  },
   { href: "/app/favorites", icon: IconHeart, label: "Обране", shortLabel: "Обране", badgeKey: "favorites", tourId: "nav-favorites" },
   { href: "/app/notifications", icon: IconBell, label: "Сповіщення", shortLabel: "Алерти", badgeKey: "notifications", badgeAccent: true, tourId: "nav-notifications" },
   { href: "/app/stats", icon: IconChart, label: "Статистика", shortLabel: "Стат.", tourId: "nav-stats" },
@@ -31,7 +41,11 @@ export const secondaryNav: DashboardNavItem[] = [
   { href: "/app/billing", icon: IconCreditCard, label: "Підписка", tourId: "nav-billing" },
 ];
 
+/** Bottom bar: без статистики, щоб лишилось місце під «Монітори». */
 export const mobileNav: DashboardNavItem[] = [
-  ...primaryNav,
+  primaryNav[0],
+  primaryNav[1],
+  primaryNav[2],
+  primaryNav[3],
   { href: "/app/account", icon: IconGear, label: "Акаунт", shortLabel: "Профіль" },
 ];

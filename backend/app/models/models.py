@@ -36,6 +36,14 @@ class ParseRunStatus(str, enum.Enum):
     failed = "failed"
 
 
+class SubscriptionStatus(str, enum.Enum):
+    pending = "pending"
+    active = "active"
+    cancelled = "cancelled"
+    failed = "failed"
+    past_due = "past_due"
+
+
 def new_uuid() -> str:
     return str(uuid.uuid4())
 
@@ -63,6 +71,10 @@ class User(Base):
     searches: Mapped[list["SearchQuery"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    billing_subscriptions: Mapped[list["BillingSubscription"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def searches_limit(self) -> int:
@@ -207,3 +219,31 @@ class TelegramChannel(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
+
+
+class BillingSubscription(Base):
+    """Підписка LiqPay (джерело правди у нас; синхрон через callback)."""
+
+    __tablename__ = "billing_subscriptions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    order_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    plan: Mapped[str] = mapped_column(String)
+    amount: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String, default="UAH")
+    periodicity: Mapped[str] = mapped_column(String, default="month")
+    status: Mapped[SubscriptionStatus] = mapped_column(
+        SAEnum(SubscriptionStatus),
+        default=SubscriptionStatus.pending,
+    )
+    card_token: Mapped[str | None] = mapped_column(String, nullable=True)
+    liqpay_payment_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Поспільні невдалі рекурентні списання (скидається на success).
+    failed_charges: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv, onupdate=now_kyiv)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="billing_subscriptions")

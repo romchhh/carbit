@@ -11,6 +11,9 @@ export function normalizeListingForFavorite(listing: Listing): Listing {
     region: listing.region ?? "",
     currency: listing.currency || "UAH",
     is_duplicate: listing.is_duplicate ?? false,
+    alternate_sources: Array.isArray(listing.alternate_sources)
+      ? listing.alternate_sources
+      : [],
     published_at: listing.published_at || new Date().toISOString(),
     found_at: listing.found_at || new Date().toISOString(),
   };

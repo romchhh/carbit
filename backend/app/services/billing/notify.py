@@ -1,4 +1,4 @@
-"""Сповіщення користувачу про зміну тарифу (адмінка / активація)."""
+"""Сповіщення користувачу про зміну тарифу / проблеми з оплатою."""
 
 from __future__ import annotations
 
@@ -23,6 +23,48 @@ def _format_expires(user: User) -> str:
     return dt.strftime("%d.%m.%Y")
 
 
+def _cabinet_billing() -> str:
+    return f"{settings.FRONTEND_URL.rstrip('/')}/app/billing"
+
+
+async def _push_system(
+    db: AsyncSession,
+    user: User,
+    *,
+    title: str,
+    body: str,
+    tg_text: str,
+    payload: dict,
+) -> bool:
+    notification = Notification(
+        user_id=user.id,
+        type=NotificationType.system,
+        title=title,
+        body=body,
+        listing_id=None,
+        search_id=None,
+        payload=payload,
+    )
+    db.add(notification)
+
+    sent = False
+    if user.telegram_connected and user.telegram_id:
+        try:
+            result = await telegram_client.send_message(user.telegram_id, tg_text)
+            if result:
+                notification.sent_telegram = True
+                sent = True
+        except Exception:
+            logger.exception(
+                "Failed Telegram billing notify user=%s event=%s",
+                user.id,
+                payload.get("event"),
+            )
+
+    await db.flush()
+    return sent
+
+
 async def notify_plan_activated(
     db: AsyncSession,
     user: User,
@@ -38,7 +80,7 @@ async def notify_plan_activated(
     plan_name = plan["name"]
     searches = plan["searches_limit"]
     expires = _format_expires(user)
-    cabinet = f"{settings.FRONTEND_URL.rstrip('/')}/app/billing"
+    cabinet = _cabinet_billing()
 
     if plan_id == "free":
         title = "Тариф змінено на Безкоштовний"
@@ -71,13 +113,12 @@ async def notify_plan_activated(
             tg_text += f"\n{features}\n"
         tg_text += f"\nКабінет → {cabinet}"
 
-    notification = Notification(
-        user_id=user.id,
-        type=NotificationType.system,
+    return await _push_system(
+        db,
+        user,
         title=title,
         body=body,
-        listing_id=None,
-        search_id=None,
+        tg_text=tg_text,
         payload={
             "event": "plan_activated",
             "plan": plan_id,
@@ -86,21 +127,111 @@ async def notify_plan_activated(
             "plan_expires_at": user.plan_expires_at.isoformat() if user.plan_expires_at else None,
         },
     )
-    db.add(notification)
 
-    sent = False
-    if user.telegram_connected and user.telegram_id:
-        try:
-            result = await telegram_client.send_message(user.telegram_id, tg_text)
-            if result:
-                notification.sent_telegram = True
-                sent = True
-        except Exception:
-            logger.exception(
-                "Failed to send plan Telegram notify user=%s plan=%s",
-                user.id,
-                plan_id,
-            )
 
-    await db.flush()
-    return sent
+async def notify_payment_failed(
+    db: AsyncSession,
+    user: User,
+    *,
+    attempt: int,
+    max_attempts: int,
+    will_cancel: bool,
+) -> bool:
+    cabinet = _cabinet_billing()
+    expires = _format_expires(user)
+    if will_cancel:
+        title = "Підписку скасовано через невдалу оплату"
+        until = f" Доступ діє до {expires}." if expires else ""
+        body = (
+            f"Автосписання не вдалось {attempt} раз(и). "
+            f"Рекурент скасовано.{until} Оновіть картку в кабінеті."
+        )
+        tg_text = (
+            "⚠️ <b>Оплата не пройшла</b>\n\n"
+            f"Невдалих спроб: <b>{attempt}/{max_attempts}</b>\n"
+            "Автоматичні списання зупинено.\n"
+        )
+        if expires:
+            tg_text += f"Платний доступ ще діє до <b>{expires}</b>.\n"
+        tg_text += f"\nОновіть підписку → {cabinet}"
+    else:
+        title = "Не вдалось зняти оплату за підписку"
+        body = (
+            f"Спроба {attempt} з {max_attempts}. "
+            "Перевірте картку — наступного разу може скасуватись автоплатіж."
+        )
+        tg_text = (
+            "⚠️ <b>Проблема з оплатою</b>\n\n"
+            f"Спроба <b>{attempt}</b> з <b>{max_attempts}</b> не вдалась.\n"
+            "Перевірте картку. Якщо не вийде знову — рекурент зупинимо.\n\n"
+            f"Кабінет → {cabinet}"
+        )
+
+    return await _push_system(
+        db,
+        user,
+        title=title,
+        body=body,
+        tg_text=tg_text,
+        payload={
+            "event": "payment_failed",
+            "attempt": attempt,
+            "max_attempts": max_attempts,
+            "will_cancel": will_cancel,
+        },
+    )
+
+
+async def notify_subscription_cancelled(
+    db: AsyncSession,
+    user: User,
+    *,
+    reason: str = "user",
+) -> bool:
+    cabinet = _cabinet_billing()
+    expires = _format_expires(user)
+    until = f" Доступ збережено до {expires}." if expires else ""
+    title = "Автоплатіж скасовано"
+    body = f"Щомісячні списання зупинено.{until}"
+    reason_line = {
+        "user": "Скасовано вами.",
+        "past_due": "Скасовано через невдалі оплати.",
+        "expired": "Період підписки завершився.",
+    }.get(reason, "")
+    tg_text = (
+        "🔕 <b>Автоплатіж скасовано</b>\n\n"
+        f"{reason_line}\n"
+    )
+    if expires:
+        tg_text += f"Платний доступ до: <b>{expires}</b>\n"
+    else:
+        tg_text += "План переведено на Безкоштовний.\n"
+    tg_text += f"\nКабінет → {cabinet}"
+
+    return await _push_system(
+        db,
+        user,
+        title=title,
+        body=body,
+        tg_text=tg_text,
+        payload={"event": "subscription_cancelled", "reason": reason},
+    )
+
+
+async def notify_plan_expired(db: AsyncSession, user: User) -> bool:
+    cabinet = _cabinet_billing()
+    title = "Платний період завершився"
+    body = "Тариф переведено на Безкоштовний. Оформіть підписку знову в кабінеті."
+    tg_text = (
+        "⌛ <b>Підписка закінчилась</b>\n\n"
+        "Платний період завершився — активний план <b>Безкоштовний</b>.\n"
+        f"Оформити знову → {cabinet}"
+    )
+    return await _push_system(
+        db,
+        user,
+        title=title,
+        body=body,
+        tg_text=tg_text,
+        payload={"event": "plan_expired"},
+    )

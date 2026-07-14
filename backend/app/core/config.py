@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     PUBLIC_API_BASE: str = ""
 
+    # LiqPay (sandbox_: тестові ключі; бойові — після активації компанії)
+    LIQPAY_PUBLIC_KEY: str = ""
+    LIQPAY_PRIVATE_KEY: str = ""
+
     # Admin
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "admin123"

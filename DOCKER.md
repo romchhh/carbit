@@ -260,7 +260,8 @@ GOOGLE_REDIRECT_URI=https://your-domain.com/api/v1/auth/google/callback
 | Build падає / «no space left» | `docker builder du` — якщо кеш великий: `sudo ./scripts/setup-docker-cache-limits.sh` або `docker builder prune -af --filter "until=168h"` |
 | Повільний або «зіпсований» білд | Лише тоді: `docker compose build --no-cache <service>` |
 | Mixed Content / `http://backend:8000` у консолі | Неправильний `NEXT_PUBLIC_API_URL` у `.env`. Має бути `/api/v1` або `https://ваш-домен/api/v1`. Потім `docker compose up -d --build frontend` |
-| Кабінет не завантажується без F5 | Часто через Mixed Content вище — виправте URL і перезберіть frontend |
+| Кабінет відкривається, але пошук дає 401 | Старий Bearer у localStorage + cookie. Оновіть backend/frontend: fallback cookie і API proxy. Або вийдіть і зайдіть знову. |
+| `GET /api/v1/fx/rates` → 404 | Старий backend без `fx` router. `docker compose up -d --build backend` |
 | Frontend не бачить API | Перевірте `NEXT_PUBLIC_API_URL`, перезберіть frontend |
 | Bot не підключається до backend | `INTERNAL_API_SECRET` однаковий у `.env`; bot використовує `BACKEND_URL` з compose |
 | CORS помилки | Додайте домен у `ALLOWED_ORIGINS` у `backend/app/core/config.py` |

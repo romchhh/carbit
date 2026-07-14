@@ -10,6 +10,7 @@ import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { saveRecentListing } from "@/lib/recent-listings";
 import { SourceBadge } from "@/components/listings/SourceBadge";
+import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
 import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
@@ -266,7 +267,11 @@ export function ListingsHorizontalCarousel({
                             </span>
                           )}
                         </div>
-                        <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" />
+                        {(listing.alternate_sources?.length ?? 0) > 0 ? (
+                          <SourceLinks listing={listing} iconOnly className="shrink-0" />
+                        ) : (
+                          <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" />
+                        )}
                       </div>
                     </div>
                   </article>

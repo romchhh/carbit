@@ -71,6 +71,60 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
             if "refreshed_at" not in listing_cols:
                 await conn.execute(text("ALTER TABLE listings ADD COLUMN refreshed_at DATETIME"))
                 logger.warning("Added missing listings.refreshed_at column")
+
+            if "billing_subscriptions" not in tables:
+                await conn.execute(
+                    text(
+                        """
+                        CREATE TABLE billing_subscriptions (
+                            id VARCHAR NOT NULL PRIMARY KEY,
+                            order_id VARCHAR NOT NULL UNIQUE,
+                            user_id VARCHAR NOT NULL,
+                            plan VARCHAR NOT NULL,
+                            amount INTEGER NOT NULL,
+                            currency VARCHAR NOT NULL DEFAULT 'UAH',
+                            periodicity VARCHAR NOT NULL DEFAULT 'month',
+                            status VARCHAR NOT NULL DEFAULT 'pending',
+                            card_token VARCHAR,
+                            liqpay_payment_id VARCHAR,
+                            last_status VARCHAR,
+                            failed_charges INTEGER NOT NULL DEFAULT 0,
+                            created_at DATETIME NOT NULL,
+                            updated_at DATETIME NOT NULL,
+                            cancelled_at DATETIME,
+                            FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+                        )
+                        """
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_billing_subscriptions_order_id "
+                        "ON billing_subscriptions (order_id)"
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_billing_subscriptions_user_id "
+                        "ON billing_subscriptions (user_id)"
+                    )
+                )
+                logger.warning("Created missing billing_subscriptions table")
+            else:
+                billing_cols = {
+                    row[1]
+                    for row in (
+                        await conn.execute(text("PRAGMA table_info(billing_subscriptions)"))
+                    ).fetchall()
+                }
+                if "failed_charges" not in billing_cols:
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE billing_subscriptions ADD COLUMN "
+                            "failed_charges INTEGER NOT NULL DEFAULT 0"
+                        )
+                    )
+                    logger.warning("Added missing billing_subscriptions.failed_charges column")
             return
 
         # Postgres / others
@@ -145,3 +199,78 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
                         text("CREATE INDEX IF NOT EXISTS ix_listings_vin ON listings (vin)")
                     )
                 logger.warning("Added missing listings.%s column", column)
+        billing_exists = await conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_name = 'billing_subscriptions'
+                """
+            )
+        )
+        if billing_exists.first() is None:
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE billing_subscriptions (
+                        id VARCHAR PRIMARY KEY,
+                        order_id VARCHAR NOT NULL UNIQUE,
+                        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        plan VARCHAR NOT NULL,
+                        amount INTEGER NOT NULL,
+                        currency VARCHAR NOT NULL DEFAULT 'UAH',
+                        periodicity VARCHAR NOT NULL DEFAULT 'month',
+                        status VARCHAR NOT NULL DEFAULT 'pending',
+                        card_token VARCHAR,
+                        liqpay_payment_id VARCHAR,
+                        last_status VARCHAR,
+                        failed_charges INTEGER NOT NULL DEFAULT 0,
+                        created_at TIMESTAMPTZ NOT NULL,
+                        updated_at TIMESTAMPTZ NOT NULL,
+                        cancelled_at TIMESTAMPTZ
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_billing_subscriptions_order_id "
+                    "ON billing_subscriptions (order_id)"
+                )
+            )
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_billing_subscriptions_user_id "
+                    "ON billing_subscriptions (user_id)"
+                )
+            )
+            logger.warning("Created missing billing_subscriptions table")
+
+        billing_col = await conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'billing_subscriptions'
+                  AND column_name = 'failed_charges'
+                """
+            )
+        )
+        if billing_col.first() is None:
+            # Таблиця може ще не існувати на свіжій БД з CREATE вище — тоді колонка вже є.
+            table_ok = await conn.execute(
+                text(
+                    """
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_name = 'billing_subscriptions'
+                    """
+                )
+            )
+            if table_ok.first() is not None:
+                await conn.execute(
+                    text(
+                        "ALTER TABLE billing_subscriptions "
+                        "ADD COLUMN failed_charges INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
+                logger.warning("Added missing billing_subscriptions.failed_charges column")

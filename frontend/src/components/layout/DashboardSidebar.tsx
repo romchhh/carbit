@@ -8,7 +8,7 @@ import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { primaryNav, secondaryNav, type NavBadgeKey } from "@/lib/dashboard-nav";
 import { FAVORITES_CHANGED_EVENT } from "@/hooks/useListingFavorite";
 import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notifications-events";
-import { notifications as notificationsApi, favorites as favoritesApi } from "@/lib/api";
+import { notifications as notificationsApi, favorites as favoritesApi, searches as searchesApi } from "@/lib/api";
 
 type Props = {
   searchesUsed: number;
@@ -18,14 +18,24 @@ type Props = {
 export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
   const pathname = usePathname();
   const pct = searchesLimit > 0 ? Math.round((searchesUsed / searchesLimit) * 100) : 0;
-  const [badges, setBadges] = useState<Record<NavBadgeKey, number>>({ favorites: 0, notifications: 0 });
+  const [badges, setBadges] = useState<Record<NavBadgeKey, number>>({
+    favorites: 0,
+    notifications: 0,
+    monitors: 0,
+  });
 
   useEffect(() => {
     const refreshBadges = () => {
       Promise.all([
         favoritesApi.list().then(f => f.length).catch(() => 0),
         notificationsApi.stats().then(s => s.unread).catch(() => 0),
-      ]).then(([favorites, notifications]) => setBadges({ favorites, notifications }));
+        searchesApi
+          .list()
+          .then(items => items.reduce((sum, s) => sum + (s.new_count || 0), 0))
+          .catch(() => 0),
+      ]).then(([favorites, notifications, monitors]) =>
+        setBadges({ favorites, notifications, monitors }),
+      );
     };
 
     refreshBadges();
@@ -132,14 +142,24 @@ export function DashboardSidebar({ searchesUsed, searchesLimit }: Props) {
 
 export function useDashboardBadges() {
   const pathname = usePathname();
-  const [badges, setBadges] = useState<Record<NavBadgeKey, number>>({ favorites: 0, notifications: 0 });
+  const [badges, setBadges] = useState<Record<NavBadgeKey, number>>({
+    favorites: 0,
+    notifications: 0,
+    monitors: 0,
+  });
 
   useEffect(() => {
     const refreshBadges = () => {
       Promise.all([
         favoritesApi.list().then(f => f.length).catch(() => 0),
         notificationsApi.stats().then(s => s.unread).catch(() => 0),
-      ]).then(([favorites, notifications]) => setBadges({ favorites, notifications }));
+        searchesApi
+          .list()
+          .then(items => items.reduce((sum, s) => sum + (s.new_count || 0), 0))
+          .catch(() => 0),
+      ]).then(([favorites, notifications, monitors]) =>
+        setBadges({ favorites, notifications, monitors }),
+      );
     };
 
     refreshBadges();

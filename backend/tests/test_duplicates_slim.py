@@ -51,16 +51,30 @@ class DuplicatesTests(unittest.TestCase):
         b = _item(id="b", source="olx", mileage=82000)
         self.assertTrue(listings_look_same(a, b))
 
-    def test_mark_pool(self):
+    def test_mark_pool_prefers_auto_ria_and_links_olx(self):
         items = mark_duplicates_in_pool(
             [
-                _item(id="a", vin="WBA8E9C50HK123456"),
-                _item(id="b", source="olx", vin="WBA8E9C50HK123456"),
+                _item(
+                    id="b",
+                    source="olx",
+                    vin="WBA8E9C50HK123456",
+                    url="https://olx.example/1",
+                ),
+                _item(
+                    id="a",
+                    vin="WBA8E9C50HK123456",
+                    url="https://auto.ria.example/1",
+                ),
             ]
         )
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].id, "a")
+        self.assertEqual(items[0].source, "auto_ria")
         self.assertFalse(items[0].is_duplicate)
-        self.assertTrue(items[1].is_duplicate)
-        self.assertEqual(items[1].duplicate_of, "a")
+        self.assertIsNone(items[0].duplicate_of)
+        self.assertEqual(len(items[0].alternate_sources), 1)
+        self.assertEqual(items[0].alternate_sources[0].source, "olx")
+        self.assertEqual(items[0].alternate_sources[0].url, "https://olx.example/1")
 
 
 class SlimListTests(unittest.TestCase):

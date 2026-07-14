@@ -39,6 +39,31 @@ export interface AdminDashboard {
   revenue_month_uah: number;
   plan_breakdown: Record<string, number>;
   registrations_chart: { date: string; count: number }[];
+  liqpay_active?: number;
+  liqpay_past_due?: number;
+  expiring_7d?: number;
+  expired_plans?: number;
+  recurring_mrr_uah?: number;
+}
+
+export interface AdminBillingSubscription {
+  id: string;
+  order_id: string;
+  plan: string;
+  plan_name: string;
+  amount: number;
+  currency: string;
+  periodicity: string;
+  status: string;
+  last_status?: string | null;
+  failed_charges: number;
+  liqpay_payment_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  cancelled_at?: string | null;
+  user_id?: string | null;
+  user_name?: string | null;
+  user_email?: string | null;
 }
 
 export interface AdminUser {
@@ -61,6 +86,14 @@ export interface AdminUserDetail extends AdminUser {
   notifications_count: number;
   favorites_count: number;
   searches: { id: string; name: string; is_active: boolean; new_count: number; total_count: number }[];
+  billing_subscriptions?: AdminBillingSubscription[];
+  billing_summary?: {
+    active_recurring: boolean;
+    past_due: boolean;
+    plan_expired: boolean;
+    failed_charges: number;
+    subscriptions_count: number;
+  };
 }
 
 export const adminApi = {
@@ -88,9 +121,25 @@ export const adminApi = {
     request<{ plan: string; plan_name: string; count: number; revenue_uah: number }[]>("/admin/subscriptions"),
   finance: () =>
     request<{
-      mrr_uah: number; arr_uah: number; trial_count: number; paid_count: number;
+      mrr_uah: number;
+      arr_uah: number;
+      trial_count: number;
+      paid_count: number;
       avg_revenue_per_user: number;
       by_plan: { plan: string; plan_name: string; count: number; revenue_uah: number }[];
+      liqpay?: {
+        by_status: Record<string, number>;
+        active_recurring: number;
+        past_due: number;
+        failed: number;
+        cancelled: number;
+        pending: number;
+        recurring_mrr_uah: number;
+        failed_charges_total: number;
+        expired_plans: number;
+        expiring_7d: number;
+      } | null;
+      issues?: AdminBillingSubscription[];
     }>("/admin/finance"),
   parserSettings: () => request<AdminParserSettings>("/admin/parser/settings"),
   updateParserSettings: (body: Partial<AdminParserSettings>) =>

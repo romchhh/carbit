@@ -35,6 +35,10 @@ class BotRegisterRequest(BaseModel):
     name: str | None = None
 
 
+class BotTelegramIdRequest(BaseModel):
+    telegram_id: str
+
+
 def verify_internal_secret(x_internal_secret: str = Header(...)):
     expected = settings.INTERNAL_API_SECRET or ""
     provided = x_internal_secret or ""
@@ -132,4 +136,108 @@ async def bot_init_register(
         "success": True,
         "register_url": register_url,
         "user_name": name,
+    }
+
+
+@router.post("/subscription")
+async def bot_subscription_status(
+    body: BotTelegramIdRequest,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_internal_secret),
+):
+    from app.models.models import BillingSubscription, SubscriptionStatus
+    from app.services.billing.plans import enforce_plan_expiry, get_plan
+    from app.services.billing.subscriptions import get_active_subscription
+
+    user = await db.scalar(select(User).where(User.telegram_id == body.telegram_id))
+    if not user:
+        return {"error": "not_registered"}
+    if not user.is_active:
+        return {"error": "account_deactivated"}
+
+    if enforce_plan_expiry(user):
+        await db.flush()
+
+    plan = get_plan(user.plan.value if hasattr(user.plan, "value") else str(user.plan))
+    active = await get_active_subscription(db, user.id)
+    past_due = None
+    if not active:
+        past_due = await db.scalar(
+            select(BillingSubscription)
+            .where(
+                BillingSubscription.user_id == user.id,
+                BillingSubscription.status == SubscriptionStatus.past_due,
+            )
+            .order_by(BillingSubscription.created_at.desc())
+        )
+    sub = active or past_due
+    return {
+        "success": True,
+        "user_name": user.name,
+        "plan": plan["id"],
+        "plan_name": plan["name"],
+        "searches_limit": user.searches_limit,
+        "plan_expires_at": user.plan_expires_at.isoformat() if user.plan_expires_at else None,
+        "is_trial_active": bool(user.is_trial_active),
+        "recurring_active": active is not None,
+        "past_due": past_due is not None,
+        "order_id": sub.order_id if sub else None,
+        "failed_charges": int(getattr(sub, "failed_charges", 0) or 0) if sub else 0,
+        "billing_url": f"{settings.FRONTEND_URL.rstrip('/')}/app/billing",
+    }
+
+
+@router.post("/unsubscribe")
+async def bot_unsubscribe(
+    body: BotTelegramIdRequest,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_internal_secret),
+):
+    from app.services.billing.notify import notify_subscription_cancelled
+    from app.services.billing.plans import activate_plan, enforce_plan_expiry
+    from app.services.billing.subscriptions import (
+        cancel_active_subscriptions,
+        get_active_subscription,
+    )
+
+    user = await db.scalar(select(User).where(User.telegram_id == body.telegram_id))
+    if not user:
+        return {"error": "not_registered"}
+    if not user.is_active:
+        return {"error": "account_deactivated"}
+
+    if enforce_plan_expiry(user):
+        await db.flush()
+
+    active = await get_active_subscription(db, user.id)
+    previous_plan = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
+    if not active and previous_plan == "free":
+        return {
+            "success": True,
+            "already_free": True,
+            "message": "Активної платної підписки немає.",
+            "plan": "free",
+            "plan_name": "Безкоштовний",
+            "billing_url": f"{settings.FRONTEND_URL.rstrip('/')}/app/billing",
+        }
+
+    await cancel_active_subscriptions(db, user.id)
+    if active is None and previous_plan != "free":
+        activate_plan(user, "free")
+    else:
+        await notify_subscription_cancelled(db, user, reason="user")
+    await db.flush()
+
+    expires = user.plan_expires_at.isoformat() if user.plan_expires_at else None
+    return {
+        "success": True,
+        "cancelled": True,
+        "plan": user.plan.value if hasattr(user.plan, "value") else str(user.plan),
+        "plan_expires_at": expires,
+        "message": (
+            "Автоплатіж скасовано. Доступ збережено до кінця оплаченого періоду."
+            if expires
+            else "Підписку скасовано."
+        ),
+        "billing_url": f"{settings.FRONTEND_URL.rstrip('/')}/app/billing",
     }

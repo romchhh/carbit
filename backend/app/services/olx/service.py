@@ -8,7 +8,7 @@ import re
 from app.schemas.schemas import PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.mapper import sort_listings
-from app.services.olx.brand_slugs import resolve_olx_brand_slug
+from app.services.olx.brand_slugs import brand_uses_olx_text_search, resolve_olx_brand_slug
 from app.services.olx.client import OlxClient
 from app.services.olx.constants import MAX_DELAY, MIN_DELAY
 from app.services.olx.mapper import filters_to_olx_params, olx_listing_to_listing_out
@@ -84,11 +84,8 @@ async def _fetch_olx_search_html(
                 )
                 raise
         if exc.status_code == 404:
-            await notify_admin_parsing_error(
-                source="OLX",
-                error=str(exc),
-                url=url,
-            )
+            # Не спамимо в Telegram на «голий» 404 без fallback (already tried or N/A)
+            pass
         raise
 
 
@@ -129,6 +126,10 @@ async def _search_olx_body(
     # Менше overscan: live path передає вже обмежений per_page (SOURCE_POOL_CAP)
     max_pages = min(max(page, 1) + 1, 3)
     params = filters_to_olx_params(filters, max_pages=max_pages)
+    # Подвійний захист: ніколи не бити taxonomy-path для марок без path на OLX
+    brand = (filters.brand or "").strip()
+    if brand and brand_uses_olx_text_search(brand) and not params.text_query:
+        params = _switch_params_to_text_query(params, filters)
     if params.needs_post_filter():
         params.max_pages = min(max(params.max_pages, 2), 4)
 

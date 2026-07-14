@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { IconGlobe, IconHeart, IconX, IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SourceBadge } from "@/components/listings/SourceBadge";
+import { SourceLinks, listingSourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
@@ -261,7 +262,11 @@ export function ListingDetailModal({
 
           <div className="flex items-center gap-3 px-3 pb-2.5 sm:px-4 sm:pb-3">
             <div className="min-w-0 flex-1 sm:hidden">
-              <SourceBadge source={listing.source} className="mb-1 bg-transparent px-0 shadow-none" />
+              {(listing.alternate_sources?.length ?? 0) > 0 ? (
+                <SourceLinks listing={listing} className="mb-1" />
+              ) : (
+                <SourceBadge source={listing.source} className="mb-1 bg-transparent px-0 shadow-none" />
+              )}
               <h2 className="truncate text-[15px] font-bold leading-snug text-ink">
                 {listing.title}
               </h2>
@@ -447,7 +452,11 @@ export function ListingDetailModal({
               <div className="w-1/2 min-w-0">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <SourceBadge source={listing.source} variant="outline" className="mb-2" />
+                    {(listing.alternate_sources?.length ?? 0) > 0 ? (
+                      <SourceLinks listing={listing} className="mb-2" />
+                    ) : (
+                      <SourceBadge source={listing.source} variant="outline" className="mb-2" />
+                    )}
                     <h2 id="listing-modal-title" className="text-[20px] font-bold leading-snug text-ink">
                       {listing.title}
                     </h2>
@@ -530,7 +539,11 @@ export function ListingDetailModal({
                   </p>
                 )}
               </div>
-              <SourceBadge source={listing.source} variant="outline" />
+              {(listing.alternate_sources?.length ?? 0) > 0 ? (
+                <SourceLinks listing={listing} />
+              ) : (
+                <SourceBadge source={listing.source} variant="outline" />
+              )}
             </div>
 
             {specs.length > 0 && (
@@ -574,14 +587,19 @@ export function ListingDetailModal({
 
             <p className="pb-2 text-center text-[11px] text-muted">
               Дані надано{" "}
-              <a
-                href={listingAttributionUrl(listing.source, listing.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-emerald-dark hover:underline"
-              >
-                {listingSourceSiteName(listing.source)}
-              </a>
+              {listingSourceLinks(listing).map((link, index, arr) => (
+                <span key={`${link.source}-${link.url}`}>
+                  {index > 0 ? (index === arr.length - 1 ? " та " : ", ") : null}
+                  <a
+                    href={listingAttributionUrl(link.source, link.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-dark hover:underline"
+                  >
+                    {listingSourceSiteName(link.source)}
+                  </a>
+                </span>
+              ))}
             </p>
           </div>
         </div>
@@ -594,12 +612,27 @@ export function ListingDetailModal({
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <Link href={listing.url} target="_blank" rel="noopener noreferrer" className="flex-1 sm:min-w-[240px]">
-              <Button variant="emerald" size="lg" className="w-full gap-2 py-3 text-[15px] font-bold">
-                <IconGlobe size={18} />
-                {listingOpenLabel(listing.source)}
-              </Button>
-            </Link>
+            {listingSourceLinks(listing).map((link, index) => (
+              <Link
+                key={`${link.source}-${link.url}-cta`}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={index === 0 ? "flex-1 sm:min-w-[240px]" : "sm:w-auto"}
+              >
+                <Button
+                  variant={index === 0 ? "emerald" : "outline"}
+                  size="lg"
+                  className={cn(
+                    "w-full gap-2 py-3 text-[15px] font-bold",
+                    index > 0 && "border-border text-ink",
+                  )}
+                >
+                  <IconGlobe size={18} />
+                  {listingOpenLabel(link.source)}
+                </Button>
+              </Link>
+            ))}
             {hasVinCheck(listing) && (
               <VinCheckButton listing={listing} size="md" className="w-full sm:w-auto sm:min-w-[180px]" />
             )}

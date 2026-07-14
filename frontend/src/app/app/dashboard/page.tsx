@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { IconPlus, IconZap, IconArrowRight } from "@/components/icons";
+import { IconZap, IconArrowRight } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
@@ -11,6 +11,7 @@ import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarous
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
 import { cn } from "@/lib/utils";
+import { formatSearchDesc } from "@/lib/format-search-desc";
 import { useAuth } from "@/contexts/AuthProvider";
 import { usePreviewSearch } from "@/hooks/usePreviewSearch";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
@@ -23,24 +24,6 @@ import {
 } from "@/components/layout/AppPage";
 import { DashboardWelcomeHero } from "@/components/layout/DashboardWelcomeHero";
 import type { SearchQuery, DashboardStats } from "@/types/api";
-
-function formatSearchDesc(filters: Record<string, unknown>): string {
-  const parts: string[] = [];
-  if (filters.brand) parts.push(String(filters.brand));
-  if (filters.model) parts.push(String(filters.model));
-  if (filters.year_from || filters.year_to) {
-    parts.push(`${filters.year_from ?? "…"}–${filters.year_to ?? "…"}`);
-  }
-  if (filters.price_from || filters.price_to) {
-    const from = filters.price_from ? Number(filters.price_from).toLocaleString("uk-UA") : "…";
-    const to = filters.price_to ? Number(filters.price_to).toLocaleString("uk-UA") : "…";
-    const currency =
-      filters.currency === "USD" ? "$" : filters.currency === "EUR" ? "€" : "грн";
-    parts.push(`${from}–${to} ${currency}`);
-  }
-  if (filters.region) parts.push(String(filters.region));
-  return parts.length > 0 ? parts.join(" · ") : "Без фільтрів";
-}
 
 function CompactStat({
   label,
@@ -141,7 +124,7 @@ export default function DashboardPage() {
   };
 
   const handleSave = () => {
-    void saveSearch(filters);
+    void saveSearch(filters, results);
   };
 
   return (
@@ -202,14 +185,15 @@ export default function DashboardPage() {
 
       <div className="mt-8 flex items-end justify-between gap-3" data-tour="my-searches">
         <div>
-          <h2 className="text-[17px] font-bold text-ink">Мої запити</h2>
+          <h2 className="text-[17px] font-bold text-ink">Мої моніторинги</h2>
           <p className="mt-1 text-[13px] text-muted">
             {activeCount} активних · {remaining > 0 ? `ще ${remaining} доступно` : "ліміт використано"}
+            {totalNew > 0 ? ` · ${totalNew} нових` : ""}
           </p>
         </div>
-        <Link href="/app/search" className="shrink-0">
+        <Link href="/app/monitors" className="shrink-0">
           <Button variant="secondary" size="sm" className="gap-1.5">
-            <IconPlus size={13} /> Додати
+            Усі <IconArrowRight size={13} />
           </Button>
         </Link>
       </div>
@@ -219,14 +203,15 @@ export default function DashboardPage() {
           <AppLoading />
         ) : searches.length === 0 ? (
           <AppEmpty>
-            <p className="text-[15px] font-medium text-ink">Поки немає збережених запитів</p>
+            <p className="text-[15px] font-medium text-ink">Поки немає збережених моніторингів</p>
             <p className="mx-auto mt-2 max-w-sm text-[13px] text-muted">
-              Налаштуйте фільтри вище і натисніть «Зберегти пошук» — нові авто приходитимуть у Telegram.
+              Налаштуйте фільтри вище і натисніть «Зберегти» — поточні й нові авто з’являться в
+              розділі «Мої моніторинги».
             </p>
           </AppEmpty>
         ) : (
           <div className="space-y-3">
-            {searches.map(s => (
+            {searches.slice(0, 3).map(s => (
               <AppSection
                 key={s.id}
                 className={cn("!bg-white p-4 sm:p-5", !s.is_active && "opacity-60")}
@@ -252,20 +237,28 @@ export default function DashboardPage() {
                       <div className={cn("text-[20px] font-black leading-none", s.is_active ? "text-emerald-dark" : "text-muted")}>
                         {s.is_active ? s.total_count : "—"}
                       </div>
-                      <div className="mt-1 text-[10px] uppercase tracking-wide text-muted">знайдено</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-wide text-muted">авто</div>
                     </div>
                     {s.is_active && (
                       <Link
-                        href={`/app/results?search=${s.id}`}
+                        href={`/app/monitors/${s.id}`}
                         className="inline-flex items-center gap-1 rounded-full bg-emerald/10 px-3 py-2 text-[12px] font-semibold text-emerald-dark transition-colors hover:bg-emerald/15"
                       >
-                        Результати <IconArrowRight size={11} />
+                        Відкрити <IconArrowRight size={11} />
                       </Link>
                     )}
                   </div>
                 </div>
               </AppSection>
             ))}
+            {searches.length > 3 && (
+              <Link
+                href="/app/monitors"
+                className="block rounded-2xl border border-dashed border-border bg-white px-4 py-3 text-center text-[13px] font-semibold text-emerald-dark hover:border-emerald/40"
+              >
+                Ще {searches.length - 3} моніторингів →
+              </Link>
+            )}
           </div>
         )}
       </div>

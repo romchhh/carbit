@@ -56,27 +56,45 @@ export function DashboardWelcomeHero({
           <span className="font-medium text-ink">Telegram</span>
         </p>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-ink shadow-sm">
-            <Image src={SOURCE_LOGOS.autoRia} alt="" width={18} height={18} className="rounded-full" />
+        <div className="mt-4 flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/90 px-2 py-1 text-[10px] font-medium text-ink shadow-sm sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-[11px]">
+            <Image
+              src={SOURCE_LOGOS.autoRia}
+              alt=""
+              width={14}
+              height={14}
+              className="h-3 w-3 rounded-full object-contain sm:h-[18px] sm:w-[18px]"
+            />
             AUTO.RIA
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-ink shadow-sm">
-            <Image src={SOURCE_LOGOS.olx} alt="" width={18} height={18} className="rounded-full" />
+          <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/90 px-2 py-1 text-[10px] font-medium text-ink shadow-sm sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-[11px]">
+            <Image
+              src={SOURCE_LOGOS.olx}
+              alt=""
+              width={14}
+              height={14}
+              className="h-3 w-3 rounded-full object-contain sm:h-[18px] sm:w-[18px]"
+            />
             OLX
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-ink shadow-sm">
-            <Image src={SOURCE_LOGOS.telegram} alt="" width={18} height={18} className="rounded-full" />
+          <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/90 px-2 py-1 text-[10px] font-medium text-ink shadow-sm sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-[11px]">
+            <Image
+              src={SOURCE_LOGOS.telegram}
+              alt=""
+              width={14}
+              height={14}
+              className="h-3 w-3 rounded-full object-contain sm:h-[18px] sm:w-[18px]"
+            />
             Telegram
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald/20 bg-emerald/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-dark">
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald/20 bg-emerald/10 px-2 py-1 text-[10px] font-semibold text-emerald-dark sm:px-2.5 sm:py-1.5 sm:text-[11px]">
             <IconZap size={12} />
             {activeSearches} з {searchesLimit} моніторингів
           </span>
           {unreadNotifications > 0 && (
             <Link
               href="/app/notifications"
-              className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink px-2.5 py-1.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+              className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink px-2 py-1 text-[10px] font-semibold text-white transition-opacity hover:opacity-90 sm:px-2.5 sm:py-1.5 sm:text-[11px]"
             >
               <IconBell size={12} />
               {unreadNotifications} нових

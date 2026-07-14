@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
+import { formatSearchDesc } from "@/lib/format-search-desc";
 import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import type { ExportListing } from "@/lib/export-listings";
@@ -36,24 +36,12 @@ function toExportItems(items: Listing[]): ExportListing[] {
   }));
 }
 
-export default function ResultsPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex justify-center py-16">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
-        </div>
-      }
-    >
-      <ResultsPageContent />
-    </Suspense>
-  );
-}
-
-function ResultsPageContent() {
-  const searchParams = useSearchParams();
-  const searchId = searchParams.get("search");
-
+export default function MonitorDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id: searchId } = use(params);
   const [search, setSearch] = useState<SearchQuery | null>(null);
   const [results, setResults] = useState<Listing[]>([]);
   const [total, setTotal] = useState(0);
@@ -64,6 +52,8 @@ function ResultsPageContent() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [newSeenFlash, setNewSeenFlash] = useState(0);
+  const markedSeen = useRef(false);
 
   const loadResults = useCallback(
     async (id: string, nextPage: number, nextSort: SortOption, append: boolean) => {
@@ -83,13 +73,21 @@ function ResultsPageContent() {
         setResults(prev =>
           append ? [...prev, ...data.results.items] : data.results.items,
         );
+
+        if (!append && !markedSeen.current && data.search.new_count > 0) {
+          markedSeen.current = true;
+          setNewSeenFlash(data.search.new_count);
+          void searchesApi.markSeen(id).then(updated => {
+            setSearch(updated);
+          }).catch(() => {});
+        }
       } catch (err) {
         if (!append) {
           setResults([]);
           setTotal(0);
           setSearch(null);
         }
-        setError(getApiErrorMessage(err, "Не вдалось завантажити результати"));
+        setError(getApiErrorMessage(err, "Не вдалось завантажити авто моніторингу"));
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -99,17 +97,20 @@ function ResultsPageContent() {
   );
 
   useEffect(() => {
-    if (!searchId) {
-      setLoading(false);
-      return;
-    }
+    markedSeen.current = false;
     void loadResults(searchId, 1, sort, false);
   }, [searchId, sort, loadResults]);
 
   const exportItems = useMemo(() => toExportItems(results), [results]);
-  const exportName = (search?.name || "rezultaty").replace(/\s+/g, "-").toLowerCase();
+  const exportName = (search?.name || "monitoring").replace(/\s+/g, "-").toLowerCase();
   const hasMore = page < pages;
-  const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } = useListingFavorites(results.map(item => item.id));
+  const {
+    favoriteIds,
+    loadingIds,
+    error: favoriteError,
+    clearError,
+    toggleFavorite,
+  } = useListingFavorites(results.map(item => item.id));
 
   const openListing = (listing: Listing) => {
     saveRecentListing(listing);
@@ -122,24 +123,9 @@ function ResultsPageContent() {
   };
 
   const handleLoadMore = () => {
-    if (!searchId || !hasMore || loadingMore) return;
+    if (!hasMore || loadingMore) return;
     void loadResults(searchId, page + 1, sort, true);
   };
-
-  if (!searchId) {
-    return (
-      <div className="max-w-[860px] rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center">
-        <p className="text-[15px] font-semibold text-ink">Оберіть збережений пошук</p>
-        <p className="mt-2 text-[13px] text-muted">Перейдіть до «Мої моніторинги» і відкрийте запит</p>
-        <Link
-          href="/app/monitors"
-          className="mt-4 inline-flex rounded-full bg-emerald px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-emerald-dark"
-        >
-          Мої моніторинги
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-[860px]">
@@ -153,6 +139,18 @@ function ResultsPageContent() {
         </span>
       </div>
 
+      {search && (
+        <p className="mb-4 text-[13px] text-muted">{formatSearchDesc(search.filters)}</p>
+      )}
+
+      {newSeenFlash > 0 && (
+        <div className="mb-4 rounded-2xl border border-emerald/25 bg-emerald/10 px-4 py-3 text-[13px] text-emerald-dark">
+          Показано {newSeenFlash}{" "}
+          {newSeenFlash === 1 ? "нове авто" : newSeenFlash < 5 ? "нові авто" : "нових авто"} — позначені
+          бейджем «Нове».
+        </div>
+      )}
+
       <SearchResultsToolbar
         running={!loading && !error && results.length > 0}
         loading={loading}
@@ -163,8 +161,8 @@ function ResultsPageContent() {
         exportItems={exportItems}
         exportName={exportName}
         isActive={search?.is_active}
-        newCount={search?.new_count}
-        idleLabel={loading ? "Завантаження..." : "Немає результатів"}
+        newCount={newSeenFlash || search?.new_count}
+        idleLabel={loading ? "Завантаження..." : "Немає авто в цьому моніторингу"}
       />
 
       {error && (
@@ -179,10 +177,16 @@ function ResultsPageContent() {
         </div>
       ) : results.length === 0 && !error ? (
         <div className="rounded-2xl border border-border bg-white px-6 py-16 text-center">
-          <p className="text-[15px] font-semibold text-ink">Нічого не знайдено</p>
+          <p className="text-[15px] font-semibold text-ink">Поки порожньо</p>
           <p className="mt-2 text-[13px] text-muted">
-            Спробуйте змінити фільтри збереженого пошуку або перевірте пізніше
+            Збережіть моніторинг після першого пошуку — сюди потраплять показані авто і всі нові.
           </p>
+          <Link
+            href="/app/dashboard"
+            className="mt-4 inline-flex rounded-full bg-emerald px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-emerald-dark"
+          >
+            До пошуку
+          </Link>
         </div>
       ) : (
         <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:px-0">
@@ -206,31 +210,8 @@ function ResultsPageContent() {
           disabled={loadingMore}
           className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[13px] font-semibold text-muted transition-colors hover:border-ink/20 hover:text-ink disabled:opacity-60"
         >
-          {loadingMore ? "Завантаження..." : "Показати більше результатів"}
+          {loadingMore ? "Завантаження..." : "Показати більше"}
         </button>
-      )}
-
-      {results.length > 0 && (
-        <p className="mt-4 pb-1 text-center text-[11px] text-muted">
-          Дані надано{" "}
-          <a
-            href="https://auto.ria.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-emerald-dark hover:underline"
-          >
-            AUTO.RIA
-          </a>
-          {" "}та{" "}
-          <a
-            href="https://www.olx.ua"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-emerald-dark hover:underline"
-          >
-            OLX
-          </a>
-        </p>
       )}
 
       <ListingDetailModal

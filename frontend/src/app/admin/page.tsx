@@ -41,13 +41,13 @@ export default function AdminDashboardPage() {
 
   const cards = [
     { label: "Клієнтів", value: data.total_users, sub: `+${data.new_users_today} сьогодні · +${data.new_users_week} за тиждень`, accent: data.new_users_today > 0 },
-    { label: "MRR", value: `${data.revenue_month_uah.toLocaleString("uk-UA")} ₴`, sub: "оцінка за тарифами", accent: true },
+    { label: "MRR тарифів", value: `${data.revenue_month_uah.toLocaleString("uk-UA")} ₴`, sub: data.recurring_mrr_uah != null ? `LiqPay ${data.recurring_mrr_uah.toLocaleString("uk-UA")} ₴` : "оцінка за тарифами", accent: true },
     { label: "Платних", value: data.active_subscriptions, sub: `${data.trial_users} на trial`, accent: false },
+    { label: "LiqPay active", value: data.liqpay_active ?? 0, sub: `${data.liqpay_past_due ?? 0} past due`, accent: (data.liqpay_past_due ?? 0) > 0 },
     { label: "Оголошень", value: analytics.total_listings, sub: `+${analytics.listings_today} сьогодні · ${analytics.duplicate_listings} дублів`, accent: analytics.listings_today > 0 },
     { label: "Пошуків", value: analytics.active_searches, sub: `${analytics.inactive_searches} неактивних`, accent: false },
-    { label: "Сповіщень", value: data.total_notifications, sub: `+${analytics.notifications_today} сьогодні`, accent: analytics.notifications_today > 0 },
+    { label: "Закінчуються", value: data.expiring_7d ?? 0, sub: `${data.expired_plans ?? 0} уже прострочені`, accent: (data.expired_plans ?? 0) > 0 },
     { label: "Telegram", value: data.telegram_connected, sub: "підключено", accent: false },
-    { label: "Обране", value: analytics.favorites_count, sub: "збережень", accent: false },
   ];
 
   const maxChart = Math.max(...data.registrations_chart.map(c => c.count), 1);
@@ -209,6 +209,9 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
+        <Link href="/admin/finance" className="rounded-full border border-border bg-white px-4 py-2 text-[13px] font-semibold hover:bg-surface">
+          Фінанси / платежі
+        </Link>
         <Link href="/admin/system" className="rounded-full border border-border bg-white px-4 py-2 text-[13px] font-semibold hover:bg-surface">
           Стан системи
         </Link>

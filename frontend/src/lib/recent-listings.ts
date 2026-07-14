@@ -33,6 +33,12 @@ function normalizeListing(raw: unknown): Listing | null {
     source_data: item.source_data ?? null,
     price_history: Array.isArray(item.price_history) ? item.price_history : [],
     is_duplicate: Boolean(item.is_duplicate),
+    alternate_sources: Array.isArray(item.alternate_sources)
+      ? item.alternate_sources.filter(
+          (row): row is NonNullable<Listing["alternate_sources"]>[number] =>
+            Boolean(row && typeof row === "object" && typeof row.source === "string" && typeof row.url === "string"),
+        )
+      : [],
     published_at: item.published_at ?? "",
     found_at: item.found_at ?? "",
   };

@@ -8,6 +8,7 @@ import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButt
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import { SourceBadge } from "@/components/listings/SourceBadge";
+import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { hasVinCheck } from "@/lib/vin-check";
 import { cn, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
@@ -63,6 +64,8 @@ export function ListingCard({
       ? refreshedAgoLabel(listing.refreshed_at)
       : "";
   const timeBadgeDate = listing.refreshed_at || listing.published_at;
+  const hasMirrorSources = (listing.alternate_sources?.length ?? 0) > 0;
+  const isNewForMonitor = Boolean(listing.is_new);
   const [photoIndex, setPhotoIndex] = useState(0);
   const photoCount = images.length;
   const safeIndex = photoCount > 0 ? ((photoIndex % photoCount) + photoCount) % photoCount : 0;
@@ -96,6 +99,7 @@ export function ListingCard({
         "hover:border-emerald/30 hover:shadow-[0_8px_24px_-10px_rgba(10,12,14,0.16)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40",
         "sm:flex sm:gap-4 sm:p-4",
+        isNewForMonitor && "border-emerald/40 ring-1 ring-emerald/20",
         className,
       )}
     >
@@ -118,7 +122,18 @@ export function ListingCard({
           </div>
         )}
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
-          <SourceBadge source={listing.source} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isNewForMonitor && (
+              <span className="rounded-full bg-emerald px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+                Нове
+              </span>
+            )}
+            {hasMirrorSources ? (
+              <SourceLinks listing={listing} iconOnly />
+            ) : (
+              <SourceBadge source={listing.source} />
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {onToggleFavorite && (
               <ListingFavoriteButton
@@ -205,9 +220,16 @@ export function ListingCard({
       <div className="flex min-w-0 flex-1 flex-col p-4 pt-3.5 sm:p-0">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[15px] sm:line-clamp-1">
-              {listing.title}
-            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              {isNewForMonitor && (
+                <span className="hidden rounded-full bg-emerald px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:inline-flex">
+                  Нове
+                </span>
+              )}
+              <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[15px] sm:line-clamp-1">
+                {listing.title}
+              </h3>
+            </div>
             <p className="mt-2 text-[22px] font-black leading-none tracking-tight text-ink sm:hidden">
               {priceLabel}
             </p>
@@ -283,12 +305,13 @@ export function ListingCard({
                 <span className="mt-0.5 block truncate text-[11px] text-muted/80">{publishedLabel}</span>
               )
             )}
-            {listing.is_duplicate && (
-              <span className="mt-0.5 block text-[11px] text-amber-700">Дублікат в іншому джерелі</span>
-            )}
           </div>
           <span className="hidden items-center gap-1.5 sm:flex">
-            <SourceBadge source={listing.source} variant="outline" />
+            {hasMirrorSources ? (
+              <SourceLinks listing={listing} iconOnly />
+            ) : (
+              <SourceBadge source={listing.source} variant="outline" />
+            )}
             <span className="text-[11px] text-muted">{sellerLabel}</span>
           </span>
           <span className="flex items-center gap-0.5 text-[12px] font-semibold text-emerald-dark sm:ml-auto">

@@ -38,13 +38,18 @@ async def get_current_user_id(
     cookie_token: str | None = Cookie(None, alias=AUTH_COOKIE_NAME),
 ) -> str:
     """Accept Bearer OR HttpOnly cookie — same session for middleware and API."""
-    token = _extract_bearer_or_cookie(credentials, cookie_token)
-    if not token:
+    bearer = credentials.credentials if credentials and credentials.credentials else None
+    # Спочатку Bearer, якщо протух/битий — cookie (роз’їзд localStorage vs HttpOnly)
+    for token in (bearer, cookie_token):
+        if not token:
+            continue
+        try:
+            return _decode_user_id(token)
+        except JWTError:
+            continue
+    if not bearer and not cookie_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    try:
-        return _decode_user_id(token)
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
 async def get_current_user_id_flexible(
@@ -97,13 +102,17 @@ async def get_current_admin(
     cookie_token: str | None = Cookie(None, alias=ADMIN_COOKIE_NAME),
 ) -> str:
     """Accept Bearer OR HttpOnly admin cookie."""
-    token = _extract_bearer_or_cookie(credentials, cookie_token)
-    if not token:
+    bearer = credentials.credentials if credentials and credentials.credentials else None
+    for token in (bearer, cookie_token):
+        if not token:
+            continue
+        try:
+            return _decode_admin(token)
+        except JWTError:
+            continue
+    if not bearer and not cookie_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    try:
-        return _decode_admin(token)
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin token")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin token")
 
 
 async def get_current_admin_flexible(

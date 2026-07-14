@@ -7,7 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.text import norm_text
 from app.models.models import Listing
-from app.schemas.schemas import ListingOut
+from app.schemas.schemas import ListingOut, ListingSourceLink
+
+
+_SOURCE_RANK = {
+    "auto_ria": 0,
+    "olx": 1,
+    "telegram": 2,
+}
+
+
+def _source_rank(source: str) -> int:
+    return _SOURCE_RANK.get((source or "").strip().lower(), 9)
 
 
 def _mileage_close(a: int, b: int) -> bool:
@@ -75,17 +86,80 @@ async def find_duplicate_of(db: AsyncSession, data: ListingOut) -> Listing | Non
     return None
 
 
+def _pick_group_members(group: list[ListingOut]) -> list[ListingOut]:
+    """Один запис на джерело (найсвіжіший)."""
+    by_source: dict[str, ListingOut] = {}
+    for item in group:
+        key = (item.source or "").strip().lower() or "unknown"
+        prev = by_source.get(key)
+        if prev is None or (item.published_at or item.found_at) > (prev.published_at or prev.found_at):
+            by_source[key] = item
+    return list(by_source.values())
+
+
+def _enrich_from_mirrors(canonical: ListingOut, members: list[ListingOut]) -> ListingOut:
+    """Доповнює AUTO.RIA-картку VIN/фото з дзеркал, якщо бракує."""
+    updates: dict = {}
+    if not (canonical.vin or "").strip():
+        for m in members:
+            vin = (m.vin or "").strip().upper()
+            if len(vin) == 17:
+                updates["vin"] = vin
+                break
+    if not canonical.images:
+        for m in members:
+            if m.images:
+                updates["images"] = list(m.images)
+                break
+    if not updates:
+        return canonical
+    return canonical.model_copy(update=updates)
+
+
 def mark_duplicates_in_pool(items: list[ListingOut]) -> list[ListingOut]:
-    """Позначає дублікати в межах однієї видачі (перший — канонічний)."""
-    result: list[ListingOut] = []
-    canonical: list[ListingOut] = []
+    """Згортає крос-джерельні дублікати в одну картку.
+
+    Канонічне оголошення — пріоритетно AUTO.RIA; у `alternate_sources` —
+    посилання на інші джерела з іконками на UI.
+    """
+    groups: list[list[ListingOut]] = []
     for item in items:
-        match = next((c for c in canonical if listings_look_same(item, c)), None)
-        if match is None:
-            canonical.append(item)
-            result.append(item.model_copy(update={"is_duplicate": False, "duplicate_of": None}))
-        else:
-            result.append(
-                item.model_copy(update={"is_duplicate": True, "duplicate_of": match.id})
+        placed = False
+        for group in groups:
+            if any(listings_look_same(item, existing) for existing in group):
+                group.append(item)
+                placed = True
+                break
+        if not placed:
+            groups.append([item])
+
+    result: list[ListingOut] = []
+    for group in groups:
+        members = _pick_group_members(group)
+        canonical = min(members, key=lambda row: _source_rank(row.source))
+        canonical = _enrich_from_mirrors(canonical, members)
+
+        alternates: list[ListingSourceLink] = []
+        seen_sources = {canonical.source}
+        for member in sorted(members, key=lambda row: _source_rank(row.source)):
+            if member.id == canonical.id:
+                continue
+            if member.source in seen_sources:
+                continue
+            seen_sources.add(member.source)
+            if not member.url:
+                continue
+            alternates.append(
+                ListingSourceLink(source=member.source, url=member.url, id=member.id)
             )
+
+        result.append(
+            canonical.model_copy(
+                update={
+                    "is_duplicate": False,
+                    "duplicate_of": None,
+                    "alternate_sources": alternates,
+                }
+            )
+        )
     return result
