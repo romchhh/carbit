@@ -259,7 +259,7 @@ export function SearchFiltersPanel({
             >
               {(
                 [
-                  { value: "new" as const, label: "Тільки нові" },
+                  { value: "new" as const, label: "Тільки нові пропозиції" },
                   { value: "all" as const, label: "Усі пропозиції" },
                 ] as const
               ).map(option => {
@@ -273,7 +273,7 @@ export function SearchFiltersPanel({
                     disabled={searching}
                     onClick={() => onFreshnessChange(option.value)}
                     className={cn(
-                      "rounded-full px-3 py-2.5 text-[13px] font-semibold transition-colors",
+                      "rounded-full px-2.5 py-2.5 text-[12px] font-semibold leading-snug transition-colors sm:px-3 sm:text-[13px]",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40",
                       "disabled:cursor-not-allowed disabled:opacity-60",
                       selected
@@ -295,9 +295,10 @@ export function SearchFiltersPanel({
                 </>
               ) : (
                 <>
-                  <span className="font-medium text-ink/80">Тільки нові</span>
+                  <span className="font-medium text-ink/80">Тільки нові пропозиції</span>
                   {" — "}
-                  оголошення за останні {SEARCH_NEW_WITHIN_DAYS} днів (рекомендовано).
+                  свіжі оголошення за останні {SEARCH_NEW_WITHIN_DAYS} днів (не плутати з категорією
+                  «Нові» авто). Рекомендовано.
                 </>
               )}{" "}
               Застосується після натискання «Шукати».

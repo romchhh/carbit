@@ -19,7 +19,7 @@ _IMPORT_STRONG = (
     "не растамож",
 )
 
-# Слабкі hints походження — лише разом із пригон/нерозмит/єврономер.
+# Слабкі hints походження — лише разом із замовленням / номерами.
 _IMPORT_ORIGIN = (
     "з єс",
     "з сша",
@@ -57,7 +57,6 @@ _ZERO_KM_RE = re.compile(r"(?<!\d)0\s*км\b")
 # Короткі «новий/нова/нове» — лише цілі слова (не «інноваційний»).
 _NEW_WORD_RE = re.compile(r"(?<![а-яa-z0-9їієґ])(новий|нова|нове)(?![а-яa-z0-9їієґ])")
 
-# Однозначні фрази «нове авто».
 _NEW_STRONG = (
     "нове авто",
     "новий автомобіль",
@@ -66,14 +65,15 @@ _NEW_STRONG = (
     "zero km",
 )
 
-# М’які маркери — лише при малому пробігу (інакше «як з салону», «нова гума»).
 _NEW_SOFT = (
     "з салону",
     "без пробігу",
 )
 
-_SOFT_NEW_MAX_KM = 3000
-_WORD_NEW_MAX_KM = 5000
+# «Нові / майже нові»: до 15 тис. км (типові свіжі EV з Китаю теж).
+_NEARLY_NEW_MAX_KM = 15_000
+_SOFT_NEW_MAX_KM = 15_000
+_WORD_NEW_MAX_KM = 20_000
 
 
 def _customs_cleared(blob: str) -> bool:
@@ -88,19 +88,14 @@ def _looks_import(blob: str) -> bool:
     if any(marker in blob for marker in _IMPORT_STRONG):
         return True
 
-    if "пригон" in blob:
-        return True
-
     cleared = _customs_cleared(blob)
     has_plate = any(m in blob for m in _IMPORT_PLATE)
     has_origin = any(m in blob for m in _IMPORT_ORIGIN)
 
     if cleared:
-        # «З ЄС, уже розмитнена» — звичайний ринок, не «під пригон».
         return False
     if has_plate:
         return True
-    # Походження («з ЄС») само по собі замало — багато розмитнених/запчастин.
     if has_origin and any(
         p in blob
         for p in (
@@ -114,7 +109,7 @@ def _looks_import(blob: str) -> bool:
 
 
 def _looks_new(blob: str, mileage: int) -> bool:
-    if mileage <= 1000:
+    if mileage <= _NEARLY_NEW_MAX_KM:
         return True
     if _ZERO_KM_RE.search(blob):
         return True
@@ -140,12 +135,14 @@ def listing_matches_category(item: ListingOut, category: str | None) -> bool:
     if key == "import":
         return looks_import
     if key == "new":
-        if looks_import:
+        # Свіжі розмитнені (Zeekr тощо) часто пишуть «з Китаю» — це не «під пригон».
+        if looks_import and mileage > _NEARLY_NEW_MAX_KM:
             return False
         return looks_new
     if key == "used":
         if looks_import:
             return False
+        # Лише зовсім свіжі (≤1000) прибираємо з «вживані».
         if looks_new and mileage <= 1000:
             return False
         return True

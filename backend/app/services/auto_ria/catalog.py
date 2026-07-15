@@ -54,8 +54,16 @@ async def resolve_model_id(client: AutoRiaClient, mark_id: int, model: str) -> i
     for item in models:
         if norm_text(str(item.get("name", ""))) == target:
             return int(item["value"])
+
+    # Найдовший частковий збіг (щоб «C-Class Coupe» не ловив просто «C-Class»).
+    best: tuple[int, int] | None = None  # (name_len, model_id)
     for item in models:
         name = norm_text(str(item.get("name", "")))
+        if not name:
+            continue
         if target in name or name in target:
-            return int(item["value"])
-    return None
+            score = len(name)
+            mid = int(item["value"])
+            if best is None or score > best[0]:
+                best = (score, mid)
+    return best[1] if best else None

@@ -88,11 +88,11 @@ class AutoRiaCategoryParamsTests(unittest.IsolatedAsyncioTestCase):
 
         new = await fake_params("new")
         self.assertEqual(new.get("searchType"), 1)
-        self.assertEqual(new.get("raceTo"), 1)
+        self.assertEqual(new.get("raceTo"), 15)
 
-        # Категорія «нові» перебиває user mileage_to (лише ≤1000 км).
+        # Категорія «нові» перебиває user mileage_to (до 15 тис. км).
         new_with_mileage = await fake_params("new", mileage_to=50000)
-        self.assertEqual(new_with_mileage.get("raceTo"), 1)
+        self.assertEqual(new_with_mileage.get("raceTo"), 15)
 
         imp = await fake_params("import")
         self.assertEqual(imp.get("custom"), 1)
@@ -103,13 +103,22 @@ class AutoRiaCategoryParamsTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ZeroKmMarkerTests(unittest.TestCase):
-    def test_9300_km_is_not_zero_km_new(self):
+    def test_nearly_new_by_mileage_is_new(self):
         item = _item(
             mileage=9300,
             description="Авто з пробігом 9300 км, знаходиться у Вінниці",
         )
+        self.assertTrue(listing_matches_category(item, "new"))
         self.assertTrue(listing_matches_category(item, "used"))
+
+    def test_high_mileage_9300_substring_not_new(self):
+        # «9300 км» у тексті не має давати false «0 км», якщо пробіг великий.
+        item = _item(
+            mileage=50000,
+            description="раніше було 9300 км, зараз більше",
+        )
         self.assertFalse(listing_matches_category(item, "new"))
+        self.assertTrue(listing_matches_category(item, "used"))
 
     def test_true_zero_km_is_new(self):
         item = _item(mileage=0, description="Без пробігу, 0 км з салону")
@@ -133,8 +142,16 @@ class NewMarkerFalsePositiveTests(unittest.TestCase):
         self.assertTrue(listing_matches_category(item, "used"))
 
     def test_nove_avto_phrase_is_new(self):
-        item = _item(mileage=12000, description="продаж, нове авто з документами")
+        item = _item(mileage=18000, description="продаж, нове авто з документами")
         self.assertTrue(listing_matches_category(item, "new"))
+
+    def test_china_origin_low_mileage_still_new(self):
+        item = _item(
+            mileage=9000,
+            description="Zeekr 001, розмитнений, привезений з Китаю",
+        )
+        self.assertTrue(listing_matches_category(item, "new"))
+        self.assertFalse(listing_matches_category(item, "import"))
 
 
 class ImportMarkerFalsePositiveTests(unittest.TestCase):

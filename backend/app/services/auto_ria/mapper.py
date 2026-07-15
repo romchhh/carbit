@@ -118,10 +118,11 @@ async def filters_to_search_params(
         params["searchType"] = 4
         params["custom"] = 0
     elif category == "new":
-        # Нові / з мінімальним пробігом (race* — тисячі км).
+        # «Нові / майже нові»: до 15 тис. км (race* — тисячі км).
+        # ≤1 тис. занадто вузько для свіжих EV (Zeekr 5–12 тис. км).
         params["searchType"] = 1
         params["raceFrom"] = 0
-        params["raceTo"] = 1
+        params["raceTo"] = 15
     elif category == "import":
         # Нерозмитнені / під пригон.
         params["searchType"] = 4

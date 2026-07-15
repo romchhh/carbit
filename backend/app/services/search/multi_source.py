@@ -587,8 +587,8 @@ async def search_listings_outcome(
 
         filtered_batches = []
         for source, result in successful:
-            # AUTO.RIA «під пригон» уже відфільтрований параметром custom=1.
-            if source == "auto_ria" and category == "import":
+            # AUTO.RIA уже відфільтрований API-параметрами (custom / raceTo).
+            if source == "auto_ria" and category in {"import", "new"}:
                 filtered_batches.append((source, result))
                 continue
             items = [item for item in result.items if listing_matches_category(item, category)]

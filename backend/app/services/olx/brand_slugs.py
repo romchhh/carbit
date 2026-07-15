@@ -283,9 +283,15 @@ _BRAND_MODEL_HAND: dict[str, str] = {
     "мерседес|s-class": "s-seriya",
     "мерседес|g-class": "g-seriya",
     "мерседес|m-class": "ml-seriya",
+    "мерседес|coupe": "coupe",
+    "мерседес|купе": "coupe",
+    "мерседес|cabrio": "cabrio",
+    "мерседес|кабріо": "cabrio",
     "мерседес-бенц|c-class": "c-seriya",
     "мерседес-бенц|e-class": "e-seriya",
     "мерседес-бенц|s-class": "s-seriya",
+    "мерседес-бенц|coupe": "coupe",
+    "мерседес-бенц|купе": "coupe",
 }
 
 _SERIES_RE = re.compile(

@@ -1186,6 +1186,32 @@ def _title_has_model(title: str, model: str, *, brand: str | None = None) -> boo
             re.IGNORECASE,
         ):
             return True
+    # C-Class Coupe / GLC Coupe → «C 200 Coupe», «GLC Coupe», «купе»
+    class_coupe_m = re.fullmatch(r"((?:[a-z]|gl[a-z]?)-class|gl[a-z]?)\s+coupe", model_l)
+    if class_coupe_m:
+        base = class_coupe_m.group(1)
+        letter_m = re.fullmatch(r"([a-z])-class", base)
+        has_coupe = bool(re.search(r"(?<![\w])(?:coupe|купе)(?![\w])", title, re.IGNORECASE))
+        if letter_m and has_coupe:
+            letter = letter_m.group(1)
+            if re.search(
+                rf"(?<![\w]){letter}(?:[\s\-]?class|[\s\-]?клас[сау]?|[\s\-]?\d{{2,3}})(?![\w])",
+                title,
+                re.IGNORECASE,
+            ):
+                return True
+        if has_coupe and re.search(
+            rf"(?<![\w]){re.escape(base)}(?![\w])",
+            title,
+            re.IGNORECASE,
+        ):
+            return True
+    if model_l in {"coupe", "купе"} and re.search(
+        r"(?<![\w])(?:coupe|купе)(?![\w])", title, re.IGNORECASE
+    ):
+        return True
+    if model_l == "cle" and re.search(r"(?<![\w])cle(?![\w])", title, re.IGNORECASE):
+        return True
     # J7 / C5 / X3 → «Jaecoo 7», «Omoda C5»
     letter_num = re.fullmatch(r"([a-z]+)(\d+[a-z]?)", model_l)
     if letter_num:
