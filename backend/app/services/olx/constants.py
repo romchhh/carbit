@@ -74,6 +74,7 @@ TRANSMISSION_NAME_TO_KEY: dict[str, str] = {
 CATEGORY_TO_CONDITION: dict[str, str] = {
     "used": "used",
     "new": "new",
+    # OLX немає окремого «під пригон» — далі пост-фільтр за текстом.
     "import": "used",
 }
 
@@ -127,18 +128,19 @@ REGION_TO_CITY_QUERY: dict[str, str] = {
 }
 
 MODEL_SLUG_ALIASES: dict[str, str] = {
-    "3 series": "3-seriya",
-    "5 series": "5-seriya",
-    "7 series": "7-seriya",
-    "1 series": "1-seriya",
-    "2 series": "2-seriya",
-    "4 series": "4-seriya",
-    "6 series": "6-seriya",
-    "8 series": "8-seriya",
+    "3 series": "3-serya",
+    "5 series": "5-serya",
+    "7 series": "7-serya",
+    "1 series": "1-serya",
+    "2 series": "2-serya",
+    "4 series": "4-serya",
+    "6 series": "6-serya",
+    "8 series": "8-serya",
     "x5": "x5",
     "x3": "x3",
     "passat": "passat",
     "octavia": "octavia",
     "camry": "camry",
-    "rav4": "rav4",
+    "rav4": "rav-4",
+    "rav-4": "rav-4",
 }

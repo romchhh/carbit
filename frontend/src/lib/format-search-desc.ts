@@ -1,5 +1,14 @@
 export function formatSearchDesc(filters: Record<string, unknown>): string {
   const parts: string[] = [];
+  const categoryLabels: Record<string, string> = {
+    used: "Вживані",
+    new: "Нові",
+    import: "Під пригон",
+  };
+  if (filters.category && filters.category !== "all") {
+    const label = categoryLabels[String(filters.category)];
+    if (label) parts.push(label);
+  }
   if (filters.brand) parts.push(String(filters.brand));
   if (filters.model) parts.push(String(filters.model));
   if (filters.year_from || filters.year_to) {

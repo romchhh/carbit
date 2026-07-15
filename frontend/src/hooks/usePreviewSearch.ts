@@ -1,7 +1,9 @@
 "use client";
 
-import { startTransition, useCallback, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/contexts/AuthProvider";
 import { listingSearch, fx, getApiErrorMessage } from "@/lib/api";
+import { resolveDisplayCurrency } from "@/lib/display-currency";
 import {
   DEFAULT_FILTERS,
   normalizePriceRange,
@@ -16,7 +18,6 @@ import {
   type SearchFreshness,
 } from "@/lib/search-preview";
 import { toBackendSearchFilters } from "@/lib/search-filters-api";
-import { resolveDisplayCurrency } from "@/lib/display-currency";
 import type { Listing, SourceStatus } from "@/types/api";
 
 type PageResult = {
@@ -28,6 +29,7 @@ type PageResult = {
 };
 
 export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAULT_FILTERS }) {
+  const { user } = useAuth();
   const resultsRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState<SearchFilterState>(initialFilters);
   const searchGen = useRef(0);
@@ -45,6 +47,22 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const [partial, setPartial] = useState(false);
   const [fromCache, setFromCache] = useState(false);
   const loadedCountRef = useRef(0);
+  /** Остання валюта з профілю, яку підтягнули у фільтр (щоб не перетирати ручну зміну). */
+  const lastSyncedPreferredCurrency = useRef<string | null>(null);
+
+  // Валюта діапазону ціни береться з профілю, але лишається редагованою в фільтрі.
+  useEffect(() => {
+    if (!user) return;
+    const preferred = resolveDisplayCurrency(user.preferred_currency);
+    setFilters(prev => {
+      const shouldSync =
+        lastSyncedPreferredCurrency.current === null ||
+        prev.currency === lastSyncedPreferredCurrency.current;
+      lastSyncedPreferredCurrency.current = preferred;
+      if (!shouldSync || prev.currency === preferred) return prev;
+      return { ...prev, currency: preferred };
+    });
+  }, [user, user?.preferred_currency]);
 
   const buildRequestFilters = useCallback(
     (nextFilters: SearchFilterState, nextFreshness: SearchFreshness) => {
@@ -264,7 +282,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   }, [fetchMore, filters, freshness, loadingMore, running, searching, sort, total]);
 
   const reset = useCallback(() => {
-    setFilters({ ...DEFAULT_FILTERS });
+    const preferred = resolveDisplayCurrency(user?.preferred_currency);
+    lastSyncedPreferredCurrency.current = preferred;
+    setFilters({ ...DEFAULT_FILTERS, currency: preferred });
     setResults([]);
     setTotal(0);
     setPage(1);
@@ -277,7 +297,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setRunning(false);
     setError(null);
     loadedCountRef.current = 0;
-  }, []);
+  }, [user?.preferred_currency]);
 
   return {
     filters,
@@ -296,7 +316,6 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     sourceStatuses,
     partial,
     fromCache,
-    displayCurrency: resolveDisplayCurrency(filters.currency),
     resultsRef,
     runSearch,
     changeSort,

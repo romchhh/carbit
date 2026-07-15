@@ -11,6 +11,7 @@ import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks, listingSourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
+import { useAuth } from "@/contexts/AuthProvider";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
   listingAttributionUrl,
@@ -31,6 +32,7 @@ type Props = {
   favoriteLoading?: boolean;
   onToggleFavorite?: () => void;
   favoriteError?: string | null;
+  /** Якщо не передано — валюта з профілю користувача. */
   displayCurrency?: DisplayCurrency;
   onListingUpdate?: (listing: Listing) => void;
 };
@@ -48,8 +50,9 @@ export function ListingDetailModal({
   displayCurrency: displayCurrencyProp,
   onListingUpdate,
 }: Props) {
+  const { user } = useAuth();
   const displayCurrency = resolveDisplayCurrency(
-    displayCurrencyProp ?? "USD",
+    displayCurrencyProp ?? user?.preferred_currency,
   );
   const [liveListing, setLiveListing] = useState<Listing | null>(listingProp);
   const [photosLoading, setPhotosLoading] = useState(false);

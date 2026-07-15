@@ -44,7 +44,6 @@ export default function DashboardPage() {
     sourceStatuses,
     partial,
     fromCache,
-    displayCurrency,
     resultsRef,
     runSearch,
     changeSort,
@@ -169,7 +168,6 @@ export default function DashboardPage() {
           sourceStatuses={sourceStatuses}
           partial={partial}
           fromCache={fromCache}
-          displayCurrency={displayCurrency}
           onSortChange={changeSort}
           onFreshnessChange={changeFreshness}
           onLoadMore={loadMore}

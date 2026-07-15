@@ -154,11 +154,16 @@ export const searches = {
         seed_listings: seedListings.slice(0, 40).map(slimListingForSeed),
       }),
     }),
-  update: (id: string, body: { name?: string; is_active?: boolean }) =>
+  update: (
+    id: string,
+    body: { name?: string; is_active?: boolean; filters?: BackendSearchFilters },
+  ) =>
     request<SearchQuery>(`/searches/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  delete: (id: string) =>
+    request<void>(`/searches/${id}`, { method: "DELETE" }),
 };
 
 function slimListingForSeed(listing: Listing): Record<string, unknown> {

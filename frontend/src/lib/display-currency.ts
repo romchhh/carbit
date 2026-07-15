@@ -122,10 +122,19 @@ export function formatListingPrice(
   sourceData?: Record<string, unknown> | null,
 ): string {
   const target = resolveDisplayCurrency(preferredCurrency);
-  const native = nativeAmountFromSourceData(sourceData, target);
-  const value = native != null ? native : convertPrice(amount, listingCurrency, target);
-  const formatted = new Intl.NumberFormat("uk-UA").format(value);
-  return `${formatted} ${currencySuffix(target)}`;
+
+  // 1) Рідна сума вже в потрібній валюті (AUTO.RIA source_data.USD / UAH / EUR)
+  const nativeTarget = nativeAmountFromSourceData(sourceData, target);
+  if (nativeTarget != null && nativeTarget > 0) {
+    return `${new Intl.NumberFormat("uk-UA").format(nativeTarget)} ${currencySuffix(target)}`;
+  }
+
+  // 2) Конвертація з рідної суми джерела або з listing.price
+  const from = resolveListingCurrency(listingCurrency);
+  const nativeFrom = nativeAmountFromSourceData(sourceData, from);
+  const raw = nativeFrom != null && nativeFrom > 0 ? nativeFrom : Number(amount) || 0;
+  const value = convertPrice(raw, from, target);
+  return `${new Intl.NumberFormat("uk-UA").format(value)} ${currencySuffix(target)}`;
 }
 
 /** @deprecated використовуй formatListingPrice з валютою оголошення */

@@ -16,7 +16,6 @@ import {
   flavorForPartial,
   flavorForRefresh,
 } from "@/lib/search-flavor";
-import type { DisplayCurrency } from "@/lib/display-currency";
 import type { Listing, SourceStatus } from "@/types/api";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +40,6 @@ type Props = {
   sourceStatuses?: SourceStatus[];
   partial?: boolean;
   fromCache?: boolean;
-  displayCurrency?: DisplayCurrency;
   onSortChange: (sort: SortOption) => void;
   onFreshnessChange: (freshness: SearchFreshness) => void;
   onLoadMore?: () => void;
@@ -61,7 +59,6 @@ export function SearchPreviewResults({
   sourceStatuses,
   partial,
   fromCache,
-  displayCurrency = "USD",
   onSortChange,
   onLoadMore,
 }: Props) {
@@ -180,7 +177,6 @@ export function SearchPreviewResults({
                 <ListingCard
                   key={item.id}
                   listing={item}
-                  displayCurrency={displayCurrency}
                   onClick={() => openListing(item)}
                   isFavorite={favoriteIds.has(item.id)}
                   favoriteLoading={loadingIds.has(item.id)}
@@ -219,7 +215,6 @@ export function SearchPreviewResults({
 
       <ListingDetailModal
         listing={selectedListing}
-        displayCurrency={displayCurrency}
         onClose={() => {
           clearError();
           setSelectedListing(null);

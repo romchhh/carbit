@@ -89,11 +89,25 @@ async def _process_group(
             searches.append(search)
 
     users_cache: dict[str, User | None] = {}
+    # У межах одного циклу: не слати TG двічі за те саме авто одному юзеру
+    notified_cars_in_batch: dict[str, list] = {}
 
+    from app.services.listings.duplicates import listings_look_same
+
+    def _batch_already_notified(user_id: str, listing) -> bool:
+        for prev in notified_cars_in_batch.get(user_id, []):
+            if listings_look_same(prev, listing):
+                return True
+        return False
+
+    # Спочатку upsert усіх, щоб з’явились duplicate_of-зв’язки
+    upserted: list[tuple[ListingOut, object]] = []
     for item in results.items:
         listing = await upsert_listing(db, item)
         listing_ids.append(listing.id)
+        upserted.append((item, listing))
 
+    for item, listing in upserted:
         for search in searches:
             search_sources = normalize_sources(parse_search_filters(search.filters).sources)
             if item.source not in search_sources:
@@ -101,19 +115,26 @@ async def _process_group(
             if search.user_id not in users_cache:
                 users_cache[search.user_id] = await db.get(User, search.user_id)
             user = users_cache[search.user_id]
+
+            do_notify = notify
+            if do_notify and bool(getattr(listing, "is_duplicate", False)):
+                do_notify = False
+            if do_notify and user and _batch_already_notified(user.id, listing):
+                do_notify = False
+
             is_new, sent = await link_listing_to_search(
                 db,
                 search=search,
                 listing_id=listing.id,
-                notify=notify,
+                notify=do_notify,
                 user=user,
                 max_notification_hours=max_hours,
             )
             if is_new:
                 new_total += 1
-            if sent:
+            if sent and user:
+                notified_cars_in_batch.setdefault(user.id, []).append(listing)
                 notifications += 1
-
     await set_filter_cache(
         group.key,
         listing_ids,

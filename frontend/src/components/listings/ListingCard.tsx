@@ -43,7 +43,7 @@ export function ListingCard({
 }: Props) {
   const { user } = useAuth();
   const displayCurrency = resolveDisplayCurrency(
-    displayCurrencyProp ?? user?.preferred_currency ?? "USD",
+    displayCurrencyProp ?? user?.preferred_currency,
   );
   const images = Array.isArray(listing.images) ? listing.images : [];
   const price = Number(listing.price) || 0;

@@ -581,6 +581,31 @@ async def search_listings_outcome(
             )
         successful = filtered_batches
 
+    category = (filters.category or "all").strip().lower()
+    if category in {"used", "new", "import"}:
+        from app.services.search.category import listing_matches_category
+
+        filtered_batches = []
+        for source, result in successful:
+            # AUTO.RIA «під пригон» уже відфільтрований параметром custom=1.
+            if source == "auto_ria" and category == "import":
+                filtered_batches.append((source, result))
+                continue
+            items = [item for item in result.items if listing_matches_category(item, category)]
+            filtered_batches.append(
+                (
+                    source,
+                    PaginatedListings(
+                        items=items,
+                        total=len(items),
+                        page=result.page,
+                        per_page=result.per_page,
+                        pages=max((len(items) + result.per_page - 1) // result.per_page, 0),
+                    ),
+                )
+            )
+        successful = filtered_batches
+
     page_items, total = _sorted_merge_slice(
         successful,
         page=page,

@@ -111,6 +111,24 @@ async def filters_to_search_params(
             if gear_id:
                 params[f"gearbox[{index}]"] = gear_id
 
+    # Всі / Вживані / Нові / Під пригон
+    category = (filters.category or "all").strip().lower()
+    if category == "used":
+        # Класичний вживаний парк (searchType=4), розмитнені.
+        params["searchType"] = 4
+        params["custom"] = 0
+    elif category == "new":
+        # Нові / з мінімальним пробігом (race* — тисячі км).
+        params["searchType"] = 1
+        params["raceFrom"] = 0
+        params["raceTo"] = 1
+    elif category == "import":
+        # Нерозмитнені / під пригон.
+        params["searchType"] = 4
+        params["custom"] = 1
+    else:
+        params["searchType"] = 1
+
     return params
 
 

@@ -49,6 +49,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [initialized, loading, user, pathname, isPublicListing]);
 
   useEffect(() => {
+    void api.fx.rates().catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (isOnboardingRoute) {
       router.replace("/app/dashboard");
     }

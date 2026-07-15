@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import re
 
-
 from app.core.text import norm_text as _norm
+from app.services.olx.olx_model_catalog import (
+    OLX_EMPTY_MODEL_TAXONOMY_BRANDS,
+    OLX_FE_MODEL_REMAP,
+    OLX_FE_TEXT_MODELS,
+    OLX_KNOWN_MODEL_PATHS,
+)
 
 
 def slugify(value: str) -> str:
@@ -198,8 +203,9 @@ MODEL_TO_SLUG: dict[str, str] = {
     "camry": "camry",
     "камрі": "camry",
     "камри": "camry",
-    "rav4": "rav4",
-    "рав4": "rav4",
+    "rav4": "rav-4",
+    "rav-4": "rav-4",
+    "рав4": "rav-4",
     "corolla": "corolla",
     "корола": "corolla",
     "королла": "corolla",
@@ -261,57 +267,40 @@ MODEL_TO_SLUG: dict[str, str] = {
     "етрон": "e-tron",
 }
 
-# Марка + модель → slug моделі на OLX
-BRAND_MODEL_TO_SLUG: dict[str, str] = {
-    "bmw|1 series": "1-seriya",
-    "bmw|2 series": "2-seriya",
-    "bmw|3 series": "3-seriya",
-    "bmw|4 series": "4-seriya",
-    "bmw|5 series": "5-seriya",
-    "bmw|6 series": "6-seriya",
-    "bmw|7 series": "7-seriya",
-    "bmw|8 series": "8-seriya",
-    "bmw|3 series gt": "3-seriya",
-    "bmw|5 series gt": "5-seriya",
-    "бмв|3 series": "3-seriya",
-    "бмв|5 series": "5-seriya",
-    "mercedes-benz|c-class": "c-klass",
-    "mercedes-benz|e-class": "e-klass",
-    "mercedes-benz|s-class": "s-klass",
-    "mercedes-benz|g-class": "g-klass",
-    "mercedes-benz|glc": "glc",
-    "mercedes-benz|gle": "gle",
-    "mercedes-benz|gls": "gls",
-    "mercedes-benz|a-class": "a-klass",
-    "mercedes-benz|b-class": "b-klass",
-    "мерседес|c-class": "c-klass",
-    "мерседес|e-class": "e-klass",
-    "audi|a4 allroad": "a4-allroad",
-    "audi|a6 allroad": "a6-allroad",
-    "audi|e-tron gt": "e-tron-gt",
-    "audi|q4 e-tron": "q4-e-tron",
-    "volkswagen|golf": "golf",
-    "volkswagen|passat": "passat",
-    "toyota|rav4": "rav4",
-    "toyota|land cruiser": "land-cruiser",
-    "toyota|land cruiser prado": "land-cruiser-prado",
-    "toyota|prado": "land-cruiser-prado",
+# Ручні аліаси (кирилиця / рідкісні). FE-каталог → olx_model_catalog.OLX_FE_MODEL_REMAP
+_BRAND_MODEL_HAND: dict[str, str] = {
+    "бмв|1 series": "1-serya",
+    "бмв|3 series": "3-serya",
+    "бмв|5 series": "5-serya",
+    "мерседес|a-class": "a-seriya",
+    "мерседес|b-class": "b-seriya",
+    "мерседес|c-class": "c-seriya",
+    "мерседес|e-class": "e-seriya",
+    "мерседес|s-class": "s-seriya",
+    "мерседес|g-class": "g-seriya",
+    "мерседес|m-class": "ml-seriya",
+    "мерседес-бенц|c-class": "c-seriya",
+    "мерседес-бенц|e-class": "e-seriya",
+    "мерседес-бенц|s-class": "s-seriya",
 }
 
 _SERIES_RE = re.compile(
-    r"^(\d+)\s*(?:series|серії|серии|серія|серия|seriya|seriya)?$",
+    r"^(\d+)\s*(?:series|серії|серии|серія|серия|seriya|serya)?$",
     re.IGNORECASE,
 )
 
+# FE remap поверх ручних (латиниця з live scrape)
+BRAND_MODEL_TO_SLUG: dict[str, str] = {**_BRAND_MODEL_HAND, **OLX_FE_MODEL_REMAP}
+
 
 # Slug у path OLX, які дають 404 (перевірено live 2026-07). Шукаємо через /q-.../
+# BYD має /byd/ path — не тут; моделі BYD без path → OLX_EMPTY_MODEL_TAXONOMY_BRANDS.
 OLX_TEXT_SEARCH_SLUGS = frozenset(
     {
         "aito",
         "avatr",
         "baic",
         "bugatti",
-        "byd",
         "changan",
         "cupra",
         "daf",
@@ -379,7 +368,6 @@ OLX_TEXT_SEARCH_NAMES = frozenset(
         "cupra",
         "genesis",
         "baic",
-        "byd",
         "gac",
         "foton",
         "lada",
@@ -398,6 +386,59 @@ def brand_uses_olx_text_search(brand: str) -> bool:
     return bool(slug) and slug in OLX_TEXT_SEARCH_SLUGS
 
 
+def brand_model_forces_text_search(brand: str, model: str) -> bool:
+    """True, якщо марка+модель без підтвердженого /brand/model/ → одразу /q-.../.
+
+    Покриває весь FE-каталог (~1400 моделей): або path з OLX_FE_MODEL_REMAP,
+    або text з OLX_FE_TEXT_MODELS / empty taxonomy.
+    """
+    model_key = _norm(model)
+    if not model_key:
+        return False
+    brand_key = _norm(brand)
+    brand_slug = BRAND_TO_SLUG.get(brand_key, slugify(brand)) if brand else ""
+    if not brand_slug:
+        return True
+
+    compound = f"{brand_slug}|{model_key}"
+    compound_raw = f"{brand_key}|{model_key}"
+
+    if brand_slug in OLX_EMPTY_MODEL_TAXONOMY_BRANDS:
+        return True
+    if compound in OLX_FE_TEXT_MODELS or compound_raw in OLX_FE_TEXT_MODELS:
+        return True
+    if compound in OLX_FE_MODEL_REMAP or compound_raw in OLX_FE_MODEL_REMAP:
+        return False
+    if compound in _BRAND_MODEL_HAND or compound_raw in _BRAND_MODEL_HAND:
+        return False
+
+    # Не з FE-аудиту: лише якщо slug уже в відомому whitelist path
+    known = OLX_KNOWN_MODEL_PATHS.get(brand_slug)
+    if known is not None:
+        if not known:
+            return True
+        resolved = _resolve_model_slug_unchecked(model_key, brand_slug=brand_slug, brand_key=brand_key)
+        return resolved not in known
+
+    # Марка взагалі не зі scrape — безпечніше text, ніж 404
+    return True
+
+
+def _resolve_model_slug_unchecked(model_key: str, *, brand_slug: str, brand_key: str) -> str:
+    compound = f"{brand_slug}|{model_key}"
+    if compound in BRAND_MODEL_TO_SLUG:
+        return BRAND_MODEL_TO_SLUG[compound]
+    compound_raw = f"{brand_key}|{model_key}"
+    if compound_raw in BRAND_MODEL_TO_SLUG:
+        return BRAND_MODEL_TO_SLUG[compound_raw]
+    if model_key in MODEL_TO_SLUG:
+        return MODEL_TO_SLUG[model_key]
+    series_match = _SERIES_RE.match(model_key)
+    if series_match and brand_slug == "bmw":
+        return f"{series_match.group(1)}-serya"
+    return slugify(model_key)
+
+
 def resolve_olx_brand_slug(brand: str) -> str:
     key = _norm(brand)
     if key in BRAND_TO_SLUG:
@@ -410,20 +451,4 @@ def resolve_olx_model_slug(model: str, *, brand: str = "") -> str:
     model_key = _norm(model)
     brand_key = _norm(brand)
     brand_slug = BRAND_TO_SLUG.get(brand_key, slugify(brand)) if brand else ""
-
-    compound = f"{brand_slug}|{model_key}"
-    if compound in BRAND_MODEL_TO_SLUG:
-        return BRAND_MODEL_TO_SLUG[compound]
-
-    compound_raw = f"{brand_key}|{model_key}"
-    if compound_raw in BRAND_MODEL_TO_SLUG:
-        return BRAND_MODEL_TO_SLUG[compound_raw]
-
-    if model_key in MODEL_TO_SLUG:
-        return MODEL_TO_SLUG[model_key]
-
-    series_match = _SERIES_RE.match(model_key)
-    if series_match and brand_slug == "bmw":
-        return f"{series_match.group(1)}-seriya"
-
-    return slugify(model)
+    return _resolve_model_slug_unchecked(model_key, brand_slug=brand_slug, brand_key=brand_key)

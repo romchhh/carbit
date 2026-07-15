@@ -28,7 +28,6 @@ export default function SearchPage() {
     sourceStatuses,
     partial,
     fromCache,
-    displayCurrency,
     resultsRef,
     runSearch,
     changeSort,
@@ -130,7 +129,6 @@ export default function SearchPage() {
         sourceStatuses={sourceStatuses}
         partial={partial}
         fromCache={fromCache}
-        displayCurrency={displayCurrency}
         onSortChange={changeSort}
         onFreshnessChange={changeFreshness}
         onLoadMore={loadMore}

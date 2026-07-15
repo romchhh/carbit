@@ -1,8 +1,10 @@
 import logging
+from datetime import timedelta
 
-from sqlalchemy import asc, desc, func, nulls_last, select, update
+from sqlalchemy import asc, desc, func, nulls_last, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timezone import now_kyiv
 from app.models.models import Notification, NotificationType, User, Listing, SearchQuery
 from app.schemas.schemas import NotificationOut
 from app.services.currency import format_display_price
@@ -16,6 +18,80 @@ from app.services.telegram.client import telegram_client, SOURCE_LABELS
 from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
 logger = logging.getLogger(__name__)
+
+
+async def _duplicate_family_ids(db: AsyncSession, listing: Listing) -> set[str]:
+    """ID цього оголошення + канон / дзеркала через duplicate_of."""
+    ids = {listing.id}
+    parent = getattr(listing, "duplicate_of", None)
+    if parent:
+        ids.add(parent)
+    rows = (
+        await db.scalars(
+            select(Listing.id).where(
+                or_(
+                    Listing.id.in_(list(ids)),
+                    Listing.duplicate_of.in_(list(ids)),
+                    Listing.duplicate_of == listing.id,
+                )
+            )
+        )
+    ).all()
+    ids.update(rows)
+    return ids
+
+
+async def user_already_notified_for_car(
+    db: AsyncSession,
+    user_id: str,
+    listing: Listing,
+    *,
+    lookback_hours: int = 72,
+) -> bool:
+    """True, якщо юзеру вже слали listing_match по цьому авто / дзеркалу / двійнику."""
+    family_ids = await _duplicate_family_ids(db, listing)
+    exact = await db.scalar(
+        select(Notification.id).where(
+            Notification.user_id == user_id,
+            Notification.type == NotificationType.listing_match,
+            Notification.listing_id.in_(list(family_ids)),
+            Notification.sent_telegram.is_(True),
+        ).limit(1)
+    )
+    if exact:
+        return True
+
+    # Soft-match: те саме авто під іншим listing_id (OLX repost / інше джерело без duplicate_of).
+    brand = (listing.brand or "").strip()
+    model = (listing.model or "").strip()
+    year = int(listing.year or 0)
+    if not brand or not model or not year:
+        return False
+
+    from app.services.listings.duplicates import listings_look_same
+
+    since = now_kyiv() - timedelta(hours=max(1, lookback_hours))
+    recent = (
+        await db.scalars(
+            select(Listing)
+            .join(Notification, Notification.listing_id == Listing.id)
+            .where(
+                Notification.user_id == user_id,
+                Notification.type == NotificationType.listing_match,
+                Notification.sent_telegram.is_(True),
+                Notification.created_at >= since,
+                Listing.brand == brand,
+                Listing.model == model,
+                Listing.year == year,
+                Listing.id.notin_(list(family_ids)),
+            )
+            .limit(40)
+        )
+    ).all()
+    for other in recent:
+        if listings_look_same(listing, other):
+            return True
+    return False
 
 
 async def create_listing_notification(
@@ -37,6 +113,20 @@ async def create_listing_notification(
     display_currency = "USD"
     price_label = format_display_price(listing.price, listing.currency, display_currency)
 
+    skip_telegram = False
+    if send_telegram and user.telegram_connected and user.telegram_id:
+        # Дзеркало іншого джерела — у TG лише канонічна картка
+        if bool(getattr(listing, "is_duplicate", False)):
+            skip_telegram = True
+            logger.info("Skip Telegram notify for duplicate mirror %s", listing.id)
+        elif await user_already_notified_for_car(db, user.id, listing):
+            skip_telegram = True
+            logger.info(
+                "Skip Telegram notify for %s: user %s already notified for this car",
+                listing.id,
+                user.id,
+            )
+
     notification = Notification(
         user_id=user.id,
         type=NotificationType.listing_match,
@@ -56,12 +146,18 @@ async def create_listing_notification(
             "url": listing_url,
             "fuel": listing.fuel,
             "transmission": listing.transmission,
+            "telegram_skipped_duplicate": skip_telegram,
         },
     )
     db.add(notification)
     await db.flush()
 
-    if send_telegram and user.telegram_connected and user.telegram_id:
+    if (
+        send_telegram
+        and not skip_telegram
+        and user.telegram_connected
+        and user.telegram_id
+    ):
         if max_published_hours is None:
             settings = await get_parser_settings()
             max_published_hours = coerce_notification_max_hours(

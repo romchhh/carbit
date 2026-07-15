@@ -14,7 +14,6 @@ class OlxTextSearchBrandTests(unittest.TestCase):
     def test_known_404_brands_use_text(self):
         for brand in (
             "Zeekr",
-            "BYD",
             "Haval",
             "Genesis",
             "Cupra",
@@ -35,7 +34,7 @@ class OlxTextSearchBrandTests(unittest.TestCase):
             self.assertTrue(brand_uses_olx_text_search(brand), brand)
 
     def test_path_brands_stay_on_taxonomy(self):
-        for brand in ("Toyota", "BMW", "Geely", "JAC", "Chery", "Tesla", "MG"):
+        for brand in ("Toyota", "BMW", "Geely", "JAC", "Chery", "Tesla", "MG", "BYD"):
             self.assertFalse(brand_uses_olx_text_search(brand), brand)
 
     def test_byd_url(self):
@@ -144,6 +143,161 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         )
         self.assertFalse(passes_olx_filters(apt, params))
         self.assertTrue(passes_olx_filters(car, params))
+
+    def test_mercedes_class_uses_seriya_path(self):
+        """OLX Mercedes класи — /e-seriya/, не /e-klass/ (404)."""
+        params = filters_to_olx_params(
+            SearchFilters(brand="Mercedes-Benz", model="E-Class", currency="USD")
+        )
+        self.assertIsNone(params.text_query)
+        self.assertEqual(params.brand, "mercedes-benz")
+        self.assertEqual(params.model, "e-seriya")
+        url = build_search_url(params)
+        self.assertIn("/mercedes-benz/e-seriya/", url)
+        self.assertNotIn("e-klass", url)
+
+        for model, slug in (
+            ("C-Class", "c-seriya"),
+            ("S-Class", "s-seriya"),
+            ("A-Class", "a-seriya"),
+            ("G-Class", "g-seriya"),
+            ("CLS", "cls-seriya"),
+            ("M-Class", "ml-seriya"),
+        ):
+            p = filters_to_olx_params(
+                SearchFilters(brand="Mercedes-Benz", model=model, currency="UAH")
+            )
+            self.assertEqual(p.model, slug, model)
+            self.assertIn(f"/mercedes-benz/{slug}/", build_search_url(p), model)
+
+    def test_mercedes_brand_path(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Mercedes-Benz", currency="USD")
+        )
+        url = build_search_url(params)
+        self.assertIn("/mercedes-benz/", url)
+        self.assertNotIn("/q-mercedes", url)
+
+    def test_mercedes_title_aliases(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Mercedes-Benz", model="E-Class", currency="USD")
+        )
+        # Path-based: text_query відсутній — title filter не застосовується.
+        # Симулюємо fallback text search (після 404), коли фільтр по title увімкнений.
+        params.text_query = "mercedes-benz"
+        short = OlxListing(title="Mercedes E 220 CDI Avantgarde", price="12000", currency="USD")
+        full = OlxListing(title="Mercedes-Benz E-Class 2018", price="18000", currency="USD")
+        other = OlxListing(title="BMW 520d xDrive", price="15000", currency="USD")
+        self.assertTrue(passes_olx_filters(short, params))
+        self.assertTrue(passes_olx_filters(full, params))
+        self.assertFalse(passes_olx_filters(other, params))
+
+    def test_bmw_uses_serya_not_seriya(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="BMW", model="5 Series", currency="USD")
+        )
+        self.assertEqual(params.model, "5-serya")
+        self.assertIn("/bmw/5-serya/", build_search_url(params))
+        self.assertNotIn("seriya", build_search_url(params))
+
+    def test_toyota_rav4_and_hilux_slugs(self):
+        rav = filters_to_olx_params(SearchFilters(brand="Toyota", model="RAV4", currency="UAH"))
+        self.assertEqual(rav.model, "rav-4")
+        self.assertIn("/toyota/rav-4/", build_search_url(rav))
+
+        hilux = filters_to_olx_params(SearchFilters(brand="Toyota", model="Hilux", currency="UAH"))
+        self.assertEqual(hilux.model, "hilux-pick-up")
+
+    def test_lexus_series_slugs(self):
+        rx = filters_to_olx_params(SearchFilters(brand="Lexus", model="RX", currency="USD"))
+        self.assertEqual(rx.model, "rx-serya")
+        nx = filters_to_olx_params(SearchFilters(brand="Lexus", model="NX", currency="USD"))
+        self.assertEqual(nx.model, "nx")
+        self.assertIsNone(nx.text_query)
+
+    def test_toyota_prado_forces_text(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Toyota", model="Land Cruiser Prado", currency="USD")
+        )
+        self.assertEqual(params.text_query, "toyota")
+        self.assertIsNone(params.model)
+        self.assertIn("/q-toyota/", build_search_url(params))
+
+    def test_tesla_model_forces_text_brand_path_alone_ok(self):
+        brand_only = filters_to_olx_params(SearchFilters(brand="Tesla", currency="USD"))
+        self.assertIsNone(brand_only.text_query)
+        self.assertEqual(brand_only.brand, "tesla")
+
+        with_model = filters_to_olx_params(
+            SearchFilters(brand="Tesla", model="Model 3", currency="USD")
+        )
+        self.assertEqual(with_model.text_query, "tesla")
+        self.assertEqual(with_model.model_label, "Model 3")
+
+    def test_byd_brand_path_model_text(self):
+        brand_only = filters_to_olx_params(SearchFilters(brand="BYD", currency="UAH"))
+        self.assertIsNone(brand_only.text_query)
+        self.assertEqual(brand_only.brand, "byd")
+        with_model = filters_to_olx_params(
+            SearchFilters(brand="BYD", model="Song Plus", currency="UAH")
+        )
+        self.assertEqual(with_model.text_query, "byd")
+
+    def test_catalog_covers_every_fe_model_path_or_text(self):
+        """Кожна модель з FE або має confirmed path, або йде в text — без 404-roulette."""
+        import re
+        from pathlib import Path
+
+        from app.services.olx.brand_slugs import (
+            brand_model_forces_text_search,
+            brand_uses_olx_text_search,
+            resolve_olx_brand_slug,
+            resolve_olx_model_slug,
+        )
+        from app.services.olx.olx_model_catalog import (
+            OLX_EMPTY_MODEL_TAXONOMY_BRANDS,
+            OLX_FE_MODEL_REMAP,
+            OLX_KNOWN_MODEL_PATHS,
+        )
+
+        ts = Path(__file__).resolve().parents[1].parent.joinpath(
+            "frontend/src/lib/search-data/brands-models.ts"
+        )
+        # backend/tests → parents[1]=backend, need repo root
+        ts = Path(__file__).resolve().parents[2] / "frontend/src/lib/search-data/brands-models.ts"
+        text = ts.read_text(encoding="utf-8")
+        fe: dict[str, list[str]] = {}
+        for m in re.finditer(
+            r'(?:^|\n)\s*(?:\"([^\"]+)\"|([A-Za-z0-9]+))\s*:\s*\[([^\]]+)\]', text
+        ):
+            brand = m.group(1) or m.group(2)
+            models = re.findall(r'\"([^\"]+)\"', m.group(3))
+            if models:
+                fe[brand] = models
+
+        uncovered = []
+        for brand, models in fe.items():
+            if brand_uses_olx_text_search(brand):
+                continue
+            bslug = resolve_olx_brand_slug(brand)
+            for model in models:
+                forces = brand_model_forces_text_search(brand, model)
+                params = filters_to_olx_params(
+                    SearchFilters(brand=brand, model=model, currency="USD")
+                )
+                if forces:
+                    self.assertTrue(params.text_query, f"{brand}/{model} should text")
+                    continue
+                # path mode
+                self.assertIsNone(params.text_query, f"{brand}/{model}")
+                slug = resolve_olx_model_slug(model, brand=brand)
+                known = OLX_KNOWN_MODEL_PATHS.get(bslug, frozenset())
+                if bslug in OLX_EMPTY_MODEL_TAXONOMY_BRANDS:
+                    uncovered.append((brand, model, "empty-but-not-forced"))
+                    continue
+                if slug not in known and f"{bslug}|{model.lower()}" not in OLX_FE_MODEL_REMAP:
+                    uncovered.append((brand, model, slug))
+        self.assertEqual(uncovered, [], f"uncovered models: {uncovered[:20]}")
 
 
 if __name__ == "__main__":

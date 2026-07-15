@@ -1083,6 +1083,25 @@ _BRAND_TITLE_ALIASES: dict[str, tuple[str, ...]] = {
     "lynk and co": ("lynk", "lynk&co", "lynk and co"),
     "great wall motor": ("great wall", "gwm", "haval"),
     "zeekr": ("zeekr", "зікр", "зикр", "зеекр"),
+    "mercedes-benz": (
+        "mercedes-benz",
+        "mercedes benz",
+        "mercedes",
+        "мерседес-бенц",
+        "мерседес бенц",
+        "мерседес",
+    ),
+    "mercedes benz": (
+        "mercedes-benz",
+        "mercedes benz",
+        "mercedes",
+        "мерседес",
+    ),
+    "volkswagen": ("volkswagen", "vw", "фольксваген"),
+    "bmw": ("bmw", "бмв"),
+    "toyota": ("toyota", "тойота"),
+    "land rover": ("land rover", "land-rover", "range rover", "ленд ровер"),
+    "land-rover": ("land rover", "land-rover", "range rover", "ленд ровер"),
 }
 
 # Запчастини / неавто, які OLX підмішує в /q-/ навіть у категорії легкових
@@ -1151,6 +1170,16 @@ def _title_has_model(title: str, model: str, *, brand: str | None = None) -> boo
         )
     if model_l in title:
         return True
+    # E-Class / C-Class → «E 220», «E-Class», «E-клас», «C200»
+    class_m = re.fullmatch(r"([a-z])-class", model_l)
+    if class_m:
+        letter = class_m.group(1)
+        if re.search(
+            rf"(?<![\w]){letter}(?:[\s\-]?class|[\s\-]?клас[сау]?|[\s\-]?\d{{2,3}})(?![\w])",
+            title,
+            re.IGNORECASE,
+        ):
+            return True
     # J7 / C5 / X3 → «Jaecoo 7», «Omoda C5»
     letter_num = re.fullmatch(r"([a-z]+)(\d+[a-z]?)", model_l)
     if letter_num:

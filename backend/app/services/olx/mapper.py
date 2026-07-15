@@ -18,6 +18,7 @@ from app.services.olx.constants import (
 from app.services.olx.dates import resolve_olx_published_at, resolve_olx_refreshed_at
 from app.services.olx.parser import OlxListing, OlxSearchParams, is_valid_image_url
 from app.services.olx.brand_slugs import (
+    brand_model_forces_text_search,
     brand_uses_olx_text_search,
     resolve_olx_brand_slug,
     resolve_olx_model_slug,
@@ -48,10 +49,12 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
     if model_raw:
         params.model_label = model_raw
 
-    if brand_raw and brand_uses_olx_text_search(brand_raw):
-        # Немає taxonomy-path OLX (Zeekr тощо) → /q-zeekr/ або /q-zeekr-001/.
-        # Цифрові моделі додаємо в q (001); літерні (J7) — лише пост-фільтр,
-        # бо brand+model у q часто дає сміття (Jaecoo J7).
+    if brand_raw and (
+        brand_uses_olx_text_search(brand_raw)
+        or brand_model_forces_text_search(brand_raw, model_raw)
+    ):
+        # Немає taxonomy-path OLX (Zeekr / Tesla Model 3 / Toyota Prado тощо)
+        # → /q-zeekr/ або /q-toyota/; модель у пост-фільтрі (крім цифрових 001).
         brand_q = brand_slug(brand_raw) or brand_raw
         if model_raw and re.fullmatch(r"\d+[a-z]?", model_raw.strip(), re.IGNORECASE):
             params.text_query = f"{brand_q} {model_raw.strip()}"

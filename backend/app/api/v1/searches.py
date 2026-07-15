@@ -171,7 +171,7 @@ async def update_search(
         else:
             setattr(sq, field, val)
 
-    if updates.get("is_active") is True:
+    if "filters" in updates or updates.get("is_active") is True:
         schedule_parse_search(sq.id)
 
     return await search_query_to_out(db, sq)

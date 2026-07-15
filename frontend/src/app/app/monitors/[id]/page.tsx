@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
+import { MonitorManagePanel } from "@/components/search/MonitorManagePanel";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
 import { formatSearchDesc } from "@/lib/format-search-desc";
@@ -117,7 +118,16 @@ export default function MonitorDetailPage({
       </div>
 
       {search && (
-        <p className="mb-4 text-[13px] text-muted">{formatSearchDesc(search.filters)}</p>
+        <>
+          <p className="mb-3 text-[13px] text-muted">{formatSearchDesc(search.filters)}</p>
+          <MonitorManagePanel
+            search={search}
+            onUpdated={updated => {
+              setSearch(updated);
+              void loadResults(searchId, 1, sort, false);
+            }}
+          />
+        </>
       )}
 
       {newSeenFlash > 0 && (

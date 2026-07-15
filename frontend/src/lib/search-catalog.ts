@@ -224,6 +224,14 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
     if (filters.fuels.length > 0 && item.fuel && !filters.fuels.includes(item.fuel)) return false;
     if (filters.transmissions.length > 0 && item.trans && !filters.transmissions.includes(item.trans)) return false;
     if (filters.sources.length > 0 && !filters.sources.includes(item.src)) return false;
+    if (filters.category && filters.category !== "all") {
+      const desc = `${item.title} ${item.desc ?? ""}`.toLowerCase();
+      const isImport = /пригон|нерозмит|єврономер|еврономер/.test(desc);
+      const isNew = item.mileage <= 1000 || /новий|з салону|без пробігу|0\s*км/.test(desc);
+      if (filters.category === "import" && !isImport) return false;
+      if (filters.category === "new" && (isImport || !isNew)) return false;
+      if (filters.category === "used" && (isImport || isNew)) return false;
+    }
     return true;
   });
 }
