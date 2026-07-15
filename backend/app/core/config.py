@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     AUTO_RIA_API_KEY: str = ""
     OLX_CLIENT_ID: str = ""
     OLX_CLIENT_SECRET: str = ""
+    # База ДАІ (baza-gai.com.ua) — перевірка VIN / номерів
+    BAZA_GAI_API_KEY: str = ""
+    BAZA_GAI_BASE_URL: str = "https://baza-gai.com.ua"
 
     # CORS
     ALLOWED_ORIGINS: list[str] = [

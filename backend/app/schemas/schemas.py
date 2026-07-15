@@ -228,6 +228,7 @@ class ListingOut(BaseModel):
     vin: Optional[str] = None
     vin_checked: Optional[bool] = None
     vin_check_url: Optional[str] = None
+    vin_check: Optional["VinCheckOut"] = None
     source_data: Optional[dict[str, Any]] = None
     price_history: list[dict]
     is_duplicate: bool
@@ -240,6 +241,44 @@ class ListingOut(BaseModel):
     found_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class VinCheckOperationOut(BaseModel):
+    registered_at: Optional[str] = None
+    digits: Optional[str] = None
+    model_year: Optional[int] = None
+    vendor: Optional[str] = None
+    model: Optional[str] = None
+    operation: Optional[str] = None
+    operation_group: Optional[str] = None
+    department: Optional[str] = None
+    color: Optional[str] = None
+    address: Optional[str] = None
+    is_last: Optional[bool] = None
+
+
+class VinStolenDetailOut(BaseModel):
+    theft_at: Optional[str] = None
+    vendor_title: Optional[str] = None
+    car_type: Optional[str] = None
+    chassis_number: Optional[str] = None
+    department_title: Optional[str] = None
+    color: Optional[str] = None
+
+
+class VinCheckOut(BaseModel):
+    vin: str
+    digits: Optional[str] = None
+    vendor: Optional[str] = None
+    model: Optional[str] = None
+    model_year: Optional[int] = None
+    region: Optional[str] = None
+    photo_url: Optional[str] = None
+    is_stolen: bool = False
+    stolen_details: list[VinStolenDetailOut] = Field(default_factory=list)
+    operations: list[VinCheckOperationOut] = Field(default_factory=list)
+    source_url: str
+    from_cache: bool = False
 
 
 class SourceStatusOut(BaseModel):

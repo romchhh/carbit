@@ -230,7 +230,14 @@ async def _collect_from_params(
     return collected
 
 
-def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
+def _cache_key(
+    filters: SearchFilters,
+    *,
+    page: int,
+    per_page: int,
+    sort_by: str,
+    lean: bool = False,
+) -> str:
     payload = {
         "source": "olx",
         "filters": filters.model_dump(mode="json"),
@@ -239,6 +246,7 @@ def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str
         "sort_by": sort_by,
         # bump при зміні multi-query логіки
         "olx_q": "multi-v1",
+        "lean": bool(lean),
     }
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
@@ -249,6 +257,7 @@ async def _search_olx_uncached(
     page: int = 1,
     per_page: int = 20,
     sort_by: str = "newest",
+    lean: bool = False,
 ) -> PaginatedListings:
     async with acquire_olx_slot():
         return await _search_olx_body(
@@ -256,6 +265,7 @@ async def _search_olx_uncached(
             page=page,
             per_page=per_page,
             sort_by=sort_by,
+            lean=lean,
         )
 
 
@@ -265,30 +275,47 @@ async def _search_olx_body(
     page: int = 1,
     per_page: int = 20,
     sort_by: str = "newest",
+    lean: bool = False,
 ) -> PaginatedListings:
-    # Менше overscan: live path передає вже обмежений per_page (SOURCE_POOL_CAP)
-    max_pages = min(max(page, 1) + 1, 3)
-    params = filters_to_olx_params(filters, max_pages=max_pages)
-    # Подвійний захист: ніколи не бити taxonomy-path для марок/моделей без path на OLX
-    brand = (filters.brand or "").strip()
-    model = (filters.model or "").strip()
-    if (
-        brand
-        and not params.text_query
-        and (brand_uses_olx_text_search(brand) or brand_model_forces_text_search(brand, model))
-    ):
-        params = _switch_params_to_text_query(params, filters)
-    if params.needs_post_filter():
-        params.max_pages = min(max(params.max_pages, 2), 4)
+    # lean=True: 1 HTML-сторінка, без folk /q-/ варіантів — для live батчів по 10
+    if lean:
+        max_pages = 1
+        params = filters_to_olx_params(filters, max_pages=max_pages)
+        brand = (filters.brand or "").strip()
+        model = (filters.model or "").strip()
+        if (
+            brand
+            and not params.text_query
+            and (brand_uses_olx_text_search(brand) or brand_model_forces_text_search(brand, model))
+        ):
+            params = _switch_params_to_text_query(params, filters)
+        params.max_pages = 1
+        start_page = max(int(page), 1)
+        target_count = max(int(per_page), 1)
+        param_variants = [params]
+    else:
+        max_pages = min(max(page, 1) + 1, 3)
+        params = filters_to_olx_params(filters, max_pages=max_pages)
+        # Подвійний захист: ніколи не бити taxonomy-path для марок/моделей без path на OLX
+        brand = (filters.brand or "").strip()
+        model = (filters.model or "").strip()
+        if (
+            brand
+            and not params.text_query
+            and (brand_uses_olx_text_search(brand) or brand_model_forces_text_search(brand, model))
+        ):
+            params = _switch_params_to_text_query(params, filters)
+        if params.needs_post_filter():
+            params.max_pages = min(max(params.max_pages, 2), 4)
 
-    start_page = max(page - 1, 0) * 2 + 1
-    # Було ×2/×3 — часто впиралось у 15s timeout на великих пулах
-    target_count = per_page + max(per_page // 2, 8) if params.needs_post_filter() else per_page
+        start_page = max(page - 1, 0) * 2 + 1
+        # Було ×2/×3 — часто впиралось у 15s timeout на великих пулах
+        target_count = per_page + max(per_page // 2, 8) if params.needs_post_filter() else per_page
+        param_variants = _build_search_param_variants(params, filters)
+
     enrich_sem = asyncio.Semaphore(3)
     seen: set[str] = set()
     collected: list[OlxListing] = []
-
-    param_variants = _build_search_param_variants(params, filters)
 
     async with OlxClient() as client:
         # Основний запит (path або primary text) — повний обхід сторінок
@@ -338,7 +365,11 @@ async def _search_olx_body(
     start = 0
     end = per_page
     page_items = items[start:end]
-    total = max(len(items), len(page_items))
+    # lean: якщо сторінка повна — ще може бути більше на ринку
+    if lean and len(page_items) >= per_page:
+        total = max(len(items), page * per_page + 1)
+    else:
+        total = max(len(items), len(page_items))
     pages = max((total + per_page - 1) // per_page, 1 if page_items else 0)
 
     return PaginatedListings(
@@ -358,6 +389,7 @@ async def search_olx(
     sort_by: str = "newest",
     use_cache: bool = True,
     cache_ttl_seconds: int = 120,
+    lean: bool = False,
 ) -> PaginatedListings:
     if not use_cache:
         return await _search_olx_uncached(
@@ -365,9 +397,10 @@ async def search_olx(
             page=page,
             per_page=per_page,
             sort_by=sort_by,
+            lean=lean,
         )
 
-    key = _cache_key(filters, page=page, per_page=per_page, sort_by=sort_by)
+    key = _cache_key(filters, page=page, per_page=per_page, sort_by=sort_by, lean=lean)
     return await get_or_fetch(
         key,
         lambda: _search_olx_uncached(
@@ -375,6 +408,7 @@ async def search_olx(
             page=page,
             per_page=per_page,
             sort_by=sort_by,
+            lean=lean,
         ),
         ttl_seconds=cache_ttl_seconds,
     )

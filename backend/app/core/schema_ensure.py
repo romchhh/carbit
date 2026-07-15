@@ -72,6 +72,26 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
                 await conn.execute(text("ALTER TABLE listings ADD COLUMN refreshed_at DATETIME"))
                 logger.warning("Added missing listings.refreshed_at column")
 
+            if "vin_checks" not in tables:
+                await conn.execute(
+                    text(
+                        """
+                        CREATE TABLE vin_checks (
+                            vin VARCHAR(17) NOT NULL PRIMARY KEY,
+                            payload JSON NOT NULL,
+                            is_stolen BOOLEAN NOT NULL DEFAULT 0,
+                            digits VARCHAR,
+                            checked_at DATETIME NOT NULL,
+                            updated_at DATETIME NOT NULL
+                        )
+                        """
+                    )
+                )
+                await conn.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_vin_checks_digits ON vin_checks (digits)")
+                )
+                logger.warning("Created missing vin_checks table")
+
             if "billing_subscriptions" not in tables:
                 await conn.execute(
                     text(
@@ -244,6 +264,36 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
                         text("CREATE INDEX IF NOT EXISTS ix_listings_vin ON listings (vin)")
                     )
                 logger.warning("Added missing listings.%s column", column)
+
+        vin_checks_exists = await conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_name = 'vin_checks'
+                """
+            )
+        )
+        if vin_checks_exists.first() is None:
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE vin_checks (
+                        vin VARCHAR(17) PRIMARY KEY,
+                        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                        is_stolen BOOLEAN NOT NULL DEFAULT FALSE,
+                        digits VARCHAR,
+                        checked_at TIMESTAMPTZ NOT NULL,
+                        updated_at TIMESTAMPTZ NOT NULL
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_vin_checks_digits ON vin_checks (digits)")
+            )
+            logger.warning("Created missing vin_checks table")
+
         billing_exists = await conn.execute(
             text(
                 """

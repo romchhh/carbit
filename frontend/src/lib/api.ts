@@ -23,6 +23,7 @@ import type {
   TokenResponse,
   UpgradeQuote,
   User,
+  VinCheckResult,
 } from "@/types/api";
 
 function apiUrl(): string {
@@ -311,4 +312,14 @@ export const telegram = {
       method: "POST",
       body: JSON.stringify({ token }),
     }),
+};
+
+// ── VIN / База ДАІ ─────────────────────────────────────
+export const vinCheck = {
+  get: (vin: string, listingId?: string | null) => {
+    const q = listingId ? `?listing_id=${encodeURIComponent(listingId)}` : "";
+    return request<VinCheckResult>(
+      `/vin/${encodeURIComponent(vin.trim().toUpperCase())}${q}`,
+    );
+  },
 };

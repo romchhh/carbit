@@ -40,6 +40,44 @@ export interface ListingSourceLink {
   id?: string | null;
 }
 
+export type VinCheckOperation = {
+  registered_at?: string | null;
+  digits?: string | null;
+  model_year?: number | null;
+  vendor?: string | null;
+  model?: string | null;
+  operation?: string | null;
+  operation_group?: string | null;
+  department?: string | null;
+  color?: string | null;
+  address?: string | null;
+  is_last?: boolean | null;
+};
+
+export type VinStolenDetail = {
+  theft_at?: string | null;
+  vendor_title?: string | null;
+  car_type?: string | null;
+  chassis_number?: string | null;
+  department_title?: string | null;
+  color?: string | null;
+};
+
+export type VinCheckResult = {
+  vin: string;
+  digits?: string | null;
+  vendor?: string | null;
+  model?: string | null;
+  model_year?: number | null;
+  region?: string | null;
+  photo_url?: string | null;
+  is_stolen: boolean;
+  stolen_details: VinStolenDetail[];
+  operations: VinCheckOperation[];
+  source_url: string;
+  from_cache?: boolean;
+};
+
 export interface Listing {
   id: string;
   source: string;
@@ -60,6 +98,7 @@ export interface Listing {
   vin?: string | null;
   vin_checked?: boolean | null;
   vin_check_url?: string | null;
+  vin_check?: VinCheckResult | null;
   source_data?: Record<string, unknown> | null;
   price_history: Record<string, unknown>[];
   is_duplicate: boolean;

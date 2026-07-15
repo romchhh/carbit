@@ -48,6 +48,7 @@ def listing_to_out(listing: Listing) -> ListingOut:
         vin=(vin or None),
         vin_checked=None,
         vin_check_url=None,
+        vin_check=None,
         source_data=source_data,
         price_history=listing.price_history or [],
         is_duplicate=bool(listing.is_duplicate),

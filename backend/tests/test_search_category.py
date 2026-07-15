@@ -98,7 +98,7 @@ class AutoRiaCategoryParamsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(imp.get("custom"), 1)
 
         all_cat = await fake_params("all")
-        self.assertEqual(all_cat.get("searchType"), 4)
+        self.assertEqual(all_cat.get("searchType"), 0)
         self.assertNotIn("raceTo", all_cat)
 
 

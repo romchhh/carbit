@@ -97,7 +97,9 @@ async def filters_to_search_params(
         if region_key in REGION_TO_STATE_CITY:
             state_id, city_id = REGION_TO_STATE_CITY[region_key]
             params["state[0]"] = state_id
-            params["city[0]"] = city_id
+            # city_id=0 — уся область; не надсилаємо city, щоб API не звужував.
+            if city_id:
+                params["city[0]"] = city_id
 
     if filters.fuel:
         for index, fuel in enumerate(filters.fuel[:3]):
@@ -128,8 +130,9 @@ async def filters_to_search_params(
         params["searchType"] = 4
         params["custom"] = 1
     else:
-        # «Всі» — увесь ринок (не searchType=1, бо це режим «нові»).
-        params["searchType"] = 4
+        # «Всі» — повний ринок як на auto.ria (нові + вживані).
+        # searchType=4 лишає лише used (~половина Zeekr 001 у Києві: 56 vs ~103).
+        params["searchType"] = 0
 
     return params
 
@@ -286,11 +289,14 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
     fuel = fuel_raw.split(",")[0].strip() if fuel_raw else ""
     transmission = str(auto_data.get("gearboxName") or "")
 
-    dealer = info.get("dealer") if isinstance(info.get("dealer"), dict) else {}
+    dealer_raw = info.get("dealer")
+    dealer = dealer_raw if isinstance(dealer_raw, dict) else {}
     seller_type = "dealer" if dealer.get("id") or dealer.get("name") else "private"
 
     checked_vin = info.get("checkedVin")
-    vin_checked = bool(checked_vin.get("isChecked")) if isinstance(checked_vin, dict) else None
+    vin_checked = (
+        bool(checked_vin.get("isChecked")) if isinstance(checked_vin, dict) else None
+    )
 
     description = str(auto_data.get("description") or info.get("infoBarText") or "").strip() or None
 

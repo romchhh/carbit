@@ -69,6 +69,19 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     setPhotoIndex(index);
   }, []);
 
+  const applyVinCheck = useCallback((data: import("@/types/api").VinCheckResult) => {
+    setListing(prev =>
+      prev
+        ? {
+            ...prev,
+            vin_check: data,
+            vin_checked: true,
+            vin_check_url: data.source_url,
+          }
+        : prev,
+    );
+  }, []);
+
   const toggleFavorite = async () => {
     if (!listing) return;
     if (!user) {
@@ -261,7 +274,15 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   </Button>
                 </a>
               ))}
-              {hasVinCheck(listing) && <VinCheckButton listing={listing} size="md" className="w-full" />}
+              {hasVinCheck(listing) && (
+                <VinCheckButton
+                  listing={listing}
+                  size="md"
+                  className="w-full"
+                  showSavedOnPage
+                  onResult={applyVinCheck}
+                />
+              )}
             </div>
           </section>
 
@@ -368,7 +389,15 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   </Button>
                 </a>
               ))}
-              {hasVinCheck(listing) && <VinCheckButton listing={listing} size="md" className="w-full" />}
+              {hasVinCheck(listing) && (
+                <VinCheckButton
+                  listing={listing}
+                  size="md"
+                  className="w-full"
+                  showSavedOnPage
+                  onResult={applyVinCheck}
+                />
+              )}
             </div>
           </div>
         </aside>

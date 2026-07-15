@@ -12,7 +12,6 @@ import {
   type SortOption,
 } from "@/lib/search-catalog";
 import {
-  SEARCH_FIRST_BATCH,
   SEARCH_NEW_WITHIN_DAYS,
   SEARCH_PAGE_SIZE,
   type SearchFreshness,
@@ -47,6 +46,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const [partial, setPartial] = useState(false);
   const [fromCache, setFromCache] = useState(false);
   const loadedCountRef = useRef(0);
+  /** Наступна API-сторінка (лінива гідрація по 10). */
+  const nextApiPageRef = useRef(1);
   /** Остання валюта з профілю, яку підтягнули у фільтр (щоб не перетирати ручну зміну). */
   const lastSyncedPreferredCurrency = useRef<string | null>(null);
 
@@ -94,7 +95,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       const data = await listingSearch.search(
         buildRequestFilters(nextFilters, nextFreshness),
         apiPage,
-        SEARCH_FIRST_BATCH,
+        SEARCH_PAGE_SIZE,
         nextSort === "newest" ? "published_desc" : nextSort,
         "preview",
       );
@@ -149,30 +150,22 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       setSearching(true);
       setError(null);
       loadedCountRef.current = 0;
+      nextApiPageRef.current = 1;
       scrollToProgress();
 
       try {
         void fx.rates();
+        // Одна сторінка по 10: бекенд гідратить get_info лише для цього батча
         const first = await searchSlice(nextFilters, nextSort, nextFreshness, 1);
         if (gen !== searchGen.current) return;
 
+        nextApiPageRef.current = 2;
         loadedCountRef.current = first.items.length;
         startTransition(() => {
           setResults(first.items);
           syncMeta(first, nextFilters, nextSort, nextFreshness, first.items.length);
           setSearching(false);
         });
-
-        if (first.items.length >= SEARCH_FIRST_BATCH && first.total > SEARCH_FIRST_BATCH) {
-          const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2);
-          if (gen !== searchGen.current) return;
-          const merged = [...first.items, ...second.items];
-          loadedCountRef.current = merged.length;
-          startTransition(() => {
-            setResults(merged);
-            syncMeta(second, nextFilters, nextSort, nextFreshness, merged.length);
-          });
-        }
       } catch (err) {
         if (gen !== searchGen.current) return;
         setResults([]);
@@ -184,6 +177,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         setFromCache(false);
         setRunning(false);
         loadedCountRef.current = 0;
+        nextApiPageRef.current = 1;
         setError(getApiErrorMessage(err, "Не вдалось виконати пошук. Спробуйте ще раз."));
       } finally {
         if (gen === searchGen.current) {
@@ -205,28 +199,19 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       setLoadingMore(true);
 
       try {
-        const chunks = Math.ceil(SEARCH_PAGE_SIZE / SEARCH_FIRST_BATCH);
-        let startApiPage = Math.floor(loadedCountRef.current / SEARCH_FIRST_BATCH) + 1;
-        const collected: Listing[] = [];
-        let lastMeta: PageResult | null = null;
+        // Наступна сторінка = наступні 10; бекенд догідратить ще один батч
+        const apiPage = nextApiPageRef.current;
+        const data = await searchSlice(nextFilters, nextSort, nextFreshness, apiPage);
+        if (gen !== searchGen.current) return;
 
-        for (let i = 0; i < chunks; i += 1) {
-          const data = await searchSlice(nextFilters, nextSort, nextFreshness, startApiPage + i);
-          if (gen !== searchGen.current) return;
-          lastMeta = data;
-          collected.push(...data.items);
-          if (data.items.length < SEARCH_FIRST_BATCH) break;
-        }
-
-        if (!lastMeta) return;
-
+        nextApiPageRef.current = apiPage + 1;
         startTransition(() => {
           setResults(prev => {
             const seen = new Set(prev.map(item => item.id));
-            const unique = collected.filter(item => !seen.has(item.id));
+            const unique = data.items.filter(item => !seen.has(item.id));
             const merged = [...prev, ...unique];
             loadedCountRef.current = merged.length;
-            syncMeta(lastMeta!, nextFilters, nextSort, nextFreshness, merged.length);
+            syncMeta(data, nextFilters, nextSort, nextFreshness, merged.length);
             return merged;
           });
         });

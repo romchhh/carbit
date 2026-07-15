@@ -1,6 +1,6 @@
 export const SEARCH_PAGE_SIZE = 10;
-/** Перший запит — щоб показати картки, щойно є 5 результатів. */
-export const SEARCH_FIRST_BATCH = 5;
+/** Розмір API-сторінки = розмір видимого батча (лінива гідрація get_info). */
+export const SEARCH_FIRST_BATCH = SEARCH_PAGE_SIZE;
 export const SEARCH_HOURLY_LIMIT = 40;
 export const SEARCH_NEW_WITHIN_DAYS = 7;
 

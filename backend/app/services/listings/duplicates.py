@@ -256,8 +256,26 @@ async def collapse_listings_with_db_mirrors(
 
 
 async def listing_out_with_mirrors(db: AsyncSession, listing: Listing) -> ListingOut:
+    from app.services.baza_gai.service import get_stored_vin_check
     from app.services.listings.serialize import listing_to_out
+    from app.services.vin import extract_vin, is_valid_vin
 
     out = listing_to_out(listing)
     collapsed = await collapse_listings_with_db_mirrors(db, [out])
-    return collapsed[0] if collapsed else out
+    result = collapsed[0] if collapsed else out
+
+    vin = (result.vin or "").strip().upper()
+    if not vin:
+        vin = (extract_vin(listing.description, listing.title) or "").strip().upper()
+    if vin and is_valid_vin(vin):
+        stored = await get_stored_vin_check(db, vin)
+        if stored is not None:
+            result = result.model_copy(
+                update={
+                    "vin": vin,
+                    "vin_checked": True,
+                    "vin_check": stored,
+                    "vin_check_url": stored.source_url,
+                }
+            )
+    return result
