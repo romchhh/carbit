@@ -76,6 +76,10 @@ BRAND_TO_SLUG: dict[str, str] = {
     "mercedes": "mercedes-benz",
     "mercedes-benz": "mercedes-benz",
     "mercedes benz": "mercedes-benz",
+    # Народне написання на OLX.ua (/q-mersedes-gla/)
+    "mersedes": "mercedes-benz",
+    "mersedes-benz": "mercedes-benz",
+    "mersedes benz": "mercedes-benz",
     "mg": "mg",
     "mini": "mini",
     "mitsubishi": "mitsubishi",
@@ -445,6 +449,92 @@ def resolve_olx_brand_slug(brand: str) -> str:
         return BRAND_TO_SLUG[key]
     slug = slugify(brand)
     return slug or key.replace(" ", "-")
+
+
+# Токен для /q-.../ (народне написання на OLX.ua; taxonomy-path лишається окремо)
+OLX_TEXT_BRAND_TOKENS: dict[str, str] = {
+    "mercedes-benz": "mersedes",
+}
+
+# Альтернативні написання для паралельного /q-.../ (написи в оголошеннях різняться)
+OLX_TEXT_BRAND_VARIANTS: dict[str, tuple[str, ...]] = {
+    "mercedes-benz": ("mersedes", "mercedes", "mercedes-benz", "мерседес"),
+    "volkswagen": ("volkswagen", "vw", "фольксваген"),
+    "bmw": ("bmw", "бмв"),
+    "toyota": ("toyota", "тойота"),
+    "hyundai": ("hyundai", "хюндай", "хендай"),
+    "kia": ("kia", "кіа"),
+    "nissan": ("nissan", "ніссан"),
+    "ford": ("ford", "форд"),
+    "skoda": ("skoda", "шкода"),
+    "renault": ("renault", "рено"),
+    "peugeot": ("peugeot", "пежо"),
+    "citroen": ("citroen", "сітроен", "ситроен"),
+    "opel": ("opel", "опель"),
+    "mazda": ("mazda", "мазда"),
+    "lexus": ("lexus", "лексус"),
+    "audi": ("audi", "ауді", "ауди"),
+    "chevrolet": ("chevrolet", "шевроле"),
+    "mitsubishi": ("mitsubishi", "міцубісі"),
+    "subaru": ("subaru", "субару"),
+    "honda": ("honda", "хонда"),
+    "volvo": ("volvo", "вольво"),
+    "jeep": ("jeep", "джип"),
+    "porsche": ("porsche", "порше"),
+    "land-rover": ("land-rover", "land rover", "ленд ровер"),
+}
+
+# Скільки різних /q-/ запитів максимум на один пошук (включно з основним text)
+MAX_OLX_TEXT_QUERY_VARIANTS = 4
+
+
+def resolve_olx_text_brand_query(brand: str) -> str:
+    """Текст у /q-{brand}/ — для Mercedes народне «mersedes», не mercedes-benz."""
+    slug = resolve_olx_brand_slug(brand)
+    return OLX_TEXT_BRAND_TOKENS.get(slug, slug)
+
+
+def build_olx_text_query_variants(brand: str, model: str = "") -> list[str]:
+    """Унікальні text_query для різних написань марки (+ модель)."""
+    brand = (brand or "").strip()
+    model = (model or "").strip()
+    if not brand and not model:
+        return []
+
+    brand_slug = resolve_olx_brand_slug(brand) if brand else ""
+    model_token = slugify(model) if model else ""
+
+    tokens: list[str] = []
+    if brand:
+        primary = resolve_olx_text_brand_query(brand)
+        if primary:
+            tokens.append(primary)
+        for alt in OLX_TEXT_BRAND_VARIANTS.get(brand_slug, ()):
+            if alt and alt not in tokens:
+                tokens.append(alt)
+        if brand_slug and brand_slug not in tokens:
+            tokens.append(brand_slug)
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for token in tokens or [""]:
+        if brand and not token:
+            continue
+        if model_token and token:
+            # Mercedes folk: mersedes-gla; цифрові (Zeekr 001) — також у q
+            query = f"{token} {model_token}"
+        elif model_token:
+            query = model_token
+        else:
+            query = token
+        key = query.casefold().replace(" ", "-")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(query)
+        if len(out) >= MAX_OLX_TEXT_QUERY_VARIANTS:
+            break
+    return out
 
 
 def resolve_olx_model_slug(model: str, *, brand: str = "") -> str:

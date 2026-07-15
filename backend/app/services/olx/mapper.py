@@ -22,6 +22,8 @@ from app.services.olx.brand_slugs import (
     brand_uses_olx_text_search,
     resolve_olx_brand_slug,
     resolve_olx_model_slug,
+    resolve_olx_text_brand_query,
+    slugify,
 )
 from app.services.olx.constants import MODEL_SLUG_ALIASES
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
@@ -54,10 +56,15 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
         or brand_model_forces_text_search(brand_raw, model_raw)
     ):
         # Немає taxonomy-path OLX (Zeekr / Tesla Model 3 / Toyota Prado тощо)
-        # → /q-zeekr/ або /q-toyota/; модель у пост-фільтрі (крім цифрових 001).
-        brand_q = brand_slug(brand_raw) or brand_raw
-        if model_raw and re.fullmatch(r"\d+[a-z]?", model_raw.strip(), re.IGNORECASE):
-            params.text_query = f"{brand_q} {model_raw.strip()}"
+        # → /q-zeekr/ або /q-mersedes-gla/; модель у q для Mercedes і цифрових кодів.
+        brand_q = resolve_olx_text_brand_query(brand_raw) or brand_raw
+        brand_path = brand_slug(brand_raw)
+        model_token = (model_raw or "").strip()
+        # Mercedes: OLX народний пошук — /q-mersedes-gla/ (модель у q)
+        if brand_path == "mercedes-benz" and model_token:
+            params.text_query = f"{brand_q} {slugify(model_token)}"
+        elif model_token and re.fullmatch(r"\d+[a-z]?", model_token, re.IGNORECASE):
+            params.text_query = f"{brand_q} {model_token}"
         else:
             params.text_query = brand_q
     else:

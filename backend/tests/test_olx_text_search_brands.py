@@ -243,6 +243,55 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         )
         self.assertEqual(with_model.text_query, "byd")
 
+    def test_mercedes_text_uses_mersedes_folk_query(self):
+        """OLX народний пошук: /q-mersedes-glb/, не /q-mercedes-benz/."""
+        params = filters_to_olx_params(
+            SearchFilters(brand="Mercedes-Benz", model="GLB", currency="UAH")
+        )
+        self.assertEqual(params.text_query, "mersedes glb")
+        url = build_search_url(params)
+        self.assertIn("/q-mersedes-glb/", url)
+
+    def test_mercedes_gla_keeps_taxonomy_path(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Mercedes-Benz", model="GLA", currency="UAH")
+        )
+        self.assertIsNone(params.text_query)
+        self.assertEqual(params.model, "gla")
+        self.assertIn("/mercedes-benz/gla/", build_search_url(params))
+
+    def test_mercedes_title_accepts_mersedes_spelling(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Mercedes-Benz", model="GLB", currency="UAH")
+        )
+        hit = OlxListing(title="Mersedes GLB 200d 2021", price="25000", currency="USD")
+        miss = OlxListing(title="BMW X1 sDrive18d", price="18000", currency="USD")
+        self.assertTrue(passes_olx_filters(hit, params))
+        self.assertFalse(passes_olx_filters(miss, params))
+
+    def test_mercedes_text_query_variants(self):
+        from app.services.olx.brand_slugs import build_olx_text_query_variants
+        from app.services.olx.service import _build_search_param_variants
+
+        queries = build_olx_text_query_variants("Mercedes-Benz", "GLA")
+        self.assertIn("mersedes gla", queries)
+        self.assertIn("mercedes gla", queries)
+        self.assertTrue(any("мерседес" in q for q in queries))
+
+        primary = filters_to_olx_params(
+            SearchFilters(brand="Mercedes-Benz", model="GLA", currency="UAH")
+        )
+        variants = _build_search_param_variants(
+            primary, SearchFilters(brand="Mercedes-Benz", model="GLA", currency="UAH")
+        )
+        # path primary + text folk queries
+        self.assertGreaterEqual(len(variants), 2)
+        self.assertIsNone(variants[0].text_query)
+        self.assertTrue(any(v.text_query and "mersedes" in v.text_query for v in variants))
+        urls = [build_search_url(v) for v in variants]
+        self.assertTrue(any("/mercedes-benz/gla/" in u for u in urls))
+        self.assertTrue(any("/q-mersedes-gla/" in u for u in urls))
+
     def test_catalog_covers_every_fe_model_path_or_text(self):
         """Кожна модель з FE або має confirmed path, або йде в text — без 404-roulette."""
         import re
@@ -260,10 +309,6 @@ class OlxTextSearchBrandTests(unittest.TestCase):
             OLX_KNOWN_MODEL_PATHS,
         )
 
-        ts = Path(__file__).resolve().parents[1].parent.joinpath(
-            "frontend/src/lib/search-data/brands-models.ts"
-        )
-        # backend/tests → parents[1]=backend, need repo root
         ts = Path(__file__).resolve().parents[2] / "frontend/src/lib/search-data/brands-models.ts"
         text = ts.read_text(encoding="utf-8")
         fe: dict[str, list[str]] = {}
@@ -288,7 +333,6 @@ class OlxTextSearchBrandTests(unittest.TestCase):
                 if forces:
                     self.assertTrue(params.text_query, f"{brand}/{model} should text")
                     continue
-                # path mode
                 self.assertIsNone(params.text_query, f"{brand}/{model}")
                 slug = resolve_olx_model_slug(model, brand=brand)
                 known = OLX_KNOWN_MODEL_PATHS.get(bslug, frozenset())

@@ -64,7 +64,7 @@ class AutoRiaCategoryParamsTests(unittest.IsolatedAsyncioTestCase):
 
         client = object()
 
-        async def fake_params(category: str):
+        async def fake_params(category: str, **filter_kw):
             with (
                 patch(
                     "app.services.auto_ria.mapper.resolve_mark_id",
@@ -77,7 +77,7 @@ class AutoRiaCategoryParamsTests(unittest.IsolatedAsyncioTestCase):
             ):
                 return await filters_to_search_params(
                     client,  # type: ignore[arg-type]
-                    SearchFilters(category=category),
+                    SearchFilters(category=category, **filter_kw),
                     page=1,
                     per_page=20,
                 )
@@ -90,8 +90,81 @@ class AutoRiaCategoryParamsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(new.get("searchType"), 1)
         self.assertEqual(new.get("raceTo"), 1)
 
+        # Категорія «нові» перебиває user mileage_to (лише ≤1000 км).
+        new_with_mileage = await fake_params("new", mileage_to=50000)
+        self.assertEqual(new_with_mileage.get("raceTo"), 1)
+
         imp = await fake_params("import")
         self.assertEqual(imp.get("custom"), 1)
+
+        all_cat = await fake_params("all")
+        self.assertEqual(all_cat.get("searchType"), 4)
+        self.assertNotIn("raceTo", all_cat)
+
+
+class ZeroKmMarkerTests(unittest.TestCase):
+    def test_9300_km_is_not_zero_km_new(self):
+        item = _item(
+            mileage=9300,
+            description="Авто з пробігом 9300 км, знаходиться у Вінниці",
+        )
+        self.assertTrue(listing_matches_category(item, "used"))
+        self.assertFalse(listing_matches_category(item, "new"))
+
+    def test_true_zero_km_is_new(self):
+        item = _item(mileage=0, description="Без пробігу, 0 км з салону")
+        self.assertTrue(listing_matches_category(item, "new"))
+
+
+class NewMarkerFalsePositiveTests(unittest.TestCase):
+    def test_innovatsiynyi_is_not_new(self):
+        item = _item(mileage=50000, description="інноваційний підхід до сервісу")
+        self.assertFalse(listing_matches_category(item, "new"))
+        self.assertTrue(listing_matches_category(item, "used"))
+
+    def test_nova_rezyna_high_mileage_not_new(self):
+        item = _item(mileage=60000, description="нова резина комплект")
+        self.assertFalse(listing_matches_category(item, "new"))
+        self.assertTrue(listing_matches_category(item, "used"))
+
+    def test_yak_z_salonu_high_mileage_not_new(self):
+        item = _item(mileage=80000, description="стан як з салону")
+        self.assertFalse(listing_matches_category(item, "new"))
+        self.assertTrue(listing_matches_category(item, "used"))
+
+    def test_nove_avto_phrase_is_new(self):
+        item = _item(mileage=12000, description="продаж, нове авто з документами")
+        self.assertTrue(listing_matches_category(item, "new"))
+
+
+class ImportMarkerFalsePositiveTests(unittest.TestCase):
+    def test_parts_from_china_not_import(self):
+        item = _item(description="запчастини з Китаю в наявності", mileage=50000)
+        self.assertFalse(listing_matches_category(item, "import"))
+        self.assertTrue(listing_matches_category(item, "used"))
+
+    def test_cleared_from_eu_is_used(self):
+        item = _item(description="машина з ЄС, уже розмитнена", mileage=70000)
+        self.assertFalse(listing_matches_category(item, "import"))
+        self.assertTrue(listing_matches_category(item, "used"))
+
+    def test_poland_delivery_header_not_import(self):
+        item = _item(description="Польща. Доставка по Україні", mileage=90000)
+        self.assertFalse(listing_matches_category(item, "import"))
+        self.assertTrue(listing_matches_category(item, "used"))
+
+    def test_disks_on_order_not_import(self):
+        item = _item(description="диски під замовлення", mileage=40000)
+        self.assertFalse(listing_matches_category(item, "import"))
+
+    def test_real_import_still_matches(self):
+        item = _item(description="авто під пригон з США, нерозмитнене", mileage=40000)
+        self.assertTrue(listing_matches_category(item, "import"))
+        self.assertFalse(listing_matches_category(item, "used"))
+
+    def test_evronomer_uncleared_is_import(self):
+        item = _item(description="на єврономерах, без розмитнення", mileage=50000)
+        self.assertTrue(listing_matches_category(item, "import"))
 
 
 if __name__ == "__main__":

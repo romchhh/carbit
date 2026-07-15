@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from typing import Optional, TypeGuard
-from urllib.parse import urlencode, urljoin
+from urllib.parse import quote, urlencode, urljoin
 
 from bs4 import BeautifulSoup
 
@@ -166,11 +166,12 @@ def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
         # Не чіпаємо params (пост-фільтр лишає brand_label/model_label)
 
     if text_q:
-        path_parts.append(f"q-{text_q}")
+        # Кирилиця в /q-мерседес/ має бути %-encoded
+        path_parts.append("q-" + quote(text_q, safe="-._~"))
     elif brand:
-        path_parts.append(brand.lower())
+        path_parts.append(quote(brand.lower(), safe="-._~"))
         if model:
-            path_parts.append(model.lower())
+            path_parts.append(quote(model.lower(), safe="-._~"))
 
     path = "/" + "/".join(path_parts) + "/"
 
@@ -1087,15 +1088,20 @@ _BRAND_TITLE_ALIASES: dict[str, tuple[str, ...]] = {
         "mercedes-benz",
         "mercedes benz",
         "mercedes",
+        "mersedes",
+        "mersedes-benz",
         "мерседес-бенц",
         "мерседес бенц",
         "мерседес",
+        "мерс",
     ),
     "mercedes benz": (
         "mercedes-benz",
         "mercedes benz",
         "mercedes",
+        "mersedes",
         "мерседес",
+        "мерс",
     ),
     "volkswagen": ("volkswagen", "vw", "фольксваген"),
     "bmw": ("bmw", "бмв"),

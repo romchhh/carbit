@@ -127,7 +127,8 @@ async def filters_to_search_params(
         params["searchType"] = 4
         params["custom"] = 1
     else:
-        params["searchType"] = 1
+        # «Всі» — увесь ринок (не searchType=1, бо це режим «нові»).
+        params["searchType"] = 4
 
     return params
 
