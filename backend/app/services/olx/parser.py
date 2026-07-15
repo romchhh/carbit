@@ -401,7 +401,13 @@ def _params_from_embedded(params: object) -> tuple[Optional[str], Optional[str],
 
 def _listing_from_embedded(raw: dict) -> Optional[OlxListing]:
     listing_id = raw.get("id")
-    url = raw.get("url")
+    url = (
+        raw.get("url")
+        or raw.get("urlPath")
+        or raw.get("slug")
+        or raw.get("friendlyUrl")
+        or raw.get("externalUrl")
+    )
     if listing_id is None or not url:
         return None
 
@@ -432,7 +438,7 @@ def _listing_from_embedded(raw: dict) -> Optional[OlxListing]:
         city=_city_from_embedded(raw),
         published=str(created) if created else None,
         photo_url=_photo_from_embedded(raw),
-        promoted=bool(raw.get("isHighlighted") or raw.get("promoted")),
+        promoted=bool(raw.get("isHighlighted") or raw.get("promoted") or raw.get("isPromoted")),
         specs=specs,
         raw_params=raw if isinstance(raw, dict) else {},
     )
@@ -648,6 +654,16 @@ def parse_listing_page(html: str) -> list[OlxListing]:
     if not cards:
         cards = soup.select('[data-cy="l-card"]')
     if not cards:
+        # Fallback: title nodes → піднімаємось до картки, якщо є
+        title_nodes = soup.select('[data-testid="ad-card-title"]')
+        recovered = []
+        for node in title_nodes:
+            parent = node.find_parent(attrs={"data-testid": "l-card"}) or node.find_parent(
+                attrs={"data-cy": "l-card"}
+            )
+            recovered.append(parent or node)
+        cards = recovered
+    if not cards:
         cards = soup.select('a[href*="obyavlenie"]')
 
     for card in cards:
@@ -667,6 +683,11 @@ def parse_listing_page(html: str) -> list[OlxListing]:
 def _parse_single_card(card) -> Optional[OlxListing]:
     link_tag = card if card.name == "a" else card.find("a", href=True)
     if not link_tag or not link_tag.get("href"):
+        # OLX інколи кладе посилання в data-testid="card-title-link"
+        link_tag = card.select_one('a[data-testid="card-title-link"][href]') or card.select_one(
+            'a[href*="obyavlenie"]'
+        )
+    if not link_tag or not link_tag.get("href"):
         return None
 
     url = urljoin(BASE_URL, link_tag["href"])
@@ -679,12 +700,20 @@ def _parse_single_card(card) -> Optional[OlxListing]:
     )
 
     title_tag = (
-        card.select_one('[data-testid="ad-title"]')
+        card.select_one('[data-testid="card-title-link"]')
+        or card.select_one('[data-testid="ad-card-title"] h4')
+        or card.select_one('[data-testid="ad-card-title"] h6')
+        or card.select_one('[data-testid="ad-title"]')
         or card.select_one("h4")
         or card.select_one("h6")
         or link_tag
     )
     title = title_tag.get_text(strip=True) if title_tag else None
+    # ad-card-title інколи містить і ціну — беремо лише перший рядок / h4
+    if title and title_tag is not None and title_tag.get("data-testid") == "ad-card-title":
+        inner = title_tag.select_one("h4, h6, a")
+        if inner:
+            title = inner.get_text(strip=True)
 
     price_tag = card.select_one('[data-testid="ad-price"]')
     price_text = price_tag.get_text(strip=True) if price_tag else None
@@ -701,6 +730,13 @@ def _parse_single_card(card) -> Optional[OlxListing]:
     )
     if params_tag:
         params_text = params_tag.get_text(" ", strip=True)
+    # Сучасна видача: параметри інколи лише в іконках/тексті поруч із title
+    if not params_text:
+        params_text = " ".join(
+            node.get_text(" ", strip=True)
+            for node in card.select('[data-testid*="param"], [class*="param"]')
+            if node.get_text(strip=True)
+        )
 
     year_match = re.search(r"(19[5-9]\d|20[0-4]\d)", params_text or title or "")
     year = year_match.group(1) if year_match else None
@@ -983,6 +1019,7 @@ def html_looks_like_results_page(html: str) -> bool:
     markers = (
         'data-testid="l-card"',
         'data-cy="l-card"',
+        'data-testid="ad-card-title"',
         'id="__NEXT_DATA__"',
         "window.__PRERENDERED_STATE__",
         "/d/uk/obyavlenie/",
@@ -1186,32 +1223,6 @@ def _title_has_model(title: str, model: str, *, brand: str | None = None) -> boo
             re.IGNORECASE,
         ):
             return True
-    # C-Class Coupe / GLC Coupe → «C 200 Coupe», «GLC Coupe», «купе»
-    class_coupe_m = re.fullmatch(r"((?:[a-z]|gl[a-z]?)-class|gl[a-z]?)\s+coupe", model_l)
-    if class_coupe_m:
-        base = class_coupe_m.group(1)
-        letter_m = re.fullmatch(r"([a-z])-class", base)
-        has_coupe = bool(re.search(r"(?<![\w])(?:coupe|купе)(?![\w])", title, re.IGNORECASE))
-        if letter_m and has_coupe:
-            letter = letter_m.group(1)
-            if re.search(
-                rf"(?<![\w]){letter}(?:[\s\-]?class|[\s\-]?клас[сау]?|[\s\-]?\d{{2,3}})(?![\w])",
-                title,
-                re.IGNORECASE,
-            ):
-                return True
-        if has_coupe and re.search(
-            rf"(?<![\w]){re.escape(base)}(?![\w])",
-            title,
-            re.IGNORECASE,
-        ):
-            return True
-    if model_l in {"coupe", "купе"} and re.search(
-        r"(?<![\w])(?:coupe|купе)(?![\w])", title, re.IGNORECASE
-    ):
-        return True
-    if model_l == "cle" and re.search(r"(?<![\w])cle(?![\w])", title, re.IGNORECASE):
-        return True
     # J7 / C5 / X3 → «Jaecoo 7», «Omoda C5»
     letter_num = re.fullmatch(r"([a-z]+)(\d+[a-z]?)", model_l)
     if letter_num:

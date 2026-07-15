@@ -170,6 +170,26 @@ class OlxTextSearchBrandTests(unittest.TestCase):
             self.assertEqual(p.model, slug, model)
             self.assertIn(f"/mercedes-benz/{slug}/", build_search_url(p), model)
 
+    def test_mercedes_coupe_models(self):
+        path = filters_to_olx_params(
+            SearchFilters(brand="Mercedes-Benz", model="Coupe", currency="UAH")
+        )
+        self.assertIsNone(path.text_query)
+        self.assertEqual(path.model, "coupe")
+        self.assertIn("/mercedes-benz/coupe/", build_search_url(path))
+
+        cabrio = filters_to_olx_params(
+            SearchFilters(brand="Mercedes-Benz", model="Cabrio", currency="UAH")
+        )
+        self.assertEqual(cabrio.model, "cabrio")
+
+        for model in ("GLC Coupe", "GLE Coupe", "C-Class Coupe", "CLE"):
+            p = filters_to_olx_params(
+                SearchFilters(brand="Mercedes-Benz", model=model, currency="UAH")
+            )
+            self.assertIsNotNone(p.text_query, model)
+            self.assertIn("mersedes", (p.text_query or "").lower(), model)
+
     def test_mercedes_brand_path(self):
         params = filters_to_olx_params(
             SearchFilters(brand="Mercedes-Benz", currency="USD")

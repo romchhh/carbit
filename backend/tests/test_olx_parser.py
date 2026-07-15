@@ -88,6 +88,48 @@ def test_parse_listing_page_from_next_data():
     assert any(item.listing_id == "999" for item in listings)
 
 
+def test_parse_card_html_ad_card_title():
+    """OLX перейменував ad-title → ad-card-title."""
+    html = """
+    <div data-testid="l-card">
+      <a href="/d/uk/obyavlenie/bmw-x5-IDtest2.html">
+        <img src="https://ireland.apollo.olxcdn.com/v1/files/abc/image" />
+      </a>
+      <div data-testid="ad-card-title">
+        <a data-testid="card-title-link" href="/d/uk/obyavlenie/bmw-x5-IDtest2.html">
+          <h4>BMW X5 2019</h4>
+        </a>
+        <p data-testid="ad-price">28 000 $</p>
+      </div>
+      <p data-testid="location-date">Київ - Сьогодні</p>
+    </div>
+    """
+    from bs4 import BeautifulSoup
+
+    card = BeautifulSoup(html, "html.parser").select_one('[data-testid="l-card"]')
+    listing = _parse_single_card(card)
+    assert listing is not None
+    assert listing.listing_id == "test2"
+    assert listing.title == "BMW X5 2019"
+    assert listing.price == "28000"
+    assert listing.currency == "USD"
+    assert listing.city == "Київ"
+
+
+def test_embedded_listing_url_path_fallback():
+    raw = {
+        "id": 42,
+        "urlPath": "/d/uk/obyavlenie/zeekr-001-IDxyz.html",
+        "title": "Zeekr 001",
+        "createdTime": "2026-07-01T10:00:00Z",
+        "price": {"regularPrice": {"value": 40000, "currency": "USD"}},
+    }
+    listing = _listing_from_embedded(raw)
+    assert listing is not None
+    assert listing.url.endswith("/d/uk/obyavlenie/zeekr-001-IDxyz.html")
+    assert listing.listing_id == "42"
+
+
 def test_parse_card_html_mileage():
     html = """
     <div data-testid="l-card">

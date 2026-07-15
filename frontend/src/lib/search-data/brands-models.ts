@@ -55,7 +55,7 @@ export const BRAND_MODELS: Record<string, readonly string[]> = {
   MAN: ["TGE","TGL","TGM","TGS","TGX"],
   Maserati: ["3200 GT","Coupe","Ghibli","GranCabrio","GranTurismo","Grecale","Levante","MC20","Quattroporte","Spyder"],
   Mazda: ["121","2","3","323","5","6","626","929","B-Series","BT-50","CX-3","CX-30","CX-5","CX-50","CX-60","CX-7","CX-9","CX-90","Demio","MPV","MX-3","MX-30","MX-5","MX-6","Premacy","Protege","RX-7","RX-8","Tribute","Xedos"],
-  "Mercedes-Benz": ["190","A-Class","AMG GT","B-Class","C-Class","C-Class Coupe","Cabrio","Citan","CL","CLA","CLC","CLE","CLK","CLS","Coupe","E-Class","E-Class Coupe","EQA","EQB","EQC","EQE","EQS","EQV","G-Class","GL","GLA","GLB","GLC","GLC Coupe","GLE","GLE Coupe","GLK","GLS","M-Class","Maybach S-Class","R-Class","S-Class","S-Class Coupe","SL","SLC","SLK","SLR McLaren","SLS AMG","Sprinter","V-Class","Vaneo","Viano","Vito","X-Class"],
+  "Mercedes-Benz": ["190","A-Class","AMG GT","AMG GT 4-Door Coupe","B-Class","C-Class","C-Class Coupe","Cabrio","Citan","CL","CLA","CLC","CLE","CLK","CLS","Coupe","E-Class","E-Class Coupe","EQA","EQB","EQC","EQE","EQS","EQV","G-Class","GL","GLA","GLB","GLC","GLC Coupe","GLE","GLE Coupe","GLK","GLS","M-Class","Maybach S-Class","R-Class","S-Class","S-Class Coupe","SL","SLC","SLK","SLR McLaren","SLS AMG","Sprinter","V-Class","Vaneo","Viano","Vito","X-Class"],
   MG: ["3","350","5","550","6","750","HS","Marvel R","TF","ZS","ZS EV","ZST"],
   Mini: ["Clubman","Cooper","Cooper S","Countryman","Coupe","One","Paceman","Roadster"],
   Mitsubishi: ["3000 GT","ASX","Carisma","Colt","Diamante","Eclipse","Eclipse Cross","Endeavor","Galant","Grandis","i-MiEV","L200","Lancer","Mirage","Montero","Montero Sport","Outlander","Outlander Sport","Pajero","Pajero Pinin","Pajero Sport","RVR","Sigma","Space Gear","Space Runner","Space Star","Space Wagon"],
@@ -102,4 +102,4 @@ export function filterOptions(options: string[], query: string, limit = 80): str
 }
 
 export const TOTAL_BRANDS = 87;
-export const TOTAL_MODELS = 1425;
+export const TOTAL_MODELS = 1434;

@@ -314,12 +314,7 @@ export const telegram = {
     }),
 };
 
-// ── VIN / База ДАІ ─────────────────────────────────────
-export const vinCheck = {
-  get: (vin: string, listingId?: string | null) => {
-    const q = listingId ? `?listing_id=${encodeURIComponent(listingId)}` : "";
-    return request<VinCheckResult>(
-      `/vin/${encodeURIComponent(vin.trim().toUpperCase())}${q}`,
-    );
-  },
+// ── VIN / База ДАІ ────────────────────────────────────
+export const vin = {
+  lookup: (vinCode: string) => request<VinCheckResult>(`/vin/${encodeURIComponent(vinCode)}`),
 };

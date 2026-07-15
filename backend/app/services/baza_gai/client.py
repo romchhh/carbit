@@ -37,7 +37,7 @@ class BazaGaiClient:
             raise BazaGaiNotFound(path.rsplit("/", 1)[-1])
         if response.status_code == 429:
             raise BazaGaiRateLimited()
-        if response.status_code == 401 or response.status_code == 403:
+        if response.status_code in (401, 403):
             raise BazaGaiError("Невірний або відхилений API-ключ Бази ДАІ", status_code=503)
         if response.status_code >= 400:
             raise BazaGaiError(

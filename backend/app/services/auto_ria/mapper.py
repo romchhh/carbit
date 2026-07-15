@@ -97,9 +97,7 @@ async def filters_to_search_params(
         if region_key in REGION_TO_STATE_CITY:
             state_id, city_id = REGION_TO_STATE_CITY[region_key]
             params["state[0]"] = state_id
-            # city_id=0 — уся область; не надсилаємо city, щоб API не звужував.
-            if city_id:
-                params["city[0]"] = city_id
+            params["city[0]"] = city_id
 
     if filters.fuel:
         for index, fuel in enumerate(filters.fuel[:3]):
@@ -120,19 +118,16 @@ async def filters_to_search_params(
         params["searchType"] = 4
         params["custom"] = 0
     elif category == "new":
-        # «Нові / майже нові»: до 15 тис. км (race* — тисячі км).
-        # ≤1 тис. занадто вузько для свіжих EV (Zeekr 5–12 тис. км).
+        # Нові / з мінімальним пробігом (race* — тисячі км).
         params["searchType"] = 1
         params["raceFrom"] = 0
-        params["raceTo"] = 15
+        params["raceTo"] = 1
     elif category == "import":
         # Нерозмитнені / під пригон.
         params["searchType"] = 4
         params["custom"] = 1
     else:
-        # «Всі» — повний ринок як на auto.ria (нові + вживані).
-        # searchType=4 лишає лише used (~половина Zeekr 001 у Києві: 56 vs ~103).
-        params["searchType"] = 0
+        params["searchType"] = 1
 
     return params
 
@@ -163,7 +158,11 @@ def _pick_vin_value(value: Any) -> str | None:
     if value is None:
         return None
     text = str(value).strip().upper()
-    return text or None
+    if not text:
+        return None
+    from app.services.vin import is_valid_vin
+
+    return text if is_valid_vin(text) else None
 
 
 def _extract_vin(info: dict[str, Any]) -> str | None:
@@ -183,7 +182,15 @@ def _extract_vin(info: dict[str, Any]) -> str | None:
         if vin:
             return vin
 
-    return None
+    from app.services.vin import extract_vin
+
+    auto_data = info.get("autoData") if isinstance(info.get("autoData"), dict) else {}
+    return extract_vin(
+        str(info.get("title") or ""),
+        str(auto_data.get("description") or ""),
+        str(info.get("infoBarText") or ""),
+        str(info.get("description") or ""),
+    )
 
 
 def _extract_vin_check_url(info: dict[str, Any], auto_id: str) -> str | None:
@@ -289,14 +296,11 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
     fuel = fuel_raw.split(",")[0].strip() if fuel_raw else ""
     transmission = str(auto_data.get("gearboxName") or "")
 
-    dealer_raw = info.get("dealer")
-    dealer = dealer_raw if isinstance(dealer_raw, dict) else {}
+    dealer = info.get("dealer") if isinstance(info.get("dealer"), dict) else {}
     seller_type = "dealer" if dealer.get("id") or dealer.get("name") else "private"
 
     checked_vin = info.get("checkedVin")
-    vin_checked = (
-        bool(checked_vin.get("isChecked")) if isinstance(checked_vin, dict) else None
-    )
+    vin_checked = bool(checked_vin.get("isChecked")) if isinstance(checked_vin, dict) else None
 
     description = str(auto_data.get("description") or info.get("infoBarText") or "").strip() or None
 

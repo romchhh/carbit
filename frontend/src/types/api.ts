@@ -40,44 +40,6 @@ export interface ListingSourceLink {
   id?: string | null;
 }
 
-export type VinCheckOperation = {
-  registered_at?: string | null;
-  digits?: string | null;
-  model_year?: number | null;
-  vendor?: string | null;
-  model?: string | null;
-  operation?: string | null;
-  operation_group?: string | null;
-  department?: string | null;
-  color?: string | null;
-  address?: string | null;
-  is_last?: boolean | null;
-};
-
-export type VinStolenDetail = {
-  theft_at?: string | null;
-  vendor_title?: string | null;
-  car_type?: string | null;
-  chassis_number?: string | null;
-  department_title?: string | null;
-  color?: string | null;
-};
-
-export type VinCheckResult = {
-  vin: string;
-  digits?: string | null;
-  vendor?: string | null;
-  model?: string | null;
-  model_year?: number | null;
-  region?: string | null;
-  photo_url?: string | null;
-  is_stolen: boolean;
-  stolen_details: VinStolenDetail[];
-  operations: VinCheckOperation[];
-  source_url: string;
-  from_cache?: boolean;
-};
-
 export interface Listing {
   id: string;
   source: string;
@@ -98,7 +60,6 @@ export interface Listing {
   vin?: string | null;
   vin_checked?: boolean | null;
   vin_check_url?: string | null;
-  vin_check?: VinCheckResult | null;
   source_data?: Record<string, unknown> | null;
   price_history: Record<string, unknown>[];
   is_duplicate: boolean;
@@ -265,4 +226,60 @@ export interface TelegramRegisterInfo {
   email: string;
   valid: boolean;
   telegram_only?: boolean;
+}
+
+export interface VinCheckRegion {
+  name?: string | null;
+  name_ua?: string | null;
+  slug?: string | null;
+  codes: string[];
+}
+
+export interface VinCheckOperation {
+  registered_at?: string | null;
+  is_last?: boolean | null;
+  digits?: string | null;
+  vendor?: string | null;
+  model?: string | null;
+  model_year?: number | null;
+  operation_ua?: string | null;
+  operation_ru?: string | null;
+  operation_group_ua?: string | null;
+  department?: string | null;
+  color?: string | null;
+  displacement?: number | null;
+  address?: string | null;
+  kind_ua?: string | null;
+  is_registered_to_company?: boolean | null;
+}
+
+export interface VinCheckStolen {
+  theft_at?: string | null;
+  vendor_title?: string | null;
+  color?: string | null;
+  car_type?: string | null;
+  chassis_number?: string | null;
+  body_number?: string | null;
+  department_title?: string | null;
+}
+
+export interface VinCheckResult {
+  vin: string;
+  plate?: string | null;
+  vendor?: string | null;
+  model?: string | null;
+  model_year?: number | null;
+  photo_url?: string | null;
+  is_stolen: boolean;
+  color?: string | null;
+  displacement?: number | null;
+  kind_ua?: string | null;
+  registrations_count: number;
+  first_registered_at?: string | null;
+  last_registered_at?: string | null;
+  region?: VinCheckRegion | null;
+  operations: VinCheckOperation[];
+  stolen_details: VinCheckStolen[];
+  source_url: string;
+  note?: string | null;
 }

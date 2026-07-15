@@ -12,10 +12,12 @@ USER_AGENTS = [
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 ]
 
-REQUEST_TIMEOUT = 15.0
+REQUEST_TIMEOUT = 30.0
 MIN_DELAY = 0.4
 MAX_DELAY = 1.2
 MAX_RETRIES = 3
+# 5xx OLX/gateway — короткі ретраї (раніше лише 403/429)
+RETRYABLE_STATUS = frozenset({403, 429, 502, 503, 504})
 
 FUEL_MAP = {
     "petrol": "1",

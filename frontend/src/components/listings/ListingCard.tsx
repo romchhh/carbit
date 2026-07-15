@@ -10,7 +10,7 @@ import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
-import { hasVinCheck } from "@/lib/vin-check";
+import { hasVinCheck, resolveListingVin } from "@/lib/vin-check";
 import { cn, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
 import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -56,7 +56,8 @@ export function ListingCard({
   const fuel = typeof listing.fuel === "string" ? listing.fuel : "";
   const region = typeof listing.region === "string" ? listing.region : "";
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
-  const showVinBlock = Boolean(listing.vin) || hasVinCheck(listing);
+  const resolvedVin = resolveListingVin(listing);
+  const showVinBlock = Boolean(resolvedVin) || hasVinCheck(listing);
   const highlights = getAutoRiaHighlights(listing.source_data).slice(0, 3);
   const publishedLabel = publishedAgoLabel(listing.published_at);
   const refreshedLabel =
@@ -279,9 +280,9 @@ export function ListingCard({
             onClick={e => e.stopPropagation()}
             onKeyDown={e => e.stopPropagation()}
           >
-            {listing.vin && (
+            {resolvedVin && (
               <span className="rounded-full bg-surface px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide text-ink">
-                VIN: {listing.vin}
+                VIN: {resolvedVin}
               </span>
             )}
             {listing.vin_checked && (

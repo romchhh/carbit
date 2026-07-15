@@ -16,7 +16,7 @@ from app.services.telegram_channels.ingest import search_telegram_listings
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
 OLX_SEARCH_TIMEOUT_SECONDS = 15.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»)
-SOURCE_POOL_CAP = 120
+SOURCE_POOL_CAP = 80
 TELEGRAM_POOL_CAP = 200
 TELEGRAM_MAX_SCAN = 1200
 AUTO_RIA_PAGE_SIZE = 50
@@ -290,9 +290,7 @@ async def _fetch_source_pool(
     seen: set[str] = set()
     total = 0
     page = 1
-    # Extra pages when hydration drops some IDs (do not treat that as market end).
-    max_pages = max((need + AUTO_RIA_PAGE_SIZE - 1) // AUTO_RIA_PAGE_SIZE, 1) * 2
-    max_pages = min(max_pages, 6)
+    max_pages = max((need + AUTO_RIA_PAGE_SIZE - 1) // AUTO_RIA_PAGE_SIZE, 1)
 
     while len(collected) < need and page <= max_pages:
         chunk = await _search_single_source(
@@ -315,9 +313,7 @@ async def _fetch_source_pool(
             collected.append(item)
             if len(collected) >= need:
                 break
-        # Exhausted only when we've covered the API count — not when hydrate
-        # returned fewer listings than countpage (rate limits / bad IDs).
-        if page * AUTO_RIA_PAGE_SIZE >= total:
+        if len(chunk.items) < chunk.per_page:
             break
         page += 1
 
@@ -591,8 +587,8 @@ async def search_listings_outcome(
 
         filtered_batches = []
         for source, result in successful:
-            # AUTO.RIA уже відфільтрований API-параметрами (custom / raceTo).
-            if source == "auto_ria" and category in {"import", "new"}:
+            # AUTO.RIA «під пригон» уже відфільтрований параметром custom=1.
+            if source == "auto_ria" and category == "import":
                 filtered_batches.append((source, result))
                 continue
             items = [item for item in result.items if listing_matches_category(item, category)]

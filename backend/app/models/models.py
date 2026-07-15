@@ -177,19 +177,6 @@ class Listing(Base):
     search_listings: Mapped[list["SearchListing"]] = relationship(back_populates="listing")
 
 
-class VinCheck(Base):
-    """Кеш відповіді Бази ДАІ по VIN (один запис на VIN)."""
-
-    __tablename__ = "vin_checks"
-
-    vin: Mapped[str] = mapped_column(String(17), primary_key=True)
-    payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    is_stolen: Mapped[bool] = mapped_column(Boolean, default=False)
-    digits: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
-    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
-
-
 class Favorite(Base):
     __tablename__ = "favorites"
     __table_args__ = (UniqueConstraint("user_id", "listing_id", name="uq_favorites_user_listing"),)

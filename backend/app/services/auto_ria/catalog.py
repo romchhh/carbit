@@ -12,6 +12,21 @@ _marks_cache: list[dict[str, Any]] | None = None
 _models_cache: dict[int, list[dict[str, Any]]] = {}
 
 
+def _normalize_model_key(value: str) -> str:
+    """Порівняння моделей: «GLE Coupe» ≈ «GLE-Class Coupe», «купе» ≈ coupe."""
+    text = norm_text(value)
+    for src, dst in (
+        ("(купе)", " coupe "),
+        ("(coupe)", " coupe "),
+        (" купе", " coupe "),
+        ("coupe", " coupe "),
+        ("-class", " "),
+        (" class", " "),
+    ):
+        text = text.replace(src, dst)
+    return " ".join(text.split())
+
+
 async def _load_marks(client: AutoRiaClient) -> list[dict[str, Any]]:
     global _marks_cache
     if _marks_cache is not None:
@@ -50,20 +65,35 @@ async def resolve_model_id(client: AutoRiaClient, mark_id: int, model: str) -> i
     if not model:
         return None
     target = norm_text(model)
+    target_key = _normalize_model_key(model)
     models = await _load_models(client, mark_id)
+
     for item in models:
-        if norm_text(str(item.get("name", ""))) == target:
+        name = str(item.get("name", ""))
+        if norm_text(name) == target:
             return int(item["value"])
 
-    # Найдовший частковий збіг (щоб «C-Class Coupe» не ловив просто «C-Class»).
-    best: tuple[int, int] | None = None  # (name_len, model_id)
     for item in models:
-        name = norm_text(str(item.get("name", "")))
-        if not name:
-            continue
-        if target in name or name in target:
-            score = len(name)
-            mid = int(item["value"])
-            if best is None or score > best[0]:
-                best = (score, mid)
-    return best[1] if best else None
+        name = str(item.get("name", ""))
+        if _normalize_model_key(name) == target_key:
+            return int(item["value"])
+
+    # Довші/точніші збіги першими (щоб «C-Class Coupe» не ловився як «C-Class»)
+    partial: list[tuple[int, dict[str, Any]]] = []
+    for item in models:
+        name = str(item.get("name", ""))
+        name_n = norm_text(name)
+        name_key = _normalize_model_key(name)
+        if target in name_n or name_n in target or target_key in name_key or name_key in target_key:
+            partial.append((len(name_key), item))
+    if partial:
+        partial.sort(key=lambda pair: pair[0], reverse=True)
+        best_len, best = partial[0]
+        # Не підміняти купе седаном/SUV без «coupe» у назві, якщо в запиті є coupe
+        if "coupe" in target_key and "coupe" not in _normalize_model_key(str(best.get("name", ""))):
+            for length, item in partial:
+                if "coupe" in _normalize_model_key(str(item.get("name", ""))):
+                    return int(item["value"])
+            return None
+        return int(best["value"])
+    return None
