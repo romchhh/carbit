@@ -34,37 +34,31 @@ export function SaveSearchCTA({
         className="rounded-2xl border border-[#229ED9]/25 bg-[#E8F4FD]/50 px-4 py-3.5 sm:px-5"
         data-tour="save-search"
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[14px] font-bold text-ink">Моніторинг у Telegram</p>
-            <p className="mt-0.5 text-[12px] leading-snug text-muted">
-              Нові лоти за вашими фільтрами — одразу в чат.
-              {!telegramConnected && (
-                <>
-                  {" "}
-                  <Link
-                    href="/app/account"
-                    className="font-semibold text-[#229ED9] underline-offset-2 hover:underline"
-                  >
-                    Підключіть Telegram
-                  </Link>
-                </>
-              )}
-            </p>
-          </div>
-
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <button
             type="button"
             onClick={onSave}
             disabled={saving || limitReached}
             className={cn(
-              "inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#229ED9] px-5 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[#1a8bc4]",
+              "inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#229ED9] px-5 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[#1a8bc4] sm:w-auto",
               "disabled:cursor-not-allowed disabled:opacity-60",
             )}
           >
             <IconTelegram size={16} />
             {saving ? "Підключаємо…" : "Підключити моніторинг"}
           </button>
+
+          {!telegramConnected && (
+            <p className="text-center text-[12px] text-muted sm:text-right">
+              Спочатку{" "}
+              <Link
+                href="/app/account"
+                className="font-semibold text-[#229ED9] underline-offset-2 hover:underline"
+              >
+                підключіть Telegram
+              </Link>
+            </p>
+          )}
         </div>
 
         {successMessage && (

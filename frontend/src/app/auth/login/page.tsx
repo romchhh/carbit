@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
 import { ApiError, auth as authApi } from "@/lib/api";
 import { getRememberMePreference, getSavedEmail } from "@/lib/auth-storage";
+import { resolvePostAuthRedirect } from "@/lib/search-draft";
 import { CodeInput } from "@/components/auth/CodeInput";
 
 const HERO_IMAGE = "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80";
@@ -104,7 +105,7 @@ function AuthForm() {
 
   const redirect = searchParams.get("redirect");
   const plan = searchParams.get("plan");
-  const destination = redirect?.startsWith("/app") ? redirect : "/app/dashboard";
+  const destination = resolvePostAuthRedirect(redirect);
 
   useEffect(() => {
     if (!initialized || authLoading || !user) return;
@@ -193,7 +194,7 @@ function AuthForm() {
     setLoading(true);
     try {
       await verifyRegisterCode(email.trim(), code);
-      router.replace("/app/dashboard");
+      router.replace(resolvePostAuthRedirect(redirect));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Помилка підтвердження");
     } finally {

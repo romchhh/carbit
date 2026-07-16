@@ -11,11 +11,7 @@ import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import { listingsToExportItems } from "@/lib/export-listings";
 import { SEARCH_HOURLY_LIMIT, SEARCH_PAGE_SIZE, type SearchFreshness } from "@/lib/search-preview";
-import {
-  flavorForLoadMore,
-  flavorForPartial,
-  flavorForRefresh,
-} from "@/lib/search-flavor";
+import { flavorForLoadMore, flavorForRefresh } from "@/lib/search-flavor";
 import type { Listing, SourceStatus } from "@/types/api";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +20,47 @@ function sourceLabel(source: string): string {
   if (source === "auto_ria" || source === "AUTO.RIA") return "AUTO.RIA";
   if (source === "telegram" || source === "Telegram") return "Telegram";
   return source.toUpperCase();
+}
+
+function isOlxSource(source: string): boolean {
+  return source === "olx" || source === "OLX";
+}
+
+/** Зрозуміле повідомлення про збій джерела замість «креативних» текстів. */
+function sourceFailureMessage(status: SourceStatus): string {
+  const label = sourceLabel(status.source);
+  const raw = (status.error || "").trim();
+
+  if (isOlxSource(status.source)) {
+    if (/обмежує|429|rate/i.test(raw)) {
+      return "OLX тимчасово обмежує запити. Показуємо результати з інших джерел.";
+    }
+    if (/timeout|час очікування|timed?\s*out/i.test(raw)) {
+      return "OLX не відповів вчасно. Показуємо результати з інших джерел.";
+    }
+    return "OLX тимчасово недоступний. Показуємо результати з інших джерел.";
+  }
+
+  if (raw && raw.length < 120 && !/Error|Exception|Traceback|HTTP/i.test(raw)) {
+    return `${label}: ${raw}`;
+  }
+  return `${label} тимчасово недоступний. Показуємо результати з інших джерел.`;
+}
+
+function buildPartialHint(
+  statuses: SourceStatus[] | undefined,
+  partial: boolean | undefined,
+  fromCache: boolean | undefined,
+): string | null {
+  if (!partial) return null;
+  const failed = (statuses ?? []).filter(s => s.error);
+  if (failed.length === 0) return null;
+
+  const lines = failed.map(sourceFailureMessage);
+  if (fromCache) {
+    lines.push("Частина результатів з кешу.");
+  }
+  return lines.join(" ");
 }
 
 type Props = {
@@ -70,16 +107,9 @@ export function SearchPreviewResults({
   const remaining = Math.max(0, total - results.length);
   const nextBatch = Math.min(SEARCH_PAGE_SIZE, remaining);
 
-  const pendingSources = (sourceStatuses ?? []).filter(s => s.error);
-  const pendingKey = pendingSources.map(s => s.source).join("|");
-  const partialLine = useMemo(() => flavorForPartial(pendingKey.length + total), [pendingKey, total]);
+  const partialHint = buildPartialHint(sourceStatuses, partial, fromCache);
   const loadMoreLabel = useMemo(() => flavorForLoadMore(results.length), [results.length]);
   const refreshLabel = useMemo(() => flavorForRefresh(total), [total]);
-
-  const partialHint =
-    partial && pendingSources.length > 0
-      ? `${partialLine} (${pendingSources.map(s => sourceLabel(s.source)).join(", ")})`
-      : null;
 
   const openListing = (listing: Listing) => {
     saveRecentListing(listing);
@@ -116,7 +146,6 @@ export function SearchPreviewResults({
             className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900"
           >
             {partialHint}
-            {fromCache ? " Трохи підглянули в свіжий кеш, щоб не ганяти зайве." : ""}
           </div>
         )}
 
@@ -152,8 +181,8 @@ export function SearchPreviewResults({
             <p className="text-[15px] font-semibold text-ink">На цьому ряду порожньо</p>
             <p className="mt-2 text-[13px] text-muted">
               {freshness === "new"
-                ? "Оберіть «Усі пропозиції» або підключіть моніторинг — свиснемо, коли з’явиться нове."
-                : "Підключіть моніторинг — напишемо в Telegram, щойно хтось виставить цікаве."}
+                ? "Спробуйте «Усі пропозиції» або змініть фільтри."
+                : "Спробуйте розширити фільтри — рік, ціну чи регіон."}
             </p>
           </div>
         ) : (

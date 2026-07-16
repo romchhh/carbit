@@ -8,6 +8,7 @@ import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { useAuth } from "@/contexts/AuthProvider";
 import { telegram as telegramApi, ApiError } from "@/lib/api";
 import { markOnboardingPending } from "@/lib/onboarding";
+import { resolvePostAuthRedirect } from "@/lib/search-draft";
 
 function TelegramRegisterForm() {
   const searchParams = useSearchParams();
@@ -23,7 +24,7 @@ function TelegramRegisterForm() {
       .then(async ({ access_token }) => {
         await loginWithToken(access_token);
         markOnboardingPending();
-        router.replace("/app/dashboard");
+        router.replace(resolvePostAuthRedirect());
       })
       .catch(err => {
         setError(err instanceof ApiError ? err.message : "Не вдалось зареєструватись");

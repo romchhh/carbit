@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { IconArrowRight, IconBell, IconTelegram } from "@/components/icons";
+import { IconTelegram } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { SearchFreshness } from "@/lib/search-preview";
 
@@ -38,35 +38,28 @@ export function SearchPreviewNotice({
 
       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald/15 text-emerald-dark">
-              <IconBell size={18} />
-            </span>
-            <p className="text-[15px] font-bold leading-snug text-ink sm:text-[16px]">
-              Нехай ринок шукає за вас?
+          {remaining > 0 ? (
+            <p className="text-[14px] leading-relaxed text-muted">
+              {freshness === "new" ? "Свіжі за тиждень" : "За вашими фільтрами"}
+              {" · "}ще{" "}
+              <strong className="font-semibold text-ink">
+                {remaining.toLocaleString("uk-UA")}+
+              </strong>{" "}
+              у наступних рядах
             </p>
-          </div>
-          <p className="mt-2 max-w-[540px] text-[13px] leading-relaxed text-muted sm:text-[14px]">
-            {freshness === "new"
-              ? "Це свіжина за тиждень — як ранок на автобазарі. "
-              : "Обійшли майданчики за вашими фільтрами. "}
-            {remaining > 0 ? (
-              <>
-                Ще можна заглянути в наступний ряд — там ще{" "}
-                <strong className="font-semibold text-ink">
-                  {remaining.toLocaleString("uk-UA")}+
-                </strong>
-                .{" "}
-              </>
-            ) : null}
-            Збережіть моніторинг — нові лоти самі постукають у Telegram.
-          </p>
+          ) : (
+            <p className="text-[14px] leading-relaxed text-muted">
+              {freshness === "new"
+                ? "Усі свіжі за тиждень уже на екрані"
+                : "Усі знайдені авто вже на екрані"}
+            </p>
+          )}
           {!telegramConnected && (
-            <p className="mt-2 text-[12px] text-[#229ED9]">
+            <p className="mt-1.5 text-[12px] text-[#229ED9]">
               <Link href="/app/account" className="font-semibold underline-offset-2 hover:underline">
                 Підключіть Telegram
               </Link>
-              {" "}в акаунті, щоб отримувати сповіщення миттєво.
+              {" "}в акаунті
             </p>
           )}
         </div>
@@ -82,7 +75,6 @@ export function SearchPreviewNotice({
         >
           <IconTelegram size={18} />
           {saving ? "Зберігаємо..." : "Зберегти пошук"}
-          <IconArrowRight size={14} />
         </button>
       </div>
     </div>

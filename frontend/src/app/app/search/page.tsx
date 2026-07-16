@@ -8,10 +8,14 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { usePreviewSearch } from "@/hooks/usePreviewSearch";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
 import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
-import { clearSearchDraft, loadSearchDraft } from "@/lib/search-draft";
+import {
+  beginSearchDraftAutoRun,
+  clearSearchDraft,
+  peekSearchDraft,
+} from "@/lib/search-draft";
 
 export default function SearchPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, initialized } = useAuth();
   const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } = useSaveSearch();
   const {
     filters,
@@ -38,17 +42,14 @@ export default function SearchPage() {
   } = usePreviewSearch();
 
   useEffect(() => {
-    const draft = loadSearchDraft();
-    if (!draft) return;
+    if (!initialized || authLoading || !user) return;
+    const draft = peekSearchDraft();
+    if (!draft || !beginSearchDraftAutoRun()) return;
+
+    changeFreshness(draft.freshness);
     clearSearchDraft();
-    // Не стартуємо, поки валюта з профілю ще може перезаписати фільтри.
-    const timer = window.setTimeout(() => {
-      void runSearch(draft);
-    }, 0);
-    return () => window.clearTimeout(timer);
-    // лише на mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void runSearch(draft.filters, draft.freshness);
+  }, [initialized, authLoading, user, runSearch, changeFreshness]);
 
   const handleSearch = () => {
     clearSaveMessages();
@@ -74,9 +75,7 @@ export default function SearchPage() {
             Пошук авто
           </h1>
           <p className="mt-1 max-w-[560px] text-[12px] leading-relaxed text-muted sm:text-[13px]">
-            AUTO.RIA та OLX в одному місці. Шукайте всі доступні авто за фільтрами або лише нові за
-            тиждень. Збережіть пошук — Carbit надсилатиме{" "}
-            <strong className="font-medium text-ink">нові</strong> оголошення в Telegram.
+            AUTO.RIA, OLX і Telegram в одному пошуку — усі авто або лише свіжі за тиждень.
           </p>
         </div>
         <span className="flex w-fit flex-col items-end gap-1 sm:items-end">

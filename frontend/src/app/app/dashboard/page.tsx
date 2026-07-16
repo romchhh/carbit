@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { IconArrowRight } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
@@ -22,9 +23,11 @@ import {
   AppPage,
 } from "@/components/layout/AppPage";
 import { DashboardWelcomeHero } from "@/components/layout/DashboardWelcomeHero";
+import { hasSearchDraft } from "@/lib/search-draft";
 import type { SearchQuery, DashboardStats } from "@/types/api";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [searches, setSearches] = useState<SearchQuery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +59,12 @@ export default function DashboardPage() {
     setSearches(prev => [created, ...prev]);
   });
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (hasSearchDraft()) {
+      router.replace("/app/search");
+    }
+  }, [router]);
 
   useEffect(() => {
     searchesApi.list()
@@ -131,9 +140,6 @@ export default function DashboardPage() {
 
       <div className="mb-8">
         <h2 className="text-[17px] font-bold text-ink">Новий моніторинг</h2>
-        <p className="mt-1 text-[13px] text-muted">
-          Пошук усіх авто за фільтрами. Збережіть запит — далі нові пропозиції приходитимуть автоматично.
-        </p>
         <div className="mt-4">
           <SearchFiltersPanel
             wide

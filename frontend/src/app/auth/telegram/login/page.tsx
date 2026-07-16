@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { useAuth } from "@/contexts/AuthProvider";
 import { auth as authApi } from "@/lib/api";
+import { resolvePostAuthRedirect } from "@/lib/search-draft";
 
 function TelegramLoginForm() {
   const searchParams = useSearchParams();
@@ -20,7 +21,7 @@ function TelegramLoginForm() {
 
     authApi.telegramLogin(token)
       .then(({ access_token }) => loginWithToken(access_token))
-      .then(() => router.replace("/app/dashboard"))
+      .then(() => router.replace(resolvePostAuthRedirect()))
       .catch(() => setError("Не вдалося увійти. Спробуйте отримати нове посилання в Telegram."));
   }, [token, router, loginWithToken]);
 

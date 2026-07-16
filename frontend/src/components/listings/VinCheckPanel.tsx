@@ -2,14 +2,17 @@
 
 import { useEffect, useId, useState } from "react";
 import { getApiErrorMessage, vin as vinApi } from "@/lib/api";
+import { getVinCheck, saveVinCheck } from "@/lib/vin-check-cache";
 import { cn } from "@/lib/utils";
 import type { VinCheckResult } from "@/types/api";
 
 type Props = {
   vin: string | null;
+  listingId?: string | null;
   fallbackUrl?: string | null;
   open: boolean;
   onClose: () => void;
+  onChecked?: (result: VinCheckResult) => void;
 };
 
 function Fact({ label, value }: { label: string; value?: string | number | null }) {
@@ -27,7 +30,7 @@ function displacementLabel(value?: number | null): string | null {
   return `${value} см³`;
 }
 
-export function VinCheckPanel({ vin, fallbackUrl, open, onClose }: Props) {
+export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onChecked }: Props) {
   const titleId = useId();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,17 +54,29 @@ export function VinCheckPanel({ vin, fallbackUrl, open, onClose }: Props) {
     }
 
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setData(null);
+    const cached = getVinCheck(vin);
+    if (cached) {
+      setData(cached.result);
+      setLoading(false);
+      setError(null);
+    } else {
+      setLoading(true);
+      setError(null);
+      setData(null);
+    }
 
     vinApi
       .lookup(vin)
       .then(result => {
-        if (!cancelled) setData(result);
+        if (cancelled) return;
+        saveVinCheck(vin, result, listingId);
+        setData(result);
+        onChecked?.(result);
       })
       .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, "Не вдалося перевірити VIN"));
+        if (!cancelled && !cached) {
+          setError(getApiErrorMessage(err, "Не вдалося перевірити VIN"));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -70,7 +85,7 @@ export function VinCheckPanel({ vin, fallbackUrl, open, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, vin]);
+  }, [open, vin, listingId, onChecked]);
 
   if (!open) return null;
 

@@ -33,12 +33,6 @@ export const SEARCH_LOAD_MORE_LABELS = [
   "Не зупиняємось: далі теж є чим поласувати…",
 ] as const;
 
-export const SEARCH_PARTIAL_LINES = [
-  "Частина ринку ще махає рукою «зачекайте» — показуємо те, що вже є.",
-  "Одне джерело пригальмувало на світлофорі. Решта вже на фініші.",
-  "Не всі майданчики відповіли одразу — ловимо те, що встигло приїхати.",
-] as const;
-
 function pick<T>(items: readonly T[], salt = 0): T {
   const index = Math.abs(salt) % items.length;
   return items[index]!;
@@ -58,8 +52,4 @@ export function flavorForRefresh(seed: number) {
 
 export function flavorForLoadMore(seed: number) {
   return pick(SEARCH_LOAD_MORE_LABELS, seed);
-}
-
-export function flavorForPartial(seed: number) {
-  return pick(SEARCH_PARTIAL_LINES, seed);
 }

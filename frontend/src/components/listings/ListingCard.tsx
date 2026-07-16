@@ -10,6 +10,7 @@ import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
+import { useVinCheckCache } from "@/hooks/useVinCheckCache";
 import { hasVinCheck, resolveListingVin } from "@/lib/vin-check";
 import { cn, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
 import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
@@ -57,6 +58,7 @@ export function ListingCard({
   const region = typeof listing.region === "string" ? listing.region : "";
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
   const resolvedVin = resolveListingVin(listing);
+  const cachedVinCheck = useVinCheckCache(resolvedVin);
   const showVinBlock = Boolean(resolvedVin) || hasVinCheck(listing);
   const highlights = getAutoRiaHighlights(listing.source_data).slice(0, 3);
   const publishedLabel = publishedAgoLabel(listing.published_at);
@@ -107,9 +109,9 @@ export function ListingCard({
     >
       {/* Mobile: full-width photo on top */}
       <div className="relative aspect-[16/10] w-full bg-surface sm:hidden">
-        {images[0] ? (
+        {currentPhoto ? (
           <Image
-            src={images[0]}
+            src={currentPhoto}
             alt={listing.title}
             fill
             className="object-cover"
@@ -123,7 +125,7 @@ export function ListingCard({
             Без фото
           </div>
         )}
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
+        <div className="absolute inset-x-0 top-0 z-[1] flex items-start justify-between gap-2 p-3">
           <div className="flex flex-wrap items-center gap-1.5">
             {isNewForMonitor && (
               <span className="rounded-full bg-emerald px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
@@ -150,7 +152,38 @@ export function ListingCard({
             </span>
           </div>
         </div>
-        <div className="absolute bottom-2 left-2">
+        {showGalleryNav && (
+          <>
+            <button
+              type="button"
+              aria-label="Попереднє фото"
+              onClick={goPhoto(-1)}
+              className={cn(
+                "absolute left-2 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center",
+                "rounded-full bg-ink/70 text-white shadow-sm backdrop-blur-sm",
+                "active:bg-ink/85 focus:outline-none",
+              )}
+            >
+              <IconArrowLeft size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label="Наступне фото"
+              onClick={goPhoto(1)}
+              className={cn(
+                "absolute right-2 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center",
+                "rounded-full bg-ink/70 text-white shadow-sm backdrop-blur-sm",
+                "active:bg-ink/85 focus:outline-none",
+              )}
+            >
+              <IconArrowRight size={16} />
+            </button>
+            <span className="absolute bottom-2 right-2 z-[1] rounded-full bg-ink/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white backdrop-blur-sm">
+              {safeIndex + 1}/{photoCount}
+            </span>
+          </>
+        )}
+        <div className="absolute bottom-2 left-2 z-[1]">
           <PublishedTimeBadge date={timeBadgeDate} short />
         </div>
       </div>
@@ -276,21 +309,23 @@ export function ListingCard({
 
         {showVinBlock && (
           <div
-            className="mt-3 flex flex-wrap items-center gap-2"
+            className="mt-3 flex flex-col gap-2"
             onClick={e => e.stopPropagation()}
             onKeyDown={e => e.stopPropagation()}
           >
-            {resolvedVin && (
-              <span className="rounded-full bg-surface px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide text-ink">
-                VIN: {resolvedVin}
-              </span>
-            )}
-            {listing.vin_checked && (
-              <Badge variant="emerald" className="text-[10px]">
-                VIN перевірено
-              </Badge>
-            )}
-            <VinCheckButton listing={listing} />
+            <div className="flex flex-wrap items-center gap-2">
+              {resolvedVin && (
+                <span className="rounded-full bg-surface px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide text-ink">
+                  VIN: {resolvedVin}
+                </span>
+              )}
+              {listing.vin_checked && !cachedVinCheck && (
+                <Badge variant="emerald" className="text-[10px]">
+                  VIN перевірено
+                </Badge>
+              )}
+            </div>
+            <VinCheckButton listing={listing} showSummary />
           </div>
         )}
 

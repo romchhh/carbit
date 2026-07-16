@@ -5,19 +5,34 @@ import { useRouter } from "next/navigation";
 import { AuthGateModal } from "@/components/auth/AuthGateModal";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { useAuth } from "@/contexts/AuthProvider";
-import { DEFAULT_FILTERS, normalizePriceRange, normalizeYearRange, type SearchFilterState } from "@/lib/search-catalog";
+import {
+  DEFAULT_FILTERS,
+  DEFAULT_PRICE_BY_CURRENCY,
+  normalizePriceRange,
+  normalizeYearRange,
+  type SearchFilterState,
+} from "@/lib/search-catalog";
 import { saveSearchDraft } from "@/lib/search-draft";
 import type { SearchFreshness } from "@/lib/search-preview";
+
+/** Дефолти саме для лендінгу: вся Україна + типовий діапазон ціни. */
+const HOME_DEFAULT_FILTERS: SearchFilterState = {
+  ...DEFAULT_FILTERS,
+  region: "Вся Україна",
+  priceFrom: DEFAULT_PRICE_BY_CURRENCY.USD.from,
+  priceTo: DEFAULT_PRICE_BY_CURRENCY.USD.to,
+  currency: "USD",
+};
 
 export function HomeSearchSection() {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const [filters, setFilters] = useState<SearchFilterState>({ ...DEFAULT_FILTERS });
+  const [filters, setFilters] = useState<SearchFilterState>({ ...HOME_DEFAULT_FILTERS });
   const [freshness, setFreshness] = useState<SearchFreshness>("new");
   const [authOpen, setAuthOpen] = useState(false);
 
   const handleReset = () => {
-    setFilters({ ...DEFAULT_FILTERS });
+    setFilters({ ...HOME_DEFAULT_FILTERS });
     setFreshness("new");
   };
 
@@ -32,7 +47,7 @@ export function HomeSearchSection() {
       priceTo: prices.to,
     };
     setFilters(sanitized);
-    saveSearchDraft(sanitized);
+    saveSearchDraft(sanitized, { freshness });
 
     if (user) {
       router.push("/app/search");
@@ -44,7 +59,8 @@ export function HomeSearchSection() {
 
   const handleAuthenticated = () => {
     setAuthOpen(false);
-    router.push("/app/search");
+    // Повне перезавантаження — cookie сесії гарантовано підхоплюється middleware.
+    window.location.assign("/app/search");
   };
 
   return (
@@ -56,7 +72,7 @@ export function HomeSearchSection() {
               Моніторинг авто
             </h2>
             <p className="mt-3 max-w-[560px] text-[16px] font-medium leading-relaxed text-ink/70 sm:mt-4 sm:text-[18px]">
-              Оберіть фільтри — Carbit відстежуватиме нові оголошення на AUTO.RIA і надсилатиме їх у Telegram
+              Оберіть фільтри й запускайте пошук по AUTO.RIA, OLX і Telegram
             </p>
           </div>
 
