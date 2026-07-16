@@ -12,7 +12,7 @@ import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { Button } from "@/components/ui/Button";
-import { IconArrowLeft, IconGlobe, IconHeart } from "@/components/icons";
+import { IconArrowLeft, IconArrowRight, IconGlobe, IconHeart } from "@/components/icons";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
   formatMileage,
@@ -198,9 +198,37 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               )}
 
               {images.length > 1 && (
-                <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">
-                  {photoIndex + 1} / {images.length}
-                </div>
+                <>
+                  <button
+                    type="button"
+                    aria-label="Попереднє фото"
+                    onClick={() =>
+                      scrollToPhoto((photoIndex - 1 + images.length) % images.length)
+                    }
+                    className={cn(
+                      "absolute left-2 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center",
+                      "rounded-full bg-ink/70 text-white shadow-sm backdrop-blur-sm",
+                      "active:bg-ink/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                    )}
+                  >
+                    <IconArrowLeft size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Наступне фото"
+                    onClick={() => scrollToPhoto((photoIndex + 1) % images.length)}
+                    className={cn(
+                      "absolute right-2 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center",
+                      "rounded-full bg-ink/70 text-white shadow-sm backdrop-blur-sm",
+                      "active:bg-ink/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                    )}
+                  >
+                    <IconArrowRight size={16} />
+                  </button>
+                  <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">
+                    {photoIndex + 1} / {images.length}
+                  </div>
+                </>
               )}
               <div className="pointer-events-none absolute bottom-3 left-3">
                 <PublishedTimeBadge date={listing.published_at} short />

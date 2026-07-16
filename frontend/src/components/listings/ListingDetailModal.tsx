@@ -341,9 +341,37 @@ export function ListingDetailModal({
             )}
 
             {photos.length > 1 && (
-              <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">
-                {photoIndex + 1} / {photos.length}
-              </div>
+              <>
+                <button
+                  type="button"
+                  aria-label="Попереднє фото"
+                  onClick={() =>
+                    scrollToPhoto((photoIndex - 1 + photos.length) % photos.length)
+                  }
+                  className={cn(
+                    "absolute left-2 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center",
+                    "rounded-full bg-ink/70 text-white shadow-sm backdrop-blur-sm",
+                    "active:bg-ink/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                  )}
+                >
+                  <IconArrowLeft size={16} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Наступне фото"
+                  onClick={() => scrollToPhoto((photoIndex + 1) % photos.length)}
+                  className={cn(
+                    "absolute right-2 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center",
+                    "rounded-full bg-ink/70 text-white shadow-sm backdrop-blur-sm",
+                    "active:bg-ink/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                  )}
+                >
+                  <IconArrowRight size={16} />
+                </button>
+                <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">
+                  {photoIndex + 1} / {photos.length}
+                </div>
+              </>
             )}
             <div className="pointer-events-none absolute bottom-3 left-3">
               <PublishedTimeBadge date={listing.published_at} short />
