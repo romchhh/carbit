@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timezone import as_kyiv, now_kyiv
 from app.models.models import Listing, SearchQuery, Source, User
 from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
 from app.services.auto_ria.mapper import sort_listings
@@ -13,6 +15,11 @@ from app.services.listings.upsert import upsert_listing
 from app.services.parser.filter_groups import parse_search_filters
 from app.services.parser.linking import link_listing_to_search
 from app.services.parser.settings import get_parser_settings
+from app.services.search.brand_model_keywords import (
+    collect_brand_keyword_variants,
+    collect_model_keyword_variants,
+    filter_sql_search_tokens,
+)
 from app.services.telegram_channels.mapper import (
     car_listing_to_listing_out,
     listing_out_matches_filters,
@@ -20,6 +27,28 @@ from app.services.telegram_channels.mapper import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def telegram_found_after_cutoff(
+    searches: list[SearchQuery],
+    *,
+    max_hours: int,
+) -> datetime:
+    """Для cron: лише оголошення з found_at новіші за last_checked_at групи."""
+    if not searches:
+        return now_kyiv() - timedelta(hours=max(1, max_hours))
+
+    if any(search.last_checked_at is None for search in searches):
+        return now_kyiv() - timedelta(hours=max(1, max_hours))
+
+    return min(as_kyiv(search.last_checked_at) for search in searches if search.last_checked_at)
+
+
+def mark_searches_checked(searches: list[SearchQuery]) -> None:
+    """Оновлює last_checked_at після успішного проходу групи (watermark для TG)."""
+    checked_at = now_kyiv()
+    for search in searches:
+        search.last_checked_at = checked_at
 
 
 def _save_photo_refs_from_car(car_listing) -> str:
@@ -100,31 +129,49 @@ async def ingest_telegram_listing(
     return item, new_total, notifications, matched_any
 
 
-def _telegram_sql_prefilters(filters: SearchFilters):
+def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | None = None):
     """Грубі SQL-предикати — менше рядків тягнемо в Python."""
     clauses = [Listing.source == Source.telegram]
 
+    if found_after is not None:
+        clauses.append(Listing.found_at > as_kyiv(found_after))
+
     brand = (filters.brand or "").strip()
     if brand:
-        like = f"%{brand}%"
-        clauses.append(
-            or_(
-                Listing.brand.ilike(like),
-                Listing.title.ilike(like),
-                Listing.description.ilike(like),
+        brand_variants = filter_sql_search_tokens(collect_brand_keyword_variants(brand), limit=5)
+        brand_clauses = []
+        for variant in brand_variants:
+            like = f"%{variant}%"
+            brand_clauses.extend(
+                [
+                    Listing.brand.ilike(like),
+                    Listing.title.ilike(like),
+                    Listing.description.ilike(like),
+                ]
             )
-        )
+        if brand_clauses:
+            clauses.append(or_(*brand_clauses))
 
     model = (filters.model or "").strip()
     if model:
-        like = f"%{model}%"
-        clauses.append(
-            or_(
-                Listing.model.ilike(like),
-                Listing.title.ilike(like),
-                Listing.description.ilike(like),
-            )
+        model_variants = filter_sql_search_tokens(
+            collect_model_keyword_variants(filters.brand or "", model),
+            limit=5,
         )
+        if not model_variants:
+            model_variants = (model,)
+        model_clauses = []
+        for variant in model_variants:
+            like = f"%{variant}%"
+            model_clauses.extend(
+                [
+                    Listing.model.ilike(like),
+                    Listing.title.ilike(like),
+                    Listing.description.ilike(like),
+                ]
+            )
+        if model_clauses:
+            clauses.append(or_(*model_clauses))
 
     if filters.year_from or filters.year_to:
         clauses.append(Listing.year > 0)
@@ -154,6 +201,7 @@ async def search_telegram_listings(
     sort_by: str = "newest",
     max_scan: int = 3000,
     keyword_refresh: bool = True,
+    found_after: datetime | None = None,
 ) -> PaginatedListings:
     if keyword_refresh:
         try:
@@ -165,26 +213,25 @@ async def search_telegram_listings(
         except Exception:
             logger.exception("Telegram keyword refresh failed")
 
+    scan_limit = max_scan if found_after is None else min(max_scan, 500)
+    order_col = Listing.found_at.desc() if found_after is not None else Listing.published_at.desc()
+
     rows = await db.scalars(
         select(Listing)
-        .where(_telegram_sql_prefilters(filters))
-        .order_by(Listing.published_at.desc())
-        .limit(max_scan)
+        .where(_telegram_sql_prefilters(filters, found_after=found_after))
+        .order_by(order_col)
+        .limit(scan_limit)
     )
     matched: list[ListingOut] = []
-    from app.services.telegram_channels.bootstrap import ensure_parser_path
+    from app.services.telegram_channels.lazy_photos import enqueue_listing_photos
 
-    ensure_parser_path()
-    from parser.channel_media_store import ChannelMediaStore
-
-    media_store = ChannelMediaStore()
     for listing in rows.all():
         item = listing_to_out(listing)
         if listing_out_matches_filters(item, filters):
             matched.append(item)
-            # Підвантажити фото для знайдених у пошуку без картинок
+            # Підвантажити ≥1 фото для карток без картинок (через telegram-worker)
             if not (item.images or []):
-                media_store.enqueue_photo_download(item.id)
+                enqueue_listing_photos(item.id)
 
     matched = sort_listings(matched, sort_by)
     total = len(matched)

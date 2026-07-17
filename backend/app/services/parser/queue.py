@@ -18,6 +18,26 @@ STALE_RUNNING_SECONDS = 2400
 
 
 async def enqueue_parse_search(search_id: str) -> str:
+    redis = await get_redis()
+    raw = await redis.get(QUEUE_KEY)
+    jobs: list[str] = []
+    if raw:
+        try:
+            jobs = json.loads(raw)
+            if not isinstance(jobs, list):
+                jobs = []
+        except json.JSONDecodeError:
+            jobs = []
+
+    for item in jobs:
+        try:
+            data = json.loads(item) if isinstance(item, str) else item
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if data.get("type") == "parse_search" and data.get("search_id") == search_id:
+            logger.info("Parse job already queued for search %s", search_id)
+            return str(data.get("id") or "")
+
     job_id = str(uuid.uuid4())
     payload = json.dumps(
         {
@@ -28,18 +48,6 @@ async def enqueue_parse_search(search_id: str) -> str:
         },
         ensure_ascii=False,
     )
-    redis = await get_redis()
-    # Store as list via dedicated key + set membership; SQLite KV has no native list —
-    # use job hash + pending set encoded as JSON array.
-    raw = await redis.get(QUEUE_KEY)
-    jobs: list[str] = []
-    if raw:
-        try:
-            jobs = json.loads(raw)
-            if not isinstance(jobs, list):
-                jobs = []
-        except json.JSONDecodeError:
-            jobs = []
     jobs.append(payload)
     await redis.setex(QUEUE_KEY, 86400 * 7, json.dumps(jobs, ensure_ascii=False))
     logger.info("Enqueued parse job %s for search %s", job_id, search_id)

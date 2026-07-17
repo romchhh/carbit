@@ -72,8 +72,10 @@ export function ListingDetailModal({
   useEffect(() => {
     if (!listingProp) return;
     const needsPhotos =
-      listingProp.source === "telegram" &&
-      (!listingProp.images || listingProp.images.length === 0);
+      (listingProp.source === "telegram" &&
+        (!listingProp.images || listingProp.images.length === 0)) ||
+      (listingProp.source === "auto_ria" &&
+        (listingProp.images?.length ?? 0) < 2);
 
     if (!needsPhotos) {
       setPhotosLoading(false);

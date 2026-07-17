@@ -1,5 +1,6 @@
 "use client";
 
+import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -8,9 +9,10 @@ type Props = {
   onClick?: () => void;
   className?: string;
   disabled?: boolean;
+  leading?: ReactNode;
 };
 
-export function FilterRow({ label, value, onClick, className, disabled }: Props) {
+export function FilterRow({ label, value, onClick, className, disabled, leading }: Props) {
   const filled = Boolean(value?.trim());
 
   return (
@@ -25,8 +27,11 @@ export function FilterRow({ label, value, onClick, className, disabled }: Props)
         className,
       )}
     >
-      <span className={cn("truncate text-[15px]", filled ? "font-medium text-ink" : "text-muted")}>
-        {filled ? value : label}
+      <span className="flex min-w-0 flex-1 items-center gap-2.5">
+        {leading}
+        <span className={cn("truncate text-[15px]", filled ? "font-medium text-ink" : "text-muted")}>
+          {filled ? value : label}
+        </span>
       </span>
       <svg width="8" height="14" viewBox="0 0 8 14" fill="none" className="shrink-0 text-muted/70" aria-hidden>
         <path d="M1 1l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

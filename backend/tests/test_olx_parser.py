@@ -213,3 +213,69 @@ def test_passes_olx_filters_mileage_full_km():
     )
     params = OlxSearchParams(mileage_from=100, mileage_to=150)
     assert passes_olx_filters(listing, params)
+
+
+def test_parse_offers_api_payload():
+    from app.services.olx.parser import parse_offers_api_payload
+
+    payload = {
+        "data": [
+            {
+                "id": 926495358,
+                "url": "https://www.olx.ua/d/uk/obyavlenie/tesla-model-3-2021-ID10HtLv.html",
+                "title": "Tesla Model 3 2021",
+                "created_time": "2026-06-16T21:17:54+03:00",
+                "last_refresh_time": "2026-07-17T10:41:57+03:00",
+                "location": {
+                    "city": {"id": 645, "name": "Млинів", "normalized_name": "mlinov"},
+                    "region": {"id": 14, "name": "Рівненська область"},
+                },
+                "params": [
+                    {
+                        "key": "price",
+                        "name": "Ціна",
+                        "value": {"value": 15500, "currency": "USD", "label": "15 500 $"},
+                    },
+                    {
+                        "key": "motor_year",
+                        "name": "Рік випуску",
+                        "value": {"key": "2021", "label": "2021 "},
+                    },
+                    {
+                        "key": "motor_mileage_thou",
+                        "name": "Пробіг",
+                        "value": {"key": "128", "label": "128 тис.км."},
+                    },
+                ],
+                "photos": [
+                    {
+                        "link": "https://ireland.apollo.olxcdn.com/v1/files/abc/image;s={width}x{height}",
+                    }
+                ],
+                "promotion": {"highlighted": False, "top_ad": False},
+            }
+        ],
+        "metadata": {"total_elements": 1},
+    }
+    listings = parse_offers_api_payload(payload)
+    assert len(listings) == 1
+    item = listings[0]
+    assert item.listing_id == "926495358"
+    assert item.title == "Tesla Model 3 2021"
+    assert item.price == "15500"
+    assert item.currency == "USD"
+    assert item.year == "2021"
+    assert item.city == "Млинів"
+    assert item.photo_url and "{width}" not in item.photo_url
+    assert "800x600" in item.photo_url
+
+
+def test_build_offers_api_query_from_text():
+    from app.services.olx.parser import build_offers_api_query
+
+    params = OlxSearchParams(text_query="ауді-q8", brand_label="Audi", model_label="Q8")
+    assert build_offers_api_query(params) == "ауді q8"
+
+    params2 = OlxSearchParams(brand="tesla", model="model-3", brand_label="Tesla", model_label="Model 3")
+    assert "Tesla" in build_offers_api_query(params2)
+    assert "Model 3" in build_offers_api_query(params2)

@@ -48,6 +48,15 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         .then(data => {
           setListing(data);
           setNotFound(false);
+          if (
+            data.source === "auto_ria" &&
+            (data.images?.length ?? 0) < 2
+          ) {
+            listingsApi
+              .ensurePhotos(data.id)
+              .then(fresh => setListing(fresh))
+              .catch(() => {});
+          }
         })
         .catch(() => {
           setListing(null);

@@ -6,9 +6,24 @@ from types import TracebackType
 
 import httpx
 
-from app.services.olx.constants import MAX_RETRIES, REQUEST_TIMEOUT, RETRYABLE_STATUS, USER_AGENTS
+from app.services.olx.constants import (
+    BASE_URL,
+    CARS_CATEGORY_ID,
+    MAX_RETRIES,
+    OFFERS_API_LIMIT,
+    OFFERS_API_PATH,
+    REQUEST_TIMEOUT,
+    RETRYABLE_STATUS,
+    USER_AGENTS,
+)
 from app.services.olx.errors import OlxError
-from app.services.olx.parser import parse_listing_details
+from app.services.olx.parser import (
+    OlxListing,
+    OlxSearchParams,
+    build_offers_api_query,
+    parse_listing_details,
+    parse_offers_api_payload,
+)
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 
 
@@ -32,24 +47,29 @@ class OlxClient:
             await self._client.aclose()
             self._client = None
 
+    def _request_headers(self, *, accept: str) -> dict[str, str]:
+        return {
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept-Language": "uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept": accept,
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        }
+
+    async def _get(self, url: str, *, headers: dict[str, str], params: dict | None = None) -> httpx.Response:
+        if self._client is not None:
+            return await self._client.get(url, headers=headers, params=params)
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+            return await client.get(url, headers=headers, params=params)
+
     async def fetch_html(self, url: str) -> str:
         last_status: int | None = None
         for attempt in range(1, MAX_RETRIES + 1):
-            headers = {
-                "User-Agent": random.choice(USER_AGENTS),
-                "Accept-Language": "uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
-            }
+            headers = self._request_headers(
+                accept="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            )
             try:
-                if self._client is not None:
-                    response = await self._client.get(url, headers=headers)
-                else:
-                    async with httpx.AsyncClient(
-                        timeout=REQUEST_TIMEOUT, follow_redirects=True
-                    ) as client:
-                        response = await client.get(url, headers=headers)
+                response = await self._get(url, headers=headers)
             except httpx.TimeoutException as exc:
                 if attempt == MAX_RETRIES:
                     message = f"Таймаут при завантаженні OLX: {url}"
@@ -89,6 +109,63 @@ class OlxClient:
         )
         await notify_admin_parsing_error(source="OLX", error=message, url=url)
         raise OlxError(message, status_code=last_status or 502)
+
+    async def fetch_offers_api(
+        self,
+        params: OlxSearchParams,
+        *,
+        page: int = 1,
+        limit: int = OFFERS_API_LIMIT,
+    ) -> list[OlxListing]:
+        """Fallback через офіційний JSON API, коли HTML SSR порожній."""
+        query = build_offers_api_query(params)
+        if not query:
+            return []
+
+        offset = max(page - 1, 0) * max(limit, 1)
+        api_params: dict[str, str | int] = {
+            "offset": offset,
+            "limit": max(limit, 1),
+            "query": query,
+            "category_id": CARS_CATEGORY_ID,
+            "currency": (params.currency or "UAH").upper(),
+        }
+        if params.sort_order:
+            api_params["sort_by"] = params.sort_order
+
+        url = f"{BASE_URL}{OFFERS_API_PATH}"
+        last_status: int | None = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            headers = self._request_headers(accept="application/json")
+            try:
+                response = await self._get(url, headers=headers, params=api_params)
+            except httpx.TimeoutException:
+                if attempt == MAX_RETRIES:
+                    return []
+                await asyncio.sleep(2 * attempt)
+                continue
+            except httpx.HTTPError:
+                if attempt == MAX_RETRIES:
+                    return []
+                await asyncio.sleep(2 * attempt)
+                continue
+
+            if response.status_code == 200:
+                try:
+                    payload = response.json()
+                except ValueError:
+                    return []
+                return parse_offers_api_payload(payload)
+
+            last_status = response.status_code
+            if response.status_code in RETRYABLE_STATUS and attempt < MAX_RETRIES:
+                delay = (5 if response.status_code in (403, 429) else 2) * attempt
+                await asyncio.sleep(delay)
+                continue
+            return []
+
+        _ = last_status
+        return []
 
     async def fetch_listing_details(self, url: str) -> dict:
         html = await self.fetch_html(url)

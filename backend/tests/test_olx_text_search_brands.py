@@ -8,6 +8,7 @@ from app.schemas.schemas import SearchFilters
 from app.services.olx.brand_slugs import brand_uses_olx_text_search
 from app.services.olx.mapper import filters_to_olx_params
 from app.services.olx.parser import OlxListing, build_search_url, passes_olx_filters
+from app.services.search.brand_model_keywords import message_matches_search_filters
 
 
 class OlxTextSearchBrandTests(unittest.TestCase):
@@ -41,9 +42,9 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         params = filters_to_olx_params(
             SearchFilters(brand="BYD", model="Song Plus", currency="UAH")
         )
-        self.assertEqual(params.text_query, "byd")
+        self.assertEqual(params.text_query, "byd song plus")
         url = build_search_url(params)
-        self.assertIn("/q-byd/", url)
+        self.assertIn("/q-byd-song-plus/", url)
         self.assertNotIn("/legkovye-avtomobili/byd/", url)
 
     def test_text_search_uses_brand_only_url(self):
@@ -84,8 +85,8 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         params = filters_to_olx_params(
             SearchFilters(brand="Haval", model="Jolion", currency="USD")
         )
-        self.assertEqual(params.text_query, "haval")
-        self.assertIn("/q-haval/", build_search_url(params))
+        self.assertEqual(params.text_query, "haval jolion")
+        self.assertIn("/q-haval-jolion/", build_search_url(params))
 
     def test_post_filter_keeps_model(self):
         params = filters_to_olx_params(
@@ -239,9 +240,9 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         params = filters_to_olx_params(
             SearchFilters(brand="Toyota", model="Land Cruiser Prado", currency="USD")
         )
-        self.assertEqual(params.text_query, "toyota")
+        self.assertEqual(params.text_query, "toyota prado")
         self.assertIsNone(params.model)
-        self.assertIn("/q-toyota/", build_search_url(params))
+        self.assertIn("/q-toyota-prado/", build_search_url(params))
 
     def test_tesla_model_forces_text_brand_path_alone_ok(self):
         brand_only = filters_to_olx_params(SearchFilters(brand="Tesla", currency="USD"))
@@ -251,8 +252,51 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         with_model = filters_to_olx_params(
             SearchFilters(brand="Tesla", model="Model 3", currency="USD")
         )
-        self.assertEqual(with_model.text_query, "tesla")
+        self.assertEqual(with_model.text_query, "tesla model 3")
         self.assertEqual(with_model.model_label, "Model 3")
+
+    def test_tesla_model_s_text_query_single_canonical(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Tesla", model="Model S", currency="UAH")
+        )
+        self.assertEqual(params.text_query, "tesla model s")
+        url = build_search_url(params)
+        self.assertIn("/q-tesla-model-s/", url)
+
+        from app.services.olx.brand_slugs import compose_olx_text_query
+
+        self.assertEqual(compose_olx_text_query("Tesla", "Model S"), "tesla model s")
+
+    def test_tesla_cyrillic_model_s_exact_olx_title(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Tesla", model="Model S", currency="UAH")
+        )
+        title = "Тесла модел S 100D 2018"
+        listing = OlxListing(title=title, price="20000", currency="USD")
+        self.assertTrue(passes_olx_filters(listing, params), title)
+        self.assertTrue(message_matches_search_filters(title, "Tesla", "Model S"))
+        # homoglyph не ламає чисту кирилицю «Тесла»
+        from app.services.olx.parser import _normalize_title_for_match
+
+        self.assertEqual(_normalize_title_for_match(title), title)
+
+    def test_tesla_model_s_title_variants(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Tesla", model="Model S", currency="UAH")
+        )
+        titles = (
+            "Tesla Model S Long Range AWD 2020",
+            "Tesla model S plaid 2021 1020 кс",
+            "Tesla Model S 75 2016",
+            "ТЕSLA S 100 KWH DUAL MOTOR 2018",
+            "Тесла модел S 100D 2018",
+        )
+        for title in titles:
+            listing = OlxListing(title=title, price="20000", currency="USD")
+            self.assertTrue(passes_olx_filters(listing, params), title)
+
+        drop = OlxListing(title="Tesla Model 3 Performance 2022", price="18000", currency="USD")
+        self.assertFalse(passes_olx_filters(drop, params))
 
     def test_byd_brand_path_model_text(self):
         brand_only = filters_to_olx_params(SearchFilters(brand="BYD", currency="UAH"))
@@ -261,7 +305,7 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         with_model = filters_to_olx_params(
             SearchFilters(brand="BYD", model="Song Plus", currency="UAH")
         )
-        self.assertEqual(with_model.text_query, "byd")
+        self.assertEqual(with_model.text_query, "byd song plus")
 
     def test_mercedes_text_uses_mersedes_folk_query(self):
         """OLX народний пошук: /q-mersedes-glb/, не /q-mercedes-benz/."""
@@ -289,9 +333,8 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         self.assertTrue(passes_olx_filters(hit, params))
         self.assertFalse(passes_olx_filters(miss, params))
 
-    def test_mercedes_text_query_variants(self):
+    def test_mercedes_text_query_variants_for_matching_only(self):
         from app.services.olx.brand_slugs import build_olx_text_query_variants
-        from app.services.olx.service import _build_search_param_variants
 
         queries = build_olx_text_query_variants("Mercedes-Benz", "GLA")
         self.assertIn("mersedes gla", queries)
@@ -301,16 +344,9 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         primary = filters_to_olx_params(
             SearchFilters(brand="Mercedes-Benz", model="GLA", currency="UAH")
         )
-        variants = _build_search_param_variants(
-            primary, SearchFilters(brand="Mercedes-Benz", model="GLA", currency="UAH")
-        )
-        # path primary + text folk queries
-        self.assertGreaterEqual(len(variants), 2)
-        self.assertIsNone(variants[0].text_query)
-        self.assertTrue(any(v.text_query and "mersedes" in v.text_query for v in variants))
-        urls = [build_search_url(v) for v in variants]
-        self.assertTrue(any("/mercedes-benz/gla/" in u for u in urls))
-        self.assertTrue(any("/q-mersedes-gla/" in u for u in urls))
+        self.assertIsNone(primary.text_query)
+        self.assertEqual(primary.brand, "mercedes-benz")
+        self.assertEqual(primary.model, "gla")
 
     def test_catalog_covers_every_fe_model_path_or_text(self):
         """Кожна модель з FE або має confirmed path, або йде в text — без 404-roulette."""

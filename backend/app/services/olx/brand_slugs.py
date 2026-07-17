@@ -195,6 +195,53 @@ BRAND_TO_SLUG: dict[str, str] = {
     "додж": "dodge",
     "крайслер": "chrysler",
     "тесла": "tesla",
+    # Russian / folk (extended)
+    "альфа ромео": "alfa-romeo",
+    "альфа-ромео": "alfa-romeo",
+    "астон мартин": "aston-martin",
+    "баик": "baic",
+    "бьюик": "buick",
+    "бид": "byd",
+    "кадиллак": "cadillac",
+    "чанган": "changan",
+    "чери": "chery",
+    "купра": "cupra",
+    "дачия": "dacia",
+    "донгфенг": "dongfeng",
+    "ламборгини": "lamborghini",
+    "ланча": "lancia",
+    "рендж ровер": "land-rover",
+    "ли авто": "li-auto",
+    "лифан": "lifan",
+    "линкольн": "lincoln",
+    "лотус": "lotus",
+    "ман": "man",
+    "мазерати": "maserati",
+    "макларен": "mclaren",
+    "митсубиши": "mitsubishi",
+    "нио": "nio",
+    "полстар": "polestar",
+    "рам": "ram",
+    "ровер": "rover",
+    "сааб": "saab",
+    "скания": "scania",
+    "сеат": "seat",
+    "санг йонг": "ssangyong",
+    "сангйонг": "ssangyong",
+    "сузуки": "suzuki",
+    "сузукі": "suzuki",
+    "грейт волл": "great-wall",
+    "хавал": "haval",
+    "хаммер": "hummer",
+    "исузу": "isuzu",
+    "джак": "jac",
+    "джеку": "jaecoo",
+    "генesis": "genesis",
+    "дженesis": "genesis",
+    "вольво": "volvo",
+    "вольксваген": "volkswagen",
+    "гелик": "mercedes-benz",
+    "мерс": "mercedes-benz",
 }
 
 # Модель без прив'язки до марки
@@ -464,7 +511,7 @@ OLX_TEXT_BRAND_VARIANTS: dict[str, tuple[str, ...]] = {
     "toyota": ("toyota", "тойота"),
     "hyundai": ("hyundai", "хюндай", "хендай"),
     "kia": ("kia", "кіа"),
-    "nissan": ("nissan", "ніссан"),
+    "nissan": ("nissan", "ніссан", "нissan"),
     "ford": ("ford", "форд"),
     "skoda": ("skoda", "шкода"),
     "renault": ("renault", "рено"),
@@ -482,10 +529,29 @@ OLX_TEXT_BRAND_VARIANTS: dict[str, tuple[str, ...]] = {
     "jeep": ("jeep", "джип"),
     "porsche": ("porsche", "порше"),
     "land-rover": ("land-rover", "land rover", "ленд ровер"),
+    "tesla": ("tesla", "тесла", "tesla motors"),
+    "byd": ("byd", "бід", "бйд"),
+    "geely": ("geely", "джилі", "gili"),
+    "chery": ("chery", "чері"),
+    "haval": ("haval", "хaval"),
+    "genesis": ("genesis", "дженesis", "генesis"),
+    "infiniti": ("infiniti", "інфініті", "инфинити"),
+    "dodge": ("dodge", "додж"),
+    "chrysler": ("chrysler", "крайслер"),
+    "fiat": ("fiat", "фіат", "фиат"),
+    "jaguar": ("jaguar", "ягуар"),
+    "bentley": ("bentley", "бентлі", "бентли"),
+    "mini": ("mini", "міні", "мини"),
+    "smart": ("smart", "смарт"),
+    "ssangyong": ("ssangyong", "ssang yong", "санг йонг"),
+    "daewoo": ("daewoo", "деву", "дэу"),
+    "lada": ("lada", "лада", "ваз"),
+    "zaz": ("zaz", "заз"),
+    "acura": ("acura", "акура"),
 }
 
 # Скільки різних /q-/ запитів максимум на один пошук (включно з основним text)
-MAX_OLX_TEXT_QUERY_VARIANTS = 4
+MAX_OLX_TEXT_QUERY_VARIANTS = 6
 
 
 def resolve_olx_text_brand_query(brand: str) -> str:
@@ -494,47 +560,200 @@ def resolve_olx_text_brand_query(brand: str) -> str:
     return OLX_TEXT_BRAND_TOKENS.get(slug, slug)
 
 
-def build_olx_text_query_variants(brand: str, model: str = "") -> list[str]:
-    """Унікальні text_query для різних написань марки (+ модель)."""
+def _collect_brand_text_tokens(brand: str) -> list[str]:
+    """Усі написання марки для /q-/ (latin, кирилиця, slug, folk)."""
+    brand_slug = resolve_olx_brand_slug(brand)
+    tokens: list[str] = []
+    seen: set[str] = set()
+
+    def add(raw: str) -> None:
+        token = (raw or "").strip()
+        if not token:
+            return
+        key = token.casefold().replace(" ", "-")
+        if key in seen:
+            return
+        seen.add(key)
+        tokens.append(token)
+
+    add(resolve_olx_text_brand_query(brand))
+    for alt in OLX_TEXT_BRAND_VARIANTS.get(brand_slug, ()):
+        add(alt)
+    add(brand_slug)
+    try:
+        from app.services.search.brand_model_keywords import BRAND_SLUG_EXTRA_ALIASES
+
+        for alias in BRAND_SLUG_EXTRA_ALIASES.get(brand_slug, ()):
+            add(alias)
+    except ImportError:
+        pass
+    for name, slug in BRAND_TO_SLUG.items():
+        if slug == brand_slug:
+            add(name)
+    return tokens
+
+
+def build_model_text_tokens(model: str, brand_slug: str = "") -> list[str]:
+    """Варіанти моделі для /q-brand-model/ та пост-фільтра заголовків."""
+    model = (model or "").strip()
+    if not model:
+        return []
+
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def push(token: str) -> None:
+        t = (token or "").strip().lower()
+        if not t:
+            return
+        key = t.replace(" ", "-")
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(t)
+
+    slug = slugify(model)
+    base = model.lower()
+    push(slug)
+    push(base)
+    push(base.replace(" ", "-"))
+    push(base.replace("-", " "))
+    push(re.sub(r"[\s\-_]+", "", base))
+
+    model_word = re.fullmatch(r"model\s+([a-z0-9]+)", base, re.IGNORECASE)
+    if model_word:
+        letter = model_word.group(1).lower()
+        for tok in (letter, f"model{letter}", f"model-{letter}", f"model {letter}"):
+            push(tok)
+        for cyr in ("модел", "модель"):
+            push(f"{cyr} {letter}")
+            push(f"{cyr}-{letter}")
+
+    if re.match(r"model\s+", base, re.IGNORECASE):
+        rest = re.sub(r"^model\s+", "", base, flags=re.IGNORECASE)
+        for cyr in ("модел", "модель"):
+            push(f"{cyr} {rest}")
+            push(slugify(f"{cyr} {rest}"))
+
+    parts = re.split(r"[\s\-/]+", base)
+    if len(parts) >= 2:
+        tail = parts[-1]
+        push(tail)
+        push(f"{parts[-2]}-{tail}")
+        if len(parts) >= 3:
+            push(f"{parts[-2]} {tail}")
+
+    return out
+
+
+def primary_model_text_token(model: str, brand_slug: str = "") -> str:
+    """Найкращий токен моделі для primary /q-brand-model/ (не надто короткий)."""
+    tokens = build_model_text_tokens(model, brand_slug)
+    if not tokens:
+        return slugify(model)
+
+    base = model.lower()
+    parts = re.split(r"[\s\-/]+", base)
+    if len(parts) >= 3 and parts[-1] in tokens:
+        return parts[-1]
+
+    slug = slugify(model)
+    if slug in tokens:
+        return slug
+
+    if brand_slug == "tesla" and re.fullmatch(r"model\s+\S+", model.strip(), re.IGNORECASE):
+        for token in tokens:
+            if token.startswith("model"):
+                return token
+
+    if re.search(r"[\s\-/]", base):
+        for token in tokens:
+            if " " in token or "-" in token:
+                return token
+
+    return tokens[0]
+
+
+def _canonical_olx_model_token(model: str, brand_path: str = "") -> str:
+    """Канонічний текст моделі для одного OLX /q-/ (пробіли, не slug)."""
+    model = (model or "").strip()
+    if not model:
+        return ""
+    if re.fullmatch(r"\d+[a-z]?", model, re.IGNORECASE):
+        return model
+    token = primary_model_text_token(model, brand_path)
+    if token:
+        return token.replace("-", " ").strip()
+    return model.replace("-", " ").strip()
+
+
+def compose_olx_text_query(brand: str, model: str = "") -> str:
+    """Єдиний канонічний /q-/ запит (напр. «tesla model s»); аліаси — у пост-фільтрі."""
+    brand = (brand or "").strip()
+    model = (model or "").strip()
+    if not brand and not model:
+        return ""
+
+    brand_q = resolve_olx_text_brand_query(brand) if brand else ""
+    brand_path = resolve_olx_brand_slug(brand) if brand else ""
+
+    if brand_q and model:
+        model_q = _canonical_olx_model_token(model, brand_path)
+        if model_q:
+            return f"{brand_q} {model_q}".strip()
+    if brand_q:
+        return brand_q
+    if model:
+        return _canonical_olx_model_token(model, brand_path) or model
+    return brand
+
+
+def build_olx_text_query_variants(
+    brand: str,
+    model: str = "",
+    *,
+    max_queries: int | None = None,
+) -> list[str]:
+    """Унікальні text_query: комбінації написань марки × моделі."""
     brand = (brand or "").strip()
     model = (model or "").strip()
     if not brand and not model:
         return []
 
     brand_slug = resolve_olx_brand_slug(brand) if brand else ""
-    model_token = slugify(model) if model else ""
-
-    tokens: list[str] = []
-    if brand:
-        primary = resolve_olx_text_brand_query(brand)
-        if primary:
-            tokens.append(primary)
-        for alt in OLX_TEXT_BRAND_VARIANTS.get(brand_slug, ()):
-            if alt and alt not in tokens:
-                tokens.append(alt)
-        if brand_slug and brand_slug not in tokens:
-            tokens.append(brand_slug)
+    brand_tokens = _collect_brand_text_tokens(brand) if brand else []
+    model_tokens = build_model_text_tokens(model, brand_slug) if model else [""]
 
     out: list[str] = []
     seen: set[str] = set()
-    for token in tokens or [""]:
-        if brand and not token:
-            continue
-        if model_token and token:
-            # Mercedes folk: mersedes-gla; цифрові (Zeekr 001) — також у q
-            query = f"{token} {model_token}"
-        elif model_token:
-            query = model_token
-        else:
-            query = token
-        key = query.casefold().replace(" ", "-")
-        if not key or key in seen:
-            continue
+
+    def add(query: str) -> None:
+        q = (query or "").strip()
+        if not q:
+            return
+        key = q.casefold().replace(" ", "-")
+        if key in seen:
+            return
         seen.add(key)
-        out.append(query)
-        if len(out) >= MAX_OLX_TEXT_QUERY_VARIANTS:
-            break
-    return out
+        out.append(q)
+
+    for bt in brand_tokens or [""]:
+        if brand and not bt:
+            continue
+        for mt in model_tokens:
+            if bt and mt:
+                add(f"{bt} {mt}")
+            elif bt:
+                add(bt)
+            elif mt:
+                add(mt)
+
+    if model:
+        for bt in brand_tokens:
+            add(bt)
+
+    limit = max_queries if max_queries is not None else MAX_OLX_TEXT_QUERY_VARIANTS
+    return out[: max(1, limit)]
 
 
 def resolve_olx_model_slug(model: str, *, brand: str = "") -> str:

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { BrandIcon } from "@/components/search/BrandIcon";
 import { FilterRow } from "@/components/search/FilterRow";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ type Props = {
   disabled?: boolean;
   emptyLabel?: string;
   className?: string;
+  getOptionIcon?: (option: string) => string | null | undefined;
 };
 
 export function FilterOptionsPopover({
@@ -30,6 +32,7 @@ export function FilterOptionsPopover({
   disabled = false,
   emptyLabel = "Будь-яка",
   className,
+  getOptionIcon,
 }: Props) {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -68,6 +71,9 @@ export function FilterOptionsPopover({
     setQuery("");
   };
 
+  const selectedIconUrl =
+    !multiple && value && getOptionIcon ? getOptionIcon(value) : null;
+
   return (
     <div ref={rootRef} className={cn("relative", open && "z-[80]", className)}>
       <FilterRow
@@ -75,6 +81,11 @@ export function FilterOptionsPopover({
         value={display}
         onClick={() => !disabled && setOpen(v => !v)}
         disabled={disabled}
+        leading={
+          selectedIconUrl ? (
+            <BrandIcon src={selectedIconUrl} size={22} className="opacity-90" />
+          ) : undefined
+        }
       />
       {open && !disabled && (
         <div
@@ -114,17 +125,23 @@ export function FilterOptionsPopover({
             ) : (
               filtered.map(option => {
                 const active = multiple ? values.includes(option) : value === option;
+                const iconUrl = getOptionIcon?.(option);
                 return (
                   <li key={option}>
                     <button
                       type="button"
                       onClick={() => select(option)}
                       className={cn(
-                        "flex w-full items-center justify-between px-4 py-2.5 text-left text-[14px] transition-colors hover:bg-surface",
+                        "flex w-full items-center gap-3 px-4 py-2.5 text-left text-[14px] transition-colors hover:bg-surface",
                         active ? "font-semibold text-emerald-dark" : "text-ink",
                       )}
                     >
-                      <span>{option}</span>
+                      {iconUrl ? (
+                        <BrandIcon src={iconUrl} size={22} />
+                      ) : (
+                        <span className="w-[22px] shrink-0" aria-hidden />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">{option}</span>
                       {multiple && active && (
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
                           <path d="M3 7l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

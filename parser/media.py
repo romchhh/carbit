@@ -23,7 +23,14 @@ def _channel_dir(channel: str) -> str:
 def _has_photo(msg: Message | None) -> bool:
     if not msg or not isinstance(msg, Message):
         return False
-    return bool(msg.photo or (msg.media and getattr(msg.media, "photo", None)))
+    if msg.photo or (msg.media and getattr(msg.media, "photo", None)):
+        return True
+    # Багато каналів шлють стиснені фото як document (image/jpeg)
+    doc = getattr(msg, "document", None)
+    if doc is None and msg.media is not None:
+        doc = getattr(msg.media, "document", None)
+    mime = (getattr(doc, "mime_type", None) or "") if doc else ""
+    return bool(mime.startswith("image/"))
 
 
 async def download_photos(

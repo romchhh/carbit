@@ -194,6 +194,61 @@ def _extract_id_from_url(url: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def _normalize_photo_url(url: object) -> Optional[str]:
+    if not is_valid_image_url(url):
+        return None
+    # OLX API: …/image;s={width}x{height}
+    return str(url).replace("{width}", "800").replace("{height}", "600")
+
+
+def _param_value_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, dict):
+        for key in ("label", "value", "key", "name"):
+            candidate = value.get(key)
+            if isinstance(candidate, (str, int, float)) and str(candidate).strip():
+                if key == "value" and isinstance(candidate, (int, float)):
+                    return str(int(candidate)) if float(candidate).is_integer() else str(candidate)
+                return str(candidate).strip()
+        return ""
+    if isinstance(value, list):
+        parts = [_param_value_text(item) for item in value]
+        return ", ".join(part for part in parts if part)
+    return str(value).strip()
+
+
+def _price_from_params(params: object) -> tuple[Optional[str], Optional[str]]:
+    if not isinstance(params, list):
+        return None, None
+    for item in params:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or item.get("name") or "").strip().lower()
+        if key not in ("price", "ціна", "цена"):
+            continue
+        value = item.get("value")
+        if isinstance(value, dict):
+            amount = value.get("value") or value.get("amount")
+            currency = value.get("currency") or value.get("currencyCode")
+            if amount is not None:
+                try:
+                    return str(int(float(amount))), _normalize_currency(currency)
+                except (TypeError, ValueError):
+                    pass
+            label = value.get("label")
+            if isinstance(label, str) and label.strip():
+                return _split_price(label)
+        text = _param_value_text(value)
+        if text:
+            return _split_price(text)
+    return None, None
+
+
 def _price_from_embedded(raw: dict) -> tuple[Optional[str], Optional[str]]:
     price_obj = raw.get("price")
     if isinstance(price_obj, dict):
@@ -206,7 +261,111 @@ def _price_from_embedded(raw: dict) -> tuple[Optional[str], Optional[str]]:
             currency = price_obj.get("currency") or price_obj.get("currencyCode")
         if amount is not None:
             return str(int(float(amount))), _normalize_currency(currency)
-    return None, None
+    return _price_from_params(raw.get("params"))
+
+
+def _photo_from_embedded(raw: dict) -> Optional[str]:
+    photos = raw.get("photos") or raw.get("images") or []
+    if isinstance(photos, list):
+        for item in photos:
+            if isinstance(item, str):
+                normalized = _normalize_photo_url(item)
+                if normalized:
+                    return normalized
+            if isinstance(item, dict):
+                for key in ("link", "url", "src", "original"):
+                    candidate = _normalize_photo_url(item.get(key))
+                    if candidate:
+                        return candidate
+    return None
+
+
+def _params_from_embedded(params: object) -> tuple[Optional[str], Optional[str], dict[str, str]]:
+    year: Optional[str] = None
+    mileage: Optional[str] = None
+    specs: dict[str, str] = {}
+    if not isinstance(params, list):
+        return year, mileage, specs
+
+    for item in params:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("key") or "").strip()
+        value = _param_value_text(item.get("value") if "value" in item else item.get("normalizedValue"))
+        if not name or not value:
+            continue
+        key = str(item.get("key") or "").strip().lower()
+        if key == "price":
+            continue
+        specs[name] = value
+        name_low = name.lower()
+        if year is None and ("рік" in name_low or name_low == "year" or key in ("motor_year", "year")):
+            match = re.search(r"(19[5-9]\d|20[0-4]\d)", value)
+            if match:
+                year = match.group(1)
+        if mileage is None and ("пробіг" in name_low or "mileage" in name_low or "mileage" in key):
+            mileage = value
+    return year, mileage, specs
+
+
+def _normalize_api_offer(raw: dict) -> dict:
+    """API /api/v1/offers/ → формат ближчий до __PRERENDERED_STATE__."""
+    if not isinstance(raw, dict):
+        return {}
+    if raw.get("createdTime") or raw.get("urlPath"):
+        return raw
+
+    normalized = dict(raw)
+    if "created_time" in raw and "createdTime" not in normalized:
+        normalized["createdTime"] = raw.get("created_time")
+    if "last_refresh_time" in raw and "lastRefreshTime" not in normalized:
+        normalized["lastRefreshTime"] = raw.get("last_refresh_time")
+    if "external_url" in raw and "externalUrl" not in normalized:
+        normalized["externalUrl"] = raw.get("external_url")
+
+    promotion = raw.get("promotion")
+    if isinstance(promotion, dict):
+        normalized["isHighlighted"] = bool(
+            promotion.get("highlighted") or promotion.get("top_ad") or promotion.get("urgent")
+        )
+        normalized["isPromoted"] = bool(promotion.get("top_ad") or promotion.get("premium_ad_page"))
+
+    return normalized
+
+
+def parse_offers_api_payload(payload: object) -> list[OlxListing]:
+    """Парсить JSON відповіді GET /api/v1/offers/."""
+    if not isinstance(payload, dict):
+        return []
+    rows = payload.get("data")
+    if not isinstance(rows, list):
+        return []
+
+    listings: list[OlxListing] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        listing = _listing_from_embedded(_normalize_api_offer(row))
+        if not listing or not listing.listing_id or listing.listing_id in seen:
+            continue
+        seen.add(listing.listing_id)
+        listings.append(listing)
+    return listings
+
+
+def build_offers_api_query(params: OlxSearchParams) -> str:
+    """Текст для OLX offers API з поточних search params."""
+    if params.text_query:
+        return re.sub(r"[-_]+", " ", params.text_query).strip()
+    parts: list[str] = []
+    brand = (params.brand_label or params.brand or "").strip()
+    model = (params.model_label or params.model or "").strip()
+    if brand:
+        parts.append(brand)
+    if model:
+        parts.append(model)
+    return " ".join(parts).strip()
 
 
 def _normalize_currency(value: object) -> Optional[str]:
@@ -360,43 +519,6 @@ def _passes_city_query(listing: OlxListing, city_query: str | None) -> bool:
 
     needle = key.replace("-", " ").strip()
     return bool(needle) and (needle in blob or key in blob)
-def _photo_from_embedded(raw: dict) -> Optional[str]:
-    photos = raw.get("photos") or raw.get("images") or []
-    if isinstance(photos, list):
-        for item in photos:
-            if isinstance(item, str) and is_valid_image_url(item):
-                return item
-            if isinstance(item, dict):
-                for key in ("link", "url", "src", "original"):
-                    candidate = item.get(key)
-                    if is_valid_image_url(candidate):
-                        return candidate
-    return None
-
-
-def _params_from_embedded(params: object) -> tuple[Optional[str], Optional[str], dict[str, str]]:
-    year: Optional[str] = None
-    mileage: Optional[str] = None
-    specs: dict[str, str] = {}
-    if not isinstance(params, list):
-        return year, mileage, specs
-
-    for item in params:
-        if not isinstance(item, dict):
-            continue
-        name = str(item.get("name") or item.get("key") or "").strip()
-        value = str(item.get("value") or item.get("normalizedValue") or "").strip()
-        if not name or not value:
-            continue
-        specs[name] = value
-        name_low = name.lower()
-        if year is None and ("рік" in name_low or name_low == "year"):
-            match = re.search(r"(19[5-9]\d|20[0-4]\d)", value)
-            if match:
-                year = match.group(1)
-        if mileage is None and ("пробіг" in name_low or "mileage" in name_low):
-            mileage = value
-    return year, mileage, specs
 
 
 def _listing_from_embedded(raw: dict) -> Optional[OlxListing]:
@@ -1145,7 +1267,57 @@ _BRAND_TITLE_ALIASES: dict[str, tuple[str, ...]] = {
     "toyota": ("toyota", "тойота"),
     "land rover": ("land rover", "land-rover", "range rover", "ленд ровер"),
     "land-rover": ("land rover", "land-rover", "range rover", "ленд ровер"),
+    "tesla": ("tesla", "тесла", "tesla motors"),
 }
+
+# Regex-аліаси марки (typo / змішана кирилиця-latin у заголовках OLX)
+_BRAND_TITLE_REGEX: dict[str, tuple[str, ...]] = {
+    "tesla": (r"t[eеё\u0435\u0451]sla", r"тесла", r"te[s5]la"),
+}
+
+# Кирилиця → latin для змішаних написань (ТЕSLA, Аudi …)
+_TITLE_HOMOGLYPHS = str.maketrans(
+    {
+        "а": "a",
+        "А": "a",
+        "в": "b",
+        "В": "b",
+        "е": "e",
+        "Е": "e",
+        "к": "k",
+        "К": "k",
+        "м": "m",
+        "М": "m",
+        "о": "o",
+        "О": "o",
+        "р": "p",
+        "Р": "p",
+        "с": "c",
+        "С": "c",
+        "т": "t",
+        "Т": "t",
+        "у": "y",
+        "У": "y",
+        "х": "x",
+        "Х": "x",
+    }
+)
+
+
+def _normalize_title_for_match(text: str) -> str:
+    """Latinize лише змішані в одному слові кирилиця+latin (ТЕSLA), не чисту «Тесла»."""
+    if not text:
+        return text
+    if not re.search(r"[A-Za-z]", text) or not re.search(r"[\u0400-\u04FF]", text):
+        return text
+    words = text.split()
+    out: list[str] = []
+    for word in words:
+        if re.search(r"[A-Za-z]", word) and re.search(r"[\u0400-\u04FF]", word):
+            out.append(word.translate(_TITLE_HOMOGLYPHS))
+        else:
+            out.append(word)
+    return " ".join(out)
 
 # Запчастини / неавто, які OLX підмішує в /q-/ навіть у категорії легкових
 _NON_CAR_TITLE_RE = re.compile(
@@ -1193,11 +1365,20 @@ def _brand_aliases(brand: str) -> tuple[str, ...]:
 
 
 def _title_has_brand(title: str, brand: str) -> bool:
+    key = brand.strip().lower()
+    normalized = _normalize_title_for_match(title)
+    for pattern in _BRAND_TITLE_REGEX.get(key, ()):
+        if re.search(pattern, normalized, re.IGNORECASE):
+            return True
+        if re.search(pattern, title, re.IGNORECASE):
+            return True
     for alias in _brand_aliases(brand):
         if " " in alias or "-" in alias:
-            if alias in title:
+            if alias in title or alias in normalized:
                 return True
             continue
+        if re.search(rf"(?<![\w]){re.escape(alias)}(?![\w])", normalized, re.IGNORECASE):
+            return True
         if re.search(rf"(?<![\w]){re.escape(alias)}(?![\w])", title, re.IGNORECASE):
             return True
     return False
@@ -1213,6 +1394,28 @@ def _title_has_model(title: str, model: str, *, brand: str | None = None) -> boo
         )
     if model_l in title:
         return True
+    brand_l = (brand or "").strip().lower()
+    brand_slug = ""
+    if brand_l:
+        from app.services.olx.brand_slugs import resolve_olx_brand_slug
+
+        brand_slug = resolve_olx_brand_slug(brand_l)
+    # Tesla «Model S» → «S 100D», «model-s plaid», «TESSLA S 100 KWH», «Тесла модел S»
+    model_word = re.fullmatch(r"model\s+([a-z0-9]+)", model_l)
+    if model_word and brand_slug == "tesla":
+        token = model_word.group(1)
+        tesla_patterns = (
+            rf"model[\s\-]?{re.escape(token)}\b",
+            rf"модел[\s\-]?{re.escape(token)}\b",
+            rf"модель[\s\-]?{re.escape(token)}\b",
+            rf"tesla[\s\-]?{re.escape(token)}\b",
+            rf"тесла[\s\-]?{re.escape(token)}\b",
+            rf"\b{re.escape(token)}[\s\-]?\d",
+            rf"\b{re.escape(token)}\b.*(?:plaid|long range|performance|dual motor|kwh|перформанс|100d|75d|90d|85d|60d|p100d)",
+        )
+        for pattern in tesla_patterns:
+            if re.search(pattern, title, re.IGNORECASE):
+                return True
     # E-Class / C-Class → «E 220», «E-Class», «E-клас», «C200»
     class_m = re.fullmatch(r"([a-z])-class", model_l)
     if class_m:
@@ -1272,15 +1475,23 @@ def _title_matches_brand_model(
     brand: str | None,
     model: str | None,
 ) -> bool:
-    """Для text_query / fallback — відсікаємо зайве з повнотекстової видачі OLX."""
-    title = (listing.title or "").lower()
-    if not title:
+    """Метчинг за всіма keyword-варіантами (latin/RU/UA), не лише canonical query."""
+    from app.services.search.brand_model_keywords import (
+        _haystacks_for_match,
+        text_matches_brand_filter,
+        text_matches_model_filter,
+    )
+
+    raw = listing.title or ""
+    if not raw:
         return False
-    if brand and not _title_has_brand(title, brand):
-        return False
-    if model and not _title_has_model(title, model, brand=brand):
-        return False
-    return True
+    for haystack in _haystacks_for_match(raw):
+        if brand and not text_matches_brand_filter(haystack, brand, model=model or ""):
+            continue
+        if model and not text_matches_model_filter(haystack, model, brand=brand or ""):
+            continue
+        return True
+    return False
 
 
 def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
@@ -1294,6 +1505,9 @@ def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
                 return False
         # Для /q-brand/ місто не в URL — фільтруємо локацію тут
         if not _passes_city_query(listing, params.city_query):
+            return False
+    elif brand_hint or model_hint:
+        if not _title_matches_brand_model(listing, brand=brand_hint, model=model_hint):
             return False
 
     if not passes_post_filters(listing, params):

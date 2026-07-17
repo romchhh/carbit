@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from typing import Literal
 
+from app.core.text import norm_text
 from app.schemas.schemas import SearchFilters
 
 
@@ -38,22 +40,182 @@ def filters_group_key(filters: SearchFilters | dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:20]
 
 
+def _normalized_sources(sources: list[str] | None) -> tuple[str, ...]:
+    if not sources:
+        return ("auto_ria", "olx", "telegram")
+    out: list[str] = []
+    for raw in sources:
+        key = raw.strip().lower().replace(".", "_").replace(" ", "_")
+        if key in ("auto_ria", "autoria") and "auto_ria" not in out:
+            out.append("auto_ria")
+        elif key == "olx" and "olx" not in out:
+            out.append("olx")
+        elif key == "telegram" and "telegram" not in out:
+            out.append("telegram")
+    return tuple(out or ("auto_ria", "olx", "telegram"))
+
+
+def similar_fetch_signature(filters: SearchFilters) -> str | None:
+    """
+    Ключ для групування «схожих» пошуків (та сама марка/модель/категорія/джерела).
+    None — без марки: групуємо лише за точним збігом.
+    """
+    brand = norm_text(filters.brand or "")
+    if not brand:
+        return None
+    model = norm_text(filters.model or "")
+    category = (filters.category or "all").strip().lower()
+    sources = _normalized_sources(filters.sources)
+    payload = f"{brand}|{model}|{category}|{'|'.join(sources)}"
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def _merge_min_values(values: list[int | None]) -> int | None:
+    present = [v for v in values if v is not None]
+    return min(present) if present else None
+
+
+def _merge_max_values(values: list[int | None]) -> int | None:
+    present = [v for v in values if v is not None]
+    return max(present) if present else None
+
+
+def _merge_float_min_values(values: list[float | None]) -> float | None:
+    present = [v for v in values if v is not None]
+    return min(present) if present else None
+
+
+def _merge_float_max_values(values: list[float | None]) -> float | None:
+    present = [v for v in values if v is not None]
+    return max(present) if present else None
+
+
+def _merge_list_union(values: list[list[str] | None]) -> list[str] | None:
+    sets = [frozenset(v) for v in values if v]
+    if not sets:
+        return None
+    if len(sets) == 1:
+        return sorted(sets[0])
+    merged = set().union(*sets)
+    return sorted(merged)
+
+
+def _merge_region(values: list[str | None]) -> str | None:
+    normalized = [norm_text(v) for v in values if v]
+    if not normalized:
+        return None
+    if any(r in ("вся україна", "ukraine", "") for r in normalized):
+        return None
+    if len(set(normalized)) == 1:
+        return values[normalized.index(normalized[0])]
+    return None
+
+
+def _merge_currency(values: list[str | None]) -> str | None | Literal["MIXED"]:
+    normalized = [str(v).upper() for v in values if v]
+    if not normalized:
+        return None
+    if len(set(normalized)) == 1:
+        return normalized[0]
+    return "MIXED"
+
+
+def merge_filters_for_fetch(filters_list: list[SearchFilters]) -> SearchFilters:
+    """
+    Об'єднує фільтри групи в «ширший» запит до API.
+    Лінкування до кожного пошуку — окремо, за його власними фільтрами.
+    """
+    if not filters_list:
+        return SearchFilters()
+    if len(filters_list) == 1:
+        return filters_list[0]
+
+    merged = filters_list[0].model_copy()
+    merged.year_from = _merge_min_values([f.year_from for f in filters_list])
+    merged.year_to = _merge_max_values([f.year_to for f in filters_list])
+    merged.mileage_from = _merge_min_values([f.mileage_from for f in filters_list])
+    merged.mileage_to = _merge_max_values([f.mileage_to for f in filters_list])
+    merged.engine_volume_from = _merge_float_min_values([f.engine_volume_from for f in filters_list])
+    merged.engine_volume_to = _merge_float_max_values([f.engine_volume_to for f in filters_list])
+    merged.power_from = _merge_min_values([f.power_from for f in filters_list])
+    merged.power_to = _merge_max_values([f.power_to for f in filters_list])
+
+    merged.region = _merge_region([f.region for f in filters_list])
+    merged.fuel = _merge_list_union([f.fuel for f in filters_list])
+    merged.transmission = _merge_list_union([f.transmission for f in filters_list])
+    merged.drivetrain = _merge_list_union([f.drivetrain for f in filters_list])
+    merged.colors = _merge_list_union([f.colors for f in filters_list])
+
+    currency = _merge_currency([f.currency for f in filters_list])
+    if currency != "MIXED":
+        merged.currency = None if currency is None else currency
+        merged.price_from = _merge_min_values([f.price_from for f in filters_list])
+        merged.price_to = _merge_max_values([f.price_to for f in filters_list])
+    else:
+        merged.currency = None
+        merged.price_from = None
+        merged.price_to = None
+
+    source_union: set[str] = set()
+    for f in filters_list:
+        source_union.update(_normalized_sources(f.sources))
+    merged.sources = sorted(source_union)
+    return merged
+
+
 @dataclass
 class FilterGroup:
     key: str
     filters: SearchFilters
     search_ids: list[str]
+    similar: bool = False
 
 
-def group_searches(searches: list[tuple[str, dict]]) -> list[FilterGroup]:
-    """Групує збережені пошуки за однаковими фільтрами."""
-    buckets: dict[str, FilterGroup] = {}
+def group_searches(
+    searches: list[tuple[str, dict]],
+    *,
+    similar: bool = False,
+) -> list[FilterGroup]:
+    """
+    Групує збережені пошуки.
+
+    similar=False — лише ідентичні фільтри (default для exact cache keys).
+    similar=True — одна марка/модель/категорія, різні роки/ціни → один fetch.
+    """
+    if not similar:
+        buckets: dict[str, FilterGroup] = {}
+        for search_id, raw_filters in searches:
+            filters = SearchFilters.model_validate(raw_filters)
+            key = filters_group_key(filters)
+            if key not in buckets:
+                buckets[key] = FilterGroup(key=key, filters=filters, search_ids=[])
+            buckets[key].search_ids.append(search_id)
+        return list(buckets.values())
+
+    exact_buckets: dict[str, FilterGroup] = {}
+    similar_buckets: dict[str, list[tuple[str, SearchFilters]]] = {}
 
     for search_id, raw_filters in searches:
         filters = SearchFilters.model_validate(raw_filters)
-        key = filters_group_key(filters)
-        if key not in buckets:
-            buckets[key] = FilterGroup(key=key, filters=filters, search_ids=[])
-        buckets[key].search_ids.append(search_id)
+        sig = similar_fetch_signature(filters)
+        if sig is None:
+            key = filters_group_key(filters)
+            if key not in exact_buckets:
+                exact_buckets[key] = FilterGroup(key=key, filters=filters, search_ids=[])
+            exact_buckets[key].search_ids.append(search_id)
+            continue
+        similar_buckets.setdefault(sig, []).append((search_id, filters))
 
-    return list(buckets.values())
+    groups: list[FilterGroup] = list(exact_buckets.values())
+    for sig, members in similar_buckets.items():
+        filters_list = [f for _, f in members]
+        merged = merge_filters_for_fetch(filters_list)
+        groups.append(
+            FilterGroup(
+                key=f"sim-{sig}",
+                filters=merged,
+                search_ids=[sid for sid, _ in members],
+                similar=True,
+            )
+        )
+    return groups

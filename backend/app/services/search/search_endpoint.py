@@ -27,7 +27,7 @@ from app.services.search.pool_cache import (
 
 logger = logging.getLogger(__name__)
 
-LIVE_SEARCH_CACHE_TTL_SECONDS = 60
+LIVE_SEARCH_CACHE_TTL_SECONDS = 120
 
 
 async def _safe_rate_limits(*, user_id: str, mode: str, page: int) -> None:
@@ -132,6 +132,8 @@ async def run_live_search(
                 use_cache=True,
                 cache_ttl_seconds=LIVE_SEARCH_CACHE_TTL_SECONDS,
                 db=None,
+                keyword_refresh=True,
+                olx_enrich_details=True,
             )
         except AutoRiaError as exc:
             logger.warning(

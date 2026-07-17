@@ -1,95 +1,67 @@
 from __future__ import annotations
 
-from app.core.config import settings as app_settings
+from datetime import datetime
+
 from app.core.timezone import format_kyiv, now_kyiv
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.models import ParseRun, ParseRunStatus, SearchQuery, User
+from app.models.models import Listing, ParseRun, ParseRunStatus, SearchQuery, User
 from app.schemas.schemas import ListingOut
+from app.services.listings.serialize import listing_to_out
 from app.services.listings.upsert import upsert_listing
 from app.services.parser.filter_groups import FilterGroup, filters_group_key, group_searches, parse_search_filters
 from app.services.parser.linking import link_listing_to_search
-from app.services.parser.settings import get_parser_settings, set_filter_cache
+from app.services.parser.settings import get_filter_cache, get_parser_settings, set_filter_cache
 from app.services.notifications.freshness import coerce_notification_max_hours
 from app.services.search.multi_source import normalize_sources, search_listings_outcome
+from app.services.search.pool_cache import try_load_pool_listings
+from app.services.telegram_channels.ingest import (
+    mark_searches_checked,
+    telegram_found_after_cutoff,
+)
 
 
-async def _process_group(
-    db: AsyncSession,
+def _monitor_cache_ttl(settings: dict) -> int:
+    interval = int(settings.get("interval_seconds") or 900)
+    configured = int(settings.get("cache_ttl_seconds") or 1800)
+    # Не довше половини інтервалу циклу і не більше 5 хв — достатньо для dedupe.
+    return min(configured, max(60, interval // 2), 300)
+
+
+def _sources_for_group(
     group: FilterGroup,
+    searches: list[SearchQuery],
     *,
-    max_listings: int,
+    sources_only: list[str] | None,
+) -> list[str]:
+    """Об'єднання джерел усіх пошуків групи — не тягнемо зайве AUTO.RIA/OLX/TG."""
+    if sources_only:
+        return normalize_sources(sources_only)
+
+    union: set[str] = set()
+    for search in searches:
+        union.update(normalize_sources(parse_search_filters(search.filters).sources))
+
+    if union:
+        return sorted(union)
+    return normalize_sources(group.filters.sources)
+
+
+async def _link_listings_to_searches(
+    db: AsyncSession,
+    *,
+    searches: list[SearchQuery],
+    upserted: list[tuple[ListingOut, object]],
+    parse_sources: list[str],
     notify: bool,
+    max_hours: float,
     log: list[str],
-    sources_only: list[str] | None = None,
-) -> tuple[int, int, int]:
-    """Returns found, new, notifications."""
-    log.append(f"Група {group.key[:8]}… — {len(group.search_ids)} пошук(ів)")
-
-    settings = await get_parser_settings()
-    max_hours = coerce_notification_max_hours(settings.get("notification_max_published_hours", 1))
-    # Для SearchFilters потрібне int ≥ 1
-    max_hours_int = max(1, int(round(max_hours)))
-
-    try:
-        parse_filters = group.filters.model_copy(
-            update={"sources": normalize_sources(sources_only)}
-        ) if sources_only else group.filters.model_copy(
-            update={"sources": normalize_sources(group.filters.sources) or ["auto_ria", "olx"]}
-        )
-        if not sources_only:
-            if "olx" not in parse_filters.sources:
-                parse_filters = parse_filters.model_copy(
-                    update={"sources": [*parse_filters.sources, "olx"]}
-                )
-            if "auto_ria" not in parse_filters.sources:
-                parse_filters = parse_filters.model_copy(
-                    update={"sources": ["auto_ria", *parse_filters.sources]}
-                )
-            if app_settings.TELEGRAM_ENABLED and "telegram" not in parse_filters.sources:
-                parse_filters = parse_filters.model_copy(
-                    update={"sources": [*parse_filters.sources, "telegram"]}
-                )
-        parse_filters = parse_filters.model_copy(
-            update={"published_within_hours": max_hours_int},
-        )
-
-        outcome = await search_listings_outcome(
-            parse_filters,
-            page=1,
-            per_page=max_listings,
-            sort_by="published_desc",
-            use_cache=False,
-            db=db,
-        )
-    except Exception as exc:
-        log.append(f"  ✗ Помилка пошуку: {exc}")
-        return 0, 0, 0
-
-    log.append(f"  · Telegram лише ≤ {max_hours_int} год від публікації")
-
-    for status in outcome.sources:
-        if status.error:
-            log.append(f"  ⚠ {status.source}: {status.error}")
-        else:
-            log.append(f"  ✓ {status.source}: {status.item_count} оголошень")
-
-    results = outcome.result
-    found = len(results.items)
+) -> tuple[int, int]:
     new_total = 0
     notifications = 0
-    listing_ids: list[str] = []
-
-    searches = []
-    for search_id in group.search_ids:
-        search = await db.get(SearchQuery, search_id)
-        if search and search.is_active:
-            searches.append(search)
-
     users_cache: dict[str, User | None] = {}
-    # У межах одного циклу: не слати TG двічі за те саме авто одному юзеру
     notified_cars_in_batch: dict[str, list] = {}
 
     from app.services.listings.duplicates import listings_look_same
@@ -99,13 +71,6 @@ async def _process_group(
             if listings_look_same(prev, listing):
                 return True
         return False
-
-    # Спочатку upsert усіх, щоб з’явились duplicate_of-зв’язки
-    upserted: list[tuple[ListingOut, object]] = []
-    for item in results.items:
-        listing = await upsert_listing(db, item)
-        listing_ids.append(listing.id)
-        upserted.append((item, listing))
 
     for item, listing in upserted:
         for search in searches:
@@ -135,8 +100,156 @@ async def _process_group(
             if sent and user:
                 notified_cars_in_batch.setdefault(user.id, []).append(listing)
                 notifications += 1
+
+    return new_total, notifications
+
+
+async def _process_group(
+    db: AsyncSession,
+    group: FilterGroup,
+    *,
+    max_listings: int,
+    notify: bool,
+    log: list[str],
+    sources_only: list[str] | None = None,
+) -> tuple[int, int, int]:
+    """Returns found, new, notifications."""
+    log.append(f"Група {group.key[:8]}… — {len(group.search_ids)} пошук(ів)" + (" [схожі]" if group.similar else ""))
+
+    settings = await get_parser_settings()
+    max_hours = coerce_notification_max_hours(settings.get("notification_max_published_hours", 1))
+    max_hours_int = max(1, int(round(max_hours)))
+    monitor_ttl = _monitor_cache_ttl(settings)
+
+    searches: list[SearchQuery] = []
+    for search_id in group.search_ids:
+        search = await db.get(SearchQuery, search_id)
+        if search and search.is_active:
+            searches.append(search)
+
+    parse_sources = _sources_for_group(group, searches, sources_only=sources_only)
+    tg_found_after = (
+        telegram_found_after_cutoff(searches, max_hours=max_hours_int)
+        if "telegram" in parse_sources
+        else None
+    )
+
+    try:
+        parse_filters = group.filters.model_copy(
+            update={
+                "sources": parse_sources,
+                "published_within_hours": max_hours_int,
+            },
+        )
+        fetch_key = filters_group_key(parse_filters)
+
+        # Короткий dedupe: нещодавно вже тягнули цю групу (on-demand + scheduler).
+        if not sources_only:
+            cached = await get_filter_cache(fetch_key)
+            if cached and cached.get("fetched_at"):
+                try:
+                    fetched_at = datetime.fromisoformat(str(cached["fetched_at"]))
+                    age = (now_kyiv() - fetched_at).total_seconds()
+                except (TypeError, ValueError):
+                    age = monitor_ttl + 1
+                if age < monitor_ttl:
+                    log.append(f"  ⊘ Кеш {int(age)}s — пропуск API")
+                    listing_ids = list(cached.get("listing_ids") or [])
+                    upserted: list[tuple[ListingOut, object]] = []
+                    for listing_id in listing_ids:
+                        listing = await db.get(Listing, listing_id)
+                        if not listing:
+                            continue
+                        upserted.append((listing_to_out(listing), listing))
+                    new_total, notifications = await _link_listings_to_searches(
+                        db,
+                        searches=searches,
+                        upserted=upserted,
+                        parse_sources=parse_sources,
+                        notify=notify,
+                        max_hours=max_hours,
+                        log=log,
+                    )
+                    log.append(f"  ✓ З кешу: {len(upserted)} оголошень, нових {new_total}")
+                    mark_searches_checked(searches)
+                    return len(upserted), new_total, notifications
+
+        # Якщо хвилиною раніше був live-пошук з тими ж фільтрами — reuse пулу.
+        pooled = await try_load_pool_listings(
+            parse_filters,
+            "published_desc",
+            max_items=max_listings,
+        )
+        if pooled and not sources_only:
+            log.append(f"  ↺ Live-pool ({len(pooled)} огол.) — без зовнішніх API")
+            upserted = []
+            for item in pooled:
+                listing = await upsert_listing(db, item)
+                upserted.append((item, listing))
+            listing_ids = [listing.id for _, listing in upserted]
+            new_total, notifications = await _link_listings_to_searches(
+                db,
+                searches=searches,
+                upserted=upserted,
+                parse_sources=parse_sources,
+                notify=notify,
+                max_hours=max_hours,
+                log=log,
+            )
+            await set_filter_cache(fetch_key, listing_ids, ttl_seconds=settings["cache_ttl_seconds"])
+            log.append(f"  ✓ З live-pool: {len(pooled)}, нових {new_total}")
+            mark_searches_checked(searches)
+            return len(pooled), new_total, notifications
+
+        if tg_found_after is not None:
+            log.append(f"  · Telegram DB: found_at > {format_kyiv(tg_found_after)}")
+
+        outcome = await search_listings_outcome(
+            parse_filters,
+            page=1,
+            per_page=max_listings,
+            sort_by="published_desc",
+            use_cache=True,
+            cache_ttl_seconds=monitor_ttl,
+            db=db,
+            keyword_refresh=False,
+            olx_enrich_details=False,
+            telegram_found_after=tg_found_after,
+        )
+    except Exception as exc:
+        log.append(f"  ✗ Помилка пошуку: {exc}")
+        return 0, 0, 0
+
+    log.append(f"  · Джерела: {', '.join(parse_sources)} · Telegram ≤ {max_hours_int} год")
+
+    for status in outcome.sources:
+        if status.error:
+            log.append(f"  ⚠ {status.source}: {status.error}")
+        else:
+            log.append(f"  ✓ {status.source}: {status.item_count} оголошень")
+
+    results = outcome.result
+    found = len(results.items)
+    listing_ids: list[str] = []
+
+    upserted = []
+    for item in results.items:
+        listing = await upsert_listing(db, item)
+        listing_ids.append(listing.id)
+        upserted.append((item, listing))
+
+    new_total, notifications = await _link_listings_to_searches(
+        db,
+        searches=searches,
+        upserted=upserted,
+        parse_sources=parse_sources,
+        notify=notify,
+        max_hours=max_hours,
+        log=log,
+    )
+
     await set_filter_cache(
-        group.key,
+        fetch_key,
         listing_ids,
         ttl_seconds=settings["cache_ttl_seconds"],
     )
@@ -147,6 +260,7 @@ async def _process_group(
         f"  ✓ Знайдено {found}, нових {new_total}, Telegram {notifications} "
         f"(AUTO.RIA {auto_count}, OLX {olx_count}, TG {tg_count})"
     )
+    mark_searches_checked(searches)
     return found, new_total, notifications
 
 
@@ -190,12 +304,11 @@ async def run_parser_cycle(
     had_errors = False
 
     try:
-        # Telethon history/live належить telegram_worker — не дублюємо сесію в parser cycle.
         run_telegram = sources_only is None or "telegram" in sources_only
         if run_telegram:
             log.append(
                 "Telegram: ingest через telegram_worker (live + bootstrap); "
-                "у циклі лише лінкування вже збережених оголошень"
+                "у циклі — DB-пошук без keyword refresh"
             )
 
         rows = await db.scalars(select(SearchQuery).where(SearchQuery.is_active.is_(True)))
@@ -205,9 +318,13 @@ async def run_parser_cycle(
         if not active:
             log.append("Немає активних пошуків")
         else:
-            groups = group_searches(active)
+            groups = group_searches(active, similar=True)
             groups_count = len(groups)
-            log.append(f"Активних пошуків: {searches_count}, груп фільтрів: {groups_count}")
+            similar_count = sum(1 for g in groups if g.similar)
+            log.append(
+                f"Активних пошуків: {searches_count}, груп fetch: {groups_count}"
+                + (f" (схожих {similar_count})" if similar_count else "")
+            )
 
             for group in groups:
                 if sources_only == ["telegram"]:

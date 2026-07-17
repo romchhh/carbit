@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
+import { BrandIcon } from "@/components/search/BrandIcon";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
 import { cn } from "@/lib/utils";
 import { SEARCH_NEW_WITHIN_DAYS } from "@/lib/search-preview";
+import { getBrandIconUrl } from "@/lib/search-data/brand-icons";
 import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
 import { UKRAINE_REGIONS } from "@/lib/search-data/regions";
 import {
@@ -85,6 +87,8 @@ export function SearchFiltersPanel({
       ? `${filters.brand} ${filters.model}`
       : filters.brand || "";
 
+  const selectedBrandIcon = filters.brand ? getBrandIconUrl(filters.brand) : null;
+
   const searchAll = freshness === "all";
 
   return (
@@ -131,6 +135,7 @@ export function SearchFiltersPanel({
               onChange={handleBrandChange}
               searchable
               emptyLabel="Будь-яка марка"
+              getOptionIcon={getBrandIconUrl}
             />
             <FilterOptionsPopover
               label="Модель"
@@ -144,8 +149,12 @@ export function SearchFiltersPanel({
           </div>
 
           {(filters.brand || filters.model) && (
-            <p className="px-1 text-[12px] text-muted">
-              Обрано: <span className="font-medium text-ink">{brandModelLabel || "—"}</span>
+            <p className="flex items-center gap-2 px-1 text-[12px] text-muted">
+              {selectedBrandIcon && <BrandIcon src={selectedBrandIcon} size={18} />}
+              <span>
+                Обрано:{" "}
+                <span className="font-medium text-ink">{brandModelLabel || "—"}</span>
+              </span>
             </p>
           )}
 

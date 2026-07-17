@@ -8,26 +8,28 @@ import time
 
 from app.core.config import settings as app_settings
 from app.schemas.schemas import SearchFilters
+from app.services.search.brand_model_keywords import (
+    TELEGRAM_HISTORY_SCAN_LIMIT,
+    encode_telegram_scan_job,
+)
 from app.services.telegram_channels.bootstrap import ensure_parser_path
 from app.services.telegram_channels.service_loader import get_parser_channels
 
 logger = logging.getLogger(__name__)
 
-KEYWORD_LIMIT_PER_CHANNEL = 40
-KEYWORD_WAIT_SECONDS = 8.0
+KEYWORD_LIMIT_PER_CHANNEL = TELEGRAM_HISTORY_SCAN_LIMIT
+# Live-пошук не блокуємо — worker обробить у фоні.
+KEYWORD_WAIT_SECONDS = 0.0
 KEYWORD_COOLDOWN_SECONDS = 120
 
 
 def build_telegram_keyword_query(filters: SearchFilters) -> str | None:
-    parts: list[str] = []
+    """Scan-job payload (brand/model) для worker."""
     brand = (filters.brand or "").strip()
     model = (filters.model or "").strip()
-    if brand:
-        parts.append(brand)
-    if model:
-        parts.append(model)
-    query = " ".join(parts).strip()
-    return query or None
+    if not brand and not model:
+        return None
+    return encode_telegram_scan_job(brand, model)
 
 
 async def refresh_telegram_by_keywords(
@@ -36,8 +38,8 @@ async def refresh_telegram_by_keywords(
     wait_seconds: float = KEYWORD_WAIT_SECONDS,
 ) -> int:
     """
-    Ставить у чергу keyword-пошук по всіх увімкнених каналах і чекає worker
-    (коротко). Worker індексує знайдене в listings — далі йде звичайний DB-пошук.
+    Ставить у чергу scan історії по всіх увімкнених каналах (variant matching).
+    Worker індексує знайдене в listings — далі йде звичайний DB-пошук.
     """
     if not app_settings.TELEGRAM_ENABLED:
         return 0
@@ -70,8 +72,9 @@ async def refresh_telegram_by_keywords(
         age = await heartbeat_age_seconds("telegram_worker")
         if age is None or age > 45:
             logger.info(
-                "Telegram keyword jobs queued q=%r (worker offline/stale, no wait)",
-                query,
+                "Telegram history scan queued brand=%r model=%r (worker offline/stale, no wait)",
+                filters.brand,
+                filters.model,
             )
             return len(job_ids)
     except Exception:
@@ -84,16 +87,18 @@ async def refresh_telegram_by_keywords(
     while time.monotonic() < deadline:
         if not store.keyword_jobs_pending(job_ids):
             logger.info(
-                "Telegram keyword search ready q=%r jobs=%s",
-                query,
+                "Telegram history scan ready brand=%r model=%r jobs=%s",
+                filters.brand,
+                filters.model,
                 len(job_ids),
             )
             return len(job_ids)
         await asyncio.sleep(0.35)
 
     logger.info(
-        "Telegram keyword search timeout q=%r jobs=%s (worker ще обробляє)",
-        query,
+        "Telegram history scan timeout brand=%r model=%r jobs=%s (worker ще обробляє)",
+        filters.brand,
+        filters.model,
         len(job_ids),
     )
     return len(job_ids)

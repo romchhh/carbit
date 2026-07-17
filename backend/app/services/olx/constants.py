@@ -2,6 +2,10 @@ from __future__ import annotations
 
 BASE_URL = "https://www.olx.ua"
 CATEGORY_PATH = "/uk/transport/legkovye-avtomobili"
+# category_id для /api/v1/offers/ (Легкові автомобілі)
+CARS_CATEGORY_ID = 108
+OFFERS_API_PATH = "/api/v1/offers/"
+OFFERS_API_LIMIT = 40
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

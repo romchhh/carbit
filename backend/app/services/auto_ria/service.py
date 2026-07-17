@@ -62,13 +62,9 @@ async def _search_auto_ria_body(
     async def fetch_one(auto_id: str) -> ListingOut | None:
         async with sem:
             try:
-                info_task = client.get_info(auto_id)
-                fotos_task = client.get_fotos(auto_id)
-                info, fotos_result = await asyncio.gather(info_task, fotos_task, return_exceptions=True)
-                if isinstance(info, BaseException):
-                    return None
-                fotos = None if isinstance(fotos_result, BaseException) else fotos_result
-                return info_to_listing(info, fotos=fotos)
+                info = await client.get_info(auto_id)
+                # Cover з photoData в info — без /auto/fotos (×2 менше запитів у видачі).
+                return info_to_listing(info, fotos=None)
             except AutoRiaError:
                 return None
 

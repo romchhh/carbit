@@ -171,9 +171,21 @@ class CarParserService:
         self.last_parse_stats["valid"] = self.last_parse_stats.get("valid", 0) + 1
         return listing
 
-    async def download_listing_photos(self, listing_id: str, channel: str, message_ids: list[int]) -> list[str]:
-        """Завантажує ≤ TELEGRAM_MAX_PHOTOS для listing (викликає worker)."""
-        return await download_photos_by_ids(self.client, channel, message_ids)
+    async def download_listing_photos(
+        self,
+        listing_id: str,
+        channel: str,
+        message_ids: list[int],
+        *,
+        max_photos: int | None = None,
+    ) -> list[str]:
+        """Завантажує ≤ max_photos (або TELEGRAM_MAX_PHOTOS) для listing."""
+        return await download_photos_by_ids(
+            self.client,
+            channel,
+            message_ids,
+            max_photos=max_photos,
+        )
 
     async def parse_channel_history(self, channel: str, limit: int = 200) -> list:
         """
@@ -236,6 +248,78 @@ class CarParserService:
             self.last_parse_stats.get("valid", 0),
             cursor,
             self.last_parse_stats.get("cursor_to", cursor),
+        )
+        return results
+
+    async def scan_channel_history_for_filters(
+        self,
+        channel: str,
+        *,
+        brand: str,
+        model: str = "",
+        limit: int = 500,
+    ) -> list:
+        """Повний scan історії каналу; матчинг за усіма brand/model keyword-варіантами."""
+        brand = (brand or "").strip()
+        model = (model or "").strip()
+        if not brand and not model:
+            return []
+
+        from app.services.search.brand_model_keywords import message_matches_search_filters
+
+        joined = await self._ensure_joined_cached(channel)
+        if not joined:
+            log.warning("History scan: пропускаю %s — немає доступу", channel)
+            return []
+
+        entity = await self.client.get_entity(channel)
+        if getattr(entity, "username", None):
+            self._slug_cache[channel.strip()] = entity.username
+
+        normalized = await self._normalize_channel(channel)
+        raw_messages: list = []
+        async for msg in self.client.iter_messages(entity, limit=max(10, int(limit))):
+            raw_messages.append(msg)
+
+        self.last_parse_stats = {
+            "messages": len(raw_messages),
+            "groups": 0,
+            "dedupe": 0,
+            "empty": 0,
+            "invalid": 0,
+            "valid": 0,
+            "brand": brand,
+            "model": model,
+        }
+
+        groups: dict = {}
+        singles: list = []
+        for m in raw_messages:
+            if m.grouped_id:
+                groups.setdefault(m.grouped_id, []).append(m)
+            else:
+                singles.append([m])
+
+        all_groups = list(groups.values()) + singles
+        self.last_parse_stats["groups"] = len(all_groups)
+
+        results = []
+        for group in all_groups:
+            text = self._merge_group_text(group)
+            if not message_matches_search_filters(text, brand, model):
+                continue
+            listing = await self._process_group(channel, group, touch_cursor=False)
+            if listing:
+                results.append(listing)
+
+        results.sort(key=lambda l: l.posted_at or datetime.min, reverse=True)
+        log.info(
+            "History scan %s brand=%r model=%r: msgs=%s matched=%s",
+            normalized,
+            brand,
+            model,
+            len(raw_messages),
+            len(results),
         )
         return results
 

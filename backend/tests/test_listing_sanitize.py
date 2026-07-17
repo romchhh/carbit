@@ -61,6 +61,29 @@ class ListingSanitizeTests(unittest.TestCase):
         # NaN removed
         self.assertIsNone((item.source_data or {}).get("bad"))
 
+    def test_sanitize_keeps_telegram_media_paths(self):
+        item = sanitize_listing_out(
+            _listing(
+                id="telegram_ch_1",
+                source="telegram",
+                images=[
+                    "/api/v1/telegram-media/ua_autobazar/73520.jpg",
+                    "ftp://evil",
+                    "https://cdn.example/x.jpg",
+                    "/api/v1/other/secret",
+                ],
+            )
+        )
+        self.assertIsNotNone(item)
+        assert item is not None
+        self.assertEqual(
+            item.images,
+            [
+                "/api/v1/telegram-media/ua_autobazar/73520.jpg",
+                "https://cdn.example/x.jpg",
+            ],
+        )
+
     def test_sanitize_paginated(self):
         page = sanitize_paginated_listings(
             PaginatedListings(items=[_listing()], total=1, page=1, per_page=20, pages=1)

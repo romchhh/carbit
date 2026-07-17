@@ -12,6 +12,19 @@ logger = logging.getLogger(__name__)
 _DROP_SOURCE_KEYS = frozenset({"_fotos", "vinSvg", "photosData"})
 
 
+def _is_safe_image_url(url: Any) -> bool:
+    """HTTP(S) або локальні telegram-media шляхи (/api/v1/telegram-media/...)."""
+    if not isinstance(url, str):
+        return False
+    value = url.strip()
+    if not value:
+        return False
+    if value.startswith(("http://", "https://")):
+        return True
+    # Telegram: FileResponse через backend, без публічного CDN
+    return value.startswith("/api/v1/telegram-media/")
+
+
 def json_safe(value: Any, *, depth: int = 0) -> Any:
     """Приводить вкладені значення до JSON-сумісних (інакше FastAPI дає 500 на response_model)."""
     if depth > 14:
@@ -65,9 +78,7 @@ def sanitize_listing_out(item: ListingOut) -> ListingOut | None:
         data["is_duplicate"] = bool(data.get("is_duplicate"))
 
         images = data.get("images") or []
-        data["images"] = [
-            url for url in images if isinstance(url, str) and url.startswith(("http://", "https://"))
-        ][:30]
+        data["images"] = [url for url in images if _is_safe_image_url(url)][:30]
 
         history = data.get("price_history") or []
         data["price_history"] = [row for row in history if isinstance(row, dict)][:50]

@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 LIVE_POOL_PREFIX = "live-pool:"
 LIVE_POOL_TTL_SECONDS = 180  # 3 хвилини
-# ~4 сторінки по 20 у preview — cold search без 300×hydrate
-LIVE_POOL_SIZE = 80
+# ~6 сторінок по 20; достатньо місця для змішаного пулу OLX + Telegram + AUTO.RIA
+LIVE_POOL_SIZE = 120
 
 
 def live_pool_cache_key(filters: SearchFilters, sort_by: str) -> str:
@@ -66,6 +66,33 @@ async def set_live_pool(
         )
     except Exception:
         logger.exception("Live pool cache write failed")
+
+
+async def try_load_pool_listings(
+    filters: SearchFilters,
+    sort_by: str,
+    *,
+    max_items: int,
+    alt_sorts: tuple[str, ...] = ("newest", "published_desc"),
+) -> list[ListingOut] | None:
+    """Повертає items з live-pool кешу, якщо є (для моніторингу / dedupe)."""
+    seen: set[str] = set()
+    for sort in (sort_by, *alt_sorts):
+        if sort in seen:
+            continue
+        seen.add(sort)
+        pool = await get_live_pool(filters, sort)
+        if not pool or not pool.get("items"):
+            continue
+        items: list[ListingOut] = []
+        for row in pool["items"][:max_items]:
+            try:
+                items.append(ListingOut.model_validate(row))
+            except Exception:
+                continue
+        if items:
+            return items
+    return None
 
 
 def slice_pool(

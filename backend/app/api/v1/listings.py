@@ -11,6 +11,7 @@ from app.services.telegram_channels.lazy_photos import (
     enqueue_listing_photos,
     listing_needs_photos,
 )
+from app.services.auto_ria.lazy_photos import attach_auto_ria_gallery, auto_ria_needs_gallery
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
@@ -46,9 +47,10 @@ async def get_listing(
     listing = await db.get(Listing, listing_id)
     if not listing:
         raise HTTPException(404, "Listing not found")
-    # Відкрили картку без фото → ставимо в чергу воркера
     if listing_needs_photos(listing):
         enqueue_listing_photos(listing.id)
+    elif auto_ria_needs_gallery(listing):
+        await attach_auto_ria_gallery(db, listing)
     return await listing_out_with_mirrors(db, listing)
 
 
@@ -63,6 +65,8 @@ async def ensure_listing_photos(
         raise HTTPException(404, "Listing not found")
     if listing_needs_photos(listing):
         enqueue_listing_photos(listing.id)
+    elif auto_ria_needs_gallery(listing):
+        await attach_auto_ria_gallery(db, listing)
     out = await listing_out_with_mirrors(db, listing)
     if not out.images:
         out = out.model_copy(

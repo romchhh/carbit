@@ -79,10 +79,11 @@ async def process_photo_queue(service, *, limit: int = 5) -> int:
 
 
 async def process_keyword_queue(service, *, limit: int = 4) -> int:
-    """Telethon search по історії каналів за brand/model з live-пошуку."""
+    """Scan історії Telegram-каналів за brand/model з live-пошуку."""
     from app.services.telegram_channels.bootstrap import ensure_parser_path
 
     ensure_parser_path()
+    from app.services.search.brand_model_keywords import decode_telegram_scan_job
     from parser.channel_media_store import ChannelMediaStore
 
     store = ChannelMediaStore()
@@ -95,13 +96,22 @@ async def process_keyword_queue(service, *, limit: int = 4) -> int:
         job_id = int(job["id"])
         query = str(job["query"])
         channel = str(job["channel"])
-        per_channel = int(job.get("limit") or 40)
+        per_channel = int(job.get("limit") or 500)
         try:
-            listings = await service.search_channel_by_keywords(
-                channel,
-                query,
-                limit=per_channel,
-            )
+            payload = decode_telegram_scan_job(query)
+            if payload:
+                listings = await service.scan_channel_history_for_filters(
+                    channel,
+                    brand=payload["brand"],
+                    model=payload.get("model", ""),
+                    limit=per_channel,
+                )
+            else:
+                listings = await service.search_channel_by_keywords(
+                    channel,
+                    query,
+                    limit=min(per_channel, 100),
+                )
             async with AsyncSessionLocal() as db:
                 for listing in listings:
                     item, _new, _sent, matched = await ingest_telegram_listing(
@@ -113,9 +123,10 @@ async def process_keyword_queue(service, *, limit: int = 4) -> int:
             store.finish_keyword_job(job_id, found=len(listings))
             done += 1
             logger.info(
-                "Keyword search %s q=%r → %s listings",
+                "History scan %s brand=%r model=%r → %s listings",
                 channel,
-                query,
+                payload["brand"] if payload else None,
+                payload.get("model") if payload else query,
                 len(listings),
             )
         except Exception as exc:

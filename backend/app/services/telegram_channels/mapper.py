@@ -9,6 +9,10 @@ from app.core.config import settings
 from app.core.text import norm_text
 from app.core.timezone import as_kyiv, now_kyiv
 from app.schemas.schemas import ListingOut, SearchFilters
+from app.services.search.brand_model_keywords import (
+    text_matches_brand_filter,
+    text_matches_model_filter,
+)
 from app.services.telegram_channels.bootstrap import ensure_parser_path
 
 ensure_parser_path()
@@ -179,18 +183,24 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
 
 
 def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> bool:
+    haystack = f"{item.brand} {item.title} {item.description or ''}"
+
     if filters.brand:
-        brand = norm_text(filters.brand)
-        haystack = norm_text(f"{item.brand} {item.title} {item.description or ''}")
-        if brand not in haystack:
+        if not text_matches_brand_filter(
+            haystack, filters.brand, model=filters.model or ""
+        ):
             item_brand = norm_text(item.brand)
+            brand = norm_text(filters.brand)
             if not item_brand or (brand not in item_brand and item_brand not in brand):
                 return False
 
     if filters.model:
-        model = norm_text(filters.model)
-        haystack = norm_text(f"{item.model} {item.title} {item.description or ''}")
-        if model not in haystack:
+        model_haystack = f"{item.model} {item.title} {item.description or ''}"
+        if not text_matches_model_filter(
+            model_haystack,
+            filters.model,
+            brand=filters.brand or "",
+        ):
             return False
 
     if filters.year_from or filters.year_to:
