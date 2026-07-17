@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { IconEye, IconLock, IconMail, IconX } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
-import { CodeInput } from "@/components/auth/CodeInput";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -13,7 +12,6 @@ import { getRememberMePreference, getSavedEmail } from "@/lib/auth-storage";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 
 type Tab = "login" | "register";
-type RegisterStep = "form" | "verify";
 
 type Props = {
   open: boolean;
@@ -41,20 +39,16 @@ function TelegramLogo({ size = 18 }: { size?: number }) {
 }
 
 export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
-  const { login, sendRegisterCode, verifyRegisterCode, resendRegisterCode } = useAuth();
+  const { login } = useAuth();
 
   const [tab, setTab] = useState<Tab>("login");
-  const [registerStep, setRegisterStep] = useState<RegisterStep>("form");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
 
   useEffect(() => {
@@ -86,49 +80,20 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
 
   const handleTabChange = (next: Tab) => {
     setTab(next);
-    setRegisterStep("form");
-    setCode("");
     resetMessages();
-  };
-
-  const startResendCooldown = () => {
-    setResendCooldown(60);
-    const interval = setInterval(() => {
-      setResendCooldown(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     resetMessages();
-
-    if (tab === "register" && password.length < 8) {
-      setError("Пароль має містити щонайменше 8 символів");
-      return;
-    }
-
     setLoading(true);
     try {
-      if (tab === "login") {
-        await login(email.trim(), password, rememberMe);
-        onAuthenticated();
-      } else {
-        await sendRegisterCode(email.trim(), name.trim(), password);
-        setRegisterStep("verify");
-        setSuccess("Код надіслано на вашу пошту");
-        startResendCooldown();
-      }
+      await login(email.trim(), password, rememberMe);
+      onAuthenticated();
     } catch (err) {
       if (err instanceof ApiError) {
         const messages: Record<string, string> = {
           "Invalid credentials": "Невірний email або пароль",
-          "Email already registered": "Цей email вже зареєстрований",
         };
         setError(messages[err.message] ?? err.message);
       } else {
@@ -139,57 +104,17 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
     }
   };
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    resetMessages();
-    if (code.length !== 6) {
-      setError("Введіть 6-значний код");
-      return;
-    }
-    setLoading(true);
-    try {
-      await verifyRegisterCode(email.trim(), code);
-      onAuthenticated();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Помилка підтвердження");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResend = async () => {
-    if (resendCooldown > 0) return;
-    resetMessages();
-    setLoading(true);
-    try {
-      await resendRegisterCode(email.trim());
-      setSuccess("Новий код надіслано");
-      startResendCooldown();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не вдалося надіслати код");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleGoogleLogin = () => {
     window.location.href = authApi.googleLoginUrl();
   };
 
-  const handleTelegramAuth = async () => {
+  const handleTelegramLogin = async () => {
     resetMessages();
     setLoading(true);
     try {
-      const { bot_url } =
-        tab === "register"
-          ? await authApi.telegramRegisterUrl()
-          : await authApi.telegramLoginUrl();
+      const { bot_url } = await authApi.telegramLoginUrl();
       window.open(bot_url, "_blank", "noopener,noreferrer");
-      setSuccess(
-        tab === "register"
-          ? "Відкрийте Telegram і натисніть «Відкрити кабінет»"
-          : "Відкрийте Telegram і натисніть «Увійти в кабінет»",
-      );
+      setSuccess("Відкрийте Telegram і натисніть «Увійти в кабінет»");
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 503
@@ -231,74 +156,50 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
         </div>
 
         <div className="overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
-          {registerStep === "verify" ? (
-            <>
-              <h2 id="auth-gate-title" className="text-[22px] font-black tracking-[-0.03em] text-ink">
-                Підтвердіть email
-              </h2>
-              <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                Код надіслано на <strong className="text-ink">{email}</strong>
-              </p>
+          <h2 id="auth-gate-title" className="text-[22px] font-black tracking-[-0.03em] text-ink">
+            {tab === "login" ? "Увійдіть, щоб переглянути результати" : "Реєстрація через Google"}
+          </h2>
+          <p className="mt-2 text-[13px] leading-relaxed text-muted">
+            {tab === "login"
+              ? "7 днів безкоштовно, без карти. Після входу одразу покажемо знайдені авто."
+              : "Створіть акаунт через Google — 7 днів безкоштовно, без карти."}
+          </p>
 
-              <form onSubmit={handleVerify} className="mt-5 space-y-4">
-                <CodeInput value={code} onChange={setCode} disabled={loading} />
-
-                {success && (
-                  <p className="rounded-lg border border-emerald/20 bg-emerald-light/50 px-3 py-2 text-center text-[13px] text-emerald-dark">
-                    {success}
-                  </p>
+          <div className="mt-4 flex rounded-full border border-border/60 bg-surface p-1">
+            {(["login", "register"] as Tab[]).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => handleTabChange(t)}
+                className={cn(
+                  "flex-1 rounded-full py-2 text-[13px] font-semibold transition-all",
+                  tab === t ? "bg-ink text-white shadow-md" : "text-muted hover:text-ink",
                 )}
-                {error && (
-                  <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-center text-[13px] text-red-600">
-                    {error}
-                  </p>
-                )}
+              >
+                {t === "login" ? "Вхід" : "Реєстрація"}
+              </button>
+            ))}
+          </div>
 
-                <Button type="submit" loading={loading} size="md" variant="emerald" showArrow className="w-full" disabled={code.length !== 6}>
-                  Переглянути результати
-                </Button>
-
-                <p className="text-center text-[12px] text-muted">
-                  Не отримали код?{" "}
-                  <button
-                    type="button"
-                    onClick={handleResend}
-                    disabled={resendCooldown > 0 || loading}
-                    className={cn(
-                      "font-semibold",
-                      resendCooldown > 0 ? "cursor-not-allowed text-muted" : "text-emerald-dark hover:underline",
-                    )}
-                  >
-                    {resendCooldown > 0 ? `Повторити через ${resendCooldown}с` : "Надіслати знову"}
-                  </button>
+          {tab === "register" ? (
+            <div className="mt-5 space-y-4">
+              {error && (
+                <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[13px] text-red-600">
+                  {error}
                 </p>
-              </form>
-            </>
+              )}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleGoogleLogin}
+                className="flex min-h-[52px] w-full items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-3 py-3 text-[#1f1f1f] transition-all hover:border-[#1f1f1f]/30 hover:shadow-sm disabled:opacity-50"
+              >
+                <GoogleLogo size={20} />
+                <span className="text-[14px] font-semibold">Продовжити з Google</span>
+              </button>
+            </div>
           ) : (
             <>
-              <h2 id="auth-gate-title" className="text-[22px] font-black tracking-[-0.03em] text-ink">
-                Увійдіть, щоб переглянути результати
-              </h2>
-              <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                7 днів безкоштовно, без карти. Після входу одразу покажемо знайдені авто.
-              </p>
-
-              <div className="mt-4 flex rounded-full border border-border/60 bg-surface p-1">
-                {(["login", "register"] as Tab[]).map(t => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => handleTabChange(t)}
-                    className={cn(
-                      "flex-1 rounded-full py-2 text-[13px] font-semibold transition-all",
-                      tab === t ? "bg-ink text-white shadow-md" : "text-muted hover:text-ink",
-                    )}
-                  >
-                    {t === "login" ? "Вхід" : "Реєстрація"}
-                  </button>
-                ))}
-              </div>
-
               <div className="mt-4 flex gap-2">
                 <button
                   type="button"
@@ -312,7 +213,7 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
                 <button
                   type="button"
                   disabled={loading}
-                  onClick={handleTelegramAuth}
+                  onClick={() => void handleTelegramLogin()}
                   className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-[#2481cc] px-2 py-2 text-white transition-colors hover:bg-[#1d6fad] disabled:opacity-50"
                 >
                   <TelegramLogo />
@@ -327,21 +228,6 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-3">
-                {tab === "register" && (
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12px] font-medium text-ink">Ім&apos;я</span>
-                    <input
-                      type="text"
-                      placeholder="Василь"
-                      className="auth-input"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      required
-                      autoComplete="name"
-                    />
-                  </label>
-                )}
-
                 <label className="block">
                   <span className="mb-1.5 block text-[12px] font-medium text-ink">Email</span>
                   <div className="auth-input-wrap">
@@ -364,13 +250,13 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
                     <IconLock size={16} className="shrink-0 text-muted" />
                     <input
                       type={showPass ? "text" : "password"}
-                      placeholder="Мінімум 8 символів"
+                      placeholder="Ваш пароль"
                       className="auth-input-inner"
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       required
-                      minLength={tab === "register" ? 8 : 1}
-                      autoComplete={tab === "login" ? "current-password" : "new-password"}
+                      minLength={1}
+                      autoComplete="current-password"
                     />
                     <button
                       type="button"
@@ -383,17 +269,15 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
                   </div>
                 </label>
 
-                {tab === "login" && (
-                  <label className="flex cursor-pointer select-none items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={e => setRememberMe(e.target.checked)}
-                      className="h-4 w-4 rounded border-border text-emerald focus:ring-emerald/30"
-                    />
-                    <span className="text-[12px] text-muted">Запам&apos;ятати мене</span>
-                  </label>
-                )}
+                <label className="flex cursor-pointer select-none items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={e => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-emerald focus:ring-emerald/30"
+                  />
+                  <span className="text-[12px] text-muted">Запам&apos;ятати мене</span>
+                </label>
 
                 {success && (
                   <p className="rounded-lg border border-emerald/20 bg-emerald-light/50 px-3 py-2 text-[13px] text-emerald-dark">
@@ -407,26 +291,26 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
                 )}
 
                 <Button type="submit" loading={loading} size="md" variant="emerald" showArrow className="w-full">
-                  {tab === "login" ? "Увійти і переглянути" : "Зареєструватися"}
+                  Увійти і переглянути
                 </Button>
               </form>
-
-              <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
-                Продовжуючи, ви погоджуєтесь з{" "}
-                <Link href="/oferta" className="text-emerald-dark hover:underline" onClick={onClose}>
-                  офертою
-                </Link>
-                {", "}
-                <Link href="/terms" className="text-emerald-dark hover:underline" onClick={onClose}>
-                  умовами
-                </Link>{" "}
-                та{" "}
-                <Link href="/privacy" className="text-emerald-dark hover:underline" onClick={onClose}>
-                  політикою конфіденційності
-                </Link>
-              </p>
             </>
           )}
+
+          <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
+            Продовжуючи, ви погоджуєтесь з{" "}
+            <Link href="/oferta" className="text-emerald-dark hover:underline" onClick={onClose}>
+              офертою
+            </Link>
+            {", "}
+            <Link href="/terms" className="text-emerald-dark hover:underline" onClick={onClose}>
+              умовами
+            </Link>{" "}
+            та{" "}
+            <Link href="/privacy" className="text-emerald-dark hover:underline" onClick={onClose}>
+              політикою конфіденційності
+            </Link>
+          </p>
         </div>
       </div>
     </div>

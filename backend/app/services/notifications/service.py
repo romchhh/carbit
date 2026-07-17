@@ -177,6 +177,17 @@ async def create_listing_notification(
                 max_published_hours,
             )
         else:
+            images = list(listing.images or [])[:1]
+            if source == "telegram" and not images:
+                from app.services.telegram_channels.lazy_photos import (
+                    load_existing_telegram_photo_urls,
+                )
+
+                images = load_existing_telegram_photo_urls(listing.id, limit=1)
+                if images:
+                    listing.images = images
+                    await db.flush()
+
             listing_data = {
                 "title": listing.title,
                 "year": listing.year,
@@ -189,7 +200,7 @@ async def create_listing_notification(
                 "fuel": listing.fuel,
                 "transmission": listing.transmission,
                 "description": listing.description,
-                "images": list(listing.images or []),
+                "images": images,
                 "published_at": listing.published_at.isoformat() if listing.published_at else None,
                 "source": source,
                 "source_label": SOURCE_LABELS.get(source, source),

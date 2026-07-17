@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 import { IconTelegram } from "@/components/icons";
+import { TelegramConnectPrompt } from "@/components/search/TelegramConnectPrompt";
 import { cn } from "@/lib/utils";
 import type { SearchFreshness } from "@/lib/search-preview";
 
@@ -25,6 +26,16 @@ export function SearchPreviewNotice({
   className,
 }: Props) {
   const remaining = Math.max(total - shown, 0);
+  const [showTgPrompt, setShowTgPrompt] = useState(false);
+
+  const handleSaveClick = () => {
+    if (saving) return;
+    if (!telegramConnected) {
+      setShowTgPrompt(true);
+      return;
+    }
+    onSave();
+  };
 
   return (
     <div
@@ -54,19 +65,11 @@ export function SearchPreviewNotice({
                 : "Усі знайдені авто вже на екрані"}
             </p>
           )}
-          {!telegramConnected && (
-            <p className="mt-1.5 text-[12px] text-[#229ED9]">
-              <Link href="/app/account" className="font-semibold underline-offset-2 hover:underline">
-                Підключіть Telegram
-              </Link>
-              {" "}в акаунті
-            </p>
-          )}
         </div>
 
         <button
           type="button"
-          onClick={onSave}
+          onClick={handleSaveClick}
           disabled={saving}
           className={cn(
             "inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#229ED9] px-5 py-3.5 text-[14px] font-bold text-white shadow-lg shadow-[#229ED9]/20 transition-all hover:bg-[#1a8bc4] active:scale-[0.99]",
@@ -77,6 +80,13 @@ export function SearchPreviewNotice({
           {saving ? "Зберігаємо..." : "Зберегти пошук"}
         </button>
       </div>
+
+      <TelegramConnectPrompt
+        open={showTgPrompt}
+        onClose={() => setShowTgPrompt(false)}
+        onContinueWithoutTelegram={onSave}
+        onConnected={onSave}
+      />
     </div>
   );
 }

@@ -38,10 +38,8 @@ async def bootstrap_channels(service, channels: list[str], limit: int) -> None:
             async with AsyncSessionLocal() as db:
                 for listing in listings:
                     item, new_count, sent, matched = await ingest_telegram_listing(
-                        db, listing, notify=True
+                        db, listing, notify=True, parser_service=service
                     )
-                    if matched and not item.images:
-                        await attach_photos_to_listing(db, service, item.id)
                     if new_count or sent:
                         logger.info(
                             "Linked %s: new=%s notifications=%s",
@@ -161,12 +159,8 @@ async def main() -> None:
     async def on_new_listing(listing) -> None:
         async with AsyncSessionLocal() as db:
             item, new_count, sent, matched = await ingest_telegram_listing(
-                db, listing, notify=True
+                db, listing, notify=True, parser_service=service
             )
-            if matched and not item.images:
-                urls = await attach_photos_to_listing(db, service, item.id)
-                if urls:
-                    item.images = urls
             await db.commit()
         await beat("telegram_worker")
         logger.info(

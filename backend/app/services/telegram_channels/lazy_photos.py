@@ -42,6 +42,24 @@ def _urls_from_existing_files(channel: str, message_ids: list[int], *, limit: in
     return urls
 
 
+def load_existing_telegram_photo_urls(listing_id: str, *, limit: int = 1) -> list[str]:
+    """URL з уже скачаних jpg (без Telethon) — для TG-сповіщень."""
+    refs = _media_store().get_photo_refs(listing_id)
+    if refs:
+        channel, message_ids, _status = refs
+        return _urls_from_existing_files(channel, message_ids, limit=max(1, limit))
+
+    body = listing_id.removeprefix("telegram_")
+    channel_part, _, msg_part = body.rpartition("_")
+    if channel_part and msg_part.isdigit():
+        return _urls_from_existing_files(
+            f"@{channel_part}",
+            [int(msg_part)],
+            limit=max(1, limit),
+        )
+    return []
+
+
 async def attach_photos_to_listing(
     db: AsyncSession,
     service: "CarParserService",

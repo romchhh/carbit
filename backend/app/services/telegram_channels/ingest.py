@@ -70,15 +70,28 @@ async def ingest_telegram_listing(
     *,
     notify: bool = True,
     link_searches: bool = True,
+    parser_service=None,
 ) -> tuple[ListingOut, int, int, bool]:
     """Upsert telegram listing and optionally link to matching active searches.
 
     Returns (item, new_links, notifications, matched_any_search).
-    Фото не качає — лише зберігає refs; download робить worker при match / queue.
+    Якщо передано parser_service — одне фото завантажується до сповіщень у Telegram.
     """
     item = car_listing_to_listing_out(car_listing)
     _save_photo_refs_from_car(car_listing)
     listing = await upsert_listing(db, item)
+
+    if parser_service is not None:
+        from app.services.telegram_channels.lazy_photos import attach_photos_to_listing
+
+        urls = await attach_photos_to_listing(
+            db,
+            parser_service,
+            listing.id,
+            max_photos=1,
+        )
+        if urls:
+            item = listing_to_out(listing)
 
     if not link_searches:
         return item, 0, 0, False

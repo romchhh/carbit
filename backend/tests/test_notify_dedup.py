@@ -135,6 +135,70 @@ class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(notif.sent_telegram)
         self.assertTrue(notif.payload.get("telegram_skipped_duplicate"))
 
+    async def test_telegram_notification_includes_one_photo(self):
+        from app.services.notifications.service import create_listing_notification
+
+        from app.core.timezone import now_kyiv
+
+        listing = SimpleNamespace(
+            id="telegram_test_1",
+            source="telegram",
+            title="BMW X5",
+            year=2022,
+            mileage=15000,
+            price=30000,
+            currency="USD",
+            region="Київ",
+            fuel="Бензин",
+            transmission="Автомат",
+            description=None,
+            images=[
+                "/api/v1/telegram-media/ua_autobazar/1.jpg",
+                "/api/v1/telegram-media/ua_autobazar/2.jpg",
+            ],
+            url="https://t.me/test/1",
+            published_at=now_kyiv(),
+            is_duplicate=False,
+            duplicate_of=None,
+            vin=None,
+            brand="BMW",
+            model="X5",
+        )
+        user = SimpleNamespace(
+            id="u1",
+            telegram_connected=True,
+            telegram_id="123",
+        )
+        search = SimpleNamespace(id="s1", name="BMW")
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        with patch(
+            "app.services.notifications.service.telegram_client.send_listing_card",
+            new_callable=AsyncMock,
+            return_value={"ok": True},
+        ) as send:
+            with patch(
+                "app.services.notifications.service.user_already_notified_for_car",
+                new_callable=AsyncMock,
+                return_value=False,
+            ):
+                with patch(
+                    "app.services.notifications.service.format_display_price",
+                    return_value="30 000 $",
+                ):
+                    notif = await create_listing_notification(
+                        db, user, listing, search=search, send_telegram=True
+                    )
+
+        send.assert_awaited_once()
+        payload = send.await_args.args[1]
+        self.assertEqual(len(payload["images"]), 1)
+        self.assertIn("/api/v1/telegram-media/", payload["images"][0])
+        self.assertTrue(notif.sent_telegram)
+
 
 if __name__ == "__main__":
     unittest.main()

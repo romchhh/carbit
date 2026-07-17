@@ -45,6 +45,25 @@ class LazyPhotosEnqueueTests(unittest.TestCase):
             listing.images = ["https://example.com/a.jpg"]
             self.assertFalse(lazy_photos.listing_needs_photos(listing))
 
+    def test_load_existing_photo_urls_from_disk(self) -> None:
+        from app.core.config import settings
+        from app.services.telegram_channels import lazy_photos
+
+        media_root = Path(settings.TELEGRAM_MEDIA_DIR) / "ua_autobazar"
+        media_root.mkdir(parents=True, exist_ok=True)
+        photo = media_root / "777.jpg"
+        photo.write_bytes(b"\xff\xd8\xff")
+
+        self.store.save_photo_refs("telegram_ua_autobazar_777", "@ua_autobazar", [777])
+        with patch.object(lazy_photos, "_media_store", return_value=self.store):
+            urls = lazy_photos.load_existing_telegram_photo_urls(
+                "telegram_ua_autobazar_777",
+                limit=1,
+            )
+        self.assertEqual(len(urls), 1)
+        self.assertIn("/api/v1/telegram-media/", urls[0])
+        photo.unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 import { IconTelegram } from "@/components/icons";
 import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
+import { TelegramConnectPrompt } from "@/components/search/TelegramConnectPrompt";
 import { useAuth } from "@/contexts/AuthProvider";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,16 @@ export function SaveSearchCTA({
   className,
 }: Props) {
   const { user } = useAuth();
+  const [showTgPrompt, setShowTgPrompt] = useState(false);
+
+  const handleConnectClick = () => {
+    if (saving || limitReached) return;
+    if (!telegramConnected) {
+      setShowTgPrompt(true);
+      return;
+    }
+    onSave();
+  };
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -37,7 +48,7 @@ export function SaveSearchCTA({
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <button
             type="button"
-            onClick={onSave}
+            onClick={handleConnectClick}
             disabled={saving || limitReached}
             className={cn(
               "inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#229ED9] px-5 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[#1a8bc4] sm:w-auto",
@@ -47,18 +58,6 @@ export function SaveSearchCTA({
             <IconTelegram size={16} />
             {saving ? "Підключаємо…" : "Підключити моніторинг"}
           </button>
-
-          {!telegramConnected && (
-            <p className="text-center text-[12px] text-muted sm:text-right">
-              Спочатку{" "}
-              <Link
-                href="/app/account"
-                className="font-semibold text-[#229ED9] underline-offset-2 hover:underline"
-              >
-                підключіть Telegram
-              </Link>
-            </p>
-          )}
         </div>
 
         {successMessage && (
@@ -79,6 +78,13 @@ export function SaveSearchCTA({
           isTrial={Boolean(user.is_trial_active)}
         />
       )}
+
+      <TelegramConnectPrompt
+        open={showTgPrompt}
+        onClose={() => setShowTgPrompt(false)}
+        onContinueWithoutTelegram={onSave}
+        onConnected={onSave}
+      />
     </div>
   );
 }
