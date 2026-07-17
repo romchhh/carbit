@@ -12,12 +12,14 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { ApiError, auth as authApi } from "@/lib/api";
 import { getRememberMePreference, getSavedEmail } from "@/lib/auth-storage";
 import { resolvePostAuthRedirect } from "@/lib/search-draft";
+import { CodeInput } from "@/components/auth/CodeInput";
 
 const HERO_IMAGE = "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80";
 const TESTIMONIAL_AVATAR =
   "https://media.istockphoto.com/id/1485546774/uk/%D1%84%D0%BE%D1%82%D0%BE/%D0%BB%D0%B8%D1%81%D0%B8%D0%B9-%D1%87%D0%BE%D0%BB%D0%BE%D0%B2%D1%96%D0%BA-%D0%BF%D0%BE%D1%81%D0%BC%D1%96%D1%85%D0%B0%D1%94%D1%82%D1%8C%D1%81%D1%8F-%D0%BD%D0%B0-%D0%BA%D0%B0%D0%BC%D0%B5%D1%80%D1%83-%D1%81%D1%82%D0%BE%D1%8F%D1%87%D0%B8-%D0%B7%D1%96-%D1%81%D1%85%D1%80%D0%B5%D1%89%D0%B5%D0%BD%D0%B8%D0%BC%D0%B8-%D1%80%D1%83%D0%BA%D0%B0%D0%BC%D0%B8.jpg?s=612x612&w=0&k=20&c=k8rWF64vFG376FAR8UmfKKEjqXvLkAGM4FRbucNTgUw=";
 
 type Tab = "login" | "register";
+type RegisterStep = "form" | "verify";
 type LoginStep = "form" | "forgot";
 
 function GoogleLogo({ size = 20 }: { size?: number }) {
@@ -78,17 +80,30 @@ function SocialButton({
 function AuthForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { login, forgotPassword, user, loading: authLoading, initialized } = useAuth();
+  const {
+    login,
+    sendRegisterCode,
+    verifyRegisterCode,
+    resendRegisterCode,
+    forgotPassword,
+    user,
+    loading: authLoading,
+    initialized,
+  } = useAuth();
 
   const [tab, setTab] = useState<Tab>("login");
+  const [registerStep, setRegisterStep] = useState<RegisterStep>("form");
   const [loginStep, setLoginStep] = useState<LoginStep>("form");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
 
   useEffect(() => {
@@ -108,26 +123,64 @@ function AuthForm() {
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
+    const stepParam = searchParams.get("step");
     const emailParam = searchParams.get("email");
+    const codeParam = searchParams.get("code");
+
     if (tabParam === "register") setTab("register");
+    if (stepParam === "verify") setRegisterStep("verify");
     if (emailParam) setEmail(emailParam);
+    if (codeParam && /^\d{6}$/.test(codeParam)) {
+      setCode(codeParam);
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(codeParam).catch(() => {});
+      }
+    }
   }, [searchParams]);
 
   const handleTabChange = (next: Tab) => {
     setTab(next);
+    setRegisterStep("form");
     setLoginStep("form");
+    setCode("");
     setError("");
     setSuccess("");
+  };
+
+  const startResendCooldown = () => {
+    setResendCooldown(60);
+    const interval = setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
+
+    if (tab === "register" && password.length < 8) {
+      setError("Пароль має містити щонайменше 8 символів");
+      return;
+    }
+
     setLoading(true);
     try {
-      await login(email.trim(), password, rememberMe);
-      router.replace(destination);
+      if (tab === "login") {
+        await login(email.trim(), password, rememberMe);
+        router.replace(destination);
+      } else {
+        await sendRegisterCode(email.trim(), name.trim(), password);
+        setRegisterStep("verify");
+        setSuccess("Код надіслано на вашу пошту");
+        startResendCooldown();
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         const messages: Record<string, string> = {
@@ -138,6 +191,39 @@ function AuthForm() {
       } else {
         setError("Не вдалося підключитися до сервера. Спробуйте пізніше.");
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (code.length !== 6) {
+      setError("Введіть 6-значний код");
+      return;
+    }
+    setLoading(true);
+    try {
+      await verifyRegisterCode(email.trim(), code);
+      router.replace(resolvePostAuthRedirect(redirect));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Помилка підтвердження");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0) return;
+    setError("");
+    setLoading(true);
+    try {
+      await resendRegisterCode(email.trim());
+      setSuccess("Новий код надіслано");
+      startResendCooldown();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не вдалося надіслати код");
     } finally {
       setLoading(false);
     }
@@ -244,7 +330,7 @@ function AuthForm() {
     );
   }
 
-  if (tab === "register") {
+  if (tab === "register" && registerStep === "verify") {
     return (
       <div className="w-full max-w-[420px]">
         <div className="lg:hidden mb-6">
@@ -254,75 +340,64 @@ function AuthForm() {
         </div>
 
         <div className="bg-white rounded-[1.5rem] border border-border/60 shadow-card p-6 sm:p-7">
-          <h1 className="text-[30px] sm:text-[34px] font-black tracking-[-0.03em] text-ink leading-none">
-            Реєстрація
+          <button
+            type="button"
+            onClick={() => { setRegisterStep("form"); setCode(""); setError(""); }}
+            className="text-[13px] text-muted hover:text-ink mb-4 transition-colors"
+          >
+            ← Назад
+          </button>
+
+          <h1 className="text-[28px] font-black tracking-[-0.03em] text-ink leading-none">
+            Підтвердіть email
           </h1>
-          <p className="mt-2 text-[14px] text-muted">
-            {plan
-              ? `7 днів безкоштовно на тарифі ${plan.toUpperCase()}`
-              : "Створіть акаунт через Google — 7 днів безкоштовно, без карти"}
+          <p className="mt-2 text-[14px] text-muted leading-relaxed">
+            Ми надіслали 6-значний код на{" "}
+            <strong className="text-ink">{email}</strong>
           </p>
 
-          <div className="mt-5 flex bg-surface rounded-full p-1 border border-border/60">
-            {(["login", "register"] as Tab[]).map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => handleTabChange(t)}
-                className={cn(
-                  "flex-1 py-2 text-[14px] font-semibold rounded-full transition-all duration-200",
-                  tab === t ? "bg-ink text-white shadow-md" : "text-muted hover:text-ink"
-                )}
-              >
-                {t === "login" ? "Вхід" : "Реєстрація"}
-              </button>
-            ))}
-          </div>
+          <form onSubmit={handleVerify} className="mt-8 space-y-6">
+            <CodeInput value={code} onChange={setCode} disabled={loading} />
 
-          <div className="mt-6 space-y-4">
+            {success && (
+              <p className="text-[13px] text-emerald-dark bg-emerald-light/50 border border-emerald/20 rounded-lg px-3 py-2 text-center">
+                {success}
+              </p>
+            )}
             {error && (
-              <p className="text-[13px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              <p className="text-[13px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-center">
                 {error}
               </p>
             )}
 
-            <button
-              type="button"
-              disabled={loading}
-              onClick={handleGoogleLogin}
-              className="group flex w-full min-h-[56px] items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-4 py-3 text-[#1f1f1f] transition-all hover:border-[#1f1f1f]/30 hover:shadow-sm disabled:opacity-50"
+            <Button
+              type="submit"
+              loading={loading}
+              size="md"
+              variant="emerald"
+              showArrow
+              className="w-full"
+              disabled={code.length !== 6}
             >
-              <GoogleLogo size={22} />
-              <span className="text-[15px] font-semibold">Продовжити з Google</span>
-            </button>
+              Підтвердити
+            </Button>
 
             <p className="text-center text-[13px] text-muted">
-              Вже маєте акаунт?{" "}
+              Не отримали код?{" "}
               <button
                 type="button"
-                onClick={() => handleTabChange("login")}
-                className="font-semibold text-emerald-dark hover:underline"
+                onClick={handleResend}
+                disabled={resendCooldown > 0 || loading}
+                className={cn(
+                  "font-semibold transition-colors",
+                  resendCooldown > 0 ? "text-muted cursor-not-allowed" : "text-emerald-dark hover:underline",
+                )}
               >
-                Увійти
+                {resendCooldown > 0 ? `Повторити через ${resendCooldown}с` : "Надіслати знову"}
               </button>
             </p>
-          </div>
+          </form>
         </div>
-
-        <p className="mt-5 text-center text-[12px] text-muted leading-relaxed px-4">
-          Продовжуючи, ви приймаєте{" "}
-          <Link href="/oferta" className="text-ink font-medium hover:text-emerald-dark transition-colors">
-            Оферту
-          </Link>
-          {", "}
-          <Link href="/terms" className="text-ink font-medium hover:text-emerald-dark transition-colors">
-            Умови
-          </Link>{" "}
-          та{" "}
-          <Link href="/privacy" className="text-ink font-medium hover:text-emerald-dark transition-colors">
-            Політику конфіденційності
-          </Link>
-        </p>
       </div>
     );
   }
@@ -337,10 +412,14 @@ function AuthForm() {
 
       <div className="bg-white rounded-[1.5rem] border border-border/60 shadow-card p-6 sm:p-7">
         <h1 className="text-[30px] sm:text-[34px] font-black tracking-[-0.03em] text-ink leading-none">
-          З поверненням
+          {tab === "login" ? "З поверненням" : "Реєстрація"}
         </h1>
         <p className="mt-2 text-[14px] text-muted">
-          Увійдіть email, Google або Telegram (якщо підключений)
+          {tab === "login"
+            ? "Увійдіть email, Google або Telegram (якщо підключений)"
+            : plan
+              ? `7 днів безкоштовно на тарифі ${plan.toUpperCase()}`
+              : "7 днів безкоштовно, без карти"}
         </p>
 
         <div className="mt-5 flex bg-surface rounded-full p-1 border border-border/60">
@@ -360,6 +439,19 @@ function AuthForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-3.5">
+          {tab === "register" && (
+            <Field label="Ім'я">
+              <input
+                type="text"
+                placeholder="Василь"
+                className="auth-input"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                required
+                autoComplete="name"
+              />
+            </Field>
+          )}
           <Field label="Email">
             <div className="auth-input-wrap">
               <IconMail size={18} className="text-muted shrink-0" />
@@ -379,13 +471,13 @@ function AuthForm() {
               <IconLock size={18} className="text-muted shrink-0" />
               <input
                 type={showPass ? "text" : "password"}
-                placeholder="Ваш пароль"
+                placeholder={tab === "register" ? "Мінімум 8 символів" : "Ваш пароль"}
                 className="auth-input-inner"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
-                minLength={1}
-                autoComplete="current-password"
+                minLength={tab === "register" ? 8 : 1}
+                autoComplete={tab === "login" ? "current-password" : "new-password"}
               />
               <button
                 type="button"
@@ -410,24 +502,26 @@ function AuthForm() {
             </p>
           )}
 
-          <div className="flex items-center justify-between gap-3 -mt-1">
-            <label className="flex cursor-pointer select-none items-center gap-2.5">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={e => setRememberMe(e.target.checked)}
-                className="h-4 w-4 rounded border-border text-emerald accent-emerald focus:ring-emerald/30"
-              />
-              <span className="text-[13px] text-muted">Запам&apos;ятати мене</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => { setLoginStep("forgot"); setError(""); setSuccess(""); }}
-              className="text-[13px] font-medium text-emerald-dark hover:underline shrink-0"
-            >
-              Забули пароль?
-            </button>
-          </div>
+          {tab === "login" && (
+            <div className="flex items-center justify-between gap-3 -mt-1">
+              <label className="flex cursor-pointer select-none items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-emerald accent-emerald focus:ring-emerald/30"
+                />
+                <span className="text-[13px] text-muted">Запам&apos;ятати мене</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => { setLoginStep("forgot"); setError(""); setSuccess(""); }}
+                className="text-[13px] font-medium text-emerald-dark hover:underline shrink-0"
+              >
+                Забули пароль?
+              </button>
+            </div>
+          )}
 
           <Button
             type="submit"
@@ -437,7 +531,7 @@ function AuthForm() {
             showArrow
             className="w-full"
           >
-            Увійти
+            {tab === "login" ? "Увійти" : "Продовжити"}
           </Button>
 
           <div className="flex items-center gap-3">
@@ -446,10 +540,22 @@ function AuthForm() {
             <span className="flex-1 h-px bg-border" />
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <SocialButton provider="google" disabled={loading} onClick={handleGoogleLogin} />
-            <SocialButton provider="telegram" disabled={loading} onClick={handleTelegramLogin} />
-          </div>
+          {tab === "register" ? (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleGoogleLogin}
+              className="flex w-full min-h-[56px] items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-4 py-3 text-[#1f1f1f] transition-all hover:border-[#1f1f1f]/30 hover:shadow-sm disabled:opacity-50"
+            >
+              <GoogleLogo size={22} />
+              <span className="text-[15px] font-semibold">Продовжити з Google</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2.5">
+              <SocialButton provider="google" disabled={loading} onClick={handleGoogleLogin} />
+              <SocialButton provider="telegram" disabled={loading} onClick={handleTelegramLogin} />
+            </div>
+          )}
         </form>
       </div>
 
