@@ -32,6 +32,9 @@ frontend/.next/
 frontend/out/
 frontend/tsconfig.tsbuildinfo
 
+# Accidental installs at repo root
+node_modules/
+
 # OS / IDE
 .DS_Store
 .idea/
