@@ -38,6 +38,7 @@ import {
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 import { CancelRenewalDialog } from "@/components/billing/CancelRenewalDialog";
 import { Alert } from "@/components/ui/Alert";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getPricingPlan, formatPlanPrice, planMonitorLimit } from "@/lib/plan-catalog";
 import type { DashboardStats, Subscription } from "@/types/api";
 
@@ -51,6 +52,9 @@ export default function AccountPage() {
   const [error, setError] = useState("");
   const [connectUrl, setConnectUrl] = useState<string | null>(null);
   const [tgLoading, setTgLoading] = useState(false);
+  const [tgError, setTgError] = useState("");
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [disconnectLoading, setDisconnectLoading] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [polling, setPolling] = useState(false);
@@ -120,23 +124,29 @@ export default function AccountPage() {
 
   const connectTelegram = async () => {
     setTgLoading(true);
+    setTgError("");
     try {
       const link = await telegramApi.connectLink();
       setConnectUrl(link.bot_url);
       window.open(link.bot_url, "_blank");
       setPolling(true);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Помилка");
+      setTgError(err instanceof ApiError ? err.message : "Помилка");
     } finally {
       setTgLoading(false);
     }
   };
 
   const disconnectTelegram = async () => {
-    if (!confirm("Відключити Telegram-бот?")) return;
-    await telegramApi.disconnect();
-    await refreshUser();
-    setConnectUrl(null);
+    setDisconnectLoading(true);
+    try {
+      await telegramApi.disconnect();
+      await refreshUser();
+      setConnectUrl(null);
+      setDisconnectOpen(false);
+    } finally {
+      setDisconnectLoading(false);
+    }
   };
 
   const sendBindCode = async () => {
@@ -679,7 +689,7 @@ export default function AccountPage() {
                       <span className="h-2 w-2 rounded-full bg-emerald" />
                       Підключено
                     </span>
-                    <Button variant="secondary" size="md" onClick={disconnectTelegram}>
+                    <Button variant="secondary" size="md" onClick={() => setDisconnectOpen(true)}>
                       Відключити
                     </Button>
                   </>
@@ -688,7 +698,7 @@ export default function AccountPage() {
                     variant="primary"
                     size="md"
                     loading={tgLoading || polling}
-                    onClick={connectTelegram}
+                    onClick={() => void connectTelegram()}
                   >
                     {polling ? "Очікуємо..." : "Підключити"}
                   </Button>
@@ -789,6 +799,30 @@ export default function AccountPage() {
           if (!cancelLoading) setCancelOpen(false);
         }}
         onConfirm={payload => void confirmCancelRenewal(payload)}
+      />
+
+      <ConfirmDialog
+        open={disconnectOpen}
+        title="Відключити Telegram-бот?"
+        description="Сповіщення про нові авто перестануть надходити в Telegram. Підключити знову можна будь-коли."
+        confirmLabel="Відключити"
+        cancelLabel="Скасувати"
+        variant="danger"
+        loading={disconnectLoading}
+        onClose={() => {
+          if (!disconnectLoading) setDisconnectOpen(false);
+        }}
+        onConfirm={() => void disconnectTelegram()}
+      />
+
+      <ConfirmDialog
+        open={Boolean(tgError)}
+        title="Не вдалося підключити Telegram"
+        description={tgError}
+        alertOnly
+        confirmLabel="Зрозуміло"
+        variant="primary"
+        onClose={() => setTgError("")}
       />
     </AppPage>
   );

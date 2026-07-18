@@ -45,7 +45,7 @@
   }
 
   :root {
-    --mobile-header-offset: calc(var(--safe-top) + 4.75rem);
+    --mobile-header-offset: calc(var(--safe-top) + 6.25rem);
     --mobile-nav-height: calc(4.75rem + max(0.35rem, env(safe-area-inset-bottom, 0px)));
   }
 

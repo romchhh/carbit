@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { adminApi, AdminApiError, type AdminTelegramChannel } from "@/lib/admin-api";
 import { formatKyivDateTime } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,8 @@ export default function AdminTelegramChannelsPage() {
   const [listingsLoading, setListingsLoading] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<AdminTelegramChannel | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const selected = channels.find(c => c.id === selectedId) ?? null;
 
@@ -94,15 +97,18 @@ export default function AdminTelegramChannelsPage() {
   };
 
   const removeChannel = async (channel: AdminTelegramChannel) => {
-    if (!confirm(`Видалити ${channel.username}? Оголошення в БД залишаться.`)) return;
+    setDeleting(true);
     setMessage(null);
     try {
       await adminApi.deleteTelegramChannel(channel.id);
       if (selectedId === channel.id) setSelectedId(null);
       setMessage(`Видалено ${channel.username}`);
+      setPendingDelete(null);
       await load();
     } catch (err) {
       setMessage(err instanceof AdminApiError ? err.message : "Помилка видалення");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -229,7 +235,7 @@ export default function AdminTelegramChannelsPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => void removeChannel(channel)}
+                      onClick={() => setPendingDelete(channel)}
                       className="rounded-lg border border-red-200 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50"
                     >
                       Видалити
@@ -321,6 +327,22 @@ export default function AdminTelegramChannelsPage() {
       {selectedListing && (
         <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} />
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={pendingDelete ? `Видалити ${pendingDelete.username}?` : ""}
+        description="Оголошення в БД залишаться."
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
+        variant="danger"
+        loading={deleting}
+        onClose={() => {
+          if (!deleting) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (pendingDelete) void removeChannel(pendingDelete);
+        }}
+      />
     </div>
   );
 }

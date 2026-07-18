@@ -65,5 +65,5 @@ export function getVinCheckUrl(listing: Listing): string | null {
 }
 
 export function hasVinCheck(listing: Listing): boolean {
-  return Boolean(resolveListingVin(listing) || getVinCheckUrl(listing));
+  return Boolean(resolveListingVin(listing));
 }

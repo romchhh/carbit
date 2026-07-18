@@ -27,8 +27,8 @@ export function VinCheckButton({ listing, className, size = "sm", showSummary = 
     setOpen(true);
   };
 
-  // Показуємо кнопку якщо є VIN (База ДАІ) або хоча б зовнішній fallback.
-  if (!vin && !fallbackUrl) return null;
+  // Показуємо кнопку лише коли є VIN-код.
+  if (!vin) return null;
 
   return (
     <>

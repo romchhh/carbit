@@ -3,11 +3,11 @@ import {
   IconHeart,
   IconBell,
   IconCreditCard,
-  IconGear,
-  IconZap,
+  IconUser,
+  IconCar,
 } from "@/components/icons";
 
-export type NavBadgeKey = "favorites" | "notifications" | "monitors";
+export type NavBadgeKey = "notifications" | "monitors";
 
 export type DashboardNavItem = {
   href: string;
@@ -23,19 +23,19 @@ export const primaryNav: DashboardNavItem[] = [
   { href: "/app/dashboard", icon: IconSearch, label: "Пошук", shortLabel: "Пошук", tourId: "nav-dashboard" },
   {
     href: "/app/monitors",
-    icon: IconZap,
+    icon: IconCar,
     label: "Мої моніторинги",
     shortLabel: "Монітори",
     badgeKey: "monitors",
     badgeAccent: true,
     tourId: "nav-monitors",
   },
-  { href: "/app/favorites", icon: IconHeart, label: "Обране", shortLabel: "Обране", badgeKey: "favorites", tourId: "nav-favorites" },
+  { href: "/app/favorites", icon: IconHeart, label: "Обране", shortLabel: "Обране", tourId: "nav-favorites" },
   { href: "/app/notifications", icon: IconBell, label: "Сповіщення", shortLabel: "Алерти", badgeKey: "notifications", badgeAccent: true, tourId: "nav-notifications" },
 ];
 
 export const secondaryNav: DashboardNavItem[] = [
-  { href: "/app/account", icon: IconGear, label: "Акаунт", tourId: "nav-account" },
+  { href: "/app/account", icon: IconUser, label: "Акаунт", tourId: "nav-account" },
   { href: "/app/billing", icon: IconCreditCard, label: "Підписка", tourId: "nav-billing" },
 ];
 
@@ -45,5 +45,5 @@ export const mobileNav: DashboardNavItem[] = [
   primaryNav[1],
   primaryNav[2],
   primaryNav[3],
-  { href: "/app/account", icon: IconGear, label: "Акаунт", shortLabel: "Профіль" },
+  { href: "/app/account", icon: IconUser, label: "Акаунт", shortLabel: "Профіль" },
 ];

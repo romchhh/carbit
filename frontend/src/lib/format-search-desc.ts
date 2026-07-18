@@ -1,3 +1,4 @@
+/** Підзаголовок під назвою моніторингу: рік і ціна (без дубля brand/model/region). */
 export function formatSearchDesc(filters: Record<string, unknown>): string {
   const parts: string[] = [];
   const categoryLabels: Record<string, string> = {
@@ -9,8 +10,6 @@ export function formatSearchDesc(filters: Record<string, unknown>): string {
     const label = categoryLabels[String(filters.category)];
     if (label) parts.push(label);
   }
-  if (filters.brand) parts.push(String(filters.brand));
-  if (filters.model) parts.push(String(filters.model));
   if (filters.year_from || filters.year_to) {
     parts.push(`${filters.year_from ?? "…"}–${filters.year_to ?? "…"}`);
   }
@@ -21,6 +20,5 @@ export function formatSearchDesc(filters: Record<string, unknown>): string {
       filters.currency === "USD" ? "$" : filters.currency === "EUR" ? "€" : "грн";
     parts.push(`${from}–${to} ${currency}`);
   }
-  if (filters.region) parts.push(String(filters.region));
-  return parts.length > 0 ? parts.join(" · ") : "Без фільтрів";
+  return parts.length > 0 ? parts.join(" · ") : "Без додаткових фільтрів";
 }

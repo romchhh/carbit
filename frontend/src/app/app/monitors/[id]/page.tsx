@@ -5,9 +5,9 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
-import { MonitorManagePanel } from "@/components/search/MonitorManagePanel";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
+import { notifyNotificationsChanged } from "@/lib/notifications-events";
 import { formatSearchDesc } from "@/lib/format-search-desc";
 import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
@@ -57,6 +57,7 @@ export default function MonitorDetailPage({
           setNewSeenFlash(data.search.new_count);
           void searchesApi.markSeen(id).then(updated => {
             setSearch(updated);
+            notifyNotificationsChanged();
           }).catch(() => {});
         }
       } catch (err) {
@@ -118,24 +119,7 @@ export default function MonitorDetailPage({
       </div>
 
       {search && (
-        <>
-          <p className="mb-3 text-[13px] text-muted">{formatSearchDesc(search.filters)}</p>
-          <MonitorManagePanel
-            search={search}
-            onUpdated={updated => {
-              setSearch(updated);
-              void loadResults(searchId, 1, sort, false);
-            }}
-          />
-        </>
-      )}
-
-      {newSeenFlash > 0 && (
-        <div className="mb-4 rounded-2xl border border-emerald/25 bg-emerald/10 px-4 py-3 text-[13px] text-emerald-dark">
-          Показано {newSeenFlash}{" "}
-          {newSeenFlash === 1 ? "нове авто" : newSeenFlash < 5 ? "нові авто" : "нових авто"} — позначені
-          бейджем «Нове».
-        </div>
+        <p className="mb-5 text-[13px] text-muted">{formatSearchDesc(search.filters)}</p>
       )}
 
       <SearchResultsToolbar

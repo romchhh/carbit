@@ -150,6 +150,8 @@ class TelegramClient:
         *,
         search_id: str | None = None,
         listing_id: str | None = None,
+        alert_line: str | None = None,
+        alert_emoji: str = "📉",
     ) -> dict | None:
         source = listing.get("source", "")
         source_label = listing.get("source_label") or SOURCE_LABELS.get(source, source)
@@ -165,16 +167,21 @@ class TelegramClient:
             )
 
         published_line = _published_caption_line(listing)
+        title_emoji = alert_emoji if alert_line else "🚗"
 
         lines = [
-            f"🚗 <b>{html.escape(str(listing.get('title', 'Авто')))}</b>",
+            f"{title_emoji} <b>{html.escape(str(listing.get('title', 'Авто')))}</b>",
+        ]
+        if alert_line:
+            lines.append(html.escape(alert_line))
+        lines.extend([
             "",
             f"📅 {listing.get('year', '—')}  ·  🛣 {listing.get('mileage', 0):,} км".replace(",", " "),
             f"⛽ {html.escape(str(listing.get('fuel') or '—'))}  ·  ⚙️ {html.escape(str(listing.get('transmission') or '—'))}",
             f"📍 {html.escape(str(listing.get('region') or 'Україна'))}",
             f"💰 <b>{html.escape(price_line)}</b>",
             f"📡 {html.escape(source_label)}",
-        ]
+        ])
         if published_line:
             lines.append(published_line)
         lines.extend(["", f"🔍 <i>{html.escape(search_name)}</i>"])

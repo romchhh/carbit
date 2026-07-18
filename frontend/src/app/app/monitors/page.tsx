@@ -9,11 +9,13 @@ import {
   AppLoading,
   AppPage,
 } from "@/components/layout/AppPage";
+import { MonitorManagePanel } from "@/components/search/MonitorManagePanel";
 import { MonitorSearchCard } from "@/components/search/MonitorSearchCard";
 import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 import { useAuth } from "@/contexts/AuthProvider";
-import { searches as searchesApi } from "@/lib/api";
+import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { SearchQuery } from "@/types/api";
 
 export default function MonitorsPage() {
@@ -21,6 +23,9 @@ export default function MonitorsPage() {
   const [searches, setSearches] = useState<SearchQuery[]>([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SearchQuery | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,6 +67,21 @@ export default function MonitorsPage() {
       );
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const removeSearch = async (search: SearchQuery) => {
+    setDeletingId(search.id);
+    setToggleError(null);
+    try {
+      await searchesApi.delete(search.id);
+      setSearches(list => list.filter(item => item.id !== search.id));
+      if (editingId === search.id) setEditingId(null);
+      setPendingDelete(null);
+    } catch (err) {
+      setToggleError(getApiErrorMessage(err, "Не вдалося видалити моніторинг"));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -133,15 +153,50 @@ export default function MonitorsPage() {
       ) : (
         <div className="space-y-3">
           {searches.map(s => (
-            <MonitorSearchCard
-              key={s.id}
-              search={s}
-              toggling={togglingId === s.id}
-              onActiveChange={active => void setActive(s, active)}
-            />
+            <div key={s.id}>
+              <MonitorSearchCard
+                search={s}
+                toggling={togglingId === s.id}
+                deleting={deletingId === s.id}
+                onActiveChange={active => void setActive(s, active)}
+                onEdit={() => setEditingId(id => (id === s.id ? null : s.id))}
+                onDelete={() => setPendingDelete(s)}
+              />
+              {editingId === s.id && (
+                <div className="mt-2">
+                  <MonitorManagePanel
+                    search={s}
+                    editorOnly
+                    onCancel={() => setEditingId(null)}
+                    onUpdated={updated => {
+                      setSearches(list =>
+                        list.map(item => (item.id === updated.id ? updated : item)),
+                      );
+                      setEditingId(null);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={pendingDelete ? `Видалити моніторинг «${pendingDelete.name}»?` : ""}
+        description="Збережені авто зникнуть із цього списку."
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
+        variant="danger"
+        loading={Boolean(pendingDelete && deletingId === pendingDelete.id)}
+        onClose={() => {
+          if (!deletingId) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (pendingDelete) void removeSearch(pendingDelete);
+        }}
+      />
     </AppPage>
   );
 }

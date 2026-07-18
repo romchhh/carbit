@@ -43,9 +43,17 @@ export default function NotificationsPage() {
     setLoading(true);
     try {
       const data = await notificationsApi.list(1, false, nextSort, 100);
-      setItems(data.items);
-      setUnread(data.unread);
       setTotal(data.total);
+
+      // Opening the section counts as reading — clear unread badges.
+      if (data.unread > 0) {
+        setItems(data.items.map(item => ({ ...item, is_read: true })));
+        setUnread(0);
+        void notificationsApi.markAllRead().then(() => notifyNotificationsChanged()).catch(() => {});
+      } else {
+        setItems(data.items);
+        setUnread(0);
+      }
     } finally {
       setLoading(false);
     }

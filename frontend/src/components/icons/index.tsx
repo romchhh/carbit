@@ -1,4 +1,5 @@
 import { SVGProps } from "react";
+import { Car, Pencil, Trash2, User, type LucideIcon } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 
@@ -15,6 +16,20 @@ const icon = (path: React.ReactNode, viewBox = "0 0 24 24") =>
       >
         {path}
       </svg>
+    );
+  };
+
+const lucideIcon =
+  (Lucide: LucideIcon) =>
+  function Icon({ size = 20, className, ...props }: IconProps) {
+    return (
+      <Lucide
+        size={size}
+        strokeWidth={1.6}
+        absoluteStrokeWidth
+        className={className}
+        {...props}
+      />
     );
   };
 
@@ -88,18 +103,9 @@ export const IconPlay = icon(
   </>
 );
 
-export const IconEdit = icon(
-  <>
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-    <path d="M18.5 2.5a2 2 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-  </>
-);
+export const IconEdit = lucideIcon(Pencil);
 
-export const IconTrash = icon(
-  <>
-    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-  </>
-);
+export const IconTrash = lucideIcon(Trash2);
 
 export const IconChart = icon(
   <>
@@ -146,6 +152,10 @@ export const IconZap = icon(
     <path d="M13 2L4 14h8l-1 8 9-12h-8l1-8Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
   </>
 );
+
+export const IconUser = lucideIcon(User);
+
+export const IconCar = lucideIcon(Car);
 
 export const IconCreditCard = icon(
   <>

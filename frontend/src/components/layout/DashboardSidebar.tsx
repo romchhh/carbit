@@ -6,9 +6,8 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { primaryNav, secondaryNav, type NavBadgeKey } from "@/lib/dashboard-nav";
-import { FAVORITES_CHANGED_EVENT } from "@/hooks/useListingFavorite";
 import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notifications-events";
-import { notifications as notificationsApi, favorites as favoritesApi, searches as searchesApi } from "@/lib/api";
+import { notifications as notificationsApi, searches as searchesApi } from "@/lib/api";
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 
 type Props = {
@@ -18,10 +17,9 @@ type Props = {
   isTrial?: boolean;
 };
 
-export function DashboardSidebar({ searchesUsed, searchesLimit, planId, isTrial }: Props) {
+function useNavBadges(): Record<NavBadgeKey, number> {
   const pathname = usePathname();
   const [badges, setBadges] = useState<Record<NavBadgeKey, number>>({
-    favorites: 0,
     notifications: 0,
     monitors: 0,
   });
@@ -29,25 +27,35 @@ export function DashboardSidebar({ searchesUsed, searchesLimit, planId, isTrial 
   useEffect(() => {
     const refreshBadges = () => {
       Promise.all([
-        favoritesApi.list().then(f => f.length).catch(() => 0),
         notificationsApi.stats().then(s => s.unread).catch(() => 0),
         searchesApi
           .list()
           .then(items => items.reduce((sum, s) => sum + (s.new_count || 0), 0))
           .catch(() => 0),
-      ]).then(([favorites, notifications, monitors]) =>
-        setBadges({ favorites, notifications, monitors }),
-      );
+      ]).then(([notifications, monitors]) => {
+        // While on Alerts, hide the badge immediately (page marks all read).
+        const onNotifications =
+          pathname === "/app/notifications" || pathname.startsWith("/app/notifications/");
+        setBadges({
+          notifications: onNotifications ? 0 : notifications,
+          monitors,
+        });
+      });
     };
 
     refreshBadges();
-    window.addEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
     window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshBadges);
     return () => {
-      window.removeEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
       window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshBadges);
     };
   }, [pathname]);
+
+  return badges;
+}
+
+export function DashboardSidebar({ searchesUsed, searchesLimit, planId, isTrial }: Props) {
+  const pathname = usePathname();
+  const badges = useNavBadges();
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
@@ -130,35 +138,5 @@ export function DashboardSidebar({ searchesUsed, searchesLimit, planId, isTrial 
 }
 
 export function useDashboardBadges() {
-  const pathname = usePathname();
-  const [badges, setBadges] = useState<Record<NavBadgeKey, number>>({
-    favorites: 0,
-    notifications: 0,
-    monitors: 0,
-  });
-
-  useEffect(() => {
-    const refreshBadges = () => {
-      Promise.all([
-        favoritesApi.list().then(f => f.length).catch(() => 0),
-        notificationsApi.stats().then(s => s.unread).catch(() => 0),
-        searchesApi
-          .list()
-          .then(items => items.reduce((sum, s) => sum + (s.new_count || 0), 0))
-          .catch(() => 0),
-      ]).then(([favorites, notifications, monitors]) =>
-        setBadges({ favorites, notifications, monitors }),
-      );
-    };
-
-    refreshBadges();
-    window.addEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
-    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshBadges);
-    return () => {
-      window.removeEventListener(FAVORITES_CHANGED_EVENT, refreshBadges);
-      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshBadges);
-    };
-  }, [pathname]);
-
-  return badges;
+  return useNavBadges();
 }

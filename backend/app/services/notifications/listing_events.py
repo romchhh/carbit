@@ -9,9 +9,73 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, Notification, NotificationType, SearchListing, SearchQuery, User
 from app.services.currency import format_display_price
-from app.services.telegram.client import telegram_client
+from app.services.telegram.client import SOURCE_LABELS, telegram_client
+from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
 logger = logging.getLogger(__name__)
+
+
+def _listing_card_data(listing: Listing) -> dict:
+    source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
+    display_currency = "USD"
+    listing_url = (
+        fix_telegram_listing_url(listing.id, listing.url, images=listing.images)
+        if source == "telegram"
+        else listing.url
+    )
+    price_label = format_display_price(listing.price, listing.currency, display_currency)
+    images = list(listing.images or [])[:1]
+    if source == "telegram" and not images:
+        from app.services.telegram_channels.lazy_photos import (
+            load_existing_telegram_photo_urls,
+        )
+
+        images = load_existing_telegram_photo_urls(listing.id, limit=1)
+
+    return {
+        "title": listing.title,
+        "year": listing.year,
+        "mileage": listing.mileage,
+        "price": listing.price,
+        "currency": listing.currency,
+        "display_price": price_label,
+        "preferred_currency": display_currency,
+        "region": listing.region,
+        "fuel": listing.fuel,
+        "transmission": listing.transmission,
+        "description": listing.description,
+        "images": images,
+        "published_at": listing.published_at.isoformat() if listing.published_at else None,
+        "source": source,
+        "source_label": SOURCE_LABELS.get(source, source),
+        "url": listing_url,
+    }
+
+
+async def _send_event_card(
+    user: User,
+    listing: Listing,
+    search: SearchQuery,
+    *,
+    alert_line: str,
+    alert_emoji: str,
+) -> bool:
+    if not (user.telegram_connected and user.telegram_id):
+        return False
+    try:
+        result = await telegram_client.send_listing_card(
+            user.telegram_id,
+            _listing_card_data(listing),
+            search.name or "Carbit",
+            search_id=search.id,
+            listing_id=listing.id,
+            alert_line=alert_line,
+            alert_emoji=alert_emoji,
+        )
+        return bool(result)
+    except Exception:
+        logger.debug("listing event telegram failed", exc_info=True)
+        return False
 
 
 async def notify_listing_events(
@@ -64,15 +128,14 @@ async def notify_listing_events(
             )
             db.add(notification)
             sent += 1
-            if user.telegram_connected and user.telegram_id:
-                try:
-                    await telegram_client.send_message(
-                        user.telegram_id,
-                        f"📉 {listing.title}\n{body}\n{listing.url}",
-                    )
-                    notification.sent_telegram = True
-                except Exception:
-                    logger.debug("price_drop telegram failed", exc_info=True)
+            if await _send_event_card(
+                user,
+                listing,
+                search,
+                alert_line=body,
+                alert_emoji="📉",
+            ):
+                notification.sent_telegram = True
 
         if vin_appeared and listing.vin:
             body = f"З’явився VIN: {listing.vin}"
@@ -92,15 +155,14 @@ async def notify_listing_events(
             )
             db.add(notification)
             sent += 1
-            if user.telegram_connected and user.telegram_id:
-                try:
-                    await telegram_client.send_message(
-                        user.telegram_id,
-                        f"🔑 {listing.title}\n{body}\n{listing.url}",
-                    )
-                    notification.sent_telegram = True
-                except Exception:
-                    logger.debug("vin_found telegram failed", exc_info=True)
+            if await _send_event_card(
+                user,
+                listing,
+                search,
+                alert_line=body,
+                alert_emoji="🔑",
+            ):
+                notification.sent_telegram = True
 
     if sent:
         await db.flush()

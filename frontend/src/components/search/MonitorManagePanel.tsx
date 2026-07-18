@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
 import {
@@ -16,24 +17,35 @@ import type { SearchQuery } from "@/types/api";
 type Props = {
   search: SearchQuery;
   onUpdated: (search: SearchQuery) => void;
+  onCancel?: () => void;
+  /** Лише форма редагування (кнопки дій на картці списку). */
+  editorOnly?: boolean;
   onDeleted?: () => void;
 };
 
-export function MonitorManagePanel({ search, onUpdated, onDeleted }: Props) {
+export function MonitorManagePanel({
+  search,
+  onUpdated,
+  onCancel,
+  editorOnly = false,
+  onDeleted,
+}: Props) {
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(editorOnly);
   const [name, setName] = useState(search.name);
   const [filters, setFilters] = useState<SearchFilterState>(DEFAULT_FILTERS);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
     setName(search.name);
     setFilters(fromBackendSearchFilters(search.filters));
-  }, [search]);
+    if (editorOnly) setEditing(true);
+  }, [search, editorOnly]);
 
   const saveEdits = async () => {
     setSaving(true);
@@ -46,8 +58,10 @@ export function MonitorManagePanel({ search, onUpdated, onDeleted }: Props) {
         filters: toBackendSearchFilters(filters),
       });
       onUpdated(updated);
-      setEditing(false);
-      setSuccess("Моніторинг оновлено");
+      if (!editorOnly) {
+        setEditing(false);
+        setSuccess("Моніторинг оновлено");
+      }
     } catch (err) {
       setError(getApiErrorMessage(err, "Не вдалося зберегти зміни"));
     } finally {
@@ -73,17 +87,11 @@ export function MonitorManagePanel({ search, onUpdated, onDeleted }: Props) {
   };
 
   const remove = async () => {
-    if (
-      !confirm(
-        `Видалити моніторинг «${search.name}»? Збережені авто зникнуть із цього списку.`,
-      )
-    ) {
-      return;
-    }
     setDeleting(true);
     setError("");
     try {
       await searchesApi.delete(search.id);
+      setConfirmDelete(false);
       onDeleted?.();
       router.push("/app/monitors");
     } catch (err) {
@@ -94,38 +102,39 @@ export function MonitorManagePanel({ search, onUpdated, onDeleted }: Props) {
 
   return (
     <div className="mb-5 space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            setEditing(v => !v);
-            setError("");
-            setSuccess("");
-          }}
-        >
-          {editing ? "Сховати редагування" : "Змінити"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          loading={toggling}
-          onClick={() => void toggleActive()}
-        >
-          {search.is_active ? "Зупинити" : "Запустити"}
-        </Button>
-        <Button
-          type="button"
-          variant="danger"
-          size="sm"
-          loading={deleting}
-          onClick={() => void remove()}
-        >
-          Видалити
-        </Button>
-      </div>
+      {!editorOnly && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setEditing(v => !v);
+              setError("");
+              setSuccess("");
+            }}
+          >
+            {editing ? "Сховати редагування" : "Змінити"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            loading={toggling}
+            onClick={() => void toggleActive()}
+          >
+            {search.is_active ? "Зупинити" : "Запустити"}
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            onClick={() => setConfirmDelete(true)}
+          >
+            Видалити
+          </Button>
+        </div>
+      )}
 
       {success && (
         <p className="rounded-xl border border-emerald/25 bg-emerald-light/40 px-3 py-2 text-[12px] text-emerald-dark">
@@ -160,8 +169,30 @@ export function MonitorManagePanel({ search, onUpdated, onDeleted }: Props) {
               searching={saving}
             />
           </div>
+
+          {editorOnly && onCancel && (
+            <div className="mt-3">
+              <Button type="button" variant="secondary" size="sm" onClick={onCancel}>
+                Скасувати
+              </Button>
+            </div>
+          )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Видалити моніторинг «${search.name}»?`}
+        description="Збережені авто зникнуть із цього списку."
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
+        variant="danger"
+        loading={deleting}
+        onClose={() => {
+          if (!deleting) setConfirmDelete(false);
+        }}
+        onConfirm={() => void remove()}
+      />
     </div>
   );
 }
