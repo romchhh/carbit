@@ -64,6 +64,21 @@ async def live_search(
     )
 
 
+@router.post("/seen-all")
+async def mark_all_searches_seen(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Скидає new_count для всіх моніторингів користувача (відкриття розділу)."""
+    result = await db.scalars(select(SearchQuery).where(SearchQuery.user_id == user_id))
+    marked = 0
+    for sq in result.all():
+        if (sq.new_count or 0) > 0:
+            await mark_search_listings_seen(db, sq)
+            marked += 1
+    return {"marked": marked}
+
+
 @router.get("/{search_id}", response_model=SearchQueryOut)
 async def get_search(
     search_id: str,

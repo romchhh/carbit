@@ -33,12 +33,14 @@ function useNavBadges(): Record<NavBadgeKey, number> {
           .then(items => items.reduce((sum, s) => sum + (s.new_count || 0), 0))
           .catch(() => 0),
       ]).then(([notifications, monitors]) => {
-        // While on Alerts, hide the badge immediately (page marks all read).
+        // While in the section, hide the badge immediately (pages clear counts).
         const onNotifications =
           pathname === "/app/notifications" || pathname.startsWith("/app/notifications/");
+        const onMonitors =
+          pathname === "/app/monitors" || pathname.startsWith("/app/monitors/");
         setBadges({
           notifications: onNotifications ? 0 : notifications,
-          monitors,
+          monitors: onMonitors ? 0 : monitors,
         });
       });
     };

@@ -146,6 +146,8 @@ export const searches = {
     ),
   markSeen: (id: string) =>
     request<SearchQuery>(`/searches/${id}/seen`, { method: "POST" }),
+  markAllSeen: () =>
+    request<{ marked: number }>("/searches/seen-all", { method: "POST" }),
   create: (name: string, filters: BackendSearchFilters, seedListings: Listing[] = []) =>
     request<SearchQuery>("/searches", {
       method: "POST",

@@ -15,6 +15,7 @@ import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 import { useAuth } from "@/contexts/AuthProvider";
 import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
+import { notifyNotificationsChanged } from "@/lib/notifications-events";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { SearchQuery } from "@/types/api";
 
@@ -29,11 +30,32 @@ export default function MonitorsPage() {
   const [toggleError, setToggleError] = useState<string | null>(null);
 
   useEffect(() => {
-    searchesApi
-      .list()
-      .then(setSearches)
-      .catch(() => setSearches([]))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    (async () => {
+      try {
+        const items = await searchesApi.list();
+        if (cancelled) return;
+
+        const hasNew = items.some(s => (s.new_count || 0) > 0);
+        if (hasNew) {
+          // Opening the section clears nav badges for new cars.
+          setSearches(items.map(s => ({ ...s, new_count: 0 })));
+          void searchesApi
+            .markAllSeen()
+            .then(() => notifyNotificationsChanged())
+            .catch(() => {});
+        } else {
+          setSearches(items);
+        }
+      } catch {
+        if (!cancelled) setSearches([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!user) return null;
