@@ -395,6 +395,31 @@ async def admin_update_user(
     return _admin_user_out(user, sc)
 
 
+@router.delete("/users/{user_id}", response_model=MessageResponse)
+async def admin_delete_user(
+    user_id: str,
+    _: str = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Повне видалення користувача та всіх пов’язаних даних (CASCADE)."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    email = user.email
+    try:
+        from app.services.billing.subscriptions import cancel_active_subscriptions
+
+        await cancel_active_subscriptions(db, user.id)
+    except Exception:
+        # Не блокуємо видалення, якщо LiqPay недоступний — підписки все одно зникнуть з БД.
+        pass
+
+    await db.delete(user)
+    await db.flush()
+    return MessageResponse(message=f"Користувача {email} видалено")
+
+
 @router.get("/users/{user_id}/avatar")
 async def admin_user_avatar(
     user_id: str,

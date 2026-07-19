@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { adminApi, AdminUserDetail, type AdminBillingSubscription } from "@/lib/admin-api";
 import { getAdminToken } from "@/lib/admin-storage";
 import { formatKyivDate } from "@/lib/datetime";
 import { PLAN_LABELS, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -58,8 +60,12 @@ function BillingRow({ sub }: { sub: AdminBillingSubscription }) {
 }
 
 export default function AdminClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
   const [user, setUser] = useState<AdminUserDetail | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     params.then(p => adminApi.user(p.id).then(setUser));
@@ -93,8 +99,21 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
     }
   };
 
+  const deleteUser = async () => {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await adminApi.deleteUser(user.id);
+      router.push("/admin/clients");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Не вдалося видалити користувача");
+      setDeleting(false);
+    }
+  };
+
   const summary = user.billing_summary;
   const billing = user.billing_subscriptions ?? [];
+  const searchesCount = user.searches?.length ?? user.searches_count ?? 0;
 
   return (
     <div className="max-w-[860px]">
@@ -214,9 +233,42 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
         </section>
       )}
 
-      <Button variant="danger" size="sm" loading={saving} onClick={toggleActive}>
-        {user.is_active ? "Заблокувати акаунт" : "Розблокувати акаунт"}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="danger" size="sm" loading={saving} onClick={toggleActive}>
+          {user.is_active ? "Заблокувати акаунт" : "Розблокувати акаунт"}
+        </Button>
+        <Button
+          variant="danger"
+          size="sm"
+          className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+          onClick={() => {
+            setDeleteError("");
+            setDeleteOpen(true);
+          }}
+        >
+          Видалити користувача
+        </Button>
+      </div>
+
+      {deleteError && (
+        <p className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[12px] text-red-600">
+          {deleteError}
+        </p>
+      )}
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title={`Видалити ${user.name}?`}
+        description={`Буде остаточно видалено акаунт ${user.email}, усі моніторинги (${searchesCount}), обране, сповіщення та записи оплат. Активні підписки LiqPay буде скасовано. Цю дію не можна скасувати.`}
+        confirmLabel="Видалити назавжди"
+        cancelLabel="Скасувати"
+        variant="danger"
+        loading={deleting}
+        onClose={() => {
+          if (!deleting) setDeleteOpen(false);
+        }}
+        onConfirm={() => void deleteUser()}
+      />
     </div>
   );
 }

@@ -117,6 +117,8 @@ export const adminApi = {
   user: (id: string) => request<AdminUserDetail>(`/admin/users/${id}`),
   updateUser: (id: string, body: { plan?: string; is_active?: boolean }) =>
     request<AdminUser>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteUser: (id: string) =>
+    request<{ message: string }>(`/admin/users/${id}`, { method: "DELETE" }),
   subscriptions: () =>
     request<{ plan: string; plan_name: string; count: number; revenue_uah: number }[]>("/admin/subscriptions"),
   finance: () =>
