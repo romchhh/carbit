@@ -174,14 +174,45 @@ class TelegramClient:
         ]
         if alert_line:
             lines.append(html.escape(alert_line))
-        lines.extend([
-            "",
-            f"📅 {listing.get('year', '—')}  ·  🛣 {listing.get('mileage', 0):,} км".replace(",", " "),
-            f"⛽ {html.escape(str(listing.get('fuel') or '—'))}  ·  ⚙️ {html.escape(str(listing.get('transmission') or '—'))}",
-            f"📍 {html.escape(str(listing.get('region') or 'Україна'))}",
-            f"💰 <b>{html.escape(price_line)}</b>",
-            f"📡 {html.escape(source_label)}",
-        ])
+        lines.append("")
+
+        year = listing.get("year")
+        try:
+            year_n = int(year) if year is not None else 0
+        except (TypeError, ValueError):
+            year_n = 0
+        mileage = listing.get("mileage")
+        try:
+            mileage_n = int(mileage) if mileage is not None else 0
+        except (TypeError, ValueError):
+            mileage_n = 0
+
+        meta_bits: list[str] = []
+        if year_n > 0:
+            meta_bits.append(f"📅 {year_n}")
+        if mileage_n > 0:
+            meta_bits.append(f"🛣 {mileage_n:,} км".replace(",", " "))
+        if meta_bits:
+            lines.append("  ·  ".join(meta_bits))
+
+        fuel = str(listing.get("fuel") or "").strip()
+        transmission = str(listing.get("transmission") or "").strip()
+        drivetrain_bits: list[str] = []
+        if fuel and fuel not in ("—", "-", "?"):
+            drivetrain_bits.append(f"⛽ {html.escape(fuel)}")
+        if transmission and transmission not in ("—", "-", "?"):
+            drivetrain_bits.append(f"⚙️ {html.escape(transmission)}")
+        if drivetrain_bits:
+            lines.append("  ·  ".join(drivetrain_bits))
+
+        region = str(listing.get("region") or "").strip()
+        if region and region not in ("—", "-", "?"):
+            lines.append(f"📍 {html.escape(region)}")
+
+        if price_line:
+            lines.append(f"💰 <b>{html.escape(price_line)}</b>")
+        if source_label:
+            lines.append(f"📡 {html.escape(source_label)}")
         if published_line:
             lines.append(published_line)
         lines.extend(["", f"🔍 <i>{html.escape(search_name)}</i>"])

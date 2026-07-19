@@ -1410,7 +1410,6 @@ def _title_has_model(title: str, model: str, *, brand: str | None = None) -> boo
             rf"модель[\s\-]?{re.escape(token)}\b",
             rf"tesla[\s\-]?{re.escape(token)}\b",
             rf"тесла[\s\-]?{re.escape(token)}\b",
-            rf"\b{re.escape(token)}[\s\-]?\d",
             rf"\b{re.escape(token)}\b.*(?:plaid|long range|performance|dual motor|kwh|перформанс|100d|75d|90d|85d|60d|p100d)",
         )
         for pattern in tesla_patterns:

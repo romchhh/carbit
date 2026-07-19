@@ -351,6 +351,10 @@ def _generated_model_ru_variants(model: str) -> list[str]:
     return out
 
 
+# Занадто короткі / шумні токени не годяться для SQL ILIKE і standalone match
+_SQL_SKIP_TOKENS = frozenset({"model", "models", "s", "x", "y", "3"})
+
+
 def _model_core_tokens(brand: str, model: str) -> tuple[str, ...]:
     """Компактні токени моделі для brand+model shorthand (усі марки)."""
     brand_slug = resolve_olx_brand_slug(brand) if brand else ""
@@ -424,14 +428,19 @@ def _generated_short_model_variants(brand: str, model: str) -> list[str]:
     for core in cores:
         if not core:
             continue
-        add(core)
+        core_key = norm_text(core)
+        # Голі «3» / «s» / «x» / «y» ловлять рік, ціну, пробіг — лише з маркою.
+        standalone_ok = core_key not in _SQL_SKIP_TOKENS and not (
+            len(core_key) <= 1 or (core_key.isdigit() and len(core_key) <= 2)
+        )
+        if standalone_ok:
+            add(core)
         if not brand_tokens:
             continue
         for bt in brand_tokens:
             if len(norm_text(bt)) < 2:
                 continue
             add(f"{bt} {core}")
-            core_key = norm_text(core)
             if re.fullmatch(r"\d{3}", core_key) or re.fullmatch(r"[a-z0-9]{2,4}", core_key):
                 add(f"{bt}{core}".replace(" ", ""))
 
@@ -488,7 +497,6 @@ def _regex_model_patterns(brand: str, model: str) -> tuple[str, ...]:
             rf"\bмодель[\s\-]?{token}\b",
             rf"\btesla[\s\-]?{token}\b",
             rf"\bтесла[\s\-]?{token}\b",
-            rf"\b{token}[\s\-]?\d",
         ):
             add(pat)
 
@@ -532,9 +540,9 @@ def _regex_model_patterns(brand: str, model: str) -> tuple[str, ...]:
                 if c.isdigit() and len(c) == 1:
                     continue
                 c_esc = re.escape(c)
-                add(rf"\b{b_esc}[\s\-./]{0,3}{c_esc}\b")
+                add(rf"\b{b_esc}[\s\-./]{{0,3}}{c_esc}\b")
                 if len(c) <= 4 and re.fullmatch(r"[a-z0-9]+", c):
-                    add(rf"\b{b_esc}[\s\-./]{0,3}{c_esc}(?:[\s\-./]|$|\d)")
+                    add(rf"\b{b_esc}[\s\-./]{{0,3}}{c_esc}(?:[\s\-./]|$|\d)")
 
     return tuple(patterns[:40])
 
@@ -589,10 +597,6 @@ def build_search_keyword_queries(
         for bt in brand_tokens:
             add(bt)
     return out[: max(1, max_queries)]
-
-
-# Занадто короткі / шумні токени не годяться для SQL ILIKE
-_SQL_SKIP_TOKENS = frozenset({"model", "models", "s", "x", "y", "3"})
 
 
 def filter_sql_search_tokens(variants: tuple[str, ...] | list[str], *, limit: int = 6) -> tuple[str, ...]:
@@ -686,7 +690,17 @@ def _variant_in_haystack(variant: str, hay: str) -> bool:
     v = norm_text(variant)
     if not v or not hay:
         return False
+    # Шумні однолітерні/цифрові токени без контексту марки.
+    if v in _SQL_SKIP_TOKENS and " " not in (variant or "").strip().lower():
+        return False
     if len(v) <= 2 and v.isalpha():
+        return bool(
+            re.search(
+                rf"(?<![a-zа-яёіїє0-9]){re.escape(v)}(?![a-zа-яёіїє0-9])",
+                hay,
+            )
+        )
+    if v.isdigit() and len(v) <= 2:
         return bool(
             re.search(
                 rf"(?<![a-zа-яёіїє0-9]){re.escape(v)}(?![a-zа-яёіїє0-9])",

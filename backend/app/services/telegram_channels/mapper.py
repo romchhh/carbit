@@ -186,6 +186,16 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     haystack = f"{item.brand} {item.title} {item.description or ''}"
 
     if filters.brand:
+        # Жорстка відмова: структурована марка оголошення ≠ фільтр.
+        item_brand_raw = (item.brand or "").strip()
+        if item_brand_raw:
+            from app.services.olx.brand_slugs import resolve_olx_brand_slug
+
+            filter_slug = resolve_olx_brand_slug(filters.brand)
+            item_slug = resolve_olx_brand_slug(item_brand_raw)
+            if filter_slug and item_slug and filter_slug != item_slug:
+                return False
+
         if not text_matches_brand_filter(
             haystack, filters.brand, model=filters.model or ""
         ):

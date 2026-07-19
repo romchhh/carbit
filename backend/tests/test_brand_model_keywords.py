@@ -161,6 +161,43 @@ class BrandModelKeywordTests(unittest.TestCase):
                 message_matches_search_filters(title, "Tesla", "Model 3"), title
             )
 
+    def test_tesla_model3_rejects_unrelated_cars(self):
+        """Голий токен «3» не повинен ловити рік/ціну/пробіг інших марок."""
+        negatives = (
+            "Genesis G80 3 2014",
+            "Genesis G80 2023 Київ",
+            "ціна 35000 USD Genesis G80",
+            "пробіг 43000 км Genesis G80 2021",
+            "Продам Volkswagen Passat 2019 201000 км",
+        )
+        for title in negatives:
+            self.assertFalse(
+                message_matches_search_filters(title, "Tesla", "Model 3"),
+                title,
+            )
+
+        item = type("Item", (), {
+            "brand": "Genesis",
+            "model": "G80",
+            "title": "Genesis G80 3 2014",
+            "year": 2014,
+            "price": 16900,
+            "currency": "USD",
+            "mileage": 0,
+            "region": "Київ",
+            "source": "telegram",
+            "fuel": "Бензин",
+            "transmission": "Автомат",
+            "description": "3.8 бензин, автомат. 2014 рік. 118 тис.миль.",
+        })()
+        filters = SearchFilters.model_validate({
+            "brand": "Tesla",
+            "model": "Model 3",
+            "sources": ["telegram"],
+            "region": "м. Київ",
+        })
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
     def test_tesla_model_y_colloquial(self):
         from app.schemas.schemas import SearchFilters
         from app.services.olx.mapper import filters_to_olx_params
