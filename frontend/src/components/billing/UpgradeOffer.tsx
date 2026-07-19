@@ -70,7 +70,7 @@ export function UpgradeOffer({
       const checkout = await billingApi.checkout(quote.target_plan, true);
       if (checkout.free_upgrade) {
         onDone?.();
-        router.push("/app/billing?paid=1");
+        router.push("/app/billing/success");
         router.refresh();
         return;
       }

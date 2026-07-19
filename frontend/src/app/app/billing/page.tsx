@@ -79,12 +79,9 @@ function BillingPageInner() {
 
   useEffect(() => {
     if (searchParams.get("paid") !== "1") return;
-    setSuccess("Оплату прийнято. Якщо тариф ще не оновився — зачекайте кілька секунд і оновіть сторінку.");
-    void (async () => {
-      await refreshUser();
-      await load();
-    })();
-  }, [searchParams, refreshUser]);
+    // Старий result_url LiqPay — ведемо на нову сторінку успіху.
+    window.location.replace("/app/billing/success");
+  }, [searchParams]);
 
   const liqpayEnabled = Boolean(subscription?.liqpay_enabled);
   const currentPlanId = subscription?.plan ?? user?.plan;
@@ -118,11 +115,7 @@ function BillingPageInner() {
       const checkout = await billingApi.checkout(planId, true);
       if (checkout.free_upgrade) {
         await refreshUser();
-        await load();
-        setSuccess(
-          `Тариф «${checkout.plan_name}» активовано без доплати — залишок попереднього покрив апгрейд.`,
-        );
-        setLoading(null);
+        window.location.href = "/app/billing/success";
         return;
       }
       if (checkout.credit_uah && checkout.credit_uah > 0) {

@@ -107,7 +107,7 @@ async def create_checkout(
         "description": description,
         "order_id": order_id,
         "server_url": f"{api_base}/billing/liqpay/callback",
-        "result_url": f"{frontend}/app/billing?paid=1",
+        "result_url": f"{frontend}/app/billing/success",
         "language": "uk",
     }
     if enable_subscribe:
