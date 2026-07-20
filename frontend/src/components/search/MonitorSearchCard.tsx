@@ -19,6 +19,7 @@ type Props = {
   onActiveChange?: (active: boolean) => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  className?: string;
 };
 
 export function MonitorSearchCard({
@@ -29,6 +30,7 @@ export function MonitorSearchCard({
   onActiveChange,
   onEdit,
   onDelete,
+  className,
 }: Props) {
   const href = `/app/monitors/${s.id}`;
   const showOpen = alwaysLink || s.is_active;
@@ -36,14 +38,15 @@ export function MonitorSearchCard({
   return (
     <AppSection
       className={cn(
-        "!bg-white p-4 transition-colors hover:border-emerald/30 sm:p-5",
+        "!bg-white p-3 transition-colors hover:border-emerald/30 sm:p-5",
         !s.is_active && "opacity-70",
+        className,
       )}
     >
-      <div className="flex gap-3 sm:gap-4">
+      <div className="flex gap-2.5 sm:gap-4">
         <Link
           href={href}
-          className="relative h-16 w-[4.75rem] shrink-0 overflow-hidden rounded-xl bg-surface ring-1 ring-border/70 sm:h-[4.5rem] sm:w-28"
+          className="relative h-14 w-[4.25rem] shrink-0 overflow-hidden rounded-xl bg-surface ring-1 ring-border/70 sm:h-[4.5rem] sm:w-28"
         >
           {s.preview_image ? (
             <Image
@@ -62,17 +65,19 @@ export function MonitorSearchCard({
         </Link>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-2 sm:gap-3">
             <Link href={href} className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="truncate text-[15px] font-semibold text-ink">{s.name}</span>
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <span className="truncate text-[14px] font-semibold text-ink sm:text-[15px]">
+                  {s.name}
+                </span>
                 {s.new_count > 0 && (
                   <Badge variant="ink" className="gap-1">
                     <IconZap size={9} /> {alwaysLink ? `${s.new_count} нові` : s.new_count}
                   </Badge>
                 )}
               </div>
-              <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-muted">
+              <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted sm:mt-1 sm:text-[12px]">
                 {formatSearchDesc(s.filters)}
               </p>
             </Link>
@@ -80,40 +85,42 @@ export function MonitorSearchCard({
             <div className="shrink-0 text-right">
               <div
                 className={cn(
-                  "text-[22px] font-black leading-none tabular-nums",
+                  "text-[18px] font-black leading-none tabular-nums sm:text-[22px]",
                   s.is_active ? "text-emerald-dark" : "text-muted",
                 )}
               >
                 {s.total_count}
               </div>
-              <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted">авто</div>
+              <div className="mt-0.5 text-[9px] uppercase tracking-wide text-muted sm:text-[10px]">
+                авто
+              </div>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+          <div className="mt-2.5 flex flex-nowrap items-center gap-1 border-t border-border/60 pt-2.5 sm:mt-3 sm:gap-2 sm:pt-3">
             {onActiveChange && (
-              <div className="mr-auto flex items-center gap-2">
+              <div className="mr-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
                 <IosToggle
                   checked={s.is_active}
                   disabled={toggling}
                   aria-label={s.is_active ? "Вимкнути моніторинг" : "Увімкнути моніторинг"}
                   onChange={onActiveChange}
                 />
-                <span className="text-[12px] font-medium text-muted">
+                <span className="truncate text-[11px] font-medium text-muted sm:text-[12px]">
                   {s.is_active ? "Активний" : "Пауза"}
                 </span>
               </div>
             )}
 
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
               {onEdit && (
                 <button
                   type="button"
                   onClick={onEdit}
                   aria-label="Редагувати моніторинг"
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink sm:h-9 sm:w-9"
                 >
-                  <IconEdit size={16} />
+                  <IconEdit size={15} />
                 </button>
               )}
               {onDelete && (
@@ -122,15 +129,15 @@ export function MonitorSearchCard({
                   onClick={onDelete}
                   disabled={deleting}
                   aria-label="Видалити моніторинг"
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 sm:h-9 sm:w-9"
                 >
-                  <IconTrash size={16} />
+                  <IconTrash size={15} />
                 </button>
               )}
               {showOpen && (
                 <Link
                   href={href}
-                  className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald/10 px-3 py-2 text-[12px] font-semibold text-emerald-dark transition-colors hover:bg-emerald/15"
+                  className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-emerald/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-dark transition-colors hover:bg-emerald/15 sm:ml-1 sm:gap-1 sm:px-3 sm:py-2 sm:text-[12px]"
                 >
                   Відкрити <IconArrowRight size={11} />
                 </Link>

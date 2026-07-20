@@ -13,7 +13,7 @@ const navLinks = [
   { href: "/", label: "Головна" },
   { href: "/#search", label: "Пошук" },
   { href: "/pricing", label: "Тарифи" },
-  { href: "/#how-it-works", label: "Як це працює" },
+  { href: "/#faq", label: "FAQ" },
 ];
 
 export function Header() {

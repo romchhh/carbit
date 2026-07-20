@@ -30,3 +30,23 @@ export function getTelegramBotMention(): string {
 export function isTelegramBotConfigured(): boolean {
   return Boolean(getTelegramBotUrl());
 }
+
+/** Окремий бот підтримки — фіксоване посилання */
+export const TELEGRAM_SUPPORT_BOT_URL = "https://t.me/Carbit_Support_Bot";
+export const TELEGRAM_SUPPORT_BOT_USERNAME = "Carbit_Support_Bot";
+
+export function getTelegramSupportBotUsername(): string {
+  return TELEGRAM_SUPPORT_BOT_USERNAME;
+}
+
+export function getTelegramSupportBotUrl(): string {
+  return TELEGRAM_SUPPORT_BOT_URL;
+}
+
+export function getTelegramSupportBotMention(): string {
+  return `@${TELEGRAM_SUPPORT_BOT_USERNAME}`;
+}
+
+export function isTelegramSupportBotConfigured(): boolean {
+  return true;
+}

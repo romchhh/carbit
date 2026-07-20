@@ -113,7 +113,6 @@ function AuthForm() {
   }, []);
 
   const redirect = searchParams.get("redirect");
-  const plan = searchParams.get("plan");
   const destination = resolvePostAuthRedirect(redirect);
 
   useEffect(() => {
@@ -287,28 +286,23 @@ function AuthForm() {
             ← Назад до входу
           </button>
 
-          <h1 className="text-[28px] font-black tracking-[-0.03em] text-ink leading-none">
+          <h1 className="text-[24px] font-black tracking-[-0.03em] text-ink leading-none">
             Скидання пароля
           </h1>
-          <p className="mt-2 text-[14px] text-muted leading-relaxed">
-            Введіть email — надішлемо посилання для встановлення нового пароля
-          </p>
 
-          <form onSubmit={handleForgotSubmit} className="mt-6 space-y-4">
-            <Field label="Email">
-              <div className="auth-input-wrap">
-                <IconMail size={18} className="text-muted shrink-0" />
-                <input
-                  type="email"
-                  placeholder="vasyl@example.com"
-                  className="auth-input-inner"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                />
-              </div>
-            </Field>
+          <form onSubmit={handleForgotSubmit} className="mt-5 space-y-3">
+            <div className="auth-input-wrap">
+              <IconMail size={18} className="text-muted shrink-0" />
+              <input
+                type="email"
+                placeholder="Email"
+                className="auth-input-inner"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
 
             {success && (
               <p className="text-[13px] text-emerald-dark bg-emerald-light/50 border border-emerald/20 rounded-lg px-3 py-2">
@@ -411,25 +405,14 @@ function AuthForm() {
       </div>
 
       <div className="bg-white rounded-[1.5rem] border border-border/60 shadow-card p-6 sm:p-7">
-        <h1 className="text-[30px] sm:text-[34px] font-black tracking-[-0.03em] text-ink leading-none">
-          {tab === "login" ? "З поверненням" : "Реєстрація"}
-        </h1>
-        <p className="mt-2 text-[14px] text-muted">
-          {tab === "login"
-            ? "Увійдіть email, Google або Telegram (якщо підключений)"
-            : plan
-              ? `7 днів безкоштовно на тарифі ${plan.toUpperCase()}`
-              : "7 днів безкоштовно, без карти"}
-        </p>
-
-        <div className="mt-5 flex bg-surface rounded-full p-1 border border-border/60">
+        <div className="flex bg-surface rounded-full p-1 border border-border/60">
           {(["login", "register"] as Tab[]).map(t => (
             <button
               key={t}
               type="button"
               onClick={() => handleTabChange(t)}
               className={cn(
-                "flex-1 py-2 text-[14px] font-semibold rounded-full transition-all duration-200",
+                "flex-1 py-2.5 text-[14px] font-semibold rounded-full transition-all duration-200",
                 tab === t ? "bg-ink text-white shadow-md" : "text-muted hover:text-ink"
               )}
             >
@@ -438,57 +421,74 @@ function AuthForm() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-3.5">
+        {tab === "login" ? (
+          <div className="mt-5 flex items-center gap-2.5">
+            <SocialButton provider="google" disabled={loading} onClick={handleGoogleLogin} />
+            <SocialButton provider="telegram" disabled={loading} onClick={handleTelegramLogin} />
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={loading}
+            onClick={handleGoogleLogin}
+            className="mt-5 flex w-full min-h-[52px] items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-4 py-3 text-[#1f1f1f] transition-all hover:border-[#1f1f1f]/30 hover:shadow-sm disabled:opacity-50"
+          >
+            <GoogleLogo size={20} />
+            <span className="text-[15px] font-semibold">Google</span>
+          </button>
+        )}
+
+        <div className="my-4 flex items-center gap-3">
+          <span className="flex-1 h-px bg-border" />
+          <span className="text-[12px] text-muted">email</span>
+          <span className="flex-1 h-px bg-border" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
           {tab === "register" && (
-            <Field label="Ім'я">
-              <input
-                type="text"
-                placeholder="Василь"
-                className="auth-input"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                required
-                autoComplete="name"
-              />
-            </Field>
+            <input
+              type="text"
+              placeholder="Ім'я"
+              className="auth-input"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+              autoComplete="name"
+            />
           )}
-          <Field label="Email">
-            <div className="auth-input-wrap">
-              <IconMail size={18} className="text-muted shrink-0" />
-              <input
-                type="email"
-                placeholder="vasyl@example.com"
-                className="auth-input-inner"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
-          </Field>
-          <Field label="Пароль">
-            <div className="auth-input-wrap">
-              <IconLock size={18} className="text-muted shrink-0" />
-              <input
-                type={showPass ? "text" : "password"}
-                placeholder={tab === "register" ? "Мінімум 8 символів" : "Ваш пароль"}
-                className="auth-input-inner"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                minLength={tab === "register" ? 8 : 1}
-                autoComplete={tab === "login" ? "current-password" : "new-password"}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPass(!showPass)}
-                className="text-muted hover:text-ink transition-colors p-1"
-                aria-label={showPass ? "Сховати пароль" : "Показати пароль"}
-              >
-                <IconEye size={18} />
-              </button>
-            </div>
-          </Field>
+          <div className="auth-input-wrap">
+            <IconMail size={18} className="text-muted shrink-0" />
+            <input
+              type="email"
+              placeholder="Email"
+              className="auth-input-inner"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </div>
+          <div className="auth-input-wrap">
+            <IconLock size={18} className="text-muted shrink-0" />
+            <input
+              type={showPass ? "text" : "password"}
+              placeholder="Пароль"
+              className="auth-input-inner"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              minLength={tab === "register" ? 8 : 1}
+              autoComplete={tab === "login" ? "current-password" : "new-password"}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass(!showPass)}
+              className="text-muted hover:text-ink transition-colors p-1"
+              aria-label={showPass ? "Сховати пароль" : "Показати пароль"}
+            >
+              <IconEye size={18} />
+            </button>
+          </div>
 
           {success && (
             <p className="text-[13px] text-emerald-dark bg-emerald-light/50 border border-emerald/20 rounded-lg px-3 py-2">
@@ -502,27 +502,6 @@ function AuthForm() {
             </p>
           )}
 
-          {tab === "login" && (
-            <div className="flex items-center justify-between gap-3 -mt-1">
-              <label className="flex cursor-pointer select-none items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={e => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 rounded border-border text-emerald accent-emerald focus:ring-emerald/30"
-                />
-                <span className="text-[13px] text-muted">Запам&apos;ятати мене</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => { setLoginStep("forgot"); setError(""); setSuccess(""); }}
-                className="text-[13px] font-medium text-emerald-dark hover:underline shrink-0"
-              >
-                Забули пароль?
-              </button>
-            </div>
-          )}
-
           <Button
             type="submit"
             loading={loading}
@@ -534,44 +513,22 @@ function AuthForm() {
             {tab === "login" ? "Увійти" : "Продовжити"}
           </Button>
 
-          <div className="flex items-center gap-3">
-            <span className="flex-1 h-px bg-border" />
-            <span className="text-[12px] text-muted font-medium">або</span>
-            <span className="flex-1 h-px bg-border" />
-          </div>
-
-          {tab === "register" ? (
+          {tab === "login" && (
             <button
               type="button"
-              disabled={loading}
-              onClick={handleGoogleLogin}
-              className="flex w-full min-h-[56px] items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-4 py-3 text-[#1f1f1f] transition-all hover:border-[#1f1f1f]/30 hover:shadow-sm disabled:opacity-50"
+              onClick={() => { setLoginStep("forgot"); setError(""); setSuccess(""); }}
+              className="block w-full text-center text-[13px] text-muted hover:text-ink"
             >
-              <GoogleLogo size={22} />
-              <span className="text-[15px] font-semibold">Продовжити з Google</span>
+              Забули пароль?
             </button>
-          ) : (
-            <div className="flex items-center gap-2.5">
-              <SocialButton provider="google" disabled={loading} onClick={handleGoogleLogin} />
-              <SocialButton provider="telegram" disabled={loading} onClick={handleTelegramLogin} />
-            </div>
           )}
         </form>
       </div>
 
-      <p className="mt-5 text-center text-[12px] text-muted leading-relaxed px-4">
-        Продовжуючи, ви приймаєте{" "}
-        <Link href="/oferta" className="text-ink font-medium hover:text-emerald-dark transition-colors">
-          Оферту
-        </Link>
-        {", "}
-        <Link href="/terms" className="text-ink font-medium hover:text-emerald-dark transition-colors">
-          Умови
-        </Link>{" "}
-        та{" "}
-        <Link href="/privacy" className="text-ink font-medium hover:text-emerald-dark transition-colors">
-          Політику конфіденційності
-        </Link>
+      <p className="mt-4 text-center text-[11px] text-muted">
+        <Link href="/terms" className="hover:text-ink">Умови</Link>
+        {" · "}
+        <Link href="/privacy" className="hover:text-ink">Конфіденційність</Link>
       </p>
     </div>
   );
@@ -635,15 +592,6 @@ export default function AuthPage() {
           <AuthForm />
         </Suspense>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-[12px] font-semibold text-ink mb-1">{label}</label>
-      {children}
     </div>
   );
 }

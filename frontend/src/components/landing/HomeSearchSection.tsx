@@ -28,12 +28,12 @@ export function HomeSearchSection() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [filters, setFilters] = useState<SearchFilterState>({ ...HOME_DEFAULT_FILTERS });
-  const [freshness, setFreshness] = useState<SearchFreshness>("new");
+  const [freshness, setFreshness] = useState<SearchFreshness>("all");
   const [authOpen, setAuthOpen] = useState(false);
 
   const handleReset = () => {
     setFilters({ ...HOME_DEFAULT_FILTERS });
-    setFreshness("new");
+    setFreshness("all");
   };
 
   const handleSearch = () => {

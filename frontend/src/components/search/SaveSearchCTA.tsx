@@ -69,11 +69,11 @@ export function SaveSearchCTA({
             onClick={handleConnectClick}
             disabled={saving || limitReached}
             className={cn(
-              "inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white transition-colors sm:w-auto",
+              "inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold transition-colors sm:w-auto",
               "disabled:cursor-not-allowed disabled:opacity-60",
               connected
-                ? "bg-emerald shadow-sm shadow-emerald/25 hover:bg-emerald-dark"
-                : "bg-[#229ED9] hover:bg-[#1a8bc4]",
+                ? "border border-border bg-white text-ink hover:bg-surface"
+                : "bg-[#229ED9] text-white hover:bg-[#1a8bc4]",
             )}
           >
             {connected ? <IconCheck size={16} strokeWidth={2.5} /> : <IconTelegram size={16} />}
@@ -87,11 +87,6 @@ export function SaveSearchCTA({
 
         {successMessage && !connected && (
           <p className="mt-2 text-[12px] font-medium text-emerald-dark">{successMessage}</p>
-        )}
-        {connected && (
-          <p className="mt-2 text-[12px] font-medium text-emerald-dark">
-            Ці фільтри вже в «Мої моніторинги». Натисніть, щоб відкрити.
-          </p>
         )}
         {errorMessage && !limitReached && (
           <p className="mt-2 text-[12px] font-medium text-red-600">{errorMessage}</p>

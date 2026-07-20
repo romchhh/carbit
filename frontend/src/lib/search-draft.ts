@@ -19,12 +19,12 @@ function parseDraft(raw: string): SearchDraft | null {
     if (parsed && typeof parsed === "object" && parsed.filters && typeof parsed.filters === "object") {
       return {
         filters: { ...DEFAULT_FILTERS, ...parsed.filters },
-        freshness: parsed.freshness === "all" ? "all" : "new",
+        freshness: parsed.freshness === "new" ? "new" : "all",
       };
     }
     return {
       filters: { ...DEFAULT_FILTERS, ...parsed },
-      freshness: "new",
+      freshness: "all",
     };
   } catch {
     return null;
@@ -39,7 +39,7 @@ export function saveSearchDraft(
   draftAutoRunStarted = false;
   const payload: SearchDraft = {
     filters,
-    freshness: options?.freshness === "all" ? "all" : "new",
+    freshness: options?.freshness === "new" ? "new" : "all",
   };
   sessionStorage.setItem(KEY, JSON.stringify(payload));
 }

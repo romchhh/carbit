@@ -86,6 +86,22 @@ services:
       backend:
         condition: service_healthy
 
+  support-bot:
+    build:
+      context: .
+      dockerfile: docker/python/Dockerfile
+    container_name: carbit-support-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: Europe/Kyiv
+    entrypoint: ["python", "main.py"]
+    working_dir: /app/support_bot
+    depends_on:
+      backend:
+        condition: service_healthy
+
   worker:
     build:
       context: .

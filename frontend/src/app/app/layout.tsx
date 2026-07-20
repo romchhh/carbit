@@ -153,7 +153,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       className="app-pwa-root flex min-h-0 flex-col overflow-hidden bg-white lg:relative lg:min-h-screen lg:h-screen lg:bg-canvas"
     >
       <div className="app-pwa-statusbar lg:hidden" aria-hidden />
-      <AppShellHeader unreadNotifications={badges.notifications} />
+      <AppShellHeader />
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden lg:px-6 lg:py-5">
         <div className="flex min-h-0 flex-1 gap-4 overflow-hidden lg:items-start lg:gap-5">

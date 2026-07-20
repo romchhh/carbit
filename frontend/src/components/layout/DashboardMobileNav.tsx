@@ -36,11 +36,11 @@ export function DashboardMobileNav({ badges }: Props) {
                 "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[18px] px-1 py-1.5 transition-all",
                 active
                   ? "bg-emerald/15 text-emerald-dark shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ring-1 ring-emerald/30"
-                  : "text-muted hover:bg-white/25 hover:text-ink",
+                  : "text-ink/75 hover:bg-white/55 hover:text-ink",
               )}
             >
               <span className="relative">
-                <Icon size={21} className={cn(active ? "text-emerald-dark" : "text-current")} />
+                <Icon size={21} className={cn(active ? "text-emerald-dark" : "text-ink/80")} />
                 {badge > 0 && (
                   <span
                     className={cn(
@@ -52,7 +52,12 @@ export function DashboardMobileNav({ badges }: Props) {
                   </span>
                 )}
               </span>
-              <span className={cn("text-[10px] font-semibold leading-none", active && "font-bold text-emerald-dark")}>
+              <span
+                className={cn(
+                  "text-[10px] font-semibold leading-none",
+                  active ? "font-bold text-emerald-dark" : "text-ink/80",
+                )}
+              >
                 {text}
               </span>
             </Link>

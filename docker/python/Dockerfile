@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend ./backend
 COPY bot ./bot
+COPY support_bot ./support_bot
 COPY worker ./worker
 COPY telegram_worker ./telegram_worker
 COPY parser ./parser

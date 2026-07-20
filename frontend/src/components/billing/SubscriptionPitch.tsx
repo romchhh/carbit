@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { IconCreditCard, IconZap } from "@/components/icons";
-import { Alert } from "@/components/ui/Alert";
 import {
   formatPlanPrice,
   getPricingPlan,
@@ -99,44 +98,17 @@ export function SubscriptionPitch({
   }
 
   if (variant === "compact") {
-    const alertVariant = isFree ? "success" : nearLimit ? "warning" : "info";
-    const title = isFree
-      ? "Підписка відкриває більше моніторингів"
-      : nearLimit
-        ? "Ліміт майже вичерпано"
-        : next
-          ? `Потрібно більше ніж ${searchesLimit}?`
-          : "Керуйте підпискою";
-    const body = isFree
-      ? `Старт від ${formatPlanPrice("lite")} · Telegram + AUTO.RIA + OLX`
-      : next
-        ? `«${next.name}» — до ${planMonitorLimit(next.id)} пошуків за ${formatPlanPrice(next.id)} / 30 днів`
-        : "Оплата та зміна тарифу в один клік";
-
     return (
-      <Alert
-        variant={alertVariant}
-        title={title}
-        className={className}
-        action={
-          <Link
-            href="/app/billing"
-            className={cn(
-              "inline-flex w-full items-center justify-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-bold text-white sm:w-auto",
-              alertVariant === "warning"
-                ? "bg-amber-600 hover:bg-amber-700"
-                : alertVariant === "info"
-                  ? "bg-sky-600 hover:bg-sky-700"
-                  : "bg-emerald hover:bg-emerald-dark",
-            )}
-          >
-            <IconCreditCard size={13} />
-            {isFree ? "Оформити" : "Підписка"}
-          </Link>
-        }
+      <Link
+        href="/app/billing"
+        className={cn(
+          "inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2.5 text-[13px] font-bold text-ink transition-colors hover:bg-surface",
+          className,
+        )}
       >
-        {body}
-      </Alert>
+        <IconCreditCard size={14} />
+        {isFree ? "Оформити підписку" : nearLimit ? "Збільшити ліміт" : "Підписка"}
+      </Link>
     );
   }
 

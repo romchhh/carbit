@@ -186,7 +186,7 @@ export function SearchPreviewResults({
             <p className="text-[15px] font-semibold text-ink">На цьому ряду порожньо</p>
             <p className="mt-2 text-[13px] text-muted">
               {freshness === "new"
-                ? "Спробуйте «Усі пропозиції» або змініть фільтри."
+                ? "Зніміть «Тільки свіжі» або змініть фільтри."
                 : "Спробуйте розширити фільтри — рік, ціну чи регіон."}
             </p>
           </div>
@@ -224,7 +224,7 @@ export function SearchPreviewResults({
                 type="button"
                 onClick={onLoadMore}
                 disabled={loadingMore || searching}
-                className="mt-6 w-full rounded-2xl bg-emerald py-3.5 text-[14px] font-semibold text-white shadow-md shadow-emerald/25 transition-colors hover:bg-emerald-dark disabled:opacity-60"
+                className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[14px] font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-60"
               >
                 {loadingMore ? (
                   "Завантаження…"
@@ -232,10 +232,10 @@ export function SearchPreviewResults({
                   <span className="inline-flex items-center justify-center gap-1.5">
                     <span>Показати ще</span>
                     {nextBatch > 0 && (
-                      <span className="font-bold">+{nextBatch}</span>
+                      <span className="font-bold text-ink">+{nextBatch}</span>
                     )}
                     {displayTotal > 0 && (
-                      <span className="font-medium text-white/80">
+                      <span className="font-medium text-muted">
                         · {results.length} з {displayTotal.toLocaleString("uk-UA")}
                       </span>
                     )}

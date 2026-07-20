@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { HomeSearchSection } from "@/components/landing/HomeSearchSection";
-import { HowItWorksCards } from "@/components/landing/HowItWorksCards";
+import { LandingFaq } from "@/components/landing/LandingFaq";
 import { VideoInstructions } from "@/components/landing/VideoInstructions";
 import { PricingPlans } from "@/components/pricing/PricingPlans";
 import { CtaLink } from "@/components/ui/CtaLink";
@@ -113,7 +113,7 @@ export default function HomePage() {
 
         <HomeSearchSection />
 
-        <HowItWorksCards />
+        <LandingFaq />
 
         {/* ── VIDEO INSTRUCTIONS ───────────────────────────── */}
         <section className="bg-white section-y">

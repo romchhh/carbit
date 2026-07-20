@@ -6,8 +6,8 @@ import { BrandIcon } from "@/components/search/BrandIcon";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
+import { IosToggle } from "@/components/ui/IosToggle";
 import { cn } from "@/lib/utils";
-import { SEARCH_NEW_WITHIN_DAYS } from "@/lib/search-preview";
 import { getBrandIconUrl } from "@/lib/search-data/brand-icons";
 import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
 import { UKRAINE_REGIONS } from "@/lib/search-data/regions";
@@ -68,7 +68,7 @@ export function SearchFiltersPanel({
   monitorConnected,
   connectedMonitorId,
   wide,
-  freshness = "new",
+  freshness = "all",
   onFreshnessChange,
 }: Props) {
   const [advanced, setAdvanced] = useState(false);
@@ -92,8 +92,6 @@ export function SearchFiltersPanel({
       : filters.brand || "";
 
   const selectedBrandIcon = filters.brand ? getBrandIconUrl(filters.brand) : null;
-
-  const searchAll = freshness === "all";
 
   return (
     <div className={cn("w-full", wide ? "max-w-none" : "max-w-[640px]")} data-tour="search-filters">
@@ -263,59 +261,14 @@ export function SearchFiltersPanel({
         </button>
 
         {onFreshnessChange && (
-          <div className="rounded-2xl border border-border/80 bg-surface/40 px-3.5 py-3.5 sm:px-4">
-            <p className="text-[13px] font-semibold text-ink">Що показувати?</p>
-            <div
-              role="radiogroup"
-              aria-label="Обмеження по даті публікації"
-              className="mt-2.5 grid grid-cols-2 gap-1.5 rounded-full bg-white p-1 ring-1 ring-border/80"
-            >
-              {(
-                [
-                  { value: "new" as const, label: "Тільки нові пропозиції" },
-                  { value: "all" as const, label: "Усі пропозиції" },
-                ] as const
-              ).map(option => {
-                const selected = freshness === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    disabled={searching}
-                    onClick={() => onFreshnessChange(option.value)}
-                    className={cn(
-                      "rounded-full px-3 py-2.5 text-[13px] font-semibold transition-colors",
-                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40",
-                      "disabled:cursor-not-allowed disabled:opacity-60",
-                      selected
-                        ? "bg-emerald text-white shadow-sm shadow-emerald/25"
-                        : "bg-transparent text-ink/70 hover:text-ink",
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
-              {searchAll ? (
-                <>
-                  <span className="font-medium text-ink/80">Усі пропозиції</span>
-                  {" — "}
-                  весь ринок без обмеження по даті публікації.
-                </>
-              ) : (
-                <>
-                  <span className="font-medium text-ink/80">Тільки нові пропозиції</span>
-                  {" — "}
-                  свіжі оголошення за останні {SEARCH_NEW_WITHIN_DAYS} днів, не нові авто
-                  (рекомендовано).
-                </>
-              )}{" "}
-              Застосується після натискання «Шукати».
-            </p>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white px-3.5 py-3">
+            <span className="text-[13px] font-semibold text-ink">Тільки свіжі оголошення</span>
+            <IosToggle
+              checked={freshness === "new"}
+              disabled={searching}
+              aria-label="Тільки свіжі оголошення"
+              onChange={checked => onFreshnessChange(checked ? "new" : "all")}
+            />
           </div>
         )}
 

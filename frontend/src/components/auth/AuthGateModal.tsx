@@ -269,12 +269,9 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
             </>
           ) : (
             <>
-              <h2 id="auth-gate-title" className="text-[22px] font-black tracking-[-0.03em] text-ink">
-                {tab === "login" ? "Увійдіть, щоб переглянути результати" : "Реєстрація"}
+              <h2 id="auth-gate-title" className="text-[20px] font-black tracking-[-0.03em] text-ink">
+                {tab === "login" ? "Вхід" : "Реєстрація"}
               </h2>
-              <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                7 днів безкоштовно, без карти. Після входу одразу покажемо знайдені авто.
-              </p>
 
               <div className="mt-4 flex rounded-full border border-border/60 bg-surface p-1">
                 {(["login", "register"] as Tab[]).map(t => (
@@ -292,105 +289,92 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
                 ))}
               </div>
 
-              {tab === "login" && (
-                <>
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={handleGoogleLogin}
-                      className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-xl border border-[#747775] bg-white px-2 py-2 text-[#1f1f1f] transition-all hover:border-[#1f1f1f]/30 hover:shadow-sm disabled:opacity-50"
-                    >
-                      <GoogleLogo />
-                      <span className="text-[10px] font-medium">Google</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={() => void handleTelegramLogin()}
-                      className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-[#2481cc] px-2 py-2 text-white transition-colors hover:bg-[#1d6fad] disabled:opacity-50"
-                    >
-                      <TelegramLogo />
-                      <span className="text-[10px] font-medium">Telegram</span>
-                    </button>
-                  </div>
-
-                  <div className="my-4 flex items-center gap-3">
-                    <div className="h-px flex-1 bg-border" />
-                    <span className="text-[11px] text-muted">або email</span>
-                    <div className="h-px flex-1 bg-border" />
-                  </div>
-                </>
+              {tab === "login" ? (
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={handleGoogleLogin}
+                    className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-xl border border-[#747775] bg-white px-2 py-2 text-[#1f1f1f] transition-all hover:border-[#1f1f1f]/30 hover:shadow-sm disabled:opacity-50"
+                  >
+                    <GoogleLogo />
+                    <span className="text-[10px] font-medium">Google</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void handleTelegramLogin()}
+                    className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-[#2481cc] px-2 py-2 text-white transition-colors hover:bg-[#1d6fad] disabled:opacity-50"
+                  >
+                    <TelegramLogo />
+                    <span className="text-[10px] font-medium">Telegram</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleGoogleLogin}
+                  className="mt-4 flex min-h-[52px] w-full items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-3 py-3 text-[#1f1f1f] transition-all hover:border-[#1f1f1f]/30 hover:shadow-sm disabled:opacity-50"
+                >
+                  <GoogleLogo size={20} />
+                  <span className="text-[14px] font-semibold">Google</span>
+                </button>
               )}
 
-              <form onSubmit={handleSubmit} className={cn("space-y-3", tab === "register" && "mt-4")}>
+              <div className="my-4 flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-[11px] text-muted">email</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-3">
                 {tab === "register" && (
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12px] font-medium text-ink">Ім&apos;я</span>
-                    <input
-                      type="text"
-                      placeholder="Василь"
-                      className="auth-input"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      required
-                      autoComplete="name"
-                    />
-                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ім'я"
+                    className="auth-input"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    required
+                    autoComplete="name"
+                  />
                 )}
 
-                <label className="block">
-                  <span className="mb-1.5 block text-[12px] font-medium text-ink">Email</span>
-                  <div className="auth-input-wrap">
-                    <IconMail size={16} className="shrink-0 text-muted" />
-                    <input
-                      type="email"
-                      placeholder="vasyl@example.com"
-                      className="auth-input-inner"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      required
-                      autoComplete="email"
-                    />
-                  </div>
-                </label>
+                <div className="auth-input-wrap">
+                  <IconMail size={16} className="shrink-0 text-muted" />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    className="auth-input-inner"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
+                </div>
 
-                <label className="block">
-                  <span className="mb-1.5 block text-[12px] font-medium text-ink">Пароль</span>
-                  <div className="auth-input-wrap">
-                    <IconLock size={16} className="shrink-0 text-muted" />
-                    <input
-                      type={showPass ? "text" : "password"}
-                      placeholder={tab === "register" ? "Мінімум 8 символів" : "Ваш пароль"}
-                      className="auth-input-inner"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      required
-                      minLength={tab === "register" ? 8 : 1}
-                      autoComplete={tab === "login" ? "current-password" : "new-password"}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPass(v => !v)}
-                      className="p-1 text-muted transition-colors hover:text-ink"
-                      aria-label={showPass ? "Сховати пароль" : "Показати пароль"}
-                    >
-                      <IconEye size={16} />
-                    </button>
-                  </div>
-                </label>
-
-                {tab === "login" && (
-                  <label className="flex cursor-pointer select-none items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={e => setRememberMe(e.target.checked)}
-                      className="h-4 w-4 rounded border-border text-emerald focus:ring-emerald/30"
-                    />
-                    <span className="text-[12px] text-muted">Запам&apos;ятати мене</span>
-                  </label>
-                )}
+                <div className="auth-input-wrap">
+                  <IconLock size={16} className="shrink-0 text-muted" />
+                  <input
+                    type={showPass ? "text" : "password"}
+                    placeholder="Пароль"
+                    className="auth-input-inner"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    minLength={tab === "register" ? 8 : 1}
+                    autoComplete={tab === "login" ? "current-password" : "new-password"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(v => !v)}
+                    className="p-1 text-muted transition-colors hover:text-ink"
+                    aria-label={showPass ? "Сховати пароль" : "Показати пароль"}
+                  >
+                    <IconEye size={16} />
+                  </button>
+                </div>
 
                 {success && (
                   <p className="rounded-lg border border-emerald/20 bg-emerald-light/50 px-3 py-2 text-[13px] text-emerald-dark">
@@ -404,42 +388,14 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
                 )}
 
                 <Button type="submit" loading={loading} size="md" variant="emerald" showArrow className="w-full">
-                  {tab === "login" ? "Увійти і переглянути" : "Продовжити"}
+                  {tab === "login" ? "Увійти" : "Продовжити"}
                 </Button>
               </form>
 
-              {tab === "register" && (
-                <>
-                  <div className="my-4 flex items-center gap-3">
-                    <div className="h-px flex-1 bg-border" />
-                    <span className="text-[11px] text-muted">або</span>
-                    <div className="h-px flex-1 bg-border" />
-                  </div>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={handleGoogleLogin}
-                    className="flex min-h-[52px] w-full items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-3 py-3 text-[#1f1f1f] transition-all hover:border-[#1f1f1f]/30 hover:shadow-sm disabled:opacity-50"
-                  >
-                    <GoogleLogo size={20} />
-                    <span className="text-[14px] font-semibold">Продовжити з Google</span>
-                  </button>
-                </>
-              )}
-
-              <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
-                Продовжуючи, ви погоджуєтесь з{" "}
-                <Link href="/oferta" className="text-emerald-dark hover:underline" onClick={onClose}>
-                  офертою
-                </Link>
-                {", "}
-                <Link href="/terms" className="text-emerald-dark hover:underline" onClick={onClose}>
-                  умовами
-                </Link>{" "}
-                та{" "}
-                <Link href="/privacy" className="text-emerald-dark hover:underline" onClick={onClose}>
-                  політикою конфіденційності
-                </Link>
+              <p className="mt-4 text-center text-[11px] text-muted">
+                <Link href="/terms" className="hover:text-ink" onClick={onClose}>Умови</Link>
+                {" · "}
+                <Link href="/privacy" className="hover:text-ink" onClick={onClose}>Конфіденційність</Link>
               </p>
             </>
           )}
