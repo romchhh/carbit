@@ -97,6 +97,7 @@ def sanitize_paginated_listings(results: PaginatedListings) -> PaginatedListings
     return PaginatedListings(
         items=items,
         total=int(results.total or 0),
+        market_total=results.market_total,
         page=int(results.page or 1),
         per_page=int(results.per_page or 20),
         pages=int(results.pages or 0),

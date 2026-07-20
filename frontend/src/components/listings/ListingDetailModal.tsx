@@ -63,6 +63,7 @@ export function ListingDetailModal({
   photoIndexRef.current = photoIndex;
 
   const listing = liveListing ?? listingProp;
+  const isNewCar = listing?.id?.startsWith("new_auto_ria_");
 
   useEffect(() => {
     setLiveListing(listingProp);
@@ -273,12 +274,16 @@ export function ListingDetailModal({
                 <SourceBadge source={listing.source} className="mb-1 bg-transparent px-0 shadow-none" />
               )}
               <h2 className="truncate text-[15px] font-bold leading-snug text-ink">
+                {isNewCar && <strong className="text-blue-600">НОВИЙ </strong>}
                 {listing.title}
               </h2>
             </div>
             <div className="hidden min-w-0 flex-1 sm:block">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Деталі авто</p>
-              <p className="truncate text-[15px] font-bold leading-snug text-ink">{listing.title}</p>
+              <p className="truncate text-[15px] font-bold leading-snug text-ink">
+                {isNewCar && <strong className="text-blue-600">НОВИЙ </strong>}
+                {listing.title}
+              </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {onToggleFavorite && (
@@ -491,6 +496,7 @@ export function ListingDetailModal({
                       <SourceBadge source={listing.source} variant="outline" className="mb-2" />
                     )}
                     <h2 id="listing-modal-title" className="text-[20px] font-bold leading-snug text-ink">
+                      {isNewCar && <strong className="text-blue-600">НОВИЙ </strong>}
                       {listing.title}
                     </h2>
                     <p className="mt-1 text-[13px] text-muted">

@@ -23,6 +23,7 @@ import type { Listing, SourceStatus } from "@/types/api";
 type PageResult = {
   items: Listing[];
   total: number;
+  marketTotal?: number | null;
   sources?: SourceStatus[];
   partial?: boolean;
   from_cache?: boolean;
@@ -35,6 +36,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const searchGen = useRef(0);
   const [results, setResults] = useState<Listing[]>([]);
   const [total, setTotal] = useState(0);
+  const [marketTotal, setMarketTotal] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
   const [sort, setSort] = useState<SortOption>("newest");
@@ -101,6 +103,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       return {
         items: data.items,
         total: data.total,
+        marketTotal: data.market_total,
         sources: data.sources,
         partial: data.partial,
         from_cache: data.from_cache,
@@ -117,6 +120,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     loaded: number,
   ) => {
     setTotal(data.total);
+    setMarketTotal(data.marketTotal ?? null);
     setSourceStatuses(data.sources ?? []);
     setPartial(Boolean(data.partial));
     setFromCache(Boolean(data.from_cache));
@@ -287,6 +291,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setFilters({ ...DEFAULT_FILTERS, currency: preferred });
     setResults([]);
     setTotal(0);
+    setMarketTotal(null);
     setPage(1);
     setPages(0);
     setSourceStatuses([]);
@@ -304,6 +309,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setFilters,
     results,
     total,
+    marketTotal,
     page,
     pages,
     sort,

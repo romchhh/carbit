@@ -16,14 +16,13 @@ from app.services.telegram.admin_alerts import notify_admin_parsing_error
 from app.services.telegram_channels.ingest import search_telegram_listings
 
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
-OLX_SEARCH_TIMEOUT_SECONDS = 22.0
+OLX_SEARCH_TIMEOUT_SECONDS = 30.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
-# Більший пул + fair interleave → помітна частка OLX/Telegram, не лише AUTO.RIA.
-SOURCE_POOL_CAP = 120
-TELEGRAM_POOL_CAP = 240
-TELEGRAM_MAX_SCAN = 1500
+SOURCE_POOL_CAP = 500
+TELEGRAM_POOL_CAP = 500
+TELEGRAM_MAX_SCAN = 3000
 AUTO_RIA_PAGE_SIZE = 50
-AUTO_RIA_POOL_TIMEOUT_SECONDS = 40.0
+AUTO_RIA_POOL_TIMEOUT_SECONDS = 90.0
 TELEGRAM_POOL_TIMEOUT_SECONDS = 25.0
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
 _SOURCE_BLEND_ORDER = {"olx": 0, "telegram": 1, "auto_ria": 2}
@@ -114,8 +113,13 @@ def _sorted_merge_slice(
     page: int,
     per_page: int,
     sort_by: str,
-) -> tuple[list[ListingOut], int]:
-    """Зливає джерела: сортує всередині кожного, далі fair interleave (не global sort)."""
+) -> tuple[list[ListingOut], int, int]:
+    """Зливає джерела: сортує всередині кожного, далі fair interleave (не global sort).
+
+    Повертає (page_items, nav_total, market_total), де:
+    - nav_total  — кількість елементів у пулі (для пагінації, щоб «Показати ще» не крутилось в порожнечу)
+    - market_total — сума реальних API-total з усіх джерел (для відображення «Знайдено N»)
+    """
     prepared: list[tuple[str, list[ListingOut]]] = []
     source_totals = 0
 
@@ -136,15 +140,14 @@ def _sorted_merge_slice(
     end = start + per_page
     page_items = merged_items[start:end]
     pool_size = len(merged_items)
-    # Не завищуємо total вище того, що реально є в пулі для поточної видачі,
-    # інакше «Показати ще» крутиться в порожнечу.
+    # nav_total — реальна межа пулу, щоб «Показати ще» не крутилось в порожнечу.
     if page_items and len(page_items) < per_page:
-        total = start + len(page_items)
+        nav_total = start + len(page_items)
     else:
-        total = max(source_totals, pool_size)
+        nav_total = max(source_totals, pool_size)
         if start + per_page >= pool_size:
-            total = pool_size
-    return page_items, total
+            nav_total = pool_size
+    return page_items, nav_total, source_totals
 
 
 def _published_max_age(filters: SearchFilters):
@@ -685,7 +688,7 @@ async def search_listings_outcome(
             )
         successful = filtered_batches
 
-    page_items, total = _sorted_merge_slice(
+    page_items, nav_total, market_total = _sorted_merge_slice(
         successful,
         page=page,
         per_page=per_page,
@@ -701,14 +704,15 @@ async def search_listings_outcome(
             sources=source_statuses,
         )
 
-    pages = (total + per_page - 1) // per_page if total else 1
+    pages = (nav_total + per_page - 1) // per_page if nav_total else 1
 
     await _notify_partial_source_failures(source_statuses, filters)
 
     return SearchListingsOutcome(
         result=PaginatedListings(
             items=page_items,
-            total=total,
+            total=nav_total,
+            market_total=market_total if market_total > nav_total else None,
             page=page,
             per_page=per_page,
             pages=pages,
@@ -737,3 +741,220 @@ async def search_listings(
         db=db,
     )
     return outcome.result
+
+
+# ---------------------------------------------------------------------------
+# Slot-based pool builder — lazy AUTO.RIA hydration
+# ---------------------------------------------------------------------------
+
+def _build_interleaved_slots(
+    *,
+    auto_ria_ids: list[str],
+    olx_items: list[ListingOut],
+    telegram_items: list[ListingOut],
+    limit: int,
+) -> list[dict]:
+    """Interleave AUTO.RIA IDs (stubs) with full OLX/Telegram listings.
+
+    Blend order mirrors _SOURCE_BLEND_ORDER: OLX → Telegram → AUTO.RIA.
+    AUTO.RIA entries stored as {"s":"r","i":"<id>"} — hydrated on demand.
+    OLX/Telegram entries stored as {"s":"o"/"t","d":{...}} — ready to use.
+    """
+    queues: list[tuple[str, list[dict]]] = []
+
+    if olx_items:
+        queues.append(("o", [{"s": "o", "d": item.model_dump(mode="json")} for item in olx_items]))
+    if telegram_items:
+        queues.append(("t", [{"s": "t", "d": item.model_dump(mode="json")} for item in telegram_items]))
+    if auto_ria_ids:
+        # Нові авто позначені префіксом "n:" → слот {"s":"n","i":"..."}.
+        # Вживані (без префіксу) → {"s":"r","i":"..."}.
+        ar_slots = []
+        for aid in auto_ria_ids:
+            if aid.startswith("n:"):
+                ar_slots.append({"s": "n", "i": aid[2:]})
+            else:
+                ar_slots.append({"s": "r", "i": aid})
+        queues.append(("r", ar_slots))
+
+    if not queues:
+        return []
+    if len(queues) == 1:
+        return queues[0][1][:limit]
+
+    seen_ids: set[str] = set()
+    slots: list[dict] = []
+    q_map = {src: list(items) for src, items in queues}
+    order = [src for src, _ in queues]
+
+    while len(slots) < limit:
+        added = False
+        for src in order:
+            if len(slots) >= limit:
+                break
+            q = q_map[src]
+            while q:
+                slot = q.pop(0)
+                sid = slot.get("i") or (slot.get("d") or {}).get("id", "")
+                if sid and sid in seen_ids:
+                    continue
+                if sid:
+                    seen_ids.add(sid)
+                slots.append(slot)
+                added = True
+                break
+        if not added:
+            break
+
+    return slots
+
+
+async def build_live_search_pool(
+    filters: SearchFilters,
+    *,
+    sort_by: str,
+    max_ids: int = SOURCE_POOL_CAP,
+    keyword_refresh: bool = False,
+    olx_enrich_details: bool = True,
+    db=None,
+) -> tuple[list[dict], int, int, list[SourceSearchStatus]]:
+    """Build a slot-based live search pool.
+
+    AUTO.RIA: collect IDs only (fast, no get_info calls).
+    OLX/Telegram: fetch full listings as usual.
+    Returns (slots, nav_total, market_total, source_statuses).
+    """
+    from app.services.auto_ria.service import collect_auto_ria_ids
+    from app.services.search.pool_cache import LIVE_POOL_SIZE as POOL_LIMIT
+
+    sources = normalize_sources(filters.sources)
+    source_statuses: list[SourceSearchStatus] = []
+    errors: list[Exception] = []
+
+    auto_ria_ids: list[str] = []
+    auto_ria_market_total = 0
+    olx_result = _empty_page(1, max_ids)
+    telegram_result = _empty_page(1, max_ids)
+    olx_error: str | None = None
+
+    async def run_auto_ria():
+        try:
+            return await asyncio.wait_for(
+                collect_auto_ria_ids(filters, max_ids=max_ids),
+                timeout=AUTO_RIA_POOL_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return [], 0
+        except AutoRiaError as exc:
+            raise
+        except Exception as exc:
+            logger.warning("AUTO.RIA ID collect failed: %s", exc)
+            return [], 0
+
+    async def run_olx():
+        try:
+            result = await asyncio.wait_for(
+                _fetch_source_pool(
+                    "olx",
+                    filters,
+                    need=max_ids,
+                    sort_by=sort_by,
+                    keyword_refresh=keyword_refresh,
+                    olx_enrich_details=olx_enrich_details,
+                ),
+                timeout=OLX_SEARCH_TIMEOUT_SECONDS,
+            )
+            return result, None
+        except asyncio.TimeoutError:
+            return _empty_page(1, max_ids), f"таймаут {OLX_SEARCH_TIMEOUT_SECONDS:.0f}s"
+        except OlxError as exc:
+            return _empty_page(1, max_ids), str(exc)
+        except Exception as exc:
+            return _empty_page(1, max_ids), str(exc)
+
+    async def run_telegram():
+        try:
+            return await asyncio.wait_for(
+                _fetch_source_pool(
+                    "telegram",
+                    filters,
+                    need=TELEGRAM_POOL_CAP,
+                    sort_by=sort_by,
+                    keyword_refresh=keyword_refresh,
+                    db=db,
+                ),
+                timeout=TELEGRAM_POOL_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return _empty_page(1, TELEGRAM_POOL_CAP)
+        except Exception as exc:
+            logger.warning("Telegram pool fetch failed: %s", exc)
+            return _empty_page(1, TELEGRAM_POOL_CAP)
+
+    tasks: list = []
+    task_order: list[str] = []
+    if "auto_ria" in sources:
+        tasks.append(asyncio.create_task(run_auto_ria()))
+        task_order.append("auto_ria")
+    if "olx" in sources:
+        tasks.append(asyncio.create_task(run_olx()))
+        task_order.append("olx")
+    if "telegram" in sources:
+        tasks.append(asyncio.create_task(run_telegram()))
+        task_order.append("telegram")
+
+    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    result_index = 0
+    if "auto_ria" in task_order:
+        res = raw_results[result_index]
+        result_index += 1
+        if isinstance(res, BaseException):
+            errors.append(res)
+            source_statuses.append(SourceSearchStatus(source="AUTO.RIA", item_count=0, error=str(res)))
+        else:
+            auto_ria_ids, auto_ria_market_total = res
+            source_statuses.append(SourceSearchStatus(source="AUTO.RIA", item_count=len(auto_ria_ids)))
+
+    if "olx" in task_order:
+        res = raw_results[result_index]
+        result_index += 1
+        if isinstance(res, BaseException):
+            olx_result = _empty_page(1, max_ids)
+            olx_error = str(res)
+        else:
+            olx_result, olx_error = res
+        source_statuses.append(
+            SourceSearchStatus(source="OLX", item_count=len(olx_result.items), error=olx_error)
+        )
+
+    if "telegram" in task_order:
+        res = raw_results[result_index]
+        if isinstance(res, BaseException):
+            telegram_result = _empty_page(1, TELEGRAM_POOL_CAP)
+        else:
+            telegram_result = res
+        source_statuses.append(
+            SourceSearchStatus(source="Telegram", item_count=len(telegram_result.items))
+        )
+
+    # Raise if AUTO.RIA failed and it was the only source
+    if errors and "auto_ria" in sources and len(sources) == 1:
+        raise _pick_primary_error(errors)
+
+    olx_sorted = sort_listings(list(olx_result.items), sort_by)
+    telegram_sorted = sort_listings(list(telegram_result.items), sort_by)
+
+    slots = _build_interleaved_slots(
+        auto_ria_ids=auto_ria_ids,
+        olx_items=olx_sorted,
+        telegram_items=telegram_sorted,
+        limit=POOL_LIMIT,
+    )
+
+    nav_total = len(slots)
+    market_total = auto_ria_market_total + olx_result.total + telegram_result.total
+
+    await _notify_partial_source_failures(source_statuses, filters)
+
+    return slots, nav_total, market_total, source_statuses

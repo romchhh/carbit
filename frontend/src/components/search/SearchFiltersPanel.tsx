@@ -43,6 +43,8 @@ type Props = {
   saveError?: string | null;
   saveLimitReached?: boolean;
   telegramConnected?: boolean;
+  monitorConnected?: boolean;
+  connectedMonitorId?: string | null;
   wide?: boolean;
   freshness?: SearchFreshness;
   onFreshnessChange?: (freshness: SearchFreshness) => void;
@@ -63,6 +65,8 @@ export function SearchFiltersPanel({
   saveLimitReached,
   searchError,
   telegramConnected,
+  monitorConnected,
+  connectedMonitorId,
   wide,
   freshness = "new",
   onFreshnessChange,
@@ -323,6 +327,8 @@ export function SearchFiltersPanel({
             errorMessage={saveError}
             limitReached={saveLimitReached}
             telegramConnected={telegramConnected}
+            monitorConnected={monitorConnected}
+            connectedMonitorId={connectedMonitorId}
           />
         )}
       </div>

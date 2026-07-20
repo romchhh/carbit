@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
@@ -8,20 +8,28 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { usePreviewSearch } from "@/hooks/usePreviewSearch";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
 import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
+import { searches as searchesApi } from "@/lib/api";
+import { findMatchingSearch } from "@/lib/search-filters-api";
 import {
   beginSearchDraftAutoRun,
   clearSearchDraft,
   peekSearchDraft,
 } from "@/lib/search-draft";
+import type { SearchQuery } from "@/types/api";
 
 export default function SearchPage() {
   const { user, loading: authLoading, initialized } = useAuth();
-  const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } = useSaveSearch();
+  const [searches, setSearches] = useState<SearchQuery[]>([]);
+  const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } =
+    useSaveSearch(created => {
+      setSearches(prev => [created, ...prev.filter(s => s.id !== created.id)]);
+    });
   const {
     filters,
     setFilters,
     results,
     total,
+    marketTotal,
     sort,
     freshness,
     running,
@@ -40,6 +48,19 @@ export default function SearchPage() {
     reset,
     clearError,
   } = usePreviewSearch();
+
+  useEffect(() => {
+    if (!initialized || authLoading || !user) return;
+    searchesApi
+      .list()
+      .then(setSearches)
+      .catch(() => setSearches([]));
+  }, [initialized, authLoading, user]);
+
+  const matchingMonitor = useMemo(
+    () => findMatchingSearch(searches, filters),
+    [searches, filters],
+  );
 
   useEffect(() => {
     if (!initialized || authLoading || !user) return;
@@ -109,6 +130,8 @@ export default function SearchPage() {
           saveError={saveError}
           saveLimitReached={saveLimitReached}
           telegramConnected={user?.telegram_connected}
+          monitorConnected={Boolean(matchingMonitor)}
+          connectedMonitorId={matchingMonitor?.id ?? null}
           freshness={freshness}
           onFreshnessChange={changeFreshness}
         />
@@ -121,6 +144,7 @@ export default function SearchPage() {
         loadingMore={loadingMore}
         hasMore={hasMore}
         total={total}
+        marketTotal={marketTotal}
         results={results}
         sort={sort}
         freshness={freshness}

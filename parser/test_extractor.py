@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from parser.extractor import (
     extract_car_data,
+    is_car_search_request,
     is_promo_or_spam,
     is_valid_car_listing,
     normalize_listing_text,
@@ -78,6 +79,29 @@ class ExtractorTests(unittest.TestCase):
     def test_empty_photo_only(self):
         listing = _extract("")
         self.assertFalse(is_valid_car_listing(listing))
+
+    def test_buyer_search_request_bmw_list(self):
+        text = """#Пошук авто🕵️
+
+BMW от 2020 г.в.:
+X5M F95 - до 65$
+X5M50i - до 55$
+X5 G05 (LCI) 3.0 - 60$
+X5 G05 (дорест) 3.0 в М-пак - 40$
+M8 F92/93 - до 65$
+M5 F90 (рест) - до 65$
+X6 также рассмотрю
+
+✍️ @nik_6699"""
+        self.assertTrue(is_car_search_request(text))
+        listing = _extract(text)
+        self.assertFalse(is_valid_car_listing(listing))
+
+    def test_sale_listing_not_search_request(self):
+        text = "Продаю BMW X5 2021, пробіг 45 тис, 52000$"
+        self.assertFalse(is_car_search_request(text))
+        listing = _extract(text)
+        self.assertTrue(is_valid_car_listing(listing))
 
     def test_hashtags_stripped(self):
         listing = _extract("#авто #продам Toyota Camry 2017, 14500$")

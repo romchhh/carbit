@@ -165,6 +165,75 @@ export function fromBackendSearchFilters(
   };
 }
 
+const COMPARE_KEYS: (keyof BackendSearchFilters)[] = [
+  "brand",
+  "model",
+  "year_from",
+  "year_to",
+  "price_from",
+  "price_to",
+  "currency",
+  "mileage_from",
+  "mileage_to",
+  "fuel",
+  "transmission",
+  "region",
+  "sources",
+  "category",
+  "engine_volume_from",
+  "engine_volume_to",
+  "drivetrain",
+  "colors",
+  "fuel_consumption_from",
+  "fuel_consumption_to",
+  "ev_range_from",
+  "ev_range_to",
+  "battery_capacity_from",
+  "battery_capacity_to",
+  "power_from",
+  "power_to",
+];
+
+function normalizeCompareSlice(filters: BackendSearchFilters): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of COMPARE_KEYS) {
+    let value = filters[key];
+    if (value === null || value === undefined || value === "") continue;
+    if (Array.isArray(value)) {
+      const sorted = [...value].map(String).sort();
+      if (sorted.length === 0) continue;
+      out[key] = sorted;
+      continue;
+    }
+    if (key === "category" && (value === "all" || value === null)) continue;
+    out[key] = value;
+  }
+  if (!out.currency) out.currency = "USD";
+  return out;
+}
+
+/** Чи збігаються фільтри моніторингу з поточним пошуком (без урахування назви). */
+export function searchFiltersMatchUi(
+  stored: Record<string, unknown> | null | undefined,
+  uiFilters: SearchFilterState,
+): boolean {
+  const fromUi = normalizeCompareSlice(toBackendSearchFilters(uiFilters));
+  const fromStored = normalizeCompareSlice(
+    toBackendSearchFilters(fromBackendSearchFilters(stored)),
+  );
+  return JSON.stringify(fromUi) === JSON.stringify(fromStored);
+}
+
+export function findMatchingSearch(
+  searches: { id: string; filters: Record<string, unknown> }[],
+  uiFilters: SearchFilterState,
+): { id: string; filters: Record<string, unknown> } | null {
+  for (const search of searches) {
+    if (searchFiltersMatchUi(search.filters, uiFilters)) return search;
+  }
+  return null;
+}
+
 export function buildSearchName(filters: SearchFilterState): string {
   const custom = filters.name.trim();
   if (custom) return custom;

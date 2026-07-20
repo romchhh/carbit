@@ -254,7 +254,7 @@ async def _process_group(
         ttl_seconds=settings["cache_ttl_seconds"],
     )
     olx_count = sum(1 for lid in listing_ids if lid.startswith("olx_"))
-    auto_count = sum(1 for lid in listing_ids if lid.startswith("auto_ria_"))
+    auto_count = sum(1 for lid in listing_ids if lid.startswith("auto_ria_") or lid.startswith("new_auto_ria_"))
     tg_count = sum(1 for lid in listing_ids if lid.startswith("telegram_"))
     log.append(
         f"  ✓ Знайдено {found}, нових {new_total}, Telegram {notifications} "

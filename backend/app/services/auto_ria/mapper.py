@@ -35,7 +35,7 @@ async def filters_to_search_params(
         "page": max(page - 1, 0),
         "countpage": min(max(per_page, 1), 50),
         "status_id": 0,
-        "searchType": 4,
+        "searchType": 4,  # вживані за замовчуванням; для "all" collect_auto_ria_ids додає окремий searchType=1
     }
 
     mark_id = await resolve_mark_id(client, filters.brand or "")
@@ -126,8 +126,7 @@ async def filters_to_search_params(
         # Нерозмитнені / під пригон.
         params["searchType"] = 4
         params["custom"] = 1
-    else:
-        params["searchType"] = 1
+    # else "all": лишаємо searchType=4; collect_auto_ria_ids паралельно запитає також searchType=1
 
     return params
 
@@ -328,6 +327,66 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
         price_history=[],
         is_duplicate=False,
         published_at=_parse_datetime(info.get("addDate")),
+        found_at=now_kyiv(),
+    )
+
+
+def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
+    """Конвертує відповідь /auto/new/auto/{id} у ListingOut.
+
+    Нові авто від дилерів: пробіг = 0, тип продавця = dealer.
+    Поле id: "new_auto_ria_{autoId}" — не перетинається з вживаними.
+    """
+    auto_id = str(info.get("autoId") or "")
+    main_params = info.get("mainParams") or {}
+    salon = info.get("salon") or {}
+
+    price_usd = _parse_money(info.get("priceUsd"))
+    price_uah = _parse_money(info.get("priceUah"))
+    if price_usd > 0:
+        price, currency = price_usd, "USD"
+    elif price_uah > 0:
+        price, currency = price_uah, "UAH"
+    else:
+        price, currency = 0, "USD"
+
+    photos = info.get("photos") or []
+    images = [f"{p}-680x510x85.jpg" for p in photos[:10] if p]
+
+    city = str(salon.get("city") or "").strip()
+    region = city or "Україна"
+
+    brand = str(info.get("marka") or "").strip()
+    model = str(info.get("model") or "").strip()
+    title = " ".join(part for part in (brand, model) if part) or "AUTO.RIA"
+
+    url = str(info.get("linkAuto") or f"https://auto.ria.com/newauto/auto-{auto_id}.html")
+    description = str(info.get("note") or "").strip() or None
+
+    return ListingOut(
+        id=f"new_auto_ria_{auto_id}",
+        source="auto_ria",
+        title=title,
+        brand=brand,
+        model=model,
+        year=int(info.get("year") or 0),
+        price=price,
+        currency=currency,
+        mileage=0,
+        fuel=str(main_params.get("fuel") or "").strip(),
+        transmission=str(main_params.get("gear") or "").strip(),
+        region=region,
+        description=description,
+        images=images,
+        url=url,
+        seller_type="dealer",
+        vin=None,
+        vin_checked=None,
+        vin_check_url=None,
+        source_data={},
+        price_history=[],
+        is_duplicate=False,
+        published_at=_parse_datetime(info.get("updatedDate")),
         found_at=now_kyiv(),
     )
 

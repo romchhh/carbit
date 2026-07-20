@@ -258,6 +258,9 @@ class PaginatedListings(BaseModel):
     sources: list[SourceStatusOut] = Field(default_factory=list)
     partial: bool = False
     from_cache: bool = False
+    # Реальна кількість оголошень за запитом у зовнішніх джерелах (AUTO.RIA API count).
+    # Може бути більшою за total (розмір пулу), оскільки ми завантажуємо лише перші N.
+    market_total: int | None = None
 
 
 class SearchLiveResultsOut(BaseModel):

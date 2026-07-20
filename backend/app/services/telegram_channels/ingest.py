@@ -24,6 +24,7 @@ from app.services.telegram_channels.mapper import (
     car_listing_to_listing_out,
     listing_out_matches_filters,
     telegram_listing_id,
+    telegram_text_is_search_request,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,15 @@ async def ingest_telegram_listing(
     Returns (item, new_links, notifications, matched_any_search).
     Якщо передано parser_service — одне фото завантажується до сповіщень у Telegram.
     """
+    if telegram_text_is_search_request(getattr(car_listing, "raw_text", "") or ""):
+        logger.debug(
+            "Skip telegram ingest: search request (not a sale), channel=%s msg=%s",
+            getattr(car_listing, "channel", ""),
+            getattr(car_listing, "message_id", ""),
+        )
+        placeholder = car_listing_to_listing_out(car_listing)
+        return placeholder, 0, 0, False
+
     item = car_listing_to_listing_out(car_listing)
     _save_photo_refs_from_car(car_listing)
     listing = await upsert_listing(db, item)

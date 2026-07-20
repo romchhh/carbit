@@ -1,7 +1,27 @@
-"""KV-кеш повного пулу live-пошуку — пагінація без повторних запитів до джерел."""
+"""KV-кеш повного пулу live-пошуку — пагінація без повторних запитів до джерел.
+
+Slot-based pool format (Redis):
+  {
+    "slots": [
+      {"s": "r", "i": "12345"},          # AUTO.RIA вживані — тільки ID, гідратується через /auto/info
+      {"s": "n", "i": "1928969"},         # AUTO.RIA нові   — тільки ID, гідратується через /auto/new/auto
+      {"s": "o", "d": {...listing}},      # OLX      — повний об'єкт
+      {"s": "t", "d": {...listing}},      # Telegram — повний об'єкт
+      ...
+    ],
+    "total": 310,           # кількість слотів (для пагінації)
+    "market_total": 292,    # реальна кількість оголошень в AUTO.RIA API
+    "sources": [...],
+    "partial": false
+  }
+
+Кожне AUTO.RIA-оголошення гідратується лише при відображенні сторінки.
+Кеш окремих оголошень: ar-info:{id} (вживані) і ar-new-info:{id} (нові), по 10 хв.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -15,8 +35,13 @@ logger = logging.getLogger(__name__)
 
 LIVE_POOL_PREFIX = "live-pool:"
 LIVE_POOL_TTL_SECONDS = 180  # 3 хвилини
-# ~6 сторінок по 20; достатньо місця для змішаного пулу OLX + Telegram + AUTO.RIA
-LIVE_POOL_SIZE = 120
+# Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
+LIVE_POOL_SIZE = 500
+
+# Кеш окремих AUTO.RIA-оголошень (щоб не гідратувати одне й те саме двічі)
+_AR_INFO_PREFIX = "ar-info:"
+_AR_NEW_INFO_PREFIX = "ar-new-info:"
+_AR_INFO_TTL_SECONDS = 600  # 10 хвилин
 
 
 def live_pool_cache_key(filters: SearchFilters, sort_by: str) -> str:
@@ -32,7 +57,10 @@ async def get_live_pool(filters: SearchFilters, sort_by: str) -> dict[str, Any] 
         if not raw:
             return None
         data = json.loads(raw)
-        if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        if not isinstance(data, dict):
+            return None
+        # Підтримка обох форматів: новий (slots) і старий (items)
+        if not isinstance(data.get("slots"), list) and not isinstance(data.get("items"), list):
             return None
         return data
     except Exception:
@@ -44,7 +72,9 @@ async def set_live_pool(
     filters: SearchFilters,
     sort_by: str,
     *,
-    items: list[ListingOut],
+    slots: list[dict],
+    total: int,
+    market_total: int | None = None,
     sources: list[SourceStatusOut] | list[dict] | None = None,
     partial: bool = False,
     ttl_seconds: int = LIVE_POOL_TTL_SECONDS,
@@ -52,12 +82,13 @@ async def set_live_pool(
     try:
         redis = await get_redis()
         payload = {
-            "items": [item.model_dump(mode="json") for item in items],
+            "slots": slots,
             "sources": [
                 s.model_dump() if hasattr(s, "model_dump") else s for s in (sources or [])
             ],
             "partial": partial,
-            "total": len(items),
+            "total": total,
+            "market_total": market_total,
         }
         await redis.setex(
             live_pool_cache_key(filters, sort_by),
@@ -66,6 +97,254 @@ async def set_live_pool(
         )
     except Exception:
         logger.exception("Live pool cache write failed")
+
+
+# ---------------------------------------------------------------------------
+# AUTO.RIA on-demand hydration
+# ---------------------------------------------------------------------------
+
+
+async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
+    """Гідратує AUTO.RIA оголошення за ID. Використовує окремий Redis-кеш на 10 хвилин."""
+    if not ids:
+        return {}
+
+    from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
+    from app.services.auto_ria.mapper import info_to_listing
+
+    result: dict[str, ListingOut] = {}
+    to_fetch: list[str] = []
+
+    # Перевіряємо Redis per-item cache
+    try:
+        redis = await get_redis()
+        for aid in ids:
+            raw = await redis.get(f"{_AR_INFO_PREFIX}{aid}")
+            if raw:
+                try:
+                    result[aid] = ListingOut.model_validate(json.loads(raw))
+                except Exception:
+                    to_fetch.append(aid)
+            else:
+                to_fetch.append(aid)
+    except Exception:
+        logger.exception("AR info cache read failed")
+        to_fetch = list(ids)
+
+    if not to_fetch:
+        return result
+
+    # Гідратуємо некешовані
+    client = AutoRiaClient()
+    sem = asyncio.Semaphore(10)
+
+    async def fetch_one(aid: str) -> tuple[str, ListingOut | None]:
+        async with sem:
+            try:
+                info = await client.get_info(aid)
+                listing = info_to_listing(info, fotos=None)
+                return aid, listing
+            except (AutoRiaError, Exception):
+                return aid, None
+
+    fetched = await asyncio.gather(*(fetch_one(aid) for aid in to_fetch))
+
+    # Зберігаємо в кеш
+    try:
+        redis = await get_redis()
+        for aid, listing in fetched:
+            if listing:
+                result[aid] = listing
+                try:
+                    await redis.setex(
+                        f"{_AR_INFO_PREFIX}{aid}",
+                        _AR_INFO_TTL_SECONDS,
+                        listing.model_dump_json(),
+                    )
+                except Exception:
+                    pass
+    except Exception:
+        for aid, listing in fetched:
+            if listing:
+                result[aid] = listing
+
+    return result
+
+
+async def _batch_hydrate_new_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
+    """Гідратує нові AUTO.RIA авто через /auto/new/auto/{id}. Кеш: ar-new-info:{id}."""
+    if not ids:
+        return {}
+
+    from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
+    from app.services.auto_ria.mapper import new_info_to_listing
+
+    result: dict[str, ListingOut] = {}
+    to_fetch: list[str] = []
+
+    try:
+        redis = await get_redis()
+        for aid in ids:
+            raw = await redis.get(f"{_AR_NEW_INFO_PREFIX}{aid}")
+            if raw:
+                try:
+                    result[aid] = ListingOut.model_validate(json.loads(raw))
+                except Exception:
+                    to_fetch.append(aid)
+            else:
+                to_fetch.append(aid)
+    except Exception:
+        logger.exception("AR new info cache read failed")
+        to_fetch = list(ids)
+
+    if not to_fetch:
+        return result
+
+    client = AutoRiaClient()
+    sem = asyncio.Semaphore(10)
+
+    async def fetch_one(aid: str) -> tuple[str, ListingOut | None]:
+        async with sem:
+            try:
+                info = await client.get_new_info(aid)
+                listing = new_info_to_listing(info)
+                return aid, listing
+            except (AutoRiaError, Exception):
+                return aid, None
+
+    fetched = await asyncio.gather(*(fetch_one(aid) for aid in to_fetch))
+
+    try:
+        redis = await get_redis()
+        for aid, listing in fetched:
+            if listing:
+                result[aid] = listing
+                try:
+                    await redis.setex(
+                        f"{_AR_NEW_INFO_PREFIX}{aid}",
+                        _AR_INFO_TTL_SECONDS,
+                        listing.model_dump_json(),
+                    )
+                except Exception:
+                    pass
+    except Exception:
+        for aid, listing in fetched:
+            if listing:
+                result[aid] = listing
+
+    return result
+
+
+async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
+    """Перетворює слоти сторінки на повні ListingOut об'єкти.
+
+    {"s":"r","i":"..."} — AUTO.RIA вживані, гідрат через /auto/info.
+    {"s":"n","i":"..."} — AUTO.RIA нові,   гідрат через /auto/new/auto.
+    {"s":"o"/"t","d":{...}} — OLX/Telegram, розпаковуються напряму.
+    """
+    used_ids = [s["i"] for s in slots if s.get("s") == "r" and "i" in s]
+    new_ids = [s["i"] for s in slots if s.get("s") == "n" and "i" in s]
+
+    hydrated_used, hydrated_new = await asyncio.gather(
+        _batch_hydrate_auto_ria(used_ids),
+        _batch_hydrate_new_auto_ria(new_ids),
+    )
+
+    items: list[ListingOut] = []
+    for slot in slots:
+        src = slot.get("s")
+        if src == "r":
+            listing = hydrated_used.get(slot.get("i", ""))
+            if listing:
+                items.append(listing)
+        elif src == "n":
+            listing = hydrated_new.get(slot.get("i", ""))
+            if listing:
+                items.append(listing)
+        elif "d" in slot:
+            try:
+                items.append(ListingOut.model_validate(slot["d"]))
+            except Exception:
+                pass
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Pool pagination
+# ---------------------------------------------------------------------------
+
+
+async def slice_pool(
+    pool: dict[str, Any],
+    *,
+    page: int,
+    per_page: int,
+) -> PaginatedListings:
+    """Повертає одну сторінку з пулу, гідратуючи AUTO.RIA-стаби за потреби."""
+    slots = pool.get("slots")
+
+    # Зворотна сумісність зі старим форматом (full items list)
+    if not slots:
+        return _slice_legacy_pool(pool, page=page, per_page=per_page)
+
+    total = int(pool.get("total") or len(slots))
+    raw_market = pool.get("market_total")
+    market_total = int(raw_market) if raw_market is not None else None
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_slots = slots[start:end]
+
+    items = await _hydrate_page_slots(page_slots)
+    pages = (total + per_page - 1) // per_page if total else 0
+
+    sources_raw = pool.get("sources") or []
+    sources = [SourceStatusOut.model_validate(row) for row in sources_raw]
+
+    return PaginatedListings(
+        items=items,
+        total=total,
+        market_total=market_total if market_total and market_total > total else None,
+        page=page,
+        per_page=per_page,
+        pages=pages,
+        sources=sources,
+        partial=bool(pool.get("partial")),
+        from_cache=True,
+    )
+
+
+def _slice_legacy_pool(
+    pool: dict[str, Any],
+    *,
+    page: int,
+    per_page: int,
+) -> PaginatedListings:
+    """Старий формат пулу (items — повні об'єкти). Для зворотної сумісності."""
+    raw_items = pool.get("items") or []
+    total = int(pool.get("total") or len(raw_items))
+    raw_market = pool.get("market_total")
+    market_total = int(raw_market) if raw_market is not None else None
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_raw = raw_items[start:end]
+    items = [ListingOut.model_validate(row) for row in page_raw]
+    pages = (total + per_page - 1) // per_page if total else 0
+
+    sources_raw = pool.get("sources") or []
+    sources = [SourceStatusOut.model_validate(row) for row in sources_raw]
+
+    return PaginatedListings(
+        items=items,
+        total=total,
+        market_total=market_total if market_total and market_total > total else None,
+        page=page,
+        per_page=per_page,
+        pages=pages,
+        sources=sources,
+        partial=bool(pool.get("partial")),
+        from_cache=True,
+    )
 
 
 async def try_load_pool_listings(
@@ -82,43 +361,27 @@ async def try_load_pool_listings(
             continue
         seen.add(sort)
         pool = await get_live_pool(filters, sort)
-        if not pool or not pool.get("items"):
+        if not pool:
             continue
-        items: list[ListingOut] = []
-        for row in pool["items"][:max_items]:
-            try:
-                items.append(ListingOut.model_validate(row))
-            except Exception:
-                continue
-        if items:
-            return items
+
+        # Новий формат: slots
+        slots = pool.get("slots")
+        if slots:
+            page_slots = slots[:max_items]
+            items = await _hydrate_page_slots(page_slots)
+            if items:
+                return items[:max_items]
+
+        # Старий формат: items
+        raw_items = pool.get("items")
+        if raw_items:
+            items_out: list[ListingOut] = []
+            for row in raw_items[:max_items]:
+                try:
+                    items_out.append(ListingOut.model_validate(row))
+                except Exception:
+                    continue
+            if items_out:
+                return items_out
+
     return None
-
-
-def slice_pool(
-    pool: dict[str, Any],
-    *,
-    page: int,
-    per_page: int,
-) -> PaginatedListings:
-    raw_items = pool.get("items") or []
-    total = int(pool.get("total") or len(raw_items))
-    start = (page - 1) * per_page
-    end = start + per_page
-    page_raw = raw_items[start:end]
-    items = [ListingOut.model_validate(row) for row in page_raw]
-    pages = (total + per_page - 1) // per_page if total else 0
-
-    sources_raw = pool.get("sources") or []
-    sources = [SourceStatusOut.model_validate(row) for row in sources_raw]
-
-    return PaginatedListings(
-        items=items,
-        total=total,
-        page=page,
-        per_page=per_page,
-        pages=pages,
-        sources=sources,
-        partial=bool(pool.get("partial")),
-        from_cache=True,
-    )

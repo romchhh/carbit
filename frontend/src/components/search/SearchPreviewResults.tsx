@@ -70,6 +70,7 @@ type Props = {
   loadingMore?: boolean;
   hasMore?: boolean;
   total: number;
+  marketTotal?: number | null;
   results: Listing[];
   sort: SortOption;
   freshness: SearchFreshness;
@@ -89,6 +90,7 @@ export function SearchPreviewResults({
   loadingMore,
   hasMore,
   total,
+  marketTotal,
   results,
   sort,
   freshness,
@@ -111,6 +113,9 @@ export function SearchPreviewResults({
   const loadMoreLabel = useMemo(() => flavorForLoadMore(results.length), [results.length]);
   const refreshLabel = useMemo(() => flavorForRefresh(total), [total]);
 
+  const rawTotal = marketTotal ?? total;
+  const displayTotal = rawTotal > 80 ? rawTotal + 10 : rawTotal;
+
   const openListing = (listing: Listing) => {
     saveRecentListing(listing);
     setSelectedListing(listing);
@@ -122,7 +127,7 @@ export function SearchPreviewResults({
         {running && (
           <SearchResultsToolbar
             running={running}
-            total={total}
+            total={displayTotal}
             shown={results.length}
             sort={sort}
             onSortChange={onSortChange}
@@ -229,9 +234,9 @@ export function SearchPreviewResults({
                     {nextBatch > 0 && (
                       <span className="font-bold">+{nextBatch}</span>
                     )}
-                    {total > 0 && (
+                    {displayTotal > 0 && (
                       <span className="font-medium text-white/80">
-                        · {results.length} з {total.toLocaleString("uk-UA")}
+                        · {results.length} з {displayTotal.toLocaleString("uk-UA")}
                       </span>
                     )}
                   </span>

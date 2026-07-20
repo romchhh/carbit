@@ -168,9 +168,13 @@ class TelegramClient:
 
         published_line = _published_caption_line(listing)
         title_emoji = alert_emoji if alert_line else "🚗"
+        is_new_dealer_car = bool(listing_id and listing_id.startswith("new_auto_ria_"))
+        title_text = str(listing.get("title", "Авто"))
+        if is_new_dealer_car:
+            title_text = f"🆕 НОВИЙ · {title_text}"
 
         lines = [
-            f"{title_emoji} <b>{html.escape(str(listing.get('title', 'Авто')))}</b>",
+            f"{title_emoji} <b>{html.escape(title_text)}</b>",
         ]
         if alert_line:
             lines.append(html.escape(alert_line))

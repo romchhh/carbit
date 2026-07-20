@@ -59,6 +59,18 @@ def _channel_slug_from_telegram_images(images: list[str] | None) -> str:
     return ""
 
 
+def telegram_text_is_search_request(text: str) -> bool:
+    """Пост «шукаю авто», а не пропозиція продажу — не показуємо в пошуку."""
+    if not (text or "").strip():
+        return False
+    from app.services.telegram_channels.bootstrap import ensure_parser_path
+
+    ensure_parser_path()
+    from parser.extractor import is_car_search_request
+
+    return is_car_search_request(text)
+
+
 def fix_telegram_listing_url(
     listing_id: str,
     url: str,
@@ -183,6 +195,11 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
 
 
 def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> bool:
+    if item.source == "telegram" and telegram_text_is_search_request(
+        item.description or item.title or ""
+    ):
+        return False
+
     haystack = f"{item.brand} {item.title} {item.description or ''}"
 
     if filters.brand:

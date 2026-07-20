@@ -41,7 +41,7 @@ SPAM_PATTERNS = [
         r"тренінг",
         r"реклам(?:а|ний|не)",
         r"спонсор",
-        r"промокод",
+        r"promокод",
         r"giveaway",
         r"розіграш",
         r"наш\s+канал",
@@ -54,6 +54,42 @@ SPAM_PATTERNS = [
         r"набір\s+в\s+команду",
     )
 ]
+
+# Запит «шукаю авто», а не пропозиція продажу
+SEARCH_REQUEST_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"#?\s*пошук\s+авто",
+        r"#?\s*ищу\s+авто",
+        r"#?\s*шукаю\s+авто",
+        r"шукаю\s+(?:авто|машин|автомоб)",
+        r"ищу\s+(?:авто|машин|автомоб)",
+        r"куплю\s+(?:авто|машин|автомоб)",
+        r"в\s+пошуках",
+        r"в\s+поиске",
+        r"buying\s+car",
+        r"wanted\s+car",
+    )
+]
+
+_BUYER_YEAR_RE = re.compile(
+    r"\b(?:от|from)\s+(?:19|20)\d{2}\s*г\.?\s*в\.?",
+    re.IGNORECASE,
+)
+_BUDGET_CAP_LINE_RE = re.compile(
+    r"[-–—]\s*до\s*\d{1,3}\s*[\$€]",
+    re.IGNORECASE,
+)
+_MAX_BUDGET_RE = re.compile(r"\bдо\s*\d{1,3}\s*[\$€]", re.IGNORECASE)
+_SALE_KEYWORDS = (
+    "продам",
+    "продаю",
+    "продається",
+    "продается",
+    "на продаж",
+    "for sale",
+    "sale ",
+)
 
 # --- окремі regex-и на кожне поле ---------------------------------------
 
@@ -218,12 +254,48 @@ def is_promo_or_spam(text_low: str) -> bool:
     return any(pattern.search(text_low) for pattern in SPAM_PATTERNS)
 
 
+def is_car_search_request(text: str) -> bool:
+    """True, якщо пост — запит на купівлю («шукаю X5 до 65$»), а не оголошення продажу."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    text_low = raw.lower()
+
+    if any(pattern.search(raw) for pattern in SEARCH_REQUEST_PATTERNS):
+        return True
+    if "🕵" in raw and ("пошук" in text_low or "ищу" in text_low or "шукаю" in text_low):
+        return True
+
+    budget_lines = len(_BUDGET_CAP_LINE_RE.findall(raw))
+    max_budget_hits = len(_MAX_BUDGET_RE.findall(raw))
+    has_buyer_year = bool(_BUYER_YEAR_RE.search(raw))
+    considers = any(
+        kw in text_low
+        for kw in ("рассмотр", "розглян", "also consider", "також розгляну", "также рассмотр")
+    )
+    has_sale_intent = any(kw in text_low for kw in _SALE_KEYWORDS)
+
+    if has_buyer_year and (budget_lines >= 1 or max_budget_hits >= 2 or considers):
+        return True
+
+    if not has_sale_intent and budget_lines >= 2:
+        return True
+
+    if not has_sale_intent and considers and (budget_lines >= 1 or max_budget_hits >= 1):
+        return True
+
+    return False
+
+
 def is_valid_car_listing(listing: CarListing) -> bool:
     """Чи варто зберігати/показувати оголошення (відсікає рекламу та порожні альбоми)."""
     text = (listing.raw_text or "").strip()
     text_low = text.lower()
 
     if not text and listing.confidence <= 0:
+        return False
+
+    if is_car_search_request(text):
         return False
 
     if is_promo_or_spam(text_low):
@@ -545,7 +617,7 @@ def extract_car_data(
         listing.confidence = round(
             (found_key / 3) * 0.7 + (found_secondary / len(secondary_fields)) * 0.3, 2
         )
-        listing.needs_review = found_key < 2 or is_promo_or_spam(text_low)
+        listing.needs_review = found_key < 2 or is_promo_or_spam(text_low) or is_car_search_request(text)
 
     except Exception:
         listing.needs_review = True

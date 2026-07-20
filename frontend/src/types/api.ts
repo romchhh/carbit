@@ -89,6 +89,8 @@ export interface PaginatedListings {
   sources?: SourceStatus[];
   partial?: boolean;
   from_cache?: boolean;
+  /** Реальна кількість оголошень в API (може перевищувати total — розмір локального пулу). */
+  market_total?: number | null;
 }
 
 export interface SearchLiveResults {

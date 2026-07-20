@@ -70,6 +70,7 @@ export function ListingCard({
   const timeBadgeDate = listing.published_at;
   const hasMirrorSources = (listing.alternate_sources?.length ?? 0) > 0;
   const isNewForMonitor = Boolean(listing.is_new);
+  const isNewCar = listing.id?.startsWith("new_auto_ria_");
   const [photoIndex, setPhotoIndex] = useState(0);
   const photoCount = images.length;
   const safeIndex = photoCount > 0 ? ((photoIndex % photoCount) + photoCount) % photoCount : 0;
@@ -130,6 +131,11 @@ export function ListingCard({
             {isNewForMonitor && (
               <span className="rounded-full bg-emerald px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
                 Нове
+              </span>
+            )}
+            {isNewCar && (
+              <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+                Новий
               </span>
             )}
             {hasMirrorSources ? (
@@ -261,7 +267,15 @@ export function ListingCard({
                   Нове
                 </span>
               )}
+              {isNewCar && (
+                <span className="hidden rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:inline-flex">
+                  Новий
+                </span>
+              )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[15px] sm:line-clamp-1">
+                {isNewCar && (
+                  <strong className="text-blue-600">НОВИЙ </strong>
+                )}
                 {listing.title}
               </h3>
             </div>

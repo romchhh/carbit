@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconArrowRight } from "@/components/icons";
@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { usePreviewSearch } from "@/hooks/usePreviewSearch";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
 import { searches as searchesApi, users as usersApi } from "@/lib/api";
+import { findMatchingSearch } from "@/lib/search-filters-api";
 import {
   AppEmpty,
   AppLoading,
@@ -37,6 +38,7 @@ export default function DashboardPage() {
     setFilters,
     results,
     total,
+    marketTotal,
     sort,
     freshness,
     running,
@@ -55,10 +57,16 @@ export default function DashboardPage() {
     reset,
     clearError,
   } = usePreviewSearch();
-  const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } = useSaveSearch(created => {
-    setSearches(prev => [created, ...prev]);
-  });
+  const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } =
+    useSaveSearch(created => {
+      setSearches(prev => [created, ...prev.filter(s => s.id !== created.id)]);
+    });
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const matchingMonitor = useMemo(
+    () => findMatchingSearch(searches, filters),
+    [searches, filters],
+  );
 
   useEffect(() => {
     if (hasSearchDraft()) {
@@ -155,6 +163,8 @@ export default function DashboardPage() {
             saveError={saveError}
             saveLimitReached={saveLimitReached}
             telegramConnected={user.telegram_connected}
+            monitorConnected={Boolean(matchingMonitor)}
+            connectedMonitorId={matchingMonitor?.id ?? null}
             freshness={freshness}
             onFreshnessChange={changeFreshness}
           />
@@ -167,6 +177,7 @@ export default function DashboardPage() {
           loadingMore={loadingMore}
           hasMore={hasMore}
           total={total}
+          marketTotal={marketTotal}
           results={results}
           sort={sort}
           freshness={freshness}

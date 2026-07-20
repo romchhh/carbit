@@ -75,6 +75,20 @@ class AutoRiaClient:
     async def get_fotos(self, auto_id: int | str) -> Any:
         return await self.get(f"/auto/fotos/{auto_id}")
 
+    async def search_new(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Пошук нових авто: GET /auto/new/search (1-indexed pages, limit ≤ 50)."""
+        data = await self.get("/auto/new/search", params)
+        if not isinstance(data, dict):
+            raise AutoRiaError("Неочікувана відповідь пошуку нових авто AUTO.RIA")
+        return data
+
+    async def get_new_info(self, auto_id: int | str) -> dict[str, Any]:
+        """Деталі нового авто: GET /auto/new/auto/{AUTO_ID}."""
+        data = await self.get(f"/auto/new/auto/{auto_id}")
+        if not isinstance(data, dict):
+            raise AutoRiaError(f"Неочікувана відповідь AUTO.RIA для нового авто {auto_id}")
+        return data
+
     async def get_marks(self, category_id: int = 1) -> list[dict[str, Any]]:
         data = await self.get(f"/auto/categories/{category_id}/marks")
         return data if isinstance(data, list) else []
