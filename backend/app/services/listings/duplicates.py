@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+import re
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.text import norm_text
@@ -21,6 +23,19 @@ def _source_rank(source: str) -> int:
     return _SOURCE_RANK.get((source or "").strip().lower(), 9)
 
 
+def _normalize_model_key(model: str, *, brand: str = "") -> str:
+    m = norm_text(model or "")
+    m = re.sub(r"\b(19|20)\d{2}\b", "", m)
+    m = re.sub(r"[^a-z0-9а-яёіїєґ\s-]", " ", m)
+    brand_key = norm_text(brand or "")
+    tokens = [
+        t
+        for t in m.split()
+        if t and (not brand_key or t != brand_key)
+    ]
+    return tokens[0] if tokens else m.strip()
+
+
 def _mileage_close(a: int, b: int) -> bool:
     if a <= 0 or b <= 0:
         return False
@@ -30,16 +45,27 @@ def _mileage_close(a: int, b: int) -> bool:
     return (hi - lo) / hi <= 0.08 or abs(hi - lo) <= 3000
 
 
+def _prices_close(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:
+    from app.services.currency import listing_price_uah
+
+    pa = listing_price_uah(getattr(a, "price", 0), getattr(a, "currency", None))
+    pb = listing_price_uah(getattr(b, "price", 0), getattr(b, "currency", None))
+    if pa <= 0 or pb <= 0:
+        return False
+    lo, hi = min(pa, pb), max(pa, pb)
+    return (hi - lo) / hi <= 0.025
+
+
 def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:
     vin_a = (getattr(a, "vin", None) or "").strip().upper()
     vin_b = (getattr(b, "vin", None) or "").strip().upper()
-    if vin_a and vin_b and len(vin_a) == 17 and vin_a == vin_b:
+    if vin_a and vin_b and len(vin_a) == 17 and len(vin_b) == 17 and vin_a == vin_b:
         return True
 
     brand_a = norm_text(getattr(a, "brand", "") or "")
     brand_b = norm_text(getattr(b, "brand", "") or "")
-    model_a = norm_text(getattr(a, "model", "") or "")
-    model_b = norm_text(getattr(b, "model", "") or "")
+    model_a = _normalize_model_key(getattr(a, "model", "") or "", brand=brand_a)
+    model_b = _normalize_model_key(getattr(b, "model", "") or "", brand=brand_b)
     year_a = int(getattr(a, "year", 0) or 0)
     year_b = int(getattr(b, "year", 0) or 0)
     if not brand_a or not brand_b or brand_a != brand_b:
@@ -48,15 +74,22 @@ def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool
         return False
     if not year_a or year_a != year_b:
         return False
-    return _mileage_close(int(getattr(a, "mileage", 0) or 0), int(getattr(b, "mileage", 0) or 0))
+
+    if _mileage_close(int(getattr(a, "mileage", 0) or 0), int(getattr(b, "mileage", 0) or 0)):
+        return True
+    # Repost без пробігу в одному полі, але та сама ціна (типовий OLX-дубль).
+    if _prices_close(a, b):
+        return True
+    return False
 
 
 async def find_duplicate_of(db: AsyncSession, data: ListingOut) -> Listing | None:
     """Шукає вже збережене оголошення з іншого джерела, схоже на data."""
-    if data.vin and len(data.vin) == 17:
+    vin = (data.vin or "").strip().upper()
+    if vin and len(vin) == 17:
         row = await db.scalar(
             select(Listing).where(
-                Listing.vin == data.vin.upper(),
+                func.upper(Listing.vin) == vin,
                 Listing.id != data.id,
             ).limit(1)
         )
@@ -66,21 +99,25 @@ async def find_duplicate_of(db: AsyncSession, data: ListingOut) -> Listing | Non
     if not data.brand or not data.model or not data.year:
         return None
 
+    brand_key = norm_text(data.brand)
+    model_key = _normalize_model_key(data.model, brand=brand_key)
+
     candidates = (
         await db.scalars(
             select(Listing)
             .where(
-                Listing.brand == data.brand,
-                Listing.model == data.model,
+                func.lower(Listing.brand) == brand_key,
                 Listing.year == data.year,
                 Listing.id != data.id,
-                Listing.is_duplicate.is_(False),
             )
-            .limit(40)
+            .limit(80)
         )
     ).all()
 
     for candidate in candidates:
+        cand_model = _normalize_model_key(candidate.model or "", brand=brand_key)
+        if model_key and cand_model and model_key != cand_model:
+            continue
         if listings_look_same(data, candidate):
             return candidate
     return None
@@ -135,22 +172,26 @@ def mark_duplicates_in_pool(items: list[ListingOut]) -> list[ListingOut]:
 
     result: list[ListingOut] = []
     for group in groups:
-        members = _pick_group_members(group)
-        canonical = min(members, key=lambda row: _source_rank(row.source))
-        canonical = _enrich_from_mirrors(canonical, members)
+        canonical = min(group, key=lambda row: _source_rank(row.source))
+        canonical = _enrich_from_mirrors(canonical, group)
 
         alternates: list[ListingSourceLink] = []
-        seen_sources = {canonical.source}
-        for member in sorted(members, key=lambda row: _source_rank(row.source)):
+        seen_urls: set[str] = set()
+        if canonical.url:
+            seen_urls.add(canonical.url.rstrip("/").split("?", 1)[0])
+
+        for member in sorted(group, key=lambda row: (_source_rank(row.source), row.id)):
             if member.id == canonical.id:
                 continue
-            if member.source in seen_sources:
+            url = (member.url or "").strip()
+            if not url:
                 continue
-            seen_sources.add(member.source)
-            if not member.url:
+            url_key = url.rstrip("/").split("?", 1)[0]
+            if url_key in seen_urls:
                 continue
+            seen_urls.add(url_key)
             alternates.append(
-                ListingSourceLink(source=member.source, url=member.url, id=member.id)
+                ListingSourceLink(source=member.source, url=url, id=member.id)
             )
 
         # is_new — якщо будь-який член групи був новим у моніторингу

@@ -945,8 +945,12 @@ async def build_live_search_pool(
     if errors and "auto_ria" in sources and len(sources) == 1:
         raise _pick_primary_error(errors)
 
-    olx_sorted = sort_listings(list(olx_result.items), sort_by)
-    telegram_sorted = sort_listings(list(telegram_result.items), sort_by)
+    from app.services.listings.duplicates import mark_duplicates_in_pool
+
+    olx_sorted = mark_duplicates_in_pool(sort_listings(list(olx_result.items), sort_by))
+    telegram_sorted = mark_duplicates_in_pool(
+        sort_listings(list(telegram_result.items), sort_by)
+    )
 
     slots = _build_interleaved_slots(
         auto_ria_ids=auto_ria_ids,

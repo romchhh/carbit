@@ -215,6 +215,32 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
     return and_(*clauses)
 
 
+async def _telegram_listings_matching_filters(
+    db: AsyncSession,
+    filters: SearchFilters,
+    *,
+    found_after: datetime | None,
+    scan_limit: int,
+) -> list[ListingOut]:
+    order_col = Listing.found_at.desc() if found_after is not None else Listing.published_at.desc()
+    rows = await db.scalars(
+        select(Listing)
+        .where(_telegram_sql_prefilters(filters, found_after=found_after))
+        .order_by(order_col)
+        .limit(scan_limit)
+    )
+    matched: list[ListingOut] = []
+    from app.services.telegram_channels.lazy_photos import enqueue_listing_photos
+
+    for listing in rows.all():
+        item = listing_to_out(listing)
+        if listing_out_matches_filters(item, filters):
+            matched.append(item)
+            if not (item.images or []):
+                enqueue_listing_photos(item.id)
+    return matched
+
+
 async def search_telegram_listings(
     db: AsyncSession,
     filters: SearchFilters,
@@ -237,24 +263,30 @@ async def search_telegram_listings(
             logger.exception("Telegram keyword refresh failed")
 
     scan_limit = max_scan if found_after is None else min(max_scan, 3000)
-    order_col = Listing.found_at.desc() if found_after is not None else Listing.published_at.desc()
 
-    rows = await db.scalars(
-        select(Listing)
-        .where(_telegram_sql_prefilters(filters, found_after=found_after))
-        .order_by(order_col)
-        .limit(scan_limit)
+    matched = await _telegram_listings_matching_filters(
+        db,
+        filters,
+        found_after=found_after,
+        scan_limit=scan_limit,
     )
-    matched: list[ListingOut] = []
-    from app.services.telegram_channels.lazy_photos import enqueue_listing_photos
 
-    for listing in rows.all():
-        item = listing_to_out(listing)
-        if listing_out_matches_filters(item, filters):
-            matched.append(item)
-            # Підвантажити ≥1 фото для карток без картинок (через telegram-worker)
-            if not (item.images or []):
-                enqueue_listing_photos(item.id)
+    # Якщо в БД порожньо — ще раз чекаємо історію каналів (worker часто встигає за 4–8s).
+    if keyword_refresh and not matched and ((filters.brand or "").strip() or (filters.model or "").strip()):
+        try:
+            from app.services.telegram_channels.keyword_refresh import (
+                refresh_telegram_by_keywords,
+            )
+
+            await refresh_telegram_by_keywords(filters, wait_seconds=10.0)
+            matched = await _telegram_listings_matching_filters(
+                db,
+                filters,
+                found_after=found_after,
+                scan_limit=scan_limit,
+            )
+        except Exception:
+            logger.exception("Telegram keyword refresh retry failed")
 
     matched = sort_listings(matched, sort_by)
     total = len(matched)

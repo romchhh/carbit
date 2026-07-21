@@ -46,9 +46,40 @@ class DuplicatesTests(unittest.TestCase):
         b = _item(id="b", source="olx", vin="WBA8E9C50HK123456", mileage=90000)
         self.assertTrue(listings_look_same(a, b))
 
+    def test_mark_pool_two_olx_same_vin(self):
+        vin = "WF0GXXGBBG7Y21048"
+        items = mark_duplicates_in_pool(
+            [
+                _item(
+                    id="olx_a",
+                    source="olx",
+                    vin=vin,
+                    url="https://olx.example/a",
+                    region="Вінницька область",
+                ),
+                _item(
+                    id="olx_b",
+                    source="olx",
+                    vin=vin,
+                    url="https://olx.example/b",
+                    region="Вінниця",
+                    mileage=216000,
+                ),
+            ]
+        )
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].source, "olx")
+        self.assertEqual(len(items[0].alternate_sources), 1)
+        self.assertEqual(items[0].alternate_sources[0].source, "olx")
+
     def test_brand_model_year_mileage(self):
         a = _item(id="a", mileage=80000)
         b = _item(id="b", source="olx", mileage=82000)
+        self.assertTrue(listings_look_same(a, b))
+
+    def test_same_price_repost(self):
+        a = _item(id="a", source="olx", mileage=0, price=7699, currency="USD")
+        b = _item(id="b", source="olx", mileage=216000, price=7699, currency="USD")
         self.assertTrue(listings_look_same(a, b))
 
     def test_mark_pool_prefers_auto_ria_and_links_olx(self):

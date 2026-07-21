@@ -270,6 +270,9 @@ def olx_listing_to_listing_out(
     listing_id = listing.listing_id or "unknown"
     title = (listing.title or "OLX").strip()
     brand, model = _split_brand_model(title, brand_hint, model_hint)
+    from app.services.listings.duplicates import _normalize_model_key
+
+    model = _normalize_model_key(model, brand=brand) or model.split()[0] if model else model
 
     specs = listing.specs or {}
     fuel = _extract_spec(specs, "палив", "fuel") or ""
