@@ -1,4 +1,4 @@
-"""OLX: Zeekr 001 + регіон (Boyarka / Одеса)."""
+"""OLX / region: Zeekr + міста областей."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import unittest
 from app.schemas.schemas import SearchFilters
 from app.services.olx.mapper import filters_to_olx_params
 from app.services.olx.parser import OlxListing, passes_olx_filters
-from app.services.olx.service import _text_query_variants_for_filters
+from app.services.olx.service import _olx_text_query
 from app.services.search.region_match import listing_region_matches_filter
 
 
@@ -54,16 +54,28 @@ class OlxZeekrRegionTests(unittest.TestCase):
             listing_region_matches_filter("Одеса, Пересипський", "Одеська область")
         )
 
-    def test_text_query_variants_include_brand_only(self):
+    def test_vinnytsia_oblast_cities(self):
+        for city in ("Вінниця", "Ладижин", "Козятин", "Жмеринка", "Могилів-Подільський"):
+            self.assertTrue(
+                listing_region_matches_filter(city, "Вінницька область"),
+                msg=city,
+            )
+        self.assertFalse(listing_region_matches_filter("Київ", "Вінницька область"))
+
+    def test_telegram_text_haystack_city(self):
+        blob = "україна ford mondeo 🌏місто: ладижин ціна 5500$"
+        self.assertTrue(listing_region_matches_filter(blob, "Вінницька область"))
+
+    def test_olx_single_text_query(self):
         params = filters_to_olx_params(
             SearchFilters(brand="Zeekr", model="001", currency="UAH")
         )
-        variants = _text_query_variants_for_filters(
+        query = _olx_text_query(
             SearchFilters(brand="Zeekr", model="001", currency="UAH"),
             params,
         )
-        self.assertIn("zeekr 001", variants)
-        self.assertIn("zeekr", variants)
+        self.assertTrue(query)
+        self.assertIn("zeekr", query.lower())
 
 
 if __name__ == "__main__":

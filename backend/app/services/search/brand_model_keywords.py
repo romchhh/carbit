@@ -27,7 +27,9 @@ from app.services.olx.brand_slugs import (
 MAX_TELEGRAM_KEYWORD_QUERIES = 4
 MAX_SEARCH_KEYWORD_QUERIES = 10
 TELEGRAM_SCAN_QUERY_PREFIX = "__scan__:"
-TELEGRAM_HISTORY_SCAN_LIMIT = 500
+# Глибина scan історії каналу при live-пошуку за маркою/моделлю.
+# 500 було замало для активних автоканалів — свіжі пости «губилися».
+TELEGRAM_HISTORY_SCAN_LIMIT = 2000
 
 # RU/UA написання марок (slug → варіанти). Доповнює BRAND_TO_SLUG.
 BRAND_SLUG_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {

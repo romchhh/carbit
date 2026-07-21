@@ -269,7 +269,12 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     if filters.region and norm_text(filters.region) not in ("вся україна", ""):
         from app.services.search.region_match import listing_region_matches_filter
 
-        if not listing_region_matches_filter(item.region or "", filters.region):
+        # Telegram: місто часто лише в тексті поста («🌏Місто: Вінниця»),
+        # а поле region може бути порожнім / «Україна».
+        region_haystack = item.region or ""
+        if (item.source or "").lower() == "telegram":
+            region_haystack = f"{region_haystack} {item.title or ''} {item.description or ''}"
+        if not listing_region_matches_filter(region_haystack, filters.region):
             return False
 
     blob = norm_text(f"{item.title} {item.fuel} {item.transmission} {item.description}")

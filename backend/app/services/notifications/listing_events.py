@@ -109,33 +109,47 @@ async def notify_listing_events(
         if price_dropped and old_price is not None:
             old_label = format_display_price(old_price, old_currency or listing.currency, display_currency)
             new_label = format_display_price(listing.price, listing.currency, display_currency)
-            body = f"Ціна знизилась: {old_label} → {new_label}"
-            notification = Notification(
-                user_id=user.id,
-                type=NotificationType.price_drop,
-                title=listing.title,
-                body=body,
-                listing_id=listing.id,
-                search_id=search.id,
-                payload={
-                    "event": "price_drop",
-                    "old_price": old_price,
-                    "new_price": listing.price,
-                    "currency": listing.currency,
-                    "url": listing.url,
-                    "source": listing.source.value if hasattr(listing.source, "value") else str(listing.source),
-                },
-            )
-            db.add(notification)
-            sent += 1
-            if await _send_event_card(
-                user,
-                listing,
-                search,
-                alert_line=body,
-                alert_emoji="📉",
-            ):
-                notification.sent_telegram = True
+            # Захист: якщо в $ нова ≥ старої — це не зниження (зміна валюти / шум курсу)
+            from app.services.currency import convert_price
+
+            old_usd = convert_price(old_price, old_currency or listing.currency, display_currency)
+            new_usd = convert_price(listing.price, listing.currency, display_currency)
+            if new_usd >= old_usd:
+                logger.info(
+                    "Skip price_drop for %s: display %s → %s (not a drop)",
+                    listing.id,
+                    old_label,
+                    new_label,
+                )
+            else:
+                body = f"Ціна знизилась: {old_label} → {new_label}"
+                notification = Notification(
+                    user_id=user.id,
+                    type=NotificationType.price_drop,
+                    title=listing.title,
+                    body=body,
+                    listing_id=listing.id,
+                    search_id=search.id,
+                    payload={
+                        "event": "price_drop",
+                        "old_price": old_price,
+                        "new_price": listing.price,
+                        "old_currency": old_currency or listing.currency,
+                        "currency": listing.currency,
+                        "url": listing.url,
+                        "source": listing.source.value if hasattr(listing.source, "value") else str(listing.source),
+                    },
+                )
+                db.add(notification)
+                sent += 1
+                if await _send_event_card(
+                    user,
+                    listing,
+                    search,
+                    alert_line=body,
+                    alert_emoji="📉",
+                ):
+                    notification.sent_telegram = True
 
         if vin_appeared and listing.vin:
             body = f"З’явився VIN: {listing.vin}"

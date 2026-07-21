@@ -101,14 +101,23 @@ async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
 
     await db.flush()
 
-    # Алерти «ціна впала» / «з’явився VIN» для вже прив’язаних пошуків
+    # Алерти «ціна впала» / «з’явився VIN» для вже прив’язаних пошуків.
+    # Порівнюємо в грн: сирі числа в різних валютах (UAH↔USD) давали хибні «зниження».
     if listing and (price_changed or vin_appeared):
+        from app.services.currency import listing_price_uah
         from app.services.notifications.listing_events import notify_listing_events
+
+        price_dropped = False
+        if price_changed and old_price:
+            old_uah = listing_price_uah(old_price, old_currency)
+            new_uah = listing_price_uah(data.price, data.currency or listing.currency)
+            # Реальне падіння в еквіваленті грн (не шум від зміни валюти/курсу)
+            price_dropped = old_uah > 0 and new_uah > 0 and new_uah < old_uah
 
         await notify_listing_events(
             db,
             listing,
-            price_dropped=price_changed and old_price is not None and int(data.price) < int(old_price),
+            price_dropped=price_dropped,
             old_price=old_price,
             old_currency=old_currency,
             vin_appeared=vin_appeared,

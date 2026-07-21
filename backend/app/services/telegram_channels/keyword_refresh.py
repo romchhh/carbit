@@ -18,9 +18,9 @@ from app.services.telegram_channels.service_loader import get_parser_channels
 logger = logging.getLogger(__name__)
 
 KEYWORD_LIMIT_PER_CHANNEL = TELEGRAM_HISTORY_SCAN_LIMIT
-# Live-пошук не блокуємо — worker обробить у фоні.
-KEYWORD_WAIT_SECONDS = 0.0
-KEYWORD_COOLDOWN_SECONDS = 120
+# Коротка пауза, щоб worker встиг проіндексувати збіги до відповіді пошуку.
+KEYWORD_WAIT_SECONDS = 4.0
+KEYWORD_COOLDOWN_SECONDS = 90
 
 
 def build_telegram_keyword_query(filters: SearchFilters) -> str | None:
