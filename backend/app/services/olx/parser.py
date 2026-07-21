@@ -28,6 +28,7 @@ class OlxSearchParams:
     model_label: Optional[str] = None
     # Текстовий пошук OLX: /q-zeekr-001/ — для марок без taxonomy-path
     text_query: Optional[str] = None
+    region_label: Optional[str] = None
     condition: Optional[str] = None
     city_query: Optional[str] = None
     price_from: Optional[int] = None
@@ -59,6 +60,8 @@ class OlxSearchParams:
     def needs_post_filter(self) -> bool:
         return any(
             [
+                self.region_label,
+                self.city_query,
                 self.condition,
                 self.price_from is not None,
                 self.price_to is not None,
@@ -493,6 +496,22 @@ def _city_name_is_kyiv(city: str) -> bool:
     return False
 
 
+def _listing_region_text(listing: OlxListing) -> str:
+    parts = _location_parts_from_listing(listing)
+    if parts:
+        return ", ".join(parts.values())
+    city = (listing.city or "").strip()
+    return city
+
+
+def _passes_region_filter(listing: OlxListing, region_label: str | None) -> bool:
+    from app.services.search.region_match import listing_region_matches_filter
+
+    if not region_label:
+        return True
+    return listing_region_matches_filter(_listing_region_text(listing), region_label)
+
+
 def _passes_city_query(listing: OlxListing, city_query: str | None) -> bool:
     if not city_query:
         return True
@@ -611,7 +630,12 @@ def _collect_ad_dicts(node: object, results: list[dict]) -> None:
     if isinstance(node, dict):
         has_id = node.get("id") is not None
         has_title = bool(node.get("title"))
-        has_url = bool(node.get("url") or node.get("slug"))
+        has_url = bool(
+            node.get("url")
+            or node.get("slug")
+            or node.get("urlPath")
+            or node.get("friendlyUrl")
+        )
         has_time = bool(
             node.get("createdTime")
             or node.get("lastRefreshTime")
@@ -1502,8 +1526,11 @@ def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
         if brand_hint or model_hint:
             if not _title_matches_brand_model(listing, brand=brand_hint, model=model_hint):
                 return False
-        # Для /q-brand/ місто не в URL — фільтруємо локацію тут
-        if not _passes_city_query(listing, params.city_query):
+        # Регіон / місто для /q-brand/ (місто не в URL)
+        if params.region_label:
+            if not _passes_region_filter(listing, params.region_label):
+                return False
+        elif not _passes_city_query(listing, params.city_query):
             return False
     elif brand_hint or model_hint:
         if not _title_matches_brand_model(listing, brand=brand_hint, model=model_hint):
@@ -1548,70 +1575,102 @@ def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
 
     if params.engine_from is not None or params.engine_to is not None:
         engine = _spec_number(listing.specs or {}, "об'єм", "объем", "engine", "л")
-        if engine is None:
-            return False
-        if params.engine_from is not None and engine < params.engine_from:
-            return False
-        if params.engine_to is not None and engine > params.engine_to:
-            return False
+        # Пропускаємо якщо немає даних — краще показати, ніж відкинути
+        if engine is not None:
+            if params.engine_from is not None and engine < params.engine_from:
+                return False
+            if params.engine_to is not None and engine > params.engine_to:
+                return False
 
     return True
 
 
 def passes_post_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
+    """Пост-фільтр для полів із spec-сторінки (drivetrain, color, …).
+
+    Якщо специфікація відсутня (None) — не відкидаємо: картка могла не пройти
+    enrich або OLX не включив поле у SSR. Краще показати зайве, ніж пропустити.
+    """
     specs = listing.specs or {}
 
     if params.drivetrain:
         drivetrain_value = " ".join(v for v in specs.values() if isinstance(v, str)).lower()
-        if params.drivetrain.lower() not in drivetrain_value:
+        if drivetrain_value and params.drivetrain.lower() not in drivetrain_value:
             return False
 
     if params.color:
         color_value = " ".join(v for v in specs.values() if isinstance(v, str)).lower()
-        if params.color.lower() not in color_value:
+        if color_value and params.color.lower() not in color_value:
             return False
 
     if params.consumption_from is not None or params.consumption_to is not None:
         consumption = _spec_number(specs, "витрат", "consumption")
-        if consumption is None:
-            return False
-        if params.consumption_from is not None and consumption < params.consumption_from:
-            return False
-        if params.consumption_to is not None and consumption > params.consumption_to:
-            return False
+        if consumption is not None:
+            if params.consumption_from is not None and consumption < params.consumption_from:
+                return False
+            if params.consumption_to is not None and consumption > params.consumption_to:
+                return False
 
     if params.ev_range_from is not None or params.ev_range_to is not None:
         ev_range = _spec_number(specs, "запас ходу", "range")
-        if ev_range is None:
-            return False
-        if params.ev_range_from is not None and ev_range < params.ev_range_from:
-            return False
-        if params.ev_range_to is not None and ev_range > params.ev_range_to:
-            return False
+        if ev_range is not None:
+            if params.ev_range_from is not None and ev_range < params.ev_range_from:
+                return False
+            if params.ev_range_to is not None and ev_range > params.ev_range_to:
+                return False
 
     if params.battery_from is not None or params.battery_to is not None:
         battery = _spec_number(specs, "акумулятор", "battery")
-        if battery is None:
-            return False
-        if params.battery_from is not None and battery < params.battery_from:
-            return False
-        if params.battery_to is not None and battery > params.battery_to:
-            return False
+        if battery is not None:
+            if params.battery_from is not None and battery < params.battery_from:
+                return False
+            if params.battery_to is not None and battery > params.battery_to:
+                return False
 
     if params.power_from is not None or params.power_to is not None:
         power = _spec_number(specs, "потужність", "power", "к.с")
-        if power is None:
-            return False
-        if params.power_from is not None and power < params.power_from:
-            return False
-        if params.power_to is not None and power > params.power_to:
-            return False
+        if power is not None:
+            if params.power_from is not None and power < params.power_from:
+                return False
+            if params.power_to is not None and power > params.power_to:
+                return False
 
     return True
 
 
-def has_next_page(html: str, current_page: int) -> bool:
-    soup = BeautifulSoup(html, "html.parser")
+def has_next_page(
+    html: str,
+    current_page: int,
+    *,
+    page_listings_count: int = 0,
+    api_page_limit: int = 40,
+) -> bool:
+    """Чи є наступна сторінка OLX (HTML pagination або повна сторінка результатів)."""
+    if page_listings_count >= max(api_page_limit - 3, 28):
+        return True
+
+    if html:
+        # totalPages у __PRERENDERED_STATE__ / __NEXT_DATA__
+        for pattern in (
+            r'"totalPages"\s*:\s*(\d+)',
+            r'"total_pages"\s*:\s*(\d+)',
+            r'"pageCount"\s*:\s*(\d+)',
+        ):
+            match = re.search(pattern, html)
+            if match:
+                try:
+                    total_pages = int(match.group(1))
+                    if total_pages > current_page:
+                        return True
+                    if total_pages <= current_page:
+                        return False
+                except ValueError:
+                    pass
+
+    soup = BeautifulSoup(html, "html.parser") if html else None
+    if soup is None:
+        return False
+
     pagination_links = soup.select('a[href*="page="]')
     max_page_found = current_page
     for anchor in pagination_links:

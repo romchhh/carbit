@@ -161,7 +161,7 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
 
     brand = (filters.brand or "").strip()
     if brand:
-        brand_variants = filter_sql_search_tokens(collect_brand_keyword_variants(brand), limit=5)
+        brand_variants = filter_sql_search_tokens(collect_brand_keyword_variants(brand), limit=12)
         brand_clauses = []
         for variant in brand_variants:
             like = f"%{variant}%"
@@ -179,7 +179,7 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
     if model:
         model_variants = filter_sql_search_tokens(
             collect_model_keyword_variants(filters.brand or "", model),
-            limit=5,
+            limit=12,
         )
         if not model_variants:
             model_variants = (model,)
@@ -236,7 +236,7 @@ async def search_telegram_listings(
         except Exception:
             logger.exception("Telegram keyword refresh failed")
 
-    scan_limit = max_scan if found_after is None else min(max_scan, 500)
+    scan_limit = max_scan if found_after is None else min(max_scan, 3000)
     order_col = Listing.found_at.desc() if found_after is not None else Listing.published_at.desc()
 
     rows = await db.scalars(

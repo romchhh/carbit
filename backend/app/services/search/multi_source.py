@@ -11,12 +11,13 @@ from app.services.auto_ria.client import AutoRiaError
 from app.services.auto_ria.mapper import sort_listings
 from app.services.auto_ria.service import search_auto_ria
 from app.services.olx.errors import OlxError
-from app.services.olx.service import search_olx
+from app.services.olx.service import _search_olx_body
+from app.services.search.concurrency import acquire_olx_slot
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 from app.services.telegram_channels.ingest import search_telegram_listings
 
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
-OLX_SEARCH_TIMEOUT_SECONDS = 30.0
+OLX_SEARCH_TIMEOUT_SECONDS = 55.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
 SOURCE_POOL_CAP = 500
 TELEGRAM_POOL_CAP = 500
@@ -250,15 +251,14 @@ async def _search_single_source(
                 found_after=telegram_found_after,
             )
     if source == "olx":
-        return await search_olx(
-            filters,
-            page=page,
-            per_page=per_page,
-            sort_by=sort_by,
-            use_cache=use_cache,
-            cache_ttl_seconds=cache_ttl_seconds,
-            enrich_details=olx_enrich_details,
-        )
+        async with acquire_olx_slot():
+            return await _search_olx_body(
+                filters,
+                page=page,
+                per_page=per_page,
+                sort_by=sort_by,
+                enrich_details=olx_enrich_details,
+            )
     return await search_auto_ria(
         filters,
         page=page,
@@ -366,19 +366,21 @@ async def _search_olx_safe(
     use_cache: bool = True,
     cache_ttl_seconds: int = 120,
 ) -> tuple[PaginatedListings, str | None]:
-    """OLX не повинен ламати весь пошук — таймаут/помилки дають порожню видачу."""
+    """OLX не повинен ламати весь пошук — таймаут/помилки дають порожню видачу.
+
+    Семафор займається заздалегідь; таймаут стосується лише фактичного HTTP-сканування.
+    """
     try:
-        result = await asyncio.wait_for(
-            search_olx(
-                filters,
-                page=page,
-                per_page=per_page,
-                sort_by=sort_by,
-                use_cache=use_cache,
-                cache_ttl_seconds=cache_ttl_seconds,
-            ),
-            timeout=OLX_SEARCH_TIMEOUT_SECONDS,
-        )
+        async with acquire_olx_slot():
+            result = await asyncio.wait_for(
+                _search_olx_body(
+                    filters,
+                    page=page,
+                    per_page=per_page,
+                    sort_by=sort_by,
+                ),
+                timeout=OLX_SEARCH_TIMEOUT_SECONDS,
+            )
         return result, None
     except asyncio.TimeoutError:
         return _empty_page(page, per_page), f"таймаут {OLX_SEARCH_TIMEOUT_SECONDS:.0f}s"
@@ -543,19 +545,20 @@ async def search_listings_outcome(
 
     async def run_olx() -> tuple[PaginatedListings, str | None]:
         try:
-            result = await asyncio.wait_for(
-                _fetch_source_pool(
-                    "olx",
-                    filters,
-                    need=pool_need,
-                    sort_by=sort_by,
-                    use_cache=use_cache,
-                    cache_ttl_seconds=cache_ttl_seconds,
-                    keyword_refresh=keyword_refresh,
-                    olx_enrich_details=olx_enrich_details,
-                ),
-                timeout=OLX_SEARCH_TIMEOUT_SECONDS,
-            )
+            async with acquire_olx_slot():
+                result = await asyncio.wait_for(
+                    _fetch_source_pool(
+                        "olx",
+                        filters,
+                        need=pool_need,
+                        sort_by=sort_by,
+                        use_cache=use_cache,
+                        cache_ttl_seconds=cache_ttl_seconds,
+                        keyword_refresh=keyword_refresh,
+                        olx_enrich_details=olx_enrich_details,
+                    ),
+                    timeout=OLX_SEARCH_TIMEOUT_SECONDS,
+                )
             return result, None
         except asyncio.TimeoutError:
             return _empty_page(1, pool_need), f"таймаут {OLX_SEARCH_TIMEOUT_SECONDS:.0f}s"

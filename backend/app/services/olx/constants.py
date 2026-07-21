@@ -6,6 +6,12 @@ CATEGORY_PATH = "/uk/transport/legkovye-avtomobili"
 CARS_CATEGORY_ID = 108
 OFFERS_API_PATH = "/api/v1/offers/"
 OFFERS_API_LIMIT = 40
+# Орієнтовна кількість карток на HTML-сторінці OLX
+OLX_RESULTS_PER_PAGE = 40
+# Скільки сторінок OLX максимум обходити за один пошук (live / моніторинг)
+OLX_MAX_SCAN_PAGES = 12
+# Для великого пулу (live search «усі джерела»)
+OLX_POOL_MAX_SCAN_PAGES = 15
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

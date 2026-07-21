@@ -532,6 +532,7 @@ OLX_TEXT_BRAND_VARIANTS: dict[str, tuple[str, ...]] = {
     "tesla": ("tesla", "тесла", "tesla motors"),
     "byd": ("byd", "бід", "бйд"),
     "geely": ("geely", "джилі", "gili"),
+    "zeekr": ("zeekr", "зікр", "зикр", "зеекр"),
     "chery": ("chery", "чері"),
     "haval": ("haval", "хaval"),
     "genesis": ("genesis", "дженesis", "генesis"),

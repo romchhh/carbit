@@ -4,15 +4,19 @@ import asyncio
 import json
 import random
 
+import copy
+
 from app.schemas.schemas import PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.mapper import sort_listings
 from app.services.olx.brand_slugs import (
     brand_model_forces_text_search,
     brand_uses_olx_text_search,
+    build_olx_text_query_variants,
+    compose_olx_text_query,
 )
 from app.services.olx.client import OlxClient
-from app.services.olx.constants import MAX_DELAY, MIN_DELAY
+from app.services.olx.constants import MAX_DELAY, MIN_DELAY, OFFERS_API_LIMIT
 from app.services.olx.mapper import filters_to_olx_params, olx_listing_to_listing_out
 from app.services.olx.parser import (
     OlxListing,
@@ -52,12 +56,70 @@ def _switch_params_to_text_query(params: OlxSearchParams, filters: SearchFilters
     return params
 
 
+def _text_query_variants_for_filters(
+    filters: SearchFilters,
+    params: OlxSearchParams,
+) -> list[str | None]:
+    """Кілька /q-/ запитів для text-search марок (Zeekr, NIO, …)."""
+    if not params.text_query:
+        return [None]
+
+    brand = (filters.brand or "").strip()
+    model = (filters.model or "").strip()
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(q: str) -> None:
+        text = (q or "").strip()
+        if not text:
+            return
+        key = text.casefold().replace(" ", "-")
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(text)
+
+    add(params.text_query or compose_olx_text_query(brand, model))
+    for q in build_olx_text_query_variants(brand, model):
+        add(q)
+    if brand and model:
+        add(compose_olx_text_query(brand, ""))
+    return out[:6] if out else [params.text_query]
+
+
 def _listing_dedupe_key(listing: OlxListing) -> str:
     if listing.listing_id:
         return f"id:{listing.listing_id}"
     if listing.url:
         return f"url:{listing.url.split('?', 1)[0].rstrip('/')}"
     return f"title:{(listing.title or '').strip().lower()}"
+
+
+def _olx_collect_target(*, page: int, per_page: int, needs_post_filter: bool, has_text_query: bool = False) -> int:
+    """Скільки оголошень потрібно зібрати з OLX перед пост-фільтром.
+
+    text_query (Zeekr, Tesla Model S, …) відсікає 50-80% — потрібен великий запас.
+    """
+    end = max(page, 1) * per_page
+    if has_text_query:
+        # /q-brand-model/ може відкинути 80% — збираємо 5× запас
+        return end + max(per_page * 4, 80)
+    if needs_post_filter:
+        return end + max(per_page * 2, 24)
+    return end + max(per_page, 8)
+
+
+def _olx_max_scan_pages(*, collect_target: int, needs_post_filter: bool, pool_size: bool, has_text_query: bool = False) -> int:
+    from app.services.olx.constants import OLX_MAX_SCAN_PAGES, OLX_POOL_MAX_SCAN_PAGES, OLX_RESULTS_PER_PAGE
+
+    cap = OLX_POOL_MAX_SCAN_PAGES if pool_size else OLX_MAX_SCAN_PAGES
+    raw_est = collect_target
+    if has_text_query:
+        raw_est = max(collect_target * 5, collect_target + OLX_RESULTS_PER_PAGE * 5)
+    elif needs_post_filter:
+        raw_est = max(collect_target * 3, collect_target + OLX_RESULTS_PER_PAGE * 2)
+    pages = (raw_est + OLX_RESULTS_PER_PAGE - 1) // OLX_RESULTS_PER_PAGE + 1
+    return min(max(int(pages), 2), cap)
 
 
 async def _fetch_olx_search_html(
@@ -128,9 +190,16 @@ async def _collect_from_params(
             html, active, url = await _fetch_olx_search_html(
                 client, active, filters, page=current_page
             )
-        except OlxError:
-            # Альтернативний запит може дати 404 — пропускаємо
-            break
+        except OlxError as exc:
+            if exc.status_code == 404 and pages_scanned > 0:
+                # 404 на не-першій сторінці = вийшли за межі видачі
+                break
+            if pages_scanned == 0:
+                # Перша сторінка — критична помилка, піднімаємо вгору
+                raise
+            # Інші помилки на наступних сторінках — пропускаємо, не зупиняємо цикл
+            pages_scanned += 1
+            continue
 
         try:
             page_listings = await asyncio.to_thread(parse_listing_page, html)
@@ -163,6 +232,20 @@ async def _collect_from_params(
                 page_listings = api_listings
                 url = f"{url} [api-fallback]"
 
+        # Доповнюємо HTML/API видачу офіційним offers API (SSR інколи рідший за live JSON)
+        if active.text_query:
+            api_extra = await client.fetch_offers_api(active, page=current_page)
+            if api_extra:
+                merged: list[OlxListing] = []
+                seen_page: set[str] = set()
+                for listing in list(page_listings) + list(api_extra):
+                    key = _listing_dedupe_key(listing)
+                    if key in seen_page:
+                        continue
+                    seen_page.add(key)
+                    merged.append(listing)
+                page_listings = merged
+
         if not page_listings and pages_scanned == 0 and html_looks_like_results_page(html):
             await notify_admin_parsing_error(
                 source="OLX",
@@ -194,7 +277,12 @@ async def _collect_from_params(
                 break
 
         pages_scanned += 1
-        if not has_next_page(html, current_page):
+        if not has_next_page(
+            html,
+            current_page,
+            page_listings_count=len(page_listings),
+            api_page_limit=OFFERS_API_LIMIT,
+        ):
             break
         await asyncio.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
 
@@ -216,7 +304,7 @@ def _cache_key(
         "per_page": per_page,
         "sort_by": sort_by,
         "enrich": enrich_details,
-        "olx_q": "single-v1",
+        "olx_q": "paginate-v2",
     }
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
@@ -229,6 +317,11 @@ async def _search_olx_uncached(
     sort_by: str = "newest",
     enrich_details: bool = True,
 ) -> PaginatedListings:
+    """Виконує OLX-пошук: спершу займає слот семафора, потім сканує сторінки.
+
+    Важливо: acquire_olx_slot() НЕ входить у wait_for зовнішнього таймауту,
+    тому час очікування в черзі не «з'їдає» бюджет на реальне сканування.
+    """
     async with acquire_olx_slot():
         return await _search_olx_body(
             filters,
@@ -247,11 +340,10 @@ async def _search_olx_body(
     sort_by: str = "newest",
     enrich_details: bool = True,
 ) -> PaginatedListings:
-    # Більший per_page (live pool) → більше сторінок OLX, інакше пул лишається тонким
-    pages_for_pool = max((per_page + 39) // 40, max(page, 1) + 1)
-    max_pages = min(pages_for_pool, 5)
-    params = filters_to_olx_params(filters, max_pages=max_pages)
-    # Подвійний захист: ніколи не бити taxonomy-path для марок/моделей без path на OLX
+    page = max(page, 1)
+    per_page = max(per_page, 1)
+
+    params = filters_to_olx_params(filters, max_pages=2)
     brand = (filters.brand or "").strip()
     model = (filters.model or "").strip()
     if (
@@ -260,29 +352,49 @@ async def _search_olx_body(
         and (brand_uses_olx_text_search(brand) or brand_model_forces_text_search(brand, model))
     ):
         params = _switch_params_to_text_query(params, filters)
-    if params.needs_post_filter():
-        params.max_pages = min(max(params.max_pages, 2), 4)
 
-    start_page = max(page - 1, 0) * 2 + 1
-    # Було ×2/×3 — часто впиралось у 15s timeout на великих пулах
-    target_count = per_page + max(per_page // 2, 8) if params.needs_post_filter() else per_page
+    needs_pf = params.needs_post_filter()
+    has_tq = bool(params.text_query)
+    pool_mode = per_page >= 80
+    collect_target = _olx_collect_target(
+        page=page if not pool_mode else 1,
+        per_page=per_page,
+        needs_post_filter=needs_pf,
+        has_text_query=has_tq,
+    )
+    if pool_mode:
+        # Для великого пулу — сканувати максимально, collect_target не обмежувати
+        collect_target = max(collect_target, per_page * 3)
+
+    params.max_pages = _olx_max_scan_pages(
+        collect_target=collect_target,
+        needs_post_filter=needs_pf,
+        pool_size=pool_mode,
+        has_text_query=has_tq,
+    )
+
     enrich_sem = asyncio.Semaphore(3)
     seen: set[str] = set()
     collected: list[OlxListing] = []
 
     async with OlxClient() as client:
-        collected.extend(
-            await _collect_from_params(
+        for query in _text_query_variants_for_filters(filters, params):
+            variant_params = copy.copy(params)
+            if query:
+                variant_params.text_query = query
+            batch = await _collect_from_params(
                 client,
-                params,
+                variant_params,
                 filters,
-                start_page=start_page,
-                target_count=target_count,
+                start_page=1,
+                target_count=collect_target,
                 enrich_sem=enrich_sem,
                 seen=seen,
                 enrich_details=enrich_details,
             )
-        )
+            collected.extend(batch)
+            if len(collected) >= collect_target:
+                break
 
     items = [
         olx_listing_to_listing_out(
@@ -298,10 +410,10 @@ async def _search_olx_body(
         items = [item for item in items if listing_matches_category(item, filters.category)]
     items = sort_listings(items, sort_by)
 
-    start = 0
-    end = per_page
-    page_items = items[start:end]
-    total = max(len(items), len(page_items))
+    slice_start = 0 if pool_mode else (page - 1) * per_page
+    slice_end = slice_start + per_page
+    page_items = items[slice_start:slice_end]
+    total = len(items)
     pages = max((total + per_page - 1) // per_page, 1 if page_items else 0)
 
     return PaginatedListings(

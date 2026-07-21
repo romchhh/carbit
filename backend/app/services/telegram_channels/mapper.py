@@ -203,15 +203,26 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     haystack = f"{item.brand} {item.title} {item.description or ''}"
 
     if filters.brand:
-        # Жорстка відмова: структурована марка оголошення ≠ фільтр.
+        # Жорстка відмова: структурована марка оголошення ≠ фільтр (якщо заголовок не підтверджує марку).
         item_brand_raw = (item.brand or "").strip()
         if item_brand_raw:
             from app.services.olx.brand_slugs import resolve_olx_brand_slug
 
             filter_slug = resolve_olx_brand_slug(filters.brand)
             item_slug = resolve_olx_brand_slug(item_brand_raw)
-            if filter_slug and item_slug and filter_slug != item_slug:
-                return False
+            title_matches_brand = text_matches_brand_filter(
+                haystack, filters.brand, model=filters.model or ""
+            )
+            if (
+                filter_slug
+                and item_slug
+                and filter_slug != item_slug
+                and not title_matches_brand
+            ):
+                item_brand = norm_text(item.brand)
+                brand = norm_text(filters.brand)
+                if not item_brand or (brand not in item_brand and item_brand not in brand):
+                    return False
 
         if not text_matches_brand_filter(
             haystack, filters.brand, model=filters.model or ""
@@ -256,12 +267,9 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
         return False
 
     if filters.region and norm_text(filters.region) not in ("вся україна", ""):
-        region = norm_text(filters.region).removeprefix("м. ")
-        item_region = norm_text(item.region)
-        generic_region = item_region in ("україна", "", "ukraine")
-        if generic_region and item.source == "telegram":
-            pass
-        elif region not in item_region and item_region not in region:
+        from app.services.search.region_match import listing_region_matches_filter
+
+        if not listing_region_matches_filter(item.region or "", filters.region):
             return False
 
     blob = norm_text(f"{item.title} {item.fuel} {item.transmission} {item.description}")

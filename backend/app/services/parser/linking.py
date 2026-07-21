@@ -5,12 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.timezone import now_kyiv
 from app.models.models import Listing, SearchListing, SearchQuery, User
-from app.services.notifications.freshness import (
-    coerce_notification_max_hours,
-    is_listing_fresh_for_notification,
-)
 from app.services.notifications.service import create_listing_notification
-from app.services.parser.settings import get_parser_settings
 
 
 async def link_listing_to_search(
@@ -26,6 +21,8 @@ async def link_listing_to_search(
     """Returns (is_new_link, notification_sent).
 
     mark_as_new=False — baseline при збереженні моніторингу (авто з першого пошуку).
+    Авто нове для моніторингу → Telegram відправляється так само як UI показує «нове»,
+    без додаткової перевірки published_at (захист від старих авто реалізований через baseline).
     """
     existing = await db.scalar(
         select(SearchListing).where(
@@ -53,33 +50,23 @@ async def link_listing_to_search(
     if mark_as_new and notify and user and user.telegram_connected:
         listing = await db.get(Listing, listing_id)
         if listing:
-            if max_notification_hours is None:
-                settings = await get_parser_settings()
-                max_notification_hours = coerce_notification_max_hours(
-                    settings.get("notification_max_published_hours", 1)
+            notification = await create_listing_notification(
+                db,
+                user,
+                listing,
+                search=search,
+                max_published_hours=max_notification_hours,
+                skip_freshness_check=True,
+            )
+            notification_sent = notification.sent_telegram
+            sl = await db.scalar(
+                select(SearchListing).where(
+                    SearchListing.search_id == search.id,
+                    SearchListing.listing_id == listing_id,
                 )
-            else:
-                max_notification_hours = coerce_notification_max_hours(max_notification_hours)
-            if is_listing_fresh_for_notification(
-                listing.published_at,
-                max_hours=max_notification_hours,
-            ):
-                notification = await create_listing_notification(
-                    db,
-                    user,
-                    listing,
-                    search=search,
-                    max_published_hours=max_notification_hours,
-                )
-                notification_sent = notification.sent_telegram
-                sl = await db.scalar(
-                    select(SearchListing).where(
-                        SearchListing.search_id == search.id,
-                        SearchListing.listing_id == listing_id,
-                    )
-                )
-                if sl:
-                    sl.notified_at = now_kyiv()
+            )
+            if sl:
+                sl.notified_at = now_kyiv()
 
     return True, notification_sent
 

@@ -119,6 +119,10 @@ async def _process_group(
     settings = await get_parser_settings()
     max_hours = coerce_notification_max_hours(settings.get("notification_max_published_hours", 1))
     max_hours_int = max(1, int(round(max_hours)))
+    # Для виявлення нових оголошень шукаємо ширше, ніж вікно сповіщень.
+    # Якщо авто з'являється як «нове» в UI — воно має прийти і в Telegram.
+    discover_hours = max(max_hours_int, 6)
+    notify_hours = float(discover_hours)  # вікно Telegram = вікно виявлення
     monitor_ttl = _monitor_cache_ttl(settings)
 
     searches: list[SearchQuery] = []
@@ -129,7 +133,7 @@ async def _process_group(
 
     parse_sources = _sources_for_group(group, searches, sources_only=sources_only)
     tg_found_after = (
-        telegram_found_after_cutoff(searches, max_hours=max_hours_int)
+        telegram_found_after_cutoff(searches, max_hours=discover_hours)
         if "telegram" in parse_sources
         else None
     )
@@ -138,12 +142,15 @@ async def _process_group(
         parse_filters = group.filters.model_copy(
             update={
                 "sources": parse_sources,
-                "published_within_hours": max_hours_int,
+                "published_within_hours": discover_hours,
             },
         )
         fetch_key = filters_group_key(parse_filters)
 
         # Короткий dedupe: нещодавно вже тягнули цю групу (on-demand + scheduler).
+        # Для моніторингу — не ховаємося в кеш довше ніж половина monitor_ttl,
+        # щоб нові авто не пропускати між циклами.
+        cache_reuse_max = monitor_ttl // 2
         if not sources_only:
             cached = await get_filter_cache(fetch_key)
             if cached and cached.get("fetched_at"):
@@ -151,8 +158,8 @@ async def _process_group(
                     fetched_at = datetime.fromisoformat(str(cached["fetched_at"]))
                     age = (now_kyiv() - fetched_at).total_seconds()
                 except (TypeError, ValueError):
-                    age = monitor_ttl + 1
-                if age < monitor_ttl:
+                    age = cache_reuse_max + 1
+                if age < cache_reuse_max:
                     log.append(f"  ⊘ Кеш {int(age)}s — пропуск API")
                     listing_ids = list(cached.get("listing_ids") or [])
                     upserted: list[tuple[ListingOut, object]] = []
@@ -167,20 +174,22 @@ async def _process_group(
                         upserted=upserted,
                         parse_sources=parse_sources,
                         notify=notify,
-                        max_hours=max_hours,
+                        max_hours=notify_hours,
                         log=log,
                     )
                     log.append(f"  ✓ З кешу: {len(upserted)} оголошень, нових {new_total}")
                     mark_searches_checked(searches)
                     return len(upserted), new_total, notifications
 
-        # Якщо хвилиною раніше був live-пошук з тими ж фільтрами — reuse пулу.
+        # Live-pool: використовуємо якщо пул свіжий і не містить OLX/TG (AUTO.RIA-only).
+        # Для OLX/TG — завжди йдемо в API: пул може не мати нових оголошень.
+        has_olx_or_tg = bool({"olx", "telegram"} & set(parse_sources))
         pooled = await try_load_pool_listings(
             parse_filters,
             "published_desc",
             max_items=max_listings,
         )
-        if pooled and not sources_only:
+        if pooled and not sources_only and not has_olx_or_tg:
             log.append(f"  ↺ Live-pool ({len(pooled)} огол.) — без зовнішніх API")
             upserted = []
             for item in pooled:
@@ -193,7 +202,7 @@ async def _process_group(
                 upserted=upserted,
                 parse_sources=parse_sources,
                 notify=notify,
-                max_hours=max_hours,
+                max_hours=notify_hours,
                 log=log,
             )
             await set_filter_cache(fetch_key, listing_ids, ttl_seconds=settings["cache_ttl_seconds"])
@@ -244,7 +253,7 @@ async def _process_group(
         upserted=upserted,
         parse_sources=parse_sources,
         notify=notify,
-        max_hours=max_hours,
+        max_hours=notify_hours,
         log=log,
     )
 

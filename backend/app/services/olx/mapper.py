@@ -68,7 +68,10 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
         params.condition = CATEGORY_TO_CONDITION.get(filters.category)
 
     if filters.region and norm_text(filters.region) not in ("вся україна", ""):
-        params.city_query = REGION_TO_CITY_QUERY.get(norm_text(filters.region), slugify_region(filters.region))
+        params.region_label = filters.region.strip()
+        params.city_query = REGION_TO_CITY_QUERY.get(
+            norm_text(filters.region), slugify_region(filters.region)
+        )
 
     filter_cur = resolve_filter_currency(filters.currency)
     if filter_cur == "USD":
@@ -229,13 +232,33 @@ def _split_brand_model(title: str, brand_hint: str = "", model_hint: str = "") -
     model = model_hint.strip()
     if brand and model:
         return brand, model
-    if brand and title.lower().startswith(brand.lower()):
-        remainder = title[len(brand) :].strip(" -·")
+
+    title_work = re.sub(
+        r"^(продам|продаю|продаж|sale|sell)\s+",
+        "",
+        (title or "").strip(),
+        flags=re.IGNORECASE,
+    ).strip() or (title or "").strip()
+
+    if brand and title_work.lower().startswith(brand.lower()):
+        remainder = title_work[len(brand) :].strip(" -·")
         return brand, model or remainder.split(",")[0].strip()
-    parts = title.split(" ", 1)
+    parts = title_work.split(" ", 1)
     if len(parts) == 2:
         return parts[0], parts[1].split(",")[0].strip()
-    return title, model
+    return title_work or title, model
+
+
+def _listing_region_display(listing: OlxListing) -> str:
+    raw = listing.raw_params if isinstance(listing.raw_params, dict) else {}
+    location = raw.get("location")
+    if isinstance(location, dict):
+        path = location.get("pathName") or location.get("path_name")
+        if isinstance(path, str) and path.strip():
+            return path.strip()
+    if listing.city:
+        return listing.city.strip()
+    return "Україна"
 
 
 def olx_listing_to_listing_out(
@@ -285,7 +308,7 @@ def olx_listing_to_listing_out(
         mileage=_listing_mileage_value(listing),
         fuel=fuel,
         transmission=transmission,
-        region=listing.city or "Україна",
+        region=_listing_region_display(listing),
         description=listing.description,
         images=images,
         url=listing.url or "",

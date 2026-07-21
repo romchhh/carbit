@@ -11,7 +11,7 @@ CACHE_PREFIX = "parser:cache:"
 DEFAULT_SETTINGS = {
     "enabled": True,
     "interval_seconds": 900,
-    "max_listings_per_group": 30,
+    "max_listings_per_group": 150,
     "cache_ttl_seconds": 1800,
     "notify_telegram": True,
     "telegram_enabled": True,

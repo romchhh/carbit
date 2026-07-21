@@ -101,6 +101,7 @@ async def create_listing_notification(
     search: SearchQuery | None = None,
     send_telegram: bool = True,
     max_published_hours: float | None = None,
+    skip_freshness_check: bool = False,
 ) -> Notification:
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
     listing_url = (
@@ -166,9 +167,10 @@ async def create_listing_notification(
         else:
             max_published_hours = coerce_notification_max_hours(max_published_hours)
 
-        if not is_listing_fresh_for_notification(
+        if not skip_freshness_check and not is_listing_fresh_for_notification(
             listing.published_at,
             max_hours=max_published_hours,
+            allow_none=True,
         ):
             logger.info(
                 "Skip Telegram notify for %s: published_at=%s max_hours=%s",
