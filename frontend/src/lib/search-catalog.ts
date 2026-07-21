@@ -1,4 +1,5 @@
 import type { ExportListing } from "@/lib/export-listings";
+import type { Listing } from "@/types/api";
 import { regionMatchesListing } from "@/lib/search-data/regions";
 import { resolveDisplayCurrency, resolveListingCurrency, toUah } from "@/lib/display-currency";
 
@@ -41,6 +42,8 @@ export type SearchFilterState = {
   batteryCapacityTo: string;
   powerFrom: string;
   powerTo: string;
+  seatsFrom: string;
+  seatsTo: string;
 };
 
 export type SortOption = "newest" | "price_asc" | "price_desc" | "year_desc" | "mileage_asc";
@@ -112,6 +115,8 @@ export const DEFAULT_FILTERS: SearchFilterState = {
   batteryCapacityTo: "",
   powerFrom: "",
   powerTo: "",
+  seatsFrom: "",
+  seatsTo: "",
 };
 
 export const CATALOG_LISTINGS: SearchResult[] = [
@@ -249,6 +254,30 @@ export function sortListings(items: SearchResult[], sort: SortOption): SearchRes
       return sorted.sort((a, b) => a.mileage - b.mileage);
     default:
       return sorted;
+  }
+}
+
+/** Сортування вже завантажених карток live-пошуку без нового запиту до API. */
+export function sortListingItems(items: Listing[], sort: SortOption): Listing[] {
+  const sorted = [...items];
+  const priceUah = (item: Listing) =>
+    toUah(item.price, resolveListingCurrency(item.currency));
+  const publishedMs = (item: Listing) => {
+    const t = Date.parse(item.published_at || "");
+    return Number.isFinite(t) ? t : 0;
+  };
+
+  switch (sort) {
+    case "price_asc":
+      return sorted.sort((a, b) => priceUah(a) - priceUah(b));
+    case "price_desc":
+      return sorted.sort((a, b) => priceUah(b) - priceUah(a));
+    case "year_desc":
+      return sorted.sort((a, b) => (b.year || 0) - (a.year || 0));
+    case "mileage_asc":
+      return sorted.sort((a, b) => (a.mileage || 0) - (b.mileage || 0));
+    default:
+      return sorted.sort((a, b) => publishedMs(b) - publishedMs(a));
   }
 }
 

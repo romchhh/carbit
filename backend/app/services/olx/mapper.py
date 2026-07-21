@@ -129,6 +129,8 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
     params.battery_to = filters.battery_capacity_to
     params.power_from = filters.power_from
     params.power_to = filters.power_to
+    params.seats_from = filters.seats_from
+    params.seats_to = filters.seats_to
 
     params.fetch_details = params.needs_detail_fetch()
     return params

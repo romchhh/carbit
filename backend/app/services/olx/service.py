@@ -95,6 +95,23 @@ def _olx_max_scan_pages(*, collect_target: int, needs_post_filter: bool, pool_si
     return min(max(int(pages), 1), cap)
 
 
+def _olx_pool_scan_limits(
+    filters: SearchFilters,
+    *,
+    need: int,
+    pool_mode: bool,
+) -> tuple[int, int | None]:
+    """Обмежує глибину скану OLX для широких фільтрів (ціна без марки тощо)."""
+    if not pool_mode:
+        return need, None
+    brand = (filters.brand or "").strip()
+    model = (filters.model or "").strip()
+    if brand or model:
+        return min(need, 220), None
+    # Без марки OLX не фільтрує ціну в URL — пост-фільтр по всіх авто; 3–4 сторінки достатньо.
+    return min(need, 100), 3
+
+
 async def _fetch_olx_search_html(
     client: OlxClient,
     params: OlxSearchParams,
@@ -322,9 +339,10 @@ async def _search_olx_body(
         needs_post_filter=needs_pf,
         has_text_query=has_tq,
     )
+    scan_need, page_cap = _olx_pool_scan_limits(filters, need=collect_target, pool_mode=pool_mode)
+    collect_target = scan_need
     if pool_mode:
-        # Для великого пулу — сканувати максимально, collect_target не обмежувати
-        collect_target = max(collect_target, per_page * 3)
+        collect_target = min(collect_target, per_page * 2)
 
     params.max_pages = _olx_max_scan_pages(
         collect_target=collect_target,
@@ -332,6 +350,8 @@ async def _search_olx_body(
         pool_size=pool_mode,
         has_text_query=has_tq,
     )
+    if page_cap is not None:
+        params.max_pages = min(params.max_pages, page_cap)
 
     enrich_sem = asyncio.Semaphore(3)
     seen: set[str] = set()

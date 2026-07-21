@@ -139,6 +139,8 @@ def merge_filters_for_fetch(filters_list: list[SearchFilters]) -> SearchFilters:
     merged.engine_volume_to = _merge_float_max_values([f.engine_volume_to for f in filters_list])
     merged.power_from = _merge_min_values([f.power_from for f in filters_list])
     merged.power_to = _merge_max_values([f.power_to for f in filters_list])
+    merged.seats_from = _merge_min_values([f.seats_from for f in filters_list])
+    merged.seats_to = _merge_max_values([f.seats_to for f in filters_list])
 
     merged.region = _merge_region([f.region for f in filters_list])
     merged.fuel = _merge_list_union([f.fuel for f in filters_list])

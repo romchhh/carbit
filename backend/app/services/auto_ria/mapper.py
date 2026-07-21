@@ -111,6 +111,14 @@ async def filters_to_search_params(
             if gear_id:
                 params[f"gearbox[{index}]"] = gear_id
 
+    if filters.seats_from is not None and filters.seats_to is not None:
+        if filters.seats_from == filters.seats_to:
+            params["seats"] = filters.seats_from
+    elif filters.seats_from is not None and filters.seats_to is None:
+        params["seats"] = filters.seats_from
+    elif filters.seats_to is not None and filters.seats_from is None:
+        params["seats"] = filters.seats_to
+
     # Всі / Вживані / Нові / Під пригон
     category = (filters.category or "all").strip().lower()
     if category == "used":

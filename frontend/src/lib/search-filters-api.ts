@@ -28,6 +28,8 @@ export type BackendSearchFilters = {
   battery_capacity_to?: number | null;
   power_from?: number | null;
   power_to?: number | null;
+  seats_from?: number | null;
+  seats_to?: number | null;
   published_within_days?: number | null;
 };
 
@@ -93,6 +95,8 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
     battery_capacity_to: parseDecimal(filters.batteryCapacityTo),
     power_from: parseNumber(filters.powerFrom),
     power_to: parseNumber(filters.powerTo),
+    seats_from: parseNumber(filters.seatsFrom),
+    seats_to: parseNumber(filters.seatsTo),
   };
 }
 
@@ -162,6 +166,8 @@ export function fromBackendSearchFilters(
     batteryCapacityTo: formatPlainNumber(raw.battery_capacity_to as number | null),
     powerFrom: formatPlainNumber(raw.power_from as number | null),
     powerTo: formatPlainNumber(raw.power_to as number | null),
+    seatsFrom: formatPlainNumber(raw.seats_from as number | null),
+    seatsTo: formatPlainNumber(raw.seats_to as number | null),
   };
 }
 
@@ -192,6 +198,8 @@ const COMPARE_KEYS: (keyof BackendSearchFilters)[] = [
   "battery_capacity_to",
   "power_from",
   "power_to",
+  "seats_from",
+  "seats_to",
 ];
 
 function normalizeCompareSlice(filters: BackendSearchFilters): Record<string, unknown> {

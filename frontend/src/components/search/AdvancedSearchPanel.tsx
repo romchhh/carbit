@@ -147,6 +147,17 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
             placeholderTo="300"
             suffix="к.с."
           />
+
+          <FilterRangePopover
+            label="Кількість місць"
+            from={filters.seatsFrom}
+            to={filters.seatsTo}
+            onChange={(seatsFrom, seatsTo) => update({ seatsFrom, seatsTo })}
+            format={v => v.replace(/[^\d]/g, "")}
+            placeholderFrom="5"
+            placeholderTo="7"
+            suffix="міс."
+          />
         </section>
 
         <section className="space-y-3 border-t border-border/60 pt-4">

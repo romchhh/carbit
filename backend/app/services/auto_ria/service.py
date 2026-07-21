@@ -116,6 +116,10 @@ async def _search_auto_ria_body(
 
     listings = sort_listings(listings, sort_by)
 
+    from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+    listings = [item for item in listings if listing_out_matches_filters(item, filters)]
+
     pages = (total + per_page - 1) // per_page if total else 0
     return PaginatedListings(
         items=listings,

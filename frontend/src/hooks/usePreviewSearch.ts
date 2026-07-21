@@ -10,6 +10,7 @@ import {
   normalizeYearRange,
   type SearchFilterState,
   type SortOption,
+  sortListingItems,
 } from "@/lib/search-catalog";
 import {
   SEARCH_FIRST_BATCH,
@@ -28,6 +29,18 @@ type PageResult = {
   partial?: boolean;
   from_cache?: boolean;
 };
+
+function mergeUniquePool(pool: Listing[], items: Listing[]): Listing[] {
+  if (items.length === 0) return pool;
+  const seen = new Set(pool.map(item => item.id));
+  const next = [...pool];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    next.push(item);
+  }
+  return next;
+}
 
 export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAULT_FILTERS }) {
   const { user } = useAuth();
@@ -48,11 +61,15 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const [sourceStatuses, setSourceStatuses] = useState<SourceStatus[]>([]);
   const [partial, setPartial] = useState(false);
   const [fromCache, setFromCache] = useState(false);
-  const loadedCountRef = useRef(0);
-  /** Остання валюта з профілю, яку підтягнули у фільтр (щоб не перетирати ручну зміну). */
+  /** Усі оголошення з live-пулу (підвантажуються з кешу бекенду, без нового OLX-скану). */
+  const fullPoolRef = useRef<Listing[]>([]);
+  /** Скільки карток показуємо з відсортованого пулу. */
+  const displayCountRef = useRef(0);
+  /** sort, з яким будувався Redis-пул (сторінки 2+ мають той самий sort_by). */
+  const poolApiSortRef = useRef<SortOption>("newest");
+  const hydratingPoolRef = useRef(false);
   const lastSyncedPreferredCurrency = useRef<string | null>(null);
 
-  // Валюта діапазону ціни береться з профілю, але лишається редагованою в фільтрі.
   useEffect(() => {
     if (!user) return;
     const preferred = resolveDisplayCurrency(user.preferred_currency);
@@ -89,7 +106,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const searchSlice = useCallback(
     async (
       nextFilters: SearchFilterState,
-      nextSort: SortOption,
+      apiSort: SortOption,
       nextFreshness: SearchFreshness,
       apiPage: number,
     ): Promise<PageResult> => {
@@ -97,7 +114,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         buildRequestFilters(nextFilters, nextFreshness),
         apiPage,
         SEARCH_FIRST_BATCH,
-        nextSort === "newest" ? "published_desc" : nextSort,
+        apiSort === "newest" ? "published_desc" : apiSort,
         "preview",
       );
       return {
@@ -112,12 +129,19 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     [buildRequestFilters],
   );
 
+  const applyView = useCallback((sortKey: SortOption, displayCount: number) => {
+    const sorted = sortListingItems(fullPoolRef.current, sortKey);
+    const count = Math.min(Math.max(displayCount, 0), sorted.length);
+    displayCountRef.current = count;
+    setResults(sorted.slice(0, count));
+    setPage(Math.max(1, Math.ceil(count / SEARCH_PAGE_SIZE)));
+  }, []);
+
   const syncMeta = (
     data: PageResult,
     nextFilters: SearchFilterState,
     nextSort: SortOption,
     nextFreshness: SearchFreshness,
-    loaded: number,
   ) => {
     setTotal(data.total);
     setMarketTotal(data.marketTotal ?? null);
@@ -129,7 +153,6 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setFreshness(nextFreshness);
     setRunning(true);
     setError(null);
-    setPage(Math.max(1, Math.ceil(loaded / SEARCH_PAGE_SIZE)));
     setPages(Math.max(1, Math.ceil(data.total / SEARCH_PAGE_SIZE)));
   };
 
@@ -143,6 +166,50 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     });
   }, []);
 
+  const hydrateFullPool = useCallback(
+    async (
+      gen: number,
+      nextFilters: SearchFilterState,
+      nextFreshness: SearchFreshness,
+      targetTotal: number,
+      viewSort: SortOption,
+    ) => {
+      if (hydratingPoolRef.current || targetTotal <= 0) return;
+      if (fullPoolRef.current.length >= targetTotal) return;
+
+      hydratingPoolRef.current = true;
+      const apiSort = poolApiSortRef.current;
+      try {
+        let apiPage = Math.floor(fullPoolRef.current.length / SEARCH_FIRST_BATCH) + 1;
+        const maxApiPage = Math.ceil(targetTotal / SEARCH_FIRST_BATCH) + 2;
+
+        while (
+          gen === searchGen.current &&
+          fullPoolRef.current.length < targetTotal &&
+          apiPage <= maxApiPage
+        ) {
+          const data = await searchSlice(nextFilters, apiSort, nextFreshness, apiPage);
+          if (gen !== searchGen.current) return;
+
+          fullPoolRef.current = mergeUniquePool(fullPoolRef.current, data.items);
+          if (data.items.length < SEARCH_FIRST_BATCH) break;
+          apiPage += 1;
+        }
+
+        if (gen === searchGen.current) {
+          startTransition(() => {
+            applyView(viewSort, displayCountRef.current);
+          });
+        }
+      } catch {
+        /* фонове дозавантаження — не ламаємо UI */
+      } finally {
+        hydratingPoolRef.current = false;
+      }
+    },
+    [applyView, searchSlice],
+  );
+
   const fetchInitial = useCallback(
     async (
       nextFilters: SearchFilterState,
@@ -152,7 +219,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       const gen = ++searchGen.current;
       setSearching(true);
       setError(null);
-      loadedCountRef.current = 0;
+      fullPoolRef.current = [];
+      displayCountRef.current = 0;
+      poolApiSortRef.current = nextSort;
       scrollToProgress();
 
       try {
@@ -160,25 +229,31 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         const first = await searchSlice(nextFilters, nextSort, nextFreshness, 1);
         if (gen !== searchGen.current) return;
 
-        loadedCountRef.current = first.items.length;
+        fullPoolRef.current = [...first.items];
+        displayCountRef.current = first.items.length;
+
         startTransition(() => {
-          setResults(first.items);
-          syncMeta(first, nextFilters, nextSort, nextFreshness, first.items.length);
+          applyView(nextSort, displayCountRef.current);
+          syncMeta(first, nextFilters, nextSort, nextFreshness);
           setSearching(false);
         });
 
         if (first.items.length >= SEARCH_FIRST_BATCH && first.total > SEARCH_FIRST_BATCH) {
           const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2);
           if (gen !== searchGen.current) return;
-          const merged = [...first.items, ...second.items];
-          loadedCountRef.current = merged.length;
+          fullPoolRef.current = mergeUniquePool(fullPoolRef.current, second.items);
+          displayCountRef.current = fullPoolRef.current.length;
           startTransition(() => {
-            setResults(merged);
-            syncMeta(second, nextFilters, nextSort, nextFreshness, merged.length);
+            applyView(nextSort, displayCountRef.current);
+            syncMeta(second, nextFilters, nextSort, nextFreshness);
           });
         }
+
+        void hydrateFullPool(gen, nextFilters, nextFreshness, first.total, nextSort);
       } catch (err) {
         if (gen !== searchGen.current) return;
+        fullPoolRef.current = [];
+        displayCountRef.current = 0;
         setResults([]);
         setTotal(0);
         setPage(1);
@@ -187,7 +262,6 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         setPartial(false);
         setFromCache(false);
         setRunning(false);
-        loadedCountRef.current = 0;
         setError(getApiErrorMessage(err, "Не вдалось виконати пошук. Спробуйте ще раз."));
       } finally {
         if (gen === searchGen.current) {
@@ -196,55 +270,75 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         }
       }
     },
-    [searchSlice, scrollToProgress],
+    [applyView, hydrateFullPool, scrollToProgress, searchSlice],
   );
 
-  const fetchMore = useCallback(
+  const fetchMoreFromServer = useCallback(
     async (
+      gen: number,
       nextFilters: SearchFilterState,
-      nextSort: SortOption,
       nextFreshness: SearchFreshness,
+      viewSort: SortOption,
+      targetDisplay: number,
     ) => {
-      const gen = ++searchGen.current;
-      setLoadingMore(true);
+      const apiSort = poolApiSortRef.current;
+      let apiPage = Math.floor(fullPoolRef.current.length / SEARCH_FIRST_BATCH) + 1;
+      let lastMeta: PageResult | null = null;
 
-      try {
-        const chunks = Math.ceil(SEARCH_PAGE_SIZE / SEARCH_FIRST_BATCH);
-        let startApiPage = Math.floor(loadedCountRef.current / SEARCH_FIRST_BATCH) + 1;
-        const collected: Listing[] = [];
-        let lastMeta: PageResult | null = null;
-
-        for (let i = 0; i < chunks; i += 1) {
-          const data = await searchSlice(nextFilters, nextSort, nextFreshness, startApiPage + i);
-          if (gen !== searchGen.current) return;
-          lastMeta = data;
-          collected.push(...data.items);
-          if (data.items.length < SEARCH_FIRST_BATCH) break;
-        }
-
-        if (!lastMeta) return;
-
-        startTransition(() => {
-          setResults(prev => {
-            const seen = new Set(prev.map(item => item.id));
-            const unique = collected.filter(item => !seen.has(item.id));
-            const merged = [...prev, ...unique];
-            loadedCountRef.current = merged.length;
-            syncMeta(lastMeta!, nextFilters, nextSort, nextFreshness, merged.length);
-            return merged;
-          });
-        });
-      } catch (err) {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        if (fullPoolRef.current.length >= targetDisplay) break;
+        const data = await searchSlice(nextFilters, apiSort, nextFreshness, apiPage);
         if (gen !== searchGen.current) return;
-        setError(getApiErrorMessage(err, "Не вдалось виконати пошук. Спробуйте ще раз."));
-      } finally {
-        if (gen === searchGen.current) {
-          setLoadingMore(false);
-        }
+        lastMeta = data;
+        fullPoolRef.current = mergeUniquePool(fullPoolRef.current, data.items);
+        if (data.items.length < SEARCH_FIRST_BATCH) break;
+        apiPage += 1;
       }
+
+      if (gen !== searchGen.current) return;
+
+      startTransition(() => {
+        applyView(viewSort, targetDisplay);
+        if (lastMeta) {
+          syncMeta(lastMeta, nextFilters, viewSort, nextFreshness);
+        }
+      });
     },
-    [searchSlice],
+    [applyView, searchSlice],
   );
+
+  const loadMore = useCallback(() => {
+    if (!running || loadingMore || searching) return;
+    if (displayCountRef.current >= total && total > 0) return;
+
+    const gen = searchGen.current;
+    const targetDisplay = displayCountRef.current + SEARCH_PAGE_SIZE;
+
+    if (fullPoolRef.current.length >= targetDisplay) {
+      applyView(sort, targetDisplay);
+      return;
+    }
+
+    if (fullPoolRef.current.length >= total) {
+      applyView(sort, Math.min(targetDisplay, fullPoolRef.current.length));
+      return;
+    }
+
+    setLoadingMore(true);
+    void fetchMoreFromServer(gen, filters, freshness, sort, targetDisplay).finally(() => {
+      if (gen === searchGen.current) setLoadingMore(false);
+    });
+  }, [
+    applyView,
+    fetchMoreFromServer,
+    filters,
+    freshness,
+    loadingMore,
+    running,
+    searching,
+    sort,
+    total,
+  ]);
 
   const runSearch = useCallback(
     async (nextFilters: SearchFilterState, nextFreshness: SearchFreshness = freshness) => {
@@ -265,30 +359,25 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
 
   const changeSort = useCallback(
     (nextSort: SortOption) => {
-      if (!running) {
-        setSort(nextSort);
-        return;
-      }
-      void fetchInitial(filters, nextSort, freshness);
+      setSort(nextSort);
+      if (!running || fullPoolRef.current.length === 0) return;
+      startTransition(() => {
+        applyView(nextSort, displayCountRef.current);
+      });
     },
-    [fetchInitial, filters, freshness, running],
+    [applyView, running],
   );
 
   const changeFreshness = useCallback((nextFreshness: SearchFreshness) => {
-    // Лише оновлює режим — пошук стартує тільки по кнопці «Шукати».
     setFreshness(nextFreshness);
   }, []);
-
-  const loadMore = useCallback(() => {
-    if (!running || loadingMore || searching) return;
-    if (loadedCountRef.current >= total && total > 0) return;
-    void fetchMore(filters, sort, freshness);
-  }, [fetchMore, filters, freshness, loadingMore, running, searching, sort, total]);
 
   const reset = useCallback(() => {
     const preferred = resolveDisplayCurrency(user?.preferred_currency);
     lastSyncedPreferredCurrency.current = preferred;
     setFilters({ ...DEFAULT_FILTERS, currency: preferred });
+    fullPoolRef.current = [];
+    displayCountRef.current = 0;
     setResults([]);
     setTotal(0);
     setMarketTotal(null);
@@ -301,7 +390,6 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setFreshness("new");
     setRunning(false);
     setError(null);
-    loadedCountRef.current = 0;
   }, [user?.preferred_currency]);
 
   return {

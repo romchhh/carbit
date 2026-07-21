@@ -130,7 +130,7 @@ async def run_live_search(
                 sort_by=sort_by,
                 max_ids=LIVE_POOL_SIZE,
                 keyword_refresh=True,
-                olx_enrich_details=True,
+                olx_enrich_details=False,
             )
         except AutoRiaError as exc:
             logger.warning("live_search auto_ria_error user=%s page=%s detail=%s", user_id, page, exc)

@@ -11,16 +11,27 @@ from app.services.telegram.client import telegram_client
 logger = logging.getLogger(__name__)
 
 _COOLDOWN_SECONDS = 300
+_TIMEOUT_COOLDOWN_SECONDS = 900
 _recent: dict[str, float] = {}
+_notify_lock = asyncio.Lock()
 
 
-def _should_notify(key: str) -> bool:
-    now = time.monotonic()
-    last = _recent.get(key, 0.0)
-    if now - last < _COOLDOWN_SECONDS:
-        return False
-    _recent[key] = now
-    return True
+def _dedupe_key(source: str, error: str) -> str:
+    err = (error or "").strip().lower()
+    if "таймаут" in err or "timeout" in err:
+        return f"{source}:timeout"
+    return f"{source}:{error[:160]}"
+
+
+async def _should_notify(key: str, *, cooldown: float | None = None) -> bool:
+    window = cooldown if cooldown is not None else _COOLDOWN_SECONDS
+    async with _notify_lock:
+        now = time.monotonic()
+        last = _recent.get(key, 0.0)
+        if now - last < window:
+            return False
+        _recent[key] = now
+        return True
 
 
 async def notify_admin_parsing_error(
@@ -39,8 +50,13 @@ async def notify_admin_parsing_error(
         logger.warning("Telegram bot token not configured; skipping admin alert")
         return
 
-    dedupe_key = f"{source}:{error[:160]}"
-    if not _should_notify(dedupe_key):
+    dedupe_key = _dedupe_key(source, error)
+    cooldown = (
+        _TIMEOUT_COOLDOWN_SECONDS
+        if dedupe_key.endswith(":timeout")
+        else _COOLDOWN_SECONDS
+    )
+    if not await _should_notify(dedupe_key, cooldown=cooldown):
         return
 
     lines = [

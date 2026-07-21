@@ -52,6 +52,8 @@ class OlxSearchParams:
     battery_to: Optional[float] = None
     power_from: Optional[int] = None
     power_to: Optional[int] = None
+    seats_from: Optional[int] = None
+    seats_to: Optional[int] = None
     max_pages: int = 3
     fetch_details: bool = True
     # OLX «Сортувати за: Найновіші» — search[order]=created_at:desc
@@ -83,6 +85,8 @@ class OlxSearchParams:
                 self.battery_to is not None,
                 self.power_from is not None,
                 self.power_to is not None,
+                self.seats_from is not None,
+                self.seats_to is not None,
             ]
         )
 
@@ -99,6 +103,8 @@ class OlxSearchParams:
                 self.battery_to is not None,
                 self.power_from is not None,
                 self.power_to is not None,
+                self.seats_from is not None,
+                self.seats_to is not None,
                 self.engine_from is not None,
                 self.engine_to is not None,
             ]
@@ -1147,6 +1153,10 @@ def listing_needs_enrichment(listing: OlxListing, params: OlxSearchParams | None
     if params and (params.price_from is not None or params.price_to is not None):
         if not _listing_price(listing):
             return True
+    if params and (params.seats_from is not None or params.seats_to is not None):
+        specs = listing.specs or {}
+        if not _spec_number(specs, "місць", "міс", "seat", "сидяч"):
+            return True
     return False
 
 
@@ -1633,6 +1643,15 @@ def passes_post_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
             if params.power_from is not None and power < params.power_from:
                 return False
             if params.power_to is not None and power > params.power_to:
+                return False
+
+    if params.seats_from is not None or params.seats_to is not None:
+        seats = _spec_number(specs, "місць", "міс", "seat", "сидяч")
+        if seats is not None:
+            seats_int = int(seats)
+            if params.seats_from is not None and seats_int < params.seats_from:
+                return False
+            if params.seats_to is not None and seats_int > params.seats_to:
                 return False
 
     return True

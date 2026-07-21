@@ -291,4 +291,9 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     if not listing_matches_category(item, filters.category):
         return False
 
+    from app.services.search.advanced_filters import listing_matches_advanced_filters
+
+    if not listing_matches_advanced_filters(item, filters):
+        return False
+
     return True

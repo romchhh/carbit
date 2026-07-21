@@ -68,26 +68,49 @@ export function ExportMenu({ items, filename = "carbit-export", className, iconS
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl border border-border/70 bg-white py-1 shadow-card">
-          <div className="border-b border-border/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
-            Формат файлу
+        <>
+          <button
+            type="button"
+            aria-label="Закрити"
+            className="fixed inset-0 z-40 bg-ink/40 sm:hidden"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            role="menu"
+            className={cn(
+              "z-50 overflow-hidden rounded-2xl border border-border/70 bg-white py-1 shadow-card",
+              "fixed left-1/2 top-1/2 w-[min(calc(100vw-2rem),16rem)] -translate-x-1/2 -translate-y-1/2",
+              "sm:absolute sm:left-auto sm:top-full sm:mt-2 sm:w-64 sm:translate-x-0 sm:translate-y-0 sm:rounded-xl",
+              "sm:right-0",
+            )}
+          >
+            <div className="border-b border-border/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
+              Формат файлу
+            </div>
+            {FORMATS.map(format => (
+              <button
+                key={format.id}
+                type="button"
+                role="menuitem"
+                onClick={() => handleExport(format.id)}
+                className="block w-full px-3 py-2.5 text-left transition-colors hover:bg-surface active:bg-surface"
+              >
+                <div className="text-[13px] font-semibold text-ink">{format.label}</div>
+                <div className="mt-0.5 text-[11px] text-muted">{format.hint}</div>
+              </button>
+            ))}
           </div>
-          {FORMATS.map(format => (
-            <button
-              key={format.id}
-              type="button"
-              onClick={() => handleExport(format.id)}
-              className="block w-full px-3 py-2.5 text-left transition-colors hover:bg-surface"
-            >
-              <div className="text-[13px] font-semibold text-ink">{format.label}</div>
-              <div className="mt-0.5 text-[11px] text-muted">{format.hint}</div>
-            </button>
-          ))}
-        </div>
+        </>
       )}
 
       {message && (
-        <div className="absolute right-0 top-full z-40 mt-2 whitespace-nowrap rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-white shadow-md">
+        <div
+          className={cn(
+            "z-[60] rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-white shadow-md",
+            "fixed bottom-6 left-1/2 max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-nowrap",
+            "sm:absolute sm:bottom-auto sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:max-w-none sm:translate-x-0",
+          )}
+        >
           {message}
         </div>
       )}

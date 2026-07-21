@@ -150,6 +150,8 @@ class SearchFilters(BaseModel):
     battery_capacity_to: Optional[float] = None
     power_from: Optional[int] = None
     power_to: Optional[int] = None
+    seats_from: Optional[int] = Field(default=None, ge=1, le=20)
+    seats_to: Optional[int] = Field(default=None, ge=1, le=20)
     # Тільки оголошення, опубліковані за останні N днів (напр. 7 = «тільки нові»)
     published_within_days: Optional[int] = Field(default=None, ge=1, le=90)
     # Для моніторингу / Telegram: лише оголошення за останні N годин

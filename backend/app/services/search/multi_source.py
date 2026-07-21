@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -17,7 +18,8 @@ from app.services.telegram.admin_alerts import notify_admin_parsing_error
 from app.services.telegram_channels.ingest import search_telegram_listings
 
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
-OLX_SEARCH_TIMEOUT_SECONDS = 25.0
+# Бюджет лише на HTTP-сканування після acquire_olx_slot (черга не входить у wait_for).
+OLX_SEARCH_TIMEOUT_SECONDS = 40.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
 SOURCE_POOL_CAP = 500
 TELEGRAM_POOL_CAP = 500
@@ -27,6 +29,8 @@ AUTO_RIA_POOL_TIMEOUT_SECONDS = 90.0
 TELEGRAM_POOL_TIMEOUT_SECONDS = 25.0
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
 _SOURCE_BLEND_ORDER = {"olx": 0, "telegram": 1, "auto_ria": 2}
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -422,6 +426,11 @@ def _search_filters_summary(filters: SearchFilters) -> str:
     return ", ".join(parts) or "без фільтрів"
 
 
+def _olx_timeout_partial_error(error: str | None) -> bool:
+    err = (error or "").lower()
+    return "таймаут" in err or "timeout" in err
+
+
 async def _notify_partial_source_failures(
     source_statuses: list[SourceSearchStatus],
     filters: SearchFilters,
@@ -435,9 +444,14 @@ async def _notify_partial_source_failures(
 
     details = f"Частковий пошук: {_search_filters_summary(filters)}"
     for status in failed:
+        err = status.error or "невідома помилка"
+        # OLX часто не встигає на широких фільтрах; AUTO.RIA/TG уже дали видачу — не спамимо.
+        if status.source.upper() == "OLX" and _olx_timeout_partial_error(err):
+            logger.warning("OLX partial timeout (skipped admin alert): %s | %s", err, details)
+            continue
         await notify_admin_parsing_error(
             source=status.source,
-            error=status.error or "невідома помилка",
+            error=err,
             details=details,
         )
 
@@ -547,15 +561,12 @@ async def search_listings_outcome(
         try:
             async with acquire_olx_slot():
                 result = await asyncio.wait_for(
-                    _fetch_source_pool(
-                        "olx",
+                    _search_olx_body(
                         filters,
-                        need=pool_need,
+                        page=1,
+                        per_page=pool_need,
                         sort_by=sort_by,
-                        use_cache=use_cache,
-                        cache_ttl_seconds=cache_ttl_seconds,
-                        keyword_refresh=keyword_refresh,
-                        olx_enrich_details=olx_enrich_details,
+                        enrich_details=olx_enrich_details,
                     ),
                     timeout=OLX_SEARCH_TIMEOUT_SECONDS,
                 )
@@ -856,17 +867,17 @@ async def build_live_search_pool(
 
     async def run_olx():
         try:
-            result = await asyncio.wait_for(
-                _fetch_source_pool(
-                    "olx",
-                    filters,
-                    need=max_ids,
-                    sort_by=sort_by,
-                    keyword_refresh=keyword_refresh,
-                    olx_enrich_details=olx_enrich_details,
-                ),
-                timeout=OLX_SEARCH_TIMEOUT_SECONDS,
-            )
+            async with acquire_olx_slot():
+                result = await asyncio.wait_for(
+                    _search_olx_body(
+                        filters,
+                        page=1,
+                        per_page=max_ids,
+                        sort_by=sort_by,
+                        enrich_details=olx_enrich_details,
+                    ),
+                    timeout=OLX_SEARCH_TIMEOUT_SECONDS,
+                )
             return result, None
         except asyncio.TimeoutError:
             return _empty_page(1, max_ids), f"таймаут {OLX_SEARCH_TIMEOUT_SECONDS:.0f}s"
