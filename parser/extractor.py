@@ -62,13 +62,22 @@ SEARCH_REQUEST_PATTERNS = [
         r"#?\s*пошук\s+авто",
         r"#?\s*ищу\s+авто",
         r"#?\s*шукаю\s+авто",
+        r"шукає(?:мо)?\s+(?:авто|машин|автомоб|[А-ЯЁІЇЄA-Z])",
         r"шукаю\s+(?:авто|машин|автомоб)",
         r"ищу\s+(?:авто|машин|автомоб)",
         r"куплю\s+(?:авто|машин|автомоб)",
+        r"купимо\s+(?:авто|машин|автомоб)",
+        r"терміново\s+шукаємо",
+        r"терміново\s+шукаю",
+        r"срочно\s+(?:ищу|ищем)",
+        r"маєте\s+(?:таке|таку|такий)?\s*авто",
+        r"є\s+(?:у\s+вас\s+)?(?:таке|таку|такий)?\s*авто",
         r"в\s+пошуках",
         r"в\s+поиске",
         r"buying\s+car",
         r"wanted\s+car",
+        r"розшук\s+авто",
+        r"🚨\s*терміново\s+шукаємо",
     )
 ]
 
@@ -264,6 +273,8 @@ def is_car_search_request(text: str) -> bool:
     if any(pattern.search(raw) for pattern in SEARCH_REQUEST_PATTERNS):
         return True
     if "🕵" in raw and ("пошук" in text_low or "ищу" in text_low or "шукаю" in text_low):
+        return True
+    if "🚨" in raw and ("шукаємо" in text_low or "шукаю" in text_low or "ищем" in text_low):
         return True
 
     budget_lines = len(_BUDGET_CAP_LINE_RE.findall(raw))

@@ -9,9 +9,9 @@ OFFERS_API_LIMIT = 40
 # Орієнтовна кількість карток на HTML-сторінці OLX
 OLX_RESULTS_PER_PAGE = 40
 # Скільки сторінок OLX максимум обходити за один пошук (live / моніторинг)
-OLX_MAX_SCAN_PAGES = 12
+OLX_MAX_SCAN_PAGES = 4
 # Для великого пулу (live search «усі джерела»)
-OLX_POOL_MAX_SCAN_PAGES = 15
+OLX_POOL_MAX_SCAN_PAGES = 6
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -22,10 +22,10 @@ USER_AGENTS = [
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 ]
 
-REQUEST_TIMEOUT = 30.0
-MIN_DELAY = 0.4
-MAX_DELAY = 1.2
-MAX_RETRIES = 3
+REQUEST_TIMEOUT = 15.0
+MIN_DELAY = 0.3
+MAX_DELAY = 0.8
+MAX_RETRIES = 2
 # 5xx OLX/gateway — короткі ретраї (раніше лише 403/429)
 RETRYABLE_STATUS = frozenset({403, 429, 502, 503, 504})
 

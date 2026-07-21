@@ -12,7 +12,6 @@ from app.services.auto_ria.mapper import sort_listings
 from app.services.olx.brand_slugs import (
     brand_model_forces_text_search,
     brand_uses_olx_text_search,
-    build_olx_text_query_variants,
     compose_olx_text_query,
 )
 from app.services.olx.client import OlxClient
@@ -56,35 +55,11 @@ def _switch_params_to_text_query(params: OlxSearchParams, filters: SearchFilters
     return params
 
 
-def _text_query_variants_for_filters(
-    filters: SearchFilters,
-    params: OlxSearchParams,
-) -> list[str | None]:
-    """Кілька /q-/ запитів для text-search марок (Zeekr, NIO, …)."""
+def _olx_text_query(filters: SearchFilters, params: OlxSearchParams) -> str | None:
+    """Один текстовий запит для /q-/ пошуку. OLX сам розуміє варіанти написань."""
     if not params.text_query:
-        return [None]
-
-    brand = (filters.brand or "").strip()
-    model = (filters.model or "").strip()
-    out: list[str] = []
-    seen: set[str] = set()
-
-    def add(q: str) -> None:
-        text = (q or "").strip()
-        if not text:
-            return
-        key = text.casefold().replace(" ", "-")
-        if key in seen:
-            return
-        seen.add(key)
-        out.append(text)
-
-    add(params.text_query or compose_olx_text_query(brand, model))
-    for q in build_olx_text_query_variants(brand, model):
-        add(q)
-    if brand and model:
-        add(compose_olx_text_query(brand, ""))
-    return out[:6] if out else [params.text_query]
+        return None
+    return params.text_query
 
 
 def _listing_dedupe_key(listing: OlxListing) -> str:
@@ -96,17 +71,14 @@ def _listing_dedupe_key(listing: OlxListing) -> str:
 
 
 def _olx_collect_target(*, page: int, per_page: int, needs_post_filter: bool, has_text_query: bool = False) -> int:
-    """Скільки оголошень потрібно зібрати з OLX перед пост-фільтром.
-
-    text_query (Zeekr, Tesla Model S, …) відсікає 50-80% — потрібен великий запас.
-    """
+    """Скільки оголошень потрібно зібрати з OLX перед пост-фільтром."""
     end = max(page, 1) * per_page
     if has_text_query:
-        # /q-brand-model/ може відкинути 80% — збираємо 5× запас
-        return end + max(per_page * 4, 80)
+        # text_query відсікає частину — збираємо 2× запас (не більше, щоб не таймаутити)
+        return end + max(per_page * 2, 40)
     if needs_post_filter:
-        return end + max(per_page * 2, 24)
-    return end + max(per_page, 8)
+        return end + max(per_page, 20)
+    return end + max(per_page // 2, 8)
 
 
 def _olx_max_scan_pages(*, collect_target: int, needs_post_filter: bool, pool_size: bool, has_text_query: bool = False) -> int:
@@ -115,11 +87,12 @@ def _olx_max_scan_pages(*, collect_target: int, needs_post_filter: bool, pool_si
     cap = OLX_POOL_MAX_SCAN_PAGES if pool_size else OLX_MAX_SCAN_PAGES
     raw_est = collect_target
     if has_text_query:
-        raw_est = max(collect_target * 5, collect_target + OLX_RESULTS_PER_PAGE * 5)
+        # text_query: максимум 3 сторінки — для Zeekr/NIO/тощо вся Україна має <100 оголошень
+        return min(3, cap)
     elif needs_post_filter:
-        raw_est = max(collect_target * 3, collect_target + OLX_RESULTS_PER_PAGE * 2)
+        raw_est = max(collect_target * 2, collect_target + OLX_RESULTS_PER_PAGE)
     pages = (raw_est + OLX_RESULTS_PER_PAGE - 1) // OLX_RESULTS_PER_PAGE + 1
-    return min(max(int(pages), 2), cap)
+    return min(max(int(pages), 1), cap)
 
 
 async def _fetch_olx_search_html(
@@ -226,25 +199,12 @@ async def _collect_from_params(
                 page_listings = []
 
         # HTML SSR інколи «порожній» (бот/CDN), хоча видача жива — беремо JSON API.
+        # API-доповнення викликаємо лише як fallback, щоб не подвоювати запити.
         if not page_listings:
             api_listings = await client.fetch_offers_api(active, page=current_page)
             if api_listings:
                 page_listings = api_listings
                 url = f"{url} [api-fallback]"
-
-        # Доповнюємо HTML/API видачу офіційним offers API (SSR інколи рідший за live JSON)
-        if active.text_query:
-            api_extra = await client.fetch_offers_api(active, page=current_page)
-            if api_extra:
-                merged: list[OlxListing] = []
-                seen_page: set[str] = set()
-                for listing in list(page_listings) + list(api_extra):
-                    key = _listing_dedupe_key(listing)
-                    if key in seen_page:
-                        continue
-                    seen_page.add(key)
-                    merged.append(listing)
-                page_listings = merged
 
         if not page_listings and pages_scanned == 0 and html_looks_like_results_page(html):
             await notify_admin_parsing_error(
@@ -377,24 +337,21 @@ async def _search_olx_body(
     seen: set[str] = set()
     collected: list[OlxListing] = []
 
+    text_query = _olx_text_query(filters, params)
+    if text_query:
+        params.text_query = text_query
+
     async with OlxClient() as client:
-        for query in _text_query_variants_for_filters(filters, params):
-            variant_params = copy.copy(params)
-            if query:
-                variant_params.text_query = query
-            batch = await _collect_from_params(
-                client,
-                variant_params,
-                filters,
-                start_page=1,
-                target_count=collect_target,
-                enrich_sem=enrich_sem,
-                seen=seen,
-                enrich_details=enrich_details,
-            )
-            collected.extend(batch)
-            if len(collected) >= collect_target:
-                break
+        collected = await _collect_from_params(
+            client,
+            params,
+            filters,
+            start_page=1,
+            target_count=collect_target,
+            enrich_sem=enrich_sem,
+            seen=seen,
+            enrich_details=enrich_details,
+        )
 
     items = [
         olx_listing_to_listing_out(

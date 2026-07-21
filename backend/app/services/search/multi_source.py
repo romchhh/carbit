@@ -17,7 +17,7 @@ from app.services.telegram.admin_alerts import notify_admin_parsing_error
 from app.services.telegram_channels.ingest import search_telegram_listings
 
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
-OLX_SEARCH_TIMEOUT_SECONDS = 55.0
+OLX_SEARCH_TIMEOUT_SECONDS = 25.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
 SOURCE_POOL_CAP = 500
 TELEGRAM_POOL_CAP = 500
