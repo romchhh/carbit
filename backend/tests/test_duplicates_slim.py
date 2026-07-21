@@ -82,6 +82,59 @@ class DuplicatesTests(unittest.TestCase):
         b = _item(id="b", source="olx", mileage=216000, price=7699, currency="USD")
         self.assertTrue(listings_look_same(a, b))
 
+    def test_same_price_different_mileage_not_duplicate(self):
+        a = _item(
+            id="a",
+            source="olx",
+            brand="Zeekr",
+            model="001",
+            year=2025,
+            mileage=20000,
+            price=19800,
+        )
+        b = _item(
+            id="b",
+            source="olx",
+            brand="Zeekr",
+            model="001",
+            year=2025,
+            mileage=90000,
+            price=19800,
+        )
+        self.assertFalse(listings_look_same(a, b))
+
+    def test_prefer_id_keeps_url_on_detail(self):
+        items = mark_duplicates_in_pool(
+            [
+                _item(
+                    id="olx_b",
+                    source="olx",
+                    brand="Zeekr",
+                    model="001",
+                    year=2025,
+                    mileage=20000,
+                    price=19800,
+                    url="https://olx.example/b",
+                ),
+                _item(
+                    id="olx_a",
+                    source="olx",
+                    brand="Zeekr",
+                    model="001",
+                    year=2025,
+                    mileage=21000,
+                    price=19800,
+                    url="https://olx.example/a",
+                ),
+            ],
+            prefer_id="olx_b",
+        )
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].id, "olx_b")
+        self.assertEqual(items[0].url, "https://olx.example/b")
+        self.assertEqual(len(items[0].alternate_sources), 1)
+        self.assertEqual(items[0].alternate_sources[0].url, "https://olx.example/a")
+
     def test_mark_pool_prefers_auto_ria_and_links_olx(self):
         items = mark_duplicates_in_pool(
             [

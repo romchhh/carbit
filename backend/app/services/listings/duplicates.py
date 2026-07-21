@@ -77,9 +77,13 @@ def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool
 
     if _mileage_close(int(getattr(a, "mileage", 0) or 0), int(getattr(b, "mileage", 0) or 0)):
         return True
-    # Repost без пробігу в одному полі, але та сама ціна (типовий OLX-дубль).
+    # Та сама ціна без близького пробігу — лише repost (пробіг невідомий або збігається).
     if _prices_close(a, b):
-        return True
+        ma = int(getattr(a, "mileage", 0) or 0)
+        mb = int(getattr(b, "mileage", 0) or 0)
+        if ma <= 0 or mb <= 0:
+            return True
+        return _mileage_close(ma, mb)
     return False
 
 
@@ -153,7 +157,19 @@ def _enrich_from_mirrors(canonical: ListingOut, members: list[ListingOut]) -> Li
     return canonical.model_copy(update=updates)
 
 
-def mark_duplicates_in_pool(items: list[ListingOut]) -> list[ListingOut]:
+def _pick_canonical(group: list[ListingOut], *, prefer_id: str | None = None) -> ListingOut:
+    if prefer_id:
+        for row in group:
+            if row.id == prefer_id:
+                return row
+    return min(group, key=lambda row: (_source_rank(row.source), row.id or ""))
+
+
+def mark_duplicates_in_pool(
+    items: list[ListingOut],
+    *,
+    prefer_id: str | None = None,
+) -> list[ListingOut]:
     """Згортає крос-джерельні дублікати в одну картку.
 
     Канонічне оголошення — пріоритетно AUTO.RIA; у `alternate_sources` —
@@ -172,7 +188,7 @@ def mark_duplicates_in_pool(items: list[ListingOut]) -> list[ListingOut]:
 
     result: list[ListingOut] = []
     for group in groups:
-        canonical = min(group, key=lambda row: _source_rank(row.source))
+        canonical = _pick_canonical(group, prefer_id=prefer_id)
         canonical = _enrich_from_mirrors(canonical, group)
 
         alternates: list[ListingSourceLink] = []
@@ -213,6 +229,8 @@ def mark_duplicates_in_pool(items: list[ListingOut]) -> list[ListingOut]:
 async def collapse_listings_with_db_mirrors(
     db: AsyncSession,
     items: list[ListingOut],
+    *,
+    prefer_id: str | None = None,
 ) -> list[ListingOut]:
     """
     Як mark_duplicates_in_pool, але підтягує дзеркала з БД
@@ -283,7 +301,7 @@ async def collapse_listings_with_db_mirrors(
             if any(listings_look_same(candidate, item) for item in items):
                 pool_by_id[row.id] = candidate
 
-    collapsed = mark_duplicates_in_pool(list(pool_by_id.values()))
+    collapsed = mark_duplicates_in_pool(list(pool_by_id.values()), prefer_id=prefer_id)
 
     kept: list[ListingOut] = []
     for card in collapsed:
@@ -300,5 +318,5 @@ async def listing_out_with_mirrors(db: AsyncSession, listing: Listing) -> Listin
     from app.services.listings.serialize import listing_to_out
 
     out = listing_to_out(listing)
-    collapsed = await collapse_listings_with_db_mirrors(db, [out])
+    collapsed = await collapse_listings_with_db_mirrors(db, [out], prefer_id=listing.id)
     return collapsed[0] if collapsed else out
