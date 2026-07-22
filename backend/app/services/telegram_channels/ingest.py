@@ -15,6 +15,7 @@ from app.services.listings.upsert import upsert_listing
 from app.services.parser.filter_groups import parse_search_filters
 from app.services.parser.linking import link_listing_to_search
 from app.services.parser.settings import get_parser_settings
+from app.services.notifications.freshness import coerce_notification_max_hours
 from app.services.search.brand_model_keywords import (
     collect_brand_keyword_variants,
     collect_model_keyword_variants,
@@ -109,6 +110,9 @@ async def ingest_telegram_listing(
     parser_settings = await get_parser_settings()
     if not parser_settings.get("notify_telegram", True):
         notify = False
+    max_hours = coerce_notification_max_hours(
+        parser_settings.get("notification_max_published_hours", 6)
+    )
 
     searches = await db.scalars(select(SearchQuery).where(SearchQuery.is_active.is_(True)))
     new_total = 0
@@ -128,14 +132,16 @@ async def ingest_telegram_listing(
         if search.user_id not in users_cache:
             users_cache[search.user_id] = await db.get(User, search.user_id)
         user = users_cache[search.user_id]
+        before_new = search.new_count or 0
         is_new, sent = await link_listing_to_search(
             db,
             search=search,
             listing_id=listing.id,
             notify=notify,
             user=user,
+            max_notification_hours=max_hours,
         )
-        if is_new:
+        if (search.new_count or 0) > before_new:
             new_total += 1
         if sent:
             notifications += 1

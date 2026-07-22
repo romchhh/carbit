@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, Notification, NotificationType, SearchListing, SearchQuery, User
 from app.services.currency import format_display_price
+from app.services.parser.filter_groups import search_monitor_display_name
 from app.services.telegram.client import SOURCE_LABELS, telegram_client
 from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
@@ -66,7 +67,7 @@ async def _send_event_card(
         result = await telegram_client.send_listing_card(
             user.telegram_id,
             _listing_card_data(listing),
-            search.name or "Carbit",
+            search_monitor_display_name(search),
             search_id=search.id,
             listing_id=listing.id,
             alert_line=alert_line,

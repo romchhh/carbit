@@ -141,6 +141,29 @@ class BrandModelKeywordTests(unittest.TestCase):
         })
         self.assertFalse(listing_out_matches_filters(item, filters))
 
+    def test_ford_escape_not_matched_as_tesla_model3(self):
+        item = type("Item", (), {
+            "brand": "Ford",
+            "model": "Escape",
+            "title": "Ford Escape SEL",
+            "year": 2017,
+            "price": 11000,
+            "currency": "USD",
+            "mileage": 134000,
+            "region": "Київ",
+            "source": "telegram",
+            "fuel": "Бензин",
+            "transmission": "Автомат",
+            "description": "Ford Escape 2017 134 тис км Бензин 1.5л Автомат Київ",
+        })()
+        filters = SearchFilters.model_validate({
+            "brand": "Tesla",
+            "model": "Model 3",
+            "region": "Київ",
+            "sources": ["telegram"],
+        })
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
     def test_tesla_model3_colloquial_titles(self):
         from app.schemas.schemas import SearchFilters
         from app.services.olx.mapper import filters_to_olx_params

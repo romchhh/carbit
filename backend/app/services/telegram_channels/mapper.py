@@ -244,18 +244,22 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
 
             filter_slug = resolve_olx_brand_slug(filters.brand)
             item_slug = resolve_olx_brand_slug(item_brand_raw)
-            title_matches_brand = text_matches_brand_filter(
-                haystack, filters.brand, model=filters.model or ""
-            )
-            if (
-                filter_slug
-                and item_slug
-                and filter_slug != item_slug
-                and not title_matches_brand
-            ):
-                item_brand = norm_text(item.brand)
-                brand = norm_text(filters.brand)
-                if not item_brand or (brand not in item_brand and item_brand not in brand):
+            if filter_slug and item_slug and filter_slug != item_slug:
+                from app.services.search.brand_model_keywords import (
+                    _allows_distinctive_model_without_brand,
+                )
+
+                model_str = (filters.model or "").strip()
+                distinctive = bool(
+                    model_str
+                    and _allows_distinctive_model_without_brand(filters.brand, model_str)
+                    and text_matches_model_filter(
+                        f"{item.model} {item.title} {item.description or ''}",
+                        model_str,
+                        brand=filters.brand,
+                    )
+                )
+                if not distinctive:
                     return False
 
         if not text_matches_brand_filter(

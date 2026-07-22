@@ -14,7 +14,7 @@ from app.services.auto_ria.constants import (
 
 # Допускаємо невелику різницю годинників джерела
 _MAX_FUTURE_SKEW_SECONDS = 300
-DEFAULT_NOTIFICATION_MAX_HOURS = 1.0
+DEFAULT_NOTIFICATION_MAX_HOURS = 6.0
 
 
 def coerce_notification_max_hours(value: object, default: float = DEFAULT_NOTIFICATION_MAX_HOURS) -> float:

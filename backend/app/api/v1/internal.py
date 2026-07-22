@@ -199,6 +199,7 @@ async def bot_monitor_info(
     _: None = Depends(verify_internal_secret),
 ):
     from app.models.models import SearchQuery
+    from app.services.parser.filter_groups import search_monitor_display_name
 
     user = await db.scalar(select(User).where(User.telegram_id == body.telegram_id))
     if not user:
@@ -212,7 +213,7 @@ async def bot_monitor_info(
 
     return {
         "success": True,
-        "search_name": sq.name,
+        "search_name": search_monitor_display_name(sq),
         "is_active": bool(sq.is_active),
     }
 
@@ -224,6 +225,7 @@ async def bot_deactivate_monitor(
     _: None = Depends(verify_internal_secret),
 ):
     from app.models.models import SearchQuery
+    from app.services.parser.filter_groups import search_monitor_display_name
 
     user = await db.scalar(select(User).where(User.telegram_id == body.telegram_id))
     if not user:
@@ -235,12 +237,14 @@ async def bot_deactivate_monitor(
     if not sq or sq.user_id != user.id:
         return {"error": "not_found"}
 
+    label = search_monitor_display_name(sq)
+
     if not sq.is_active:
         return {
             "success": True,
             "already_inactive": True,
-            "search_name": sq.name,
-            "message": f"Моніторинг «{sq.name}» уже вимкнено.",
+            "search_name": label,
+            "message": f"Моніторинг «{label}» уже вимкнено.",
         }
 
     sq.is_active = False
@@ -249,8 +253,8 @@ async def bot_deactivate_monitor(
     dashboard_url = f"{settings.FRONTEND_URL.rstrip('/')}/app/monitors"
     return {
         "success": True,
-        "search_name": sq.name,
-        "message": f"Моніторинг «{sq.name}» вимкнено. Нові сповіщення не надходитимуть.",
+        "search_name": label,
+        "message": f"Моніторинг «{label}» вимкнено. Нові сповіщення не надходитимуть.",
         "dashboard_url": dashboard_url,
     }
 

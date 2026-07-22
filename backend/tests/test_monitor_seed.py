@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.core.timezone import KYIV_TZ
+from app.core.timezone import KYIV_TZ, now_kyiv
 from app.schemas.schemas import ListingOut
 
 
@@ -106,6 +106,47 @@ class SeedBaselineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload.id, "auto_ria_1")
         self.assertEqual(len(payload.alternate_sources), 1)
         self.assertEqual(payload.alternate_sources[0].id, "olx_1")
+
+
+class LinkFreshnessTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stale_listing_not_new_and_no_notify(self):
+        from app.services.parser.linking import link_listing_to_search
+
+        search = MagicMock()
+        search.id = "search-1"
+        search.user_id = "user-1"
+        search.new_count = 0
+        search.total_count = 0
+
+        listing = MagicMock()
+        listing.id = "auto_ria_old"
+        listing.published_at = now_kyiv() - timedelta(days=4)
+
+        db = AsyncMock()
+        db.scalar = AsyncMock(return_value=None)
+        db.get = AsyncMock(return_value=listing)
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        with patch(
+            "app.services.parser.linking.notify_monitor_listing_after_link",
+            AsyncMock(return_value=True),
+        ) as notify:
+            is_new, sent = await link_listing_to_search(
+                db,
+                search=search,
+                listing_id=listing.id,
+                notify=True,
+                user=MagicMock(id="user-1"),
+                max_notification_hours=6,
+            )
+
+        self.assertTrue(is_new)
+        self.assertFalse(sent)
+        notify.assert_not_awaited()
+        added = db.add.call_args[0][0]
+        self.assertFalse(added.is_new)
+        self.assertEqual(search.new_count, 0)
 
 
 if __name__ == "__main__":

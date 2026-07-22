@@ -106,14 +106,16 @@ async def _link_listings_to_searches(
 
             do_notify = notify
 
+            before_new = search.new_count or 0
             is_new, sent = await link_listing_to_search(
                 db,
                 search=search,
                 listing_id=listing.id,
                 notify=do_notify,
                 user=user,
+                max_notification_hours=max_hours,
             )
-            if is_new:
+            if (search.new_count or 0) > before_new:
                 new_total += 1
             if sent and user:
                 notifications += 1
@@ -134,12 +136,12 @@ async def _process_group(
     log.append(f"Група {group.key[:8]}… — {len(group.search_ids)} пошук(ів)" + (" [схожі]" if group.similar else ""))
 
     settings = await get_parser_settings()
-    max_hours = coerce_notification_max_hours(settings.get("notification_max_published_hours", 1))
+    max_hours = coerce_notification_max_hours(
+        settings.get("notification_max_published_hours", 6)
+    )
     max_hours_int = max(1, int(round(max_hours)))
-    # Для виявлення нових оголошень шукаємо ширше, ніж вікно сповіщень.
-    # Якщо авто з'являється як «нове» в UI — воно має прийти і в Telegram.
-    discover_hours = max(max_hours_int, 6)
-    notify_hours = float(discover_hours)  # вікно Telegram = вікно виявлення
+    discover_hours = max_hours_int
+    notify_hours = max_hours
     monitor_ttl = _monitor_cache_ttl(settings)
 
     searches: list[SearchQuery] = []

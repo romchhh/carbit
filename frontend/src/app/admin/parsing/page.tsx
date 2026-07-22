@@ -818,7 +818,7 @@ export default function AdminParsingPage() {
                 type="number"
                 min={1}
                 max={24}
-                value={settings.notification_max_published_hours ?? 1}
+                value={settings.notification_max_published_hours ?? 6}
                 onChange={e =>
                   setSettings({
                     ...settings,

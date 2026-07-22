@@ -224,3 +224,32 @@ def group_searches(
             )
         )
     return groups
+
+
+def search_monitor_display_name(search) -> str:
+    """Підпис моніторингу для Telegram — з фільтрів, не лише з поля name."""
+    filters = parse_search_filters(getattr(search, "filters", None))
+    parts: list[str] = []
+    if filters.brand:
+        parts.append(filters.brand.strip())
+    if filters.model:
+        parts.append(filters.model.strip())
+    label = " · ".join(parts)
+    region = (filters.region or "").strip()
+    if region and norm_text(region) not in ("вся україна", ""):
+        region_short = region.removeprefix("м.").removeprefix("М.").strip()
+        label = f"{label} · {region_short}" if label else region_short
+    if label:
+        return label
+    custom = (getattr(search, "name", None) or "").strip()
+    return custom or "Мій моніторинг"
+
+
+def listing_matches_search_query(listing, search) -> bool:
+    """Чи oголошення відповідає фільтрам збереженого моніторингу."""
+    from app.services.listings.serialize import listing_to_out
+    from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+    item = listing_to_out(listing)
+    filters = parse_search_filters(getattr(search, "filters", None))
+    return listing_out_matches_filters(item, filters)

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.timezone import now_kyiv
 from app.models.models import Listing, SearchListing, SearchQuery, User
+from app.services.notifications.freshness import is_listing_fresh_for_notification
 from app.services.notifications.service import notify_monitor_listing_after_link
 
 
@@ -19,12 +20,23 @@ async def link_listing_to_search(
     mark_as_new: bool = True,
     publish_immediately: bool = False,  # caller commits after the batch
 ) -> tuple[bool, bool]:
-    """Returns (is_new_link, notification_sent).
+    """Returns (linked_newly, notification_sent).
 
-    mark_as_new=False — baseline при збереженні моніторингу (авто з першого пошуку).
-    Caller відповідає за commit: run_parser_cycle робить його після кожної групи.
+    linked_newly — перший раз прив’язали oголошення до пошуку.
+    «Нове» / Telegram — лише якщо mark_as_new і published_at у вікні max_notification_hours.
     """
-    del max_notification_hours, publish_immediately  # unused: caller commits
+    del publish_immediately  # unused: caller commits
+
+    listing = await db.get(Listing, listing_id)
+
+    if mark_as_new and max_notification_hours is not None and listing:
+        if not is_listing_fresh_for_notification(
+            listing.published_at,
+            max_hours=max_notification_hours,
+            allow_none=False,
+        ):
+            mark_as_new = False
+            notify = False
 
     existing = await db.scalar(
         select(SearchListing).where(
@@ -51,7 +63,6 @@ async def link_listing_to_search(
     notification_sent = False
     if mark_as_new and notify:
         owner = user if user and user.id == search.user_id else await db.get(User, search.user_id)
-        listing = await db.get(Listing, listing_id)
         if owner and listing:
             notification_sent = await notify_monitor_listing_after_link(
                 db,
