@@ -302,6 +302,104 @@ class TelegramWorkerStatusOut(BaseModel):
     schedule_hint: str
 
 
+class TelethonSessionUserOut(BaseModel):
+    id: int
+    first_name: str
+    username: str | None = None
+
+
+class TelethonSessionStatusOut(BaseModel):
+    telethon_configured: bool
+    phone_configured: bool
+    phone_masked: str
+    session_file: str
+    session_exists: bool
+    authorized: bool
+    user: TelethonSessionUserOut | None = None
+    error: str | None = None
+    error_code: str | None = None
+    auth_step: str | None = None
+
+
+class TelethonAuthCodeIn(BaseModel):
+    code: str = Field(min_length=4, max_length=12)
+
+
+class TelethonAuthPasswordIn(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
+
+
+class TelethonAuthResultOut(BaseModel):
+    status: str
+    phone_masked: str | None = None
+    user: TelethonSessionUserOut | None = None
+
+
+class TelethonSessionResetOut(BaseModel):
+    removed: list[str]
+    session_file: str
+
+
+@router.get("/telethon/session", response_model=TelethonSessionStatusOut)
+async def telethon_session_status(_admin=Depends(get_current_admin)):
+    from app.services.telegram_channels.telethon_auth import get_telethon_session_status
+
+    data = await get_telethon_session_status()
+    user = data.get("user")
+    return TelethonSessionStatusOut(
+        **{
+            **data,
+            "user": TelethonSessionUserOut(**user) if user else None,
+        }
+    )
+
+
+@router.post("/telethon/session/reset", response_model=TelethonSessionResetOut)
+async def telethon_session_reset(_admin=Depends(get_current_admin)):
+    from app.services.telegram_channels.telethon_auth import reset_telethon_session
+
+    return TelethonSessionResetOut(**await reset_telethon_session())
+
+
+@router.post("/telethon/auth/send-code", response_model=TelethonAuthResultOut)
+async def telethon_auth_send_code(_admin=Depends(get_current_admin)):
+    from app.services.telegram_channels.telethon_auth import send_telethon_login_code
+
+    data = await send_telethon_login_code()
+    user = data.get("user")
+    return TelethonAuthResultOut(
+        status=data["status"],
+        phone_masked=data.get("phone_masked"),
+        user=TelethonSessionUserOut(**user) if user else None,
+    )
+
+
+@router.post("/telethon/auth/sign-in", response_model=TelethonAuthResultOut)
+async def telethon_auth_sign_in(body: TelethonAuthCodeIn, _admin=Depends(get_current_admin)):
+    from app.services.telegram_channels.telethon_auth import confirm_telethon_code
+
+    data = await confirm_telethon_code(body.code)
+    user = data.get("user")
+    return TelethonAuthResultOut(
+        status=data["status"],
+        phone_masked=data.get("phone_masked"),
+        user=TelethonSessionUserOut(**user) if user else None,
+    )
+
+
+@router.post("/telethon/auth/password", response_model=TelethonAuthResultOut)
+async def telethon_auth_password(body: TelethonAuthPasswordIn, _admin=Depends(get_current_admin)):
+    from app.services.telegram_channels.telethon_auth import confirm_telethon_password
+
+    data = await confirm_telethon_password(body.password)
+    user = data.get("user")
+    return TelethonAuthResultOut(
+        status=data["status"],
+        phone_masked=data.get("phone_masked"),
+        user=TelethonSessionUserOut(**user) if user else None,
+    )
+
+
 @router.get("/telegram/status", response_model=TelegramWorkerStatusOut)
 async def telegram_worker_status(_admin=Depends(get_current_admin)):
     from app.services.telegram_channels.admin_status import get_telegram_worker_status

@@ -167,6 +167,21 @@ export const adminApi = {
   triggerParserRunSource: (source: "auto_ria" | "olx" | "telegram") =>
     request<AdminParseRun>(`/admin/parser/run/${source}`, { method: "POST" }),
   telegramWorkerStatus: () => request<AdminTelegramWorkerStatus>("/admin/parser/telegram/status"),
+  telethonSessionStatus: () => request<AdminTelethonSessionStatus>("/admin/parser/telethon/session"),
+  telethonResetSession: () =>
+    request<AdminTelethonSessionReset>("/admin/parser/telethon/session/reset", { method: "POST" }),
+  telethonSendCode: () =>
+    request<AdminTelethonAuthResult>("/admin/parser/telethon/auth/send-code", { method: "POST" }),
+  telethonSignIn: (code: string) =>
+    request<AdminTelethonAuthResult>("/admin/parser/telethon/auth/sign-in", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+  telethonPassword: (password: string) =>
+    request<AdminTelethonAuthResult>("/admin/parser/telethon/auth/password", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
   telegramChannels: () => request<AdminTelegramChannel[]>("/admin/parser/channels"),
   createTelegramChannel: (body: { username: string; title?: string; enabled?: boolean }) =>
     request<AdminTelegramChannel>("/admin/parser/channels", {
@@ -223,6 +238,30 @@ export interface AdminTelegramWorkerStatus {
   telegram_history_limit: number;
   keyword_queue: { pending: number; running: number; done: number; error: number };
   schedule_hint: string;
+}
+
+export interface AdminTelethonSessionStatus {
+  telethon_configured: boolean;
+  phone_configured: boolean;
+  phone_masked: string;
+  session_file: string;
+  session_exists: boolean;
+  authorized: boolean;
+  user: { id: number; first_name: string; username: string | null } | null;
+  error: string | null;
+  error_code: string | null;
+  auth_step: string | null;
+}
+
+export interface AdminTelethonAuthResult {
+  status: string;
+  phone_masked?: string | null;
+  user?: { id: number; first_name: string; username: string | null } | null;
+}
+
+export interface AdminTelethonSessionReset {
+  removed: string[];
+  session_file: string;
 }
 
 export interface AdminParseRun {

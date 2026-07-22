@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { TelethonSessionPanel } from "@/components/admin/TelethonSessionPanel";
 import { adminApi, AdminApiError, type AdminTelegramChannel, type AdminTelegramWorkerStatus } from "@/lib/admin-api";
 import { formatKyivDateTime } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
@@ -196,6 +197,11 @@ export default function AdminTelegramChannelsPage() {
           {message}
         </div>
       )}
+
+      <TelethonSessionPanel
+        onMessage={setMessage}
+        workerOnline={Boolean(workerStatus?.worker_online)}
+      />
 
       <section className="mb-6 rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">

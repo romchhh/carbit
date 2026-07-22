@@ -237,11 +237,30 @@ docker compose start backend bot worker telegram-worker
 
 | Симптом | Що робити |
 |---------|-----------|
-| `telegram-worker` падає | Перевір `database/carbit_parser.session` і `TELETHON_*` у `.env` |
+| `telegram-worker` падає | `AuthKeyDuplicated` — один `.session` лише на VPS; `docker compose stop telegram-worker`, адмінка `/admin/channels` → «Скинути сесію» + код, або `python auth.py --reset` |
+| `AuthKeyDuplicatedError` | Зупинити worker + локальний парсер; скинути сесію; увійти знову (див. §12) |
 | 0 оголошень з Telegram | Логи worker; перевір канали в адмінці `/admin/channels`, `TELEGRAM_ENABLED=true` |
 | Сповіщення без фото | Перевір `./media` на хості і nginx для `/api/v1/telegram-media/` |
 | Build «no space left» | `docker builder prune -af --filter "until=168h"` |
 | Старий UI в адмінці | Rebuild frontend + hard refresh |
+
+---
+
+## 12. Telethon-сесія (парсер каналів)
+
+Файл: `database/carbit_parser.session` (volume `./database` у Docker).
+
+**Адмінка (рекомендовано):** `/admin/channels` → блок «Telethon-сесія» → зупинити worker → «Скинути сесію» → «Надіслати код» → ввести код (і 2FA за потреби) → `docker compose up -d telegram-worker`.
+
+**CLI на VPS:**
+
+```bash
+docker compose stop telegram-worker
+docker compose run --rm -it -w /app --entrypoint python telegram-worker auth.py --reset
+docker compose up -d telegram-worker
+```
+
+Локально (без Docker): `python auth.py --reset` з кореня репо, `.env` з `TELETHON_*`.
 
 ---
 

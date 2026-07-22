@@ -20,6 +20,7 @@ COPY worker ./worker
 COPY telegram_worker ./telegram_worker
 COPY parser ./parser
 COPY storage ./storage
+COPY auth.py ./auth.py
 COPY docker/python/entrypoint-backend.sh /entrypoint-backend.sh
 
 RUN chmod +x /entrypoint-backend.sh \
