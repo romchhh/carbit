@@ -11,6 +11,7 @@ from app.core.text import norm_text
 from app.models.models import Listing
 from app.schemas.schemas import ListingOut, ListingSourceLink
 from app.services.telegram_channels.mapper import fix_telegram_listing_url
+from app.services.vin import is_valid_vin
 
 
 _SOURCE_RANK = {
@@ -42,17 +43,23 @@ def _normalize_model_key(model: str, *, brand: str = "") -> str:
     return tokens[0] if tokens else m.strip()
 
 
+def listing_vin_for_dedup(item: ListingOut | Listing) -> str | None:
+    """Валідний VIN для злиття дублів — інакше None (не dedup)."""
+    vin = _normalize_vin(getattr(item, "vin", None))
+    return vin if is_valid_vin(vin) else None
+
+
 def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:
-    """Одне авто — лише якщо збігається повний 17-символьний VIN."""
-    vin_a = _normalize_vin(getattr(a, "vin", None))
-    vin_b = _normalize_vin(getattr(b, "vin", None))
-    return bool(vin_a and vin_b and len(vin_a) == 17 and len(vin_b) == 17 and vin_a == vin_b)
+    """Одне авто — лише при збігу валідного 17-символьного VIN."""
+    vin_a = listing_vin_for_dedup(a)
+    vin_b = listing_vin_for_dedup(b)
+    return bool(vin_a and vin_b and vin_a == vin_b)
 
 
 async def find_duplicate_of(db: AsyncSession, data: ListingOut) -> Listing | None:
-    """Шукає оголошення з тим самим VIN (інше джерело / repost)."""
-    vin = _normalize_vin(data.vin)
-    if not vin or len(vin) != 17:
+    """Шукає oголошення з тим самим VIN (інше джерело / repost)."""
+    vin = listing_vin_for_dedup(data)
+    if not vin:
         return None
 
     row = await db.scalar(
@@ -81,10 +88,10 @@ def _pick_canonical(group: list[ListingOut], *, prefer_id: str | None = None) ->
 
 def _enrich_from_mirrors(canonical: ListingOut, members: list[ListingOut]) -> ListingOut:
     updates: dict = {}
-    if not _normalize_vin(canonical.vin) or len(_normalize_vin(canonical.vin)) != 17:
+    if not listing_vin_for_dedup(canonical):
         for m in members:
-            vin = _normalize_vin(m.vin)
-            if len(vin) == 17:
+            vin = listing_vin_for_dedup(m)
+            if vin:
                 updates["vin"] = vin
                 break
     if not canonical.images:
@@ -116,7 +123,7 @@ def mark_duplicates_in_pool(
 
     result: list[ListingOut] = []
     for group in groups:
-        if len(group) == 1 and not _normalize_vin(group[0].vin):
+        if len(group) == 1 and not listing_vin_for_dedup(group[0]):
             result.append(group[0])
             continue
 
@@ -183,9 +190,9 @@ async def collapse_listings_with_db_mirrors(
 
     vins = sorted(
         {
-            _normalize_vin(item.vin)
+            v
             for item in items
-            if item.vin and len(_normalize_vin(item.vin)) == 17
+            if (v := listing_vin_for_dedup(item))
         }
     )
     parent_ids = [item.duplicate_of for item in items if item.duplicate_of]

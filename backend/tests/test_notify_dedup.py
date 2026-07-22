@@ -15,13 +15,14 @@ class AlreadyNotifiedTests(unittest.IsolatedAsyncioTestCase):
     async def test_family_id_hit(self):
         from app.services.notifications.service import user_already_notified_for_car
 
+        vin = "WBA8E9C50HK123456"
         listing = SimpleNamespace(
             id="olx_1",
             brand="BMW",
             model="X5",
             year=2022,
             mileage=15000,
-            vin=None,
+            vin=vin,
             duplicate_of="auto_ria_1",
             is_duplicate=True,
         )
@@ -33,6 +34,18 @@ class AlreadyNotifiedTests(unittest.IsolatedAsyncioTestCase):
         db.scalar = AsyncMock(return_value="notif-1")
 
         self.assertTrue(await user_already_notified_for_car(db, "user-1", listing))
+
+    async def test_duplicate_link_without_vin_is_not_blocked(self):
+        from app.services.notifications.service import user_already_notified_for_car
+
+        listing = SimpleNamespace(
+            id="olx_1",
+            vin=None,
+            duplicate_of="auto_ria_1",
+            is_duplicate=True,
+        )
+        db = AsyncMock()
+        self.assertFalse(await user_already_notified_for_car(db, "user-1", listing))
 
     async def test_soft_match_hit(self):
         from app.services.notifications.service import user_already_notified_for_car
@@ -138,22 +151,17 @@ class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
             return_value={"ok": True},
         ) as send:
             with patch(
-                "app.services.notifications.service._user_already_sent_exact_listing",
+                "app.services.notifications.service.build_cross_source_telegram_alert",
                 new_callable=AsyncMock,
-                return_value=False,
+                return_value=("Це авто вже знайдено на AUTO.RIA. Ось оголошення з OLX.", "🔗"),
             ):
                 with patch(
-                    "app.services.notifications.service.build_cross_source_telegram_alert",
-                    new_callable=AsyncMock,
-                    return_value=("Це авто вже знайдено на AUTO.RIA. Ось оголошення з OLX.", "🔗"),
+                    "app.services.notifications.service.format_display_price",
+                    return_value="30 000 $",
                 ):
-                    with patch(
-                        "app.services.notifications.service.format_display_price",
-                        return_value="30 000 $",
-                    ):
-                        notif = await create_listing_notification(
-                            db, user, listing, search=search, send_telegram=True
-                        )
+                    notif = await create_listing_notification(
+                        db, user, listing, search=search, send_telegram=True
+                    )
 
         send.assert_awaited_once()
         self.assertTrue(notif.sent_telegram)

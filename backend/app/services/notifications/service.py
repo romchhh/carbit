@@ -5,6 +5,7 @@ from datetime import timedelta
 from sqlalchemy import asc, desc, exists, func, nulls_last, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.sqlite_retry import commit_session, flush_session
 from app.core.timezone import now_kyiv
 from app.models.models import (
     Listing,
@@ -22,7 +23,7 @@ from app.services.notifications.freshness import (
     is_listing_fresh_for_notification,
 )
 from app.services.parser.settings import get_parser_settings
-from app.services.listings.duplicates import listings_look_same
+from app.services.listings.duplicates import listings_look_same, listing_vin_for_dedup
 from app.services.telegram.client import telegram_client, SOURCE_LABELS
 from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
@@ -30,18 +31,15 @@ logger = logging.getLogger(__name__)
 
 
 def monitor_telegram_delivery_done(notification: Notification) -> bool:
-    """Telegram доставлено або свідомо пропущено (VIN-дзеркало) — не ретраїмо."""
-    if notification.sent_telegram:
-        return True
-    payload = notification.payload or {}
-    return bool(payload.get("telegram_skipped_duplicate"))
+    """Telegram доставлено — повторна догонка не потрібна."""
+    return bool(notification.sent_telegram)
 
 
 async def _duplicate_family_ids(db: AsyncSession, listing: Listing) -> set[str]:
-    """ID оголошення + дзеркала лише при збігу 17-символьного VIN (не вся гілка duplicate_of)."""
+    """ID оголошення + VIN-дзеркала (лише при валідному VIN)."""
     ids = {listing.id}
-    vin = (getattr(listing, "vin", None) or "").strip().upper()
-    if len(vin) != 17:
+    vin = listing_vin_for_dedup(listing)
+    if not vin:
         return ids
 
     parent_id = getattr(listing, "duplicate_of", None)
@@ -74,37 +72,23 @@ async def user_already_notified_for_car(
     *,
     lookback_hours: int = 72,
 ) -> bool:
-    """True, якщо юзеру вже успішно слали listing_match по цьому oголошенню / VIN-дзеркалу."""
+    """True, якщо юзеру вже успішно слали TG по цьому VIN (або VIN-дзеркалу)."""
+    vin = listing_vin_for_dedup(listing)
+    if not vin:
+        return False
+
+    family_ids = await _duplicate_family_ids(db, listing)
     if await db.scalar(
         select(Notification.id)
         .where(
             Notification.user_id == user_id,
             Notification.type == NotificationType.listing_match,
-            Notification.listing_id == listing.id,
+            Notification.listing_id.in_(list(family_ids)),
             Notification.sent_telegram.is_(True),
         )
         .limit(1)
     ):
         return True
-
-    family_ids = await _duplicate_family_ids(db, listing)
-    other_ids = family_ids - {listing.id}
-    if other_ids:
-        if await db.scalar(
-            select(Notification.id)
-            .where(
-                Notification.user_id == user_id,
-                Notification.type == NotificationType.listing_match,
-                Notification.listing_id.in_(list(other_ids)),
-                Notification.sent_telegram.is_(True),
-            )
-            .limit(1)
-        ):
-            return True
-
-    vin = (getattr(listing, "vin", None) or "").strip().upper()
-    if not vin or len(vin) != 17:
-        return False
 
     since = now_kyiv() - timedelta(hours=max(1, lookback_hours))
     recent = (
@@ -169,25 +153,6 @@ async def _prior_telegram_source_labels(
             seen.add(label)
             labels.append(label)
     return labels
-
-
-async def _user_already_sent_exact_listing(
-    db: AsyncSession,
-    user_id: str,
-    listing_id: str,
-) -> bool:
-    return bool(
-        await db.scalar(
-            select(Notification.id)
-            .where(
-                Notification.user_id == user_id,
-                Notification.type == NotificationType.listing_match,
-                Notification.listing_id == listing_id,
-                Notification.sent_telegram.is_(True),
-            )
-            .limit(1)
-        )
-    )
 
 
 async def build_cross_source_telegram_alert(
@@ -264,7 +229,7 @@ async def _attempt_listing_match_telegram(
         images = load_existing_telegram_photo_urls(listing.id, limit=1)
         if images:
             listing.images = images
-            await db.flush()
+            await flush_session(db)
 
     listing_data = {
         "title": listing.title,
@@ -302,7 +267,7 @@ async def _attempt_listing_match_telegram(
             await asyncio.sleep(0.6)
     if result:
         notification.sent_telegram = True
-        await db.flush()
+        await flush_session(db)
         return True
 
     logger.warning(
@@ -335,8 +300,6 @@ async def create_listing_notification(
     price_label = format_display_price(listing.price, listing.currency, display_currency)
 
     skip_telegram = False
-    skipped_duplicate = False
-    skipped_already_notified = False
     skipped_no_chat_id = False
     cross_source_alert: str | None = None
     cross_source_emoji = "🚗"
@@ -350,18 +313,9 @@ async def create_listing_notification(
                 user.id,
             )
     elif send_telegram:
-        if await _user_already_sent_exact_listing(db, user.id, listing.id):
-            skip_telegram = True
-            skipped_already_notified = True
-            logger.info(
-                "Skip Telegram notify for %s: user %s already got this listing_id",
-                listing.id,
-                user.id,
-            )
-        else:
-            cross_source_alert, cross_source_emoji = await build_cross_source_telegram_alert(
-                db, user.id, listing
-            )
+        cross_source_alert, cross_source_emoji = await build_cross_source_telegram_alert(
+            db, user.id, listing
+        )
 
     notification = Notification(
         user_id=user.id,
@@ -382,14 +336,12 @@ async def create_listing_notification(
             "url": listing_url,
             "fuel": listing.fuel,
             "transmission": listing.transmission,
-            "telegram_skipped_duplicate": skipped_duplicate,
-            "telegram_skipped_already_notified": skipped_already_notified,
             "telegram_skipped_no_chat_id": skipped_no_chat_id,
             "cross_source_alert": cross_source_alert,
         },
     )
     db.add(notification)
-    await db.flush()
+    await flush_session(db)
 
     if (
         send_telegram
@@ -475,6 +427,7 @@ async def deliver_pending_monitor_telegram(
     *,
     search_ids: list[str] | None = None,
     limit: int = 40,
+    persist_each: bool = False,
 ) -> int:
     """Догоняє Telegram для «нових» авто в моніторингу, якщо перша спроба не вдалась."""
     settings = await get_parser_settings()
@@ -524,6 +477,9 @@ async def deliver_pending_monitor_telegram(
     rows = (await db.execute(stmt)).all()
     delivered = 0
     for sl, search, user, listing in rows:
+        if persist_each:
+            await commit_session(db)
+
         latest = await db.scalar(
             select(Notification)
             .where(
@@ -538,9 +494,15 @@ async def deliver_pending_monitor_telegram(
         if latest and latest.sent_telegram:
             sl.notified_at = now_kyiv()
             delivered += 1
+            await flush_session(db)
+            if persist_each:
+                await commit_session(db)
             continue
         if latest and monitor_telegram_delivery_done(latest):
             sl.notified_at = now_kyiv()
+            await flush_session(db)
+            if persist_each:
+                await commit_session(db)
             continue
         if latest:
             payload = latest.payload or {}
@@ -565,6 +527,9 @@ async def deliver_pending_monitor_telegram(
                 delivered += 1
             if ok or monitor_telegram_delivery_done(latest):
                 sl.notified_at = now_kyiv()
+            await flush_session(db)
+            if persist_each:
+                await commit_session(db)
             continue
 
         notification = await create_listing_notification(
@@ -579,8 +544,13 @@ async def deliver_pending_monitor_telegram(
         if notification.sent_telegram:
             delivered += 1
 
+        await flush_session(db)
+        if persist_each:
+            await commit_session(db)
+
     if delivered:
-        await db.flush()
+        if not persist_each:
+            await flush_session(db)
         logger.info(
             "Delivered %s pending monitor Telegram notification(s) search_ids=%s",
             delivered,

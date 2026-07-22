@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, Source
 from app.schemas.schemas import ListingOut
-from app.services.listings.duplicates import find_duplicate_of
-from app.services.vin import extract_vin
+from app.services.listings.duplicates import find_duplicate_of, listing_vin_for_dedup
+from app.services.vin import extract_vin, is_valid_vin
 
 
 def _parse_source(value: str) -> Source:
@@ -39,7 +39,8 @@ def _append_price_history(listing: Listing, new_price: int, currency: str) -> li
 
 async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
     listing = await db.get(Listing, data.id)
-    vin = (data.vin or extract_vin(data.description, data.title) or "").strip().upper() or None
+    raw = (data.vin or extract_vin(data.description, data.title) or "").strip().upper()
+    vin = raw if is_valid_vin(raw) else None
 
     duplicate = await find_duplicate_of(db, data.model_copy(update={"vin": vin}))
     if duplicate:
@@ -131,26 +132,28 @@ async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
 
 
 async def upsert_listing_with_mirrors(db: AsyncSession, data: ListingOut) -> Listing:
-    """Upsert канонічного оголошення + дзеркал з `alternate_sources`."""
+    """Upsert канонічного оголошення + дзеркал з `alternate_sources` (лише при VIN)."""
     listing = await upsert_listing(db, data)
+    canonical_vin = listing_vin_for_dedup(listing)
     for alt in data.alternate_sources or []:
         if not alt.url or not alt.source:
             continue
         mirror_id = (alt.id or "").strip()
         if not mirror_id or mirror_id == listing.id:
             continue
-        mirror = data.model_copy(
-            update={
-                "id": mirror_id,
-                "source": alt.source,
-                "url": alt.url,
-                "images": [],
-                "source_data": None,
-                "price_history": [],
-                "alternate_sources": [],
-                "is_duplicate": True,
-                "duplicate_of": listing.id,
-            }
-        )
+        mirror_updates: dict = {
+            "id": mirror_id,
+            "source": alt.source,
+            "url": alt.url,
+            "images": [],
+            "source_data": None,
+            "price_history": [],
+            "alternate_sources": [],
+        }
+        if canonical_vin:
+            mirror_updates["is_duplicate"] = True
+            mirror_updates["duplicate_of"] = listing.id
+            mirror_updates["vin"] = canonical_vin
+        mirror = data.model_copy(update=mirror_updates)
         await upsert_listing(db, mirror)
     return listing

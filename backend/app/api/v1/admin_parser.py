@@ -9,6 +9,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal, get_db
+from app.core.sqlite_retry import commit_session
 from app.core.security import get_current_admin
 from app.models.models import Listing, Notification, NotificationType, ParseRun, SearchListing, SearchQuery, User
 from app.services.listings.serialize import listing_to_out
@@ -415,11 +416,16 @@ async def deliver_search_telegram(
 
     delivered = 0
     for _ in range(10):
-        batch = await deliver_pending_monitor_telegram(db, search_ids=[search_id], limit=50)
+        batch = await deliver_pending_monitor_telegram(
+            db,
+            search_ids=[search_id],
+            limit=50,
+            persist_each=True,
+        )
         if not batch:
             break
         delivered += batch
-    await db.commit()
+    await commit_session(db)
     return {"delivered": delivered}
 
 
