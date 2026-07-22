@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.text import norm_text
 from app.models.models import Listing
 from app.schemas.schemas import ListingOut, ListingSourceLink
 from app.services.telegram_channels.mapper import fix_telegram_listing_url
@@ -23,6 +26,20 @@ def _source_rank(source: str) -> int:
 
 def _normalize_vin(value: str | None) -> str:
     return (value or "").strip().upper()
+
+
+def _normalize_model_key(model: str, *, brand: str = "") -> str:
+    """Очистка назви моделі (OLX title split) — не для дедуплікації."""
+    m = norm_text(model or "")
+    m = re.sub(r"\b(19|20)\d{2}\b", "", m)
+    m = re.sub(r"[^a-z0-9а-яёіїєґ\s-]", " ", m)
+    brand_key = norm_text(brand or "")
+    tokens = [
+        t
+        for t in m.split()
+        if t and (not brand_key or t != brand_key)
+    ]
+    return tokens[0] if tokens else m.strip()
 
 
 def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:
