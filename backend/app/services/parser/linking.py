@@ -17,15 +17,14 @@ async def link_listing_to_search(
     user: User | None,
     max_notification_hours: float | None = None,
     mark_as_new: bool = True,
-    publish_immediately: bool = True,
+    publish_immediately: bool = False,  # caller commits after the batch
 ) -> tuple[bool, bool]:
     """Returns (is_new_link, notification_sent).
 
     mark_as_new=False — baseline при збереженні моніторингу (авто з першого пошуку).
-    publish_immediately=True — commit після нового звʼязку, щоб кабінет і Telegram
-    бачили одне й те саме одночасно (не чекати кінця циклу парсера).
+    Caller відповідає за commit: run_parser_cycle робить його після кожної групи.
     """
-    del max_notification_hours  # моніторинг: freshness вимкнено в notify_monitor_listing_after_link
+    del max_notification_hours, publish_immediately  # unused: caller commits
 
     existing = await db.scalar(
         select(SearchListing).where(
@@ -50,19 +49,17 @@ async def link_listing_to_search(
     await db.flush()
 
     notification_sent = False
-    if mark_as_new and notify and user and user.telegram_connected and user.telegram_id:
+    if mark_as_new and notify:
+        owner = user if user and user.id == search.user_id else await db.get(User, search.user_id)
         listing = await db.get(Listing, listing_id)
-        if listing:
+        if owner and listing:
             notification_sent = await notify_monitor_listing_after_link(
                 db,
-                user,
+                owner,
                 listing,
                 search,
                 sl=sl,
             )
-
-    if mark_as_new and publish_immediately:
-        await db.commit()
 
     return True, notification_sent
 

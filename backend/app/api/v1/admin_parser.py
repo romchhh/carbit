@@ -123,6 +123,7 @@ class AdminActiveSearchOut(BaseModel):
     user_email: str
     telegram_connected: bool
     telegram_username: str | None
+    telegram_has_chat_id: bool
     brand: str | None
     model: str | None
     region: str | None
@@ -152,6 +153,7 @@ class AdminSearchListingOut(BaseModel):
     notified_at: datetime | None
     telegram_sent: bool
     telegram_sent_at: datetime | None
+    telegram_issue: str | None = None
 
 
 class AdminSearchDetailOut(BaseModel):
@@ -189,6 +191,30 @@ async def _search_telegram_sent_count(db: AsyncSession, search_id: str) -> int:
     )
 
 
+def _telegram_issue_hint(
+    user: User,
+    notif: Notification | None,
+    *,
+    telegram_sent: bool,
+) -> str | None:
+    if telegram_sent:
+        return None
+    if not user.telegram_connected:
+        return "no_bot_link"
+    if not user.telegram_id:
+        return "bot_start_required"
+    if notif is None:
+        return "not_attempted"
+    payload = notif.payload or {}
+    if payload.get("telegram_skipped_no_chat_id"):
+        return "bot_start_required"
+    if payload.get("telegram_skipped_already_notified"):
+        return "skipped_duplicate_car"
+    if payload.get("telegram_skipped_duplicate"):
+        return "skipped_vin_mirror"
+    return "send_failed"
+
+
 async def _active_search_out(db: AsyncSession, search: SearchQuery, user: User) -> AdminActiveSearchOut:
     brand, model, region, sources = _filters_summary(search.filters)
     return AdminActiveSearchOut(
@@ -199,6 +225,7 @@ async def _active_search_out(db: AsyncSession, search: SearchQuery, user: User) 
         user_email=user.email,
         telegram_connected=bool(user.telegram_connected),
         telegram_username=user.telegram_username,
+        telegram_has_chat_id=bool(user.telegram_id),
         brand=brand,
         model=model,
         region=region,
@@ -312,6 +339,24 @@ async def get_parser_search_detail(
         )
     ).all()
 
+    listing_ids = [listing.id for _, listing in sl_rows]
+    latest_notif: dict[str, Notification] = {}
+    if listing_ids:
+        notif_rows = (
+            await db.scalars(
+                select(Notification)
+                .where(
+                    Notification.search_id == search_id,
+                    Notification.listing_id.in_(listing_ids),
+                    Notification.type == NotificationType.listing_match,
+                )
+                .order_by(desc(Notification.created_at))
+            )
+        ).all()
+        for notif in notif_rows:
+            if notif.listing_id and notif.listing_id not in latest_notif:
+                latest_notif[notif.listing_id] = notif
+
     listings_out: list[AdminSearchListingOut] = []
     telegram_sent_total = len(sent_map)
     telegram_pending = 0
@@ -321,6 +366,8 @@ async def get_parser_search_detail(
         telegram_sent = sent_at is not None
         if sl.is_new and not telegram_sent:
             telegram_pending += 1
+        notif = latest_notif.get(listing.id)
+        issue = _telegram_issue_hint(user, notif, telegram_sent=telegram_sent)
         source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
         images = listing.images or []
         listings_out.append(
@@ -341,6 +388,7 @@ async def get_parser_search_detail(
                 notified_at=sl.notified_at,
                 telegram_sent=telegram_sent,
                 telegram_sent_at=sent_at,
+                telegram_issue=issue,
             )
         )
 
@@ -351,6 +399,28 @@ async def get_parser_search_detail(
         telegram_sent_total=telegram_sent_total,
         telegram_pending=telegram_pending,
     )
+
+
+@router.post("/searches/{search_id}/deliver-telegram")
+async def deliver_search_telegram(
+    search_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    """Примусова догонка Telegram для нових авто в моніторингу (окремий користувач)."""
+    search = await db.get(SearchQuery, search_id)
+    if not search:
+        raise HTTPException(404, "Пошук не знайдено")
+    from app.services.notifications.service import deliver_pending_monitor_telegram
+
+    delivered = 0
+    for _ in range(10):
+        batch = await deliver_pending_monitor_telegram(db, search_ids=[search_id], limit=50)
+        if not batch:
+            break
+        delivered += batch
+    await db.commit()
+    return {"delivered": delivered}
 
 
 @router.get("/runs", response_model=list[ParseRunOut])

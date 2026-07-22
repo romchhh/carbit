@@ -13,6 +13,7 @@ from app.schemas.schemas import ListingOut
 from app.services.listings.serialize import listing_to_out
 from app.services.listings.upsert import upsert_listing
 from app.services.parser.filter_groups import FilterGroup, filters_group_key, group_searches, parse_search_filters
+from app.services.telegram_channels.mapper import listing_out_matches_filters
 from app.services.parser.linking import link_listing_to_search
 from app.services.parser.settings import get_filter_cache, get_parser_settings, set_filter_cache
 from app.services.notifications.freshness import coerce_notification_max_hours
@@ -115,6 +116,9 @@ async def _link_listings_to_searches(
             search_sources = normalize_sources(parse_search_filters(search.filters).sources)
             if item.source not in search_sources:
                 continue
+            search_filters = parse_search_filters(search.filters)
+            if not listing_out_matches_filters(item, search_filters):
+                continue
             if search.user_id not in users_cache:
                 users_cache[search.user_id] = await db.get(User, search.user_id)
             user = users_cache[search.user_id]
@@ -215,6 +219,8 @@ async def _process_group(
                         max_hours=notify_hours,
                         log=log,
                     )
+                    if new_total:
+                        await db.commit()  # зразу в кабінеті + Telegram
                     log.append(f"  ✓ З кешу: {len(upserted)} оголошень, нових {new_total}")
                     mark_searches_checked(searches)
                     notifications = await _deliver_monitor_telegram_for_searches(
@@ -246,6 +252,8 @@ async def _process_group(
                 max_hours=notify_hours,
                 log=log,
             )
+            if new_total:
+                await db.commit()
             await set_filter_cache(fetch_key, listing_ids, ttl_seconds=settings["cache_ttl_seconds"])
             log.append(f"  ✓ З live-pool: {len(pooled)}, нових {new_total}")
             mark_searches_checked(searches)
@@ -300,6 +308,8 @@ async def _process_group(
         max_hours=notify_hours,
         log=log,
     )
+    if new_total:
+        await db.commit()  # миттєво видно в кабінеті + Telegram вже відправлено
 
     await set_filter_cache(
         fetch_key,

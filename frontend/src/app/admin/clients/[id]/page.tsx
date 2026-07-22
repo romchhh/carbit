@@ -74,9 +74,20 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [tgStatus, setTgStatus] = useState<Awaited<
+    ReturnType<typeof adminApi.userTelegramStatus>
+  > | null>(null);
+  const [manualTgId, setManualTgId] = useState("");
+  const [manualTgSaving, setManualTgSaving] = useState(false);
+  const [manualTgMsg, setManualTgMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    params.then(p => adminApi.user(p.id).then(setUser));
+    params.then(p =>
+      adminApi.user(p.id).then(u => {
+        setUser(u);
+        void adminApi.userTelegramStatus(p.id).then(setTgStatus);
+      }),
+    );
   }, [params]);
 
   if (!user) {
@@ -265,6 +276,63 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
             ? `Підключено ${user.telegram_username ? `@${user.telegram_username}` : ""}`
             : "Не підключено"}
         </p>
+        {tgStatus && (
+          <p className="mt-1 text-[12px] text-muted">
+            chat_id:{" "}
+            {tgStatus.telegram_id ? (
+              <span className="font-mono text-ink">{tgStatus.telegram_id}</span>
+            ) : (
+              "немає"
+            )}
+            {tgStatus.issue && (
+              <span className="ml-2 text-amber-800">({tgStatus.issue})</span>
+            )}
+          </p>
+        )}
+        <div className="mt-4 max-w-md">
+          <label className="block text-[12px] font-semibold text-ink">
+            Telegram chat_id (вручну)
+          </label>
+          <p className="mt-0.5 text-[11px] text-muted">
+            Числовий id з бота або @userinfobot. Після збереження увімкнеться розсилка.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder={tgStatus?.telegram_id ?? "123456789"}
+              value={manualTgId}
+              onChange={e => setManualTgId(e.target.value)}
+              className="min-w-[160px] flex-1 rounded-lg border border-border px-3 py-2 text-[13px]"
+            />
+            <Button
+              size="sm"
+              loading={manualTgSaving}
+              onClick={async () => {
+                const id = manualTgId.trim();
+                if (!id) return;
+                setManualTgSaving(true);
+                setManualTgMsg(null);
+                try {
+                  await adminApi.userSetTelegramId(user.id, id, user.telegram_username);
+                  setManualTgId("");
+                  setTgStatus(await adminApi.userTelegramStatus(user.id));
+                  setUser(await adminApi.user(user.id));
+                  setManualTgMsg("Збережено");
+                } catch (e) {
+                  setManualTgMsg(e instanceof Error ? e.message : "Помилка");
+                } finally {
+                  setManualTgSaving(false);
+                }
+              }}
+            >
+              Зберегти id
+            </Button>
+          </div>
+          {manualTgMsg && (
+            <p className="mt-2 text-[12px] text-emerald-dark">{manualTgMsg}</p>
+          )}
+        </div>
       </section>
 
       {user.searches.length > 0 && (

@@ -172,6 +172,47 @@ export const adminApi = {
     request<AdminSearchDetail>(
       `/admin/parser/searches/${searchId}?listings_limit=${listingsLimit}`,
     ),
+  parserSearchDeliverTelegram: (searchId: string) =>
+    request<{ delivered: number }>(
+      `/admin/parser/searches/${searchId}/deliver-telegram`,
+      { method: "POST" },
+    ),
+  userTelegramStatus: (userId: string) =>
+    request<{
+      user_id: string;
+      telegram_connected: boolean;
+      has_chat_id: boolean;
+      telegram_username: string | null;
+      telegram_id: string | null;
+      telegram_id_prefix: string | null;
+      issue: string | null;
+      notifications_sent: number;
+      notifications_failed: number;
+    }>(`/admin/users/${userId}/telegram-status`),
+  userSetTelegramId: (
+    userId: string,
+    telegram_id: string,
+    telegram_username?: string | null,
+  ) =>
+    request<{
+      user_id: string;
+      telegram_id: string;
+      telegram_username: string | null;
+      telegram_connected: boolean;
+    }>(`/admin/users/${userId}/telegram-id`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        telegram_id,
+        telegram_username: telegram_username ?? undefined,
+        mark_connected: true,
+      }),
+    }),
+  userTestTelegram: (userId: string) =>
+    request<{ sent: boolean; chat_id_prefix: string }>(`/admin/users/${userId}/test-telegram`, {
+      method: "POST",
+    }),
+  userResetTelegram: (userId: string) =>
+    request<{ reset: boolean }>(`/admin/users/${userId}/telegram-reset`, { method: "POST" }),
   triggerParserRun: () => request<AdminParseRun>("/admin/parser/run", { method: "POST" }),
   triggerParserRunSource: (source: "auto_ria" | "olx" | "telegram") =>
     request<AdminParseRun>(`/admin/parser/run/${source}`, { method: "POST" }),
@@ -330,6 +371,7 @@ export interface AdminActiveSearch {
   user_email: string;
   telegram_connected: boolean;
   telegram_username: string | null;
+  telegram_has_chat_id: boolean;
   brand: string | null;
   model: string | null;
   region: string | null;
@@ -359,6 +401,7 @@ export interface AdminSearchListingRow {
   notified_at: string | null;
   telegram_sent: boolean;
   telegram_sent_at: string | null;
+  telegram_issue: string | null;
 }
 
 export interface AdminSearchDetail {

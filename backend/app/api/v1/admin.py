@@ -127,6 +127,12 @@ class AdminUserUpdate(BaseModel):
     access_days: int | None = Field(None, ge=1, le=1095)
 
 
+class AdminSetTelegramIdBody(BaseModel):
+    telegram_id: str = Field(..., min_length=1, max_length=32)
+    telegram_username: str | None = Field(None, max_length=64)
+    mark_connected: bool = True
+
+
 class PaginatedUsers(BaseModel):
     items: list[AdminUserOut]
     total: int
@@ -362,6 +368,126 @@ async def admin_user_detail(
             "subscriptions_count": len(billing_rows),
         },
     )
+
+
+@router.get("/users/{user_id}/telegram-status")
+async def admin_user_telegram_status(
+    user_id: str,
+    _: str = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Детальний стан Telegram для юзера (для діагностики)."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    from app.models.models import Notification, NotificationType
+    last_sent = await db.scalar(
+        select(func.count())
+        .select_from(Notification)
+        .where(
+            Notification.user_id == user_id,
+            Notification.type == NotificationType.listing_match,
+            Notification.sent_telegram.is_(True),
+        )
+    )
+    last_failed = await db.scalar(
+        select(func.count())
+        .select_from(Notification)
+        .where(
+            Notification.user_id == user_id,
+            Notification.type == NotificationType.listing_match,
+            Notification.sent_telegram.is_(False),
+        )
+    )
+    return {
+        "user_id": user_id,
+        "telegram_connected": bool(user.telegram_connected),
+        "has_chat_id": bool(user.telegram_id),
+        "telegram_username": user.telegram_username,
+        "telegram_id": user.telegram_id,
+        "telegram_id_prefix": user.telegram_id[:4] + "…" if user.telegram_id else None,
+        "issue": (
+            None if (user.telegram_connected and user.telegram_id)
+            else "bot_start_required" if user.telegram_connected
+            else "no_bot_link"
+        ),
+        "notifications_sent": last_sent or 0,
+        "notifications_failed": last_failed or 0,
+    }
+
+
+@router.patch("/users/{user_id}/telegram-id")
+async def admin_set_user_telegram_id(
+    user_id: str,
+    body: AdminSetTelegramIdBody,
+    _: str = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Вручну встановити Telegram chat_id (якщо /start не пройшов, але id відомий)."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    tid = body.telegram_id.strip()
+    if not tid.isdigit():
+        raise HTTPException(400, "telegram_id має бути числовим chat_id Telegram")
+
+    taken = await db.scalar(
+        select(User.id).where(User.telegram_id == tid, User.id != user_id).limit(1)
+    )
+    if taken:
+        raise HTTPException(409, "Цей telegram_id вже прив'язаний до іншого акаунта")
+
+    user.telegram_id = tid
+    if body.telegram_username is not None:
+        uname = body.telegram_username.strip().lstrip("@")
+        user.telegram_username = uname or None
+    if body.mark_connected:
+        user.telegram_connected = True
+
+    await db.flush()
+    return {
+        "user_id": user_id,
+        "telegram_id": user.telegram_id,
+        "telegram_username": user.telegram_username,
+        "telegram_connected": bool(user.telegram_connected),
+    }
+
+
+@router.post("/users/{user_id}/telegram-reset")
+async def admin_reset_user_telegram(
+    user_id: str,
+    _: str = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Скидає Telegram-з'єднання юзера (для повторного підключення через бота)."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    user.telegram_connected = False
+    user.telegram_id = None
+    await db.flush()
+    return {"reset": True, "user_id": user_id}
+
+
+@router.post("/users/{user_id}/test-telegram")
+async def admin_test_telegram(
+    user_id: str,
+    _: str = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Надсилає тестове повідомлення в Telegram користувача."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not user.telegram_connected or not user.telegram_id:
+        raise HTTPException(400, "Telegram не підключено або немає chat_id")
+    from app.services.telegram.client import telegram_client
+    result = await telegram_client.send_message(
+        user.telegram_id,
+        "✅ <b>Carbit</b>\n\nТест-повідомлення від адміна. Telegram підключено коректно.",
+    )
+    return {"sent": bool(result), "chat_id_prefix": user.telegram_id[:4] + "…"}
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserOut)

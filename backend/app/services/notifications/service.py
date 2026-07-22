@@ -226,7 +226,16 @@ async def create_listing_notification(
     skip_telegram = False
     skipped_duplicate = False
     skipped_already_notified = False
-    if send_telegram and user.telegram_connected and user.telegram_id:
+    skipped_no_chat_id = False
+    if not (user.telegram_connected and user.telegram_id):
+        skip_telegram = True
+        skipped_no_chat_id = True
+        if user.telegram_connected and not user.telegram_id:
+            logger.warning(
+                "User %s has telegram_connected=True but telegram_id=None — needs /start in bot",
+                user.id,
+            )
+    elif send_telegram:
         # Дзеркало з тим самим VIN — у TG лише канонічна картка
         vin = (getattr(listing, "vin", None) or "").strip().upper()
         if (
@@ -267,6 +276,7 @@ async def create_listing_notification(
             "transmission": listing.transmission,
             "telegram_skipped_duplicate": skipped_duplicate,
             "telegram_skipped_already_notified": skipped_already_notified,
+            "telegram_skipped_no_chat_id": skipped_no_chat_id,
         },
     )
     db.add(notification)
@@ -311,9 +321,9 @@ async def notify_monitor_listing_after_link(
     settings = await get_parser_settings()
     if not settings.get("notify_telegram", True):
         return False
-    if not (user.telegram_connected and user.telegram_id):
-        return False
 
+    # Завжди створюємо Notification-запис незалежно від стану Telegram,
+    # щоб адмін бачив причину ("не_підключено", "send_failed" тощо).
     notification = await create_listing_notification(
         db,
         user,
@@ -321,17 +331,20 @@ async def notify_monitor_listing_after_link(
         search=search,
         max_published_hours=None,
         skip_freshness_check=True,
+        # Якщо telegram_id = None — send_telegram=True але _attempt знає що не слати
     )
     if not notification.sent_telegram and not monitor_telegram_delivery_done(notification):
-        await _attempt_listing_match_telegram(
-            db,
-            user,
-            listing,
-            search,
-            notification,
-            skip_freshness_check=True,
-            max_published_hours=None,
-        )
+        # Перша спроба могла не пройти через тимчасову помилку — ще раз
+        if user.telegram_connected and user.telegram_id:
+            await _attempt_listing_match_telegram(
+                db,
+                user,
+                listing,
+                search,
+                notification,
+                skip_freshness_check=True,
+                max_published_hours=None,
+            )
 
     if monitor_telegram_delivery_done(notification):
         sl.notified_at = now_kyiv()

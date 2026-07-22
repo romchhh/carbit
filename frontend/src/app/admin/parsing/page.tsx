@@ -55,6 +55,20 @@ function formatSearchFilters(s: AdminActiveSearch) {
   return parts.length ? parts.join(" · ") : "Без фільтрів";
 }
 
+const TELEGRAM_ISSUE_LABELS: Record<string, string> = {
+  no_bot_link: "Бот не підключено в кабінеті",
+  bot_start_required: "Немає chat_id — натиснути /start у боті",
+  not_attempted: "Ще не пробували відправити",
+  send_failed: "Бот не доставив (заблоковано / помилка API)",
+  skipped_duplicate_car: "Пропущено: це авто вже слали цьому юзеру",
+  skipped_vin_mirror: "Пропущено: дзеркало з VIN",
+};
+
+function formatTelegramIssue(issue: string | null | undefined) {
+  if (!issue) return null;
+  return TELEGRAM_ISSUE_LABELS[issue] ?? issue;
+}
+
 export default function AdminParsingPage() {
   const [stats, setStats] = useState<AdminParserStats | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
@@ -72,6 +86,13 @@ export default function AdminParsingPage() {
   const [searchDetail, setSearchDetail] = useState<AdminSearchDetail | null>(null);
   const [loadingSearches, setLoadingSearches] = useState(false);
   const [loadingSearchDetail, setLoadingSearchDetail] = useState(false);
+  const [deliverLoading, setDeliverLoading] = useState(false);
+  const [deliverResult, setDeliverResult] = useState<string | null>(null);
+  const [tgTestLoading, setTgTestLoading] = useState(false);
+  const [tgTestResult, setTgTestResult] = useState<string | null>(null);
+  const [manualTgId, setManualTgId] = useState("");
+  const [manualTgSaving, setManualTgSaving] = useState(false);
+  const [manualTgError, setManualTgError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [running, setRunning] = useState(false);
@@ -131,10 +152,66 @@ export default function AdminParsingPage() {
     async (searchId: string) => {
       setSelectedSearchId(searchId);
       setSearchDetail(null);
+      setManualTgId("");
+      setManualTgError(null);
+      setTgTestResult(null);
+      setDeliverResult(null);
       await loadSearchDetail(searchId);
     },
     [loadSearchDetail],
   );
+
+  const saveManualTelegramId = useCallback(
+    async (userId: string, searchId: string) => {
+      const id = manualTgId.trim();
+      if (!id) {
+        setManualTgError("Введіть chat_id");
+        return;
+      }
+      setManualTgSaving(true);
+      setManualTgError(null);
+      try {
+        await adminApi.userSetTelegramId(userId, id);
+        setManualTgId("");
+        await loadSearchDetail(searchId);
+        await loadActiveSearches();
+        setTgTestResult("Chat_id збережено");
+      } catch (e) {
+        setManualTgError(e instanceof Error ? e.message : "Помилка збереження");
+      } finally {
+        setManualTgSaving(false);
+      }
+    },
+    [manualTgId, loadSearchDetail, loadActiveSearches],
+  );
+
+  const deliverTelegramForSearch = useCallback(async (searchId: string) => {
+    setDeliverLoading(true);
+    setDeliverResult(null);
+    try {
+      const res = await adminApi.parserSearchDeliverTelegram(searchId);
+      setDeliverResult(`Відправлено: ${res.delivered}`);
+      // Перезавантажити деталі пошуку
+      await loadSearchDetail(searchId);
+    } catch (e) {
+      setDeliverResult(e instanceof Error ? e.message : "Помилка");
+    } finally {
+      setDeliverLoading(false);
+    }
+  }, [loadSearchDetail]);
+
+  const testTelegramForUser = useCallback(async (userId: string) => {
+    setTgTestLoading(true);
+    setTgTestResult(null);
+    try {
+      const res = await adminApi.userTestTelegram(userId);
+      setTgTestResult(res.sent ? `✅ Доставлено (chat ${res.chat_id_prefix})` : "❌ Не доставлено");
+    } catch (e) {
+      setTgTestResult(e instanceof Error ? e.message : "Помилка");
+    } finally {
+      setTgTestLoading(false);
+    }
+  }, []);
 
   const showTelegramForSearch = useCallback(
     (searchId: string) => {
@@ -441,6 +518,56 @@ export default function AdminParsingPage() {
                             <> · @{searchDetail.search.telegram_username}</>
                           )}
                         </p>
+                        <p className="mt-1 text-[11px]">
+                          {searchDetail.search.telegram_connected &&
+                          searchDetail.search.telegram_has_chat_id ? (
+                            <span className="font-medium text-emerald-dark">
+                              ✅ Telegram готовий до розсилки
+                            </span>
+                          ) : searchDetail.search.telegram_connected ? (
+                            <span className="font-medium text-red-600">
+                              ⚠️ Telegram підключено, але немає chat_id — потрібен /start у боті
+                            </span>
+                          ) : (
+                            <span className="font-medium text-amber-800">
+                              ⚠️ Telegram не підключено
+                            </span>
+                          )}
+                        </p>
+                        {!searchDetail.search.telegram_has_chat_id && (
+                          <div className="mt-2 max-w-md rounded-lg border border-amber-200 bg-amber-50/80 p-2.5">
+                            <p className="text-[11px] font-medium text-amber-900">
+                              Вручну вставити Telegram chat_id
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                placeholder="напр. 123456789"
+                                value={manualTgId}
+                                onChange={e => setManualTgId(e.target.value)}
+                                className="min-w-[140px] flex-1 rounded-lg border border-border bg-white px-2.5 py-1.5 text-[12px]"
+                              />
+                              <button
+                                type="button"
+                                disabled={manualTgSaving}
+                                onClick={() =>
+                                  void saveManualTelegramId(
+                                    searchDetail.search.user_id,
+                                    searchDetail.search.id,
+                                  )
+                                }
+                                className="rounded-full bg-ink px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-ink/90 disabled:opacity-60"
+                              >
+                                {manualTgSaving ? "…" : "Зберегти"}
+                              </button>
+                            </div>
+                            {manualTgError && (
+                              <p className="mt-1 text-[10px] text-red-600">{manualTgError}</p>
+                            )}
+                          </div>
+                        )}
                         {searchDetail.search.last_checked_at && (
                           <p className="mt-1 text-[11px] text-muted">
                             Остання перевірка: {formatKyivDateTime(searchDetail.search.last_checked_at)}
@@ -457,6 +584,32 @@ export default function AdminParsingPage() {
                             </span>
                           )}
                         </div>
+                        <div className="flex flex-wrap gap-2 justify-end">
+                          {searchDetail.telegram_pending > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => void deliverTelegramForSearch(searchDetail.search.id)}
+                              disabled={deliverLoading}
+                              className="rounded-full bg-emerald px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-dark disabled:opacity-60"
+                            >
+                              {deliverLoading ? "…" : `Надіслати (${searchDetail.telegram_pending})`}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void testTelegramForUser(searchDetail.search.user_id)}
+                            disabled={tgTestLoading || !searchDetail.search.telegram_has_chat_id}
+                            title={!searchDetail.search.telegram_has_chat_id ? "Немає chat_id" : "Тест"}
+                            className="rounded-full border border-border px-3 py-1 text-[11px] font-semibold hover:bg-surface disabled:opacity-40"
+                          >
+                            {tgTestLoading ? "…" : "Тест Telegram"}
+                          </button>
+                        </div>
+                        {(deliverResult || tgTestResult) && (
+                          <div className="text-[11px] font-medium text-emerald-dark">
+                            {deliverResult ?? tgTestResult}
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={() => showTelegramForSearch(searchDetail.search.id)}
@@ -508,6 +661,12 @@ export default function AdminParsingPage() {
                               ) : row.is_new ? (
                                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
                                   Telegram очікує
+                                  {row.telegram_issue && formatTelegramIssue(row.telegram_issue) && (
+                                    <span className="font-normal">
+                                      {" "}
+                                      · {formatTelegramIssue(row.telegram_issue)}
+                                    </span>
+                                  )}
                                 </span>
                               ) : row.notified_at ? (
                                 <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-muted">
