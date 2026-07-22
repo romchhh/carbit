@@ -20,6 +20,13 @@ def raise_auto_ria_http(exc: AutoRiaError) -> None:
         message = "Невалідний ключ AUTO.RIA. Перевірте AUTO_RIA_API_KEY у .env."
     elif status == 404:
         status = 502
+        raw = str(exc).lower()
+        if "httpoison" in raw or ":closed" in raw:
+            message = "AUTO.RIA тимчасово обірвав з'єднання. Спробуйте ще раз."
+        else:
+            message = "AUTO.RIA тимчасово недоступний. Спробуйте пізніше."
+    elif status in (500, 502, 503, 504):
+        status = 502
         message = "AUTO.RIA тимчасово недоступний. Спробуйте пізніше."
     elif status == 429:
         message = RATE_LIMIT_MESSAGE

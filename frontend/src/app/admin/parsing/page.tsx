@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   adminApi,
+  type AdminActiveSearch,
   type AdminAnalytics,
   type AdminParseRun,
   type AdminParserNotification,
   type AdminParserSettings,
   type AdminParserStats,
+  type AdminSearchDetail,
 } from "@/lib/admin-api";
 import { formatKyivDateTime } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
@@ -42,6 +44,17 @@ function formatPrice(price: number | null | undefined) {
   return `${price.toLocaleString("uk-UA")} грн`;
 }
 
+function formatSearchFilters(s: AdminActiveSearch) {
+  const parts: string[] = [];
+  if (s.brand) parts.push(s.brand);
+  if (s.model) parts.push(s.model);
+  if (s.region) parts.push(s.region);
+  if (s.sources?.length) {
+    parts.push(s.sources.map(src => SOURCE_LABELS[src] ?? src).join(", "));
+  }
+  return parts.length ? parts.join(" · ") : "Без фільтрів";
+}
+
 export default function AdminParsingPage() {
   const [stats, setStats] = useState<AdminParserStats | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
@@ -50,6 +63,15 @@ export default function AdminParsingPage() {
   const [listings, setListings] = useState<Array<Record<string, unknown>>>([]);
   const [notifications, setNotifications] = useState<AdminParserNotification[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedSearchIdForNotifications, setSelectedSearchIdForNotifications] = useState<
+    string | null
+  >(null);
+  const [searchesPanelOpen, setSearchesPanelOpen] = useState(false);
+  const [activeSearches, setActiveSearches] = useState<AdminActiveSearch[]>([]);
+  const [selectedSearchId, setSelectedSearchId] = useState<string | null>(null);
+  const [searchDetail, setSearchDetail] = useState<AdminSearchDetail | null>(null);
+  const [loadingSearches, setLoadingSearches] = useState(false);
+  const [loadingSearchDetail, setLoadingSearchDetail] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [running, setRunning] = useState(false);
@@ -57,15 +79,72 @@ export default function AdminParsingPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const loadNotifications = useCallback(async (runId?: string | null) => {
-    setLoadingNotifications(true);
+  const loadNotifications = useCallback(
+    async (runId?: string | null, searchId?: string | null) => {
+      setLoadingNotifications(true);
+      try {
+        const data = await adminApi.parserNotifications(
+          50,
+          runId ?? undefined,
+          searchId ?? undefined,
+        );
+        setNotifications(data);
+      } finally {
+        setLoadingNotifications(false);
+      }
+    },
+    [],
+  );
+
+  const loadActiveSearches = useCallback(async () => {
+    setLoadingSearches(true);
     try {
-      const data = await adminApi.parserNotifications(50, runId ?? undefined);
-      setNotifications(data);
+      const data = await adminApi.parserSearches(true, 100);
+      setActiveSearches(data);
     } finally {
-      setLoadingNotifications(false);
+      setLoadingSearches(false);
     }
   }, []);
+
+  const loadSearchDetail = useCallback(async (searchId: string) => {
+    setLoadingSearchDetail(true);
+    try {
+      const data = await adminApi.parserSearchDetail(searchId, 80);
+      setSearchDetail(data);
+    } finally {
+      setLoadingSearchDetail(false);
+    }
+  }, []);
+
+  const toggleActiveSearchesPanel = useCallback(async () => {
+    if (searchesPanelOpen) {
+      setSearchesPanelOpen(false);
+      setSelectedSearchId(null);
+      setSearchDetail(null);
+      return;
+    }
+    setSearchesPanelOpen(true);
+    await loadActiveSearches();
+  }, [searchesPanelOpen, loadActiveSearches]);
+
+  const selectSearch = useCallback(
+    async (searchId: string) => {
+      setSelectedSearchId(searchId);
+      setSearchDetail(null);
+      await loadSearchDetail(searchId);
+    },
+    [loadSearchDetail],
+  );
+
+  const showTelegramForSearch = useCallback(
+    (searchId: string) => {
+      setSelectedRunId(null);
+      setSelectedSearchIdForNotifications(searchId);
+      void loadNotifications(null, searchId);
+      document.getElementById("admin-telegram-notifications")?.scrollIntoView({ behavior: "smooth" });
+    },
+    [loadNotifications],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,8 +171,18 @@ export default function AdminParsingPage() {
   }, [load]);
 
   useEffect(() => {
-    void loadNotifications(selectedRunId);
-  }, [selectedRunId, loadNotifications]);
+    void loadNotifications(selectedRunId, selectedSearchIdForNotifications);
+  }, [selectedRunId, selectedSearchIdForNotifications, loadNotifications]);
+
+  useEffect(() => {
+    if (!searchesPanelOpen || activeSearches.length === 0) return;
+    if (selectedSearchId) return;
+    const first = activeSearches[0]?.id;
+    if (first) {
+      setSelectedSearchId(first);
+      void loadSearchDetail(first);
+    }
+  }, [searchesPanelOpen, activeSearches, selectedSearchId, loadSearchDetail]);
 
   const handleRun = async () => {
     setRunning(true);
@@ -102,8 +191,9 @@ export default function AdminParsingPage() {
       await adminApi.triggerParserRun();
       setMessage("Повний парсинг запущено");
       setSelectedRunId(null);
+      setSelectedSearchIdForNotifications(null);
       await load();
-      await loadNotifications(null);
+      await loadNotifications(null, null);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Помилка запуску");
     } finally {
@@ -118,8 +208,9 @@ export default function AdminParsingPage() {
       await adminApi.triggerParserRunSource(source);
       setMessage(`Тестовий парсинг ${SOURCE_LABELS[source]} запущено`);
       setSelectedRunId(null);
+      setSelectedSearchIdForNotifications(null);
       await load();
-      await loadNotifications(null);
+      await loadNotifications(null, null);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Помилка запуску");
     } finally {
@@ -144,7 +235,13 @@ export default function AdminParsingPage() {
   };
 
   const handleShowRunNotifications = (runId: string) => {
+    setSelectedSearchIdForNotifications(null);
     setSelectedRunId(prev => (prev === runId ? null : runId));
+  };
+
+  const clearNotificationFilters = () => {
+    setSelectedRunId(null);
+    setSelectedSearchIdForNotifications(null);
   };
 
   if (loading && !stats) {
@@ -206,7 +303,13 @@ export default function AdminParsingPage() {
 
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-6">
         {[
-          { label: "Активних пошуків", value: stats?.active_searches ?? 0 },
+          {
+            label: "Активних пошуків",
+            value: stats?.active_searches ?? 0,
+            clickable: true,
+            onClick: () => void toggleActiveSearchesPanel(),
+            active: searchesPanelOpen,
+          },
           { label: "Звʼязків пошук–авто", value: stats?.total_search_listings ?? 0 },
           { label: "Оголошень у базі", value: stats?.total_listings ?? 0 },
           { label: "Дублів", value: analytics?.duplicate_listings ?? 0 },
@@ -217,13 +320,224 @@ export default function AdminParsingPage() {
               ? STATUS_LABELS[stats.last_run.status] ?? stats.last_run.status
               : "—",
           },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-xl border border-border bg-white px-4 py-4">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
-            <div className="mt-1 text-[22px] font-bold text-ink">{value}</div>
-          </div>
-        ))}
+        ].map(({ label, value, clickable, onClick, active }) => {
+          const inner = (
+            <>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+              <div className="mt-1 text-[22px] font-bold text-ink">{value}</div>
+              {clickable && (
+                <div className="mt-1 text-[10px] font-semibold text-emerald">
+                  {active ? "Згорнути список ↑" : "Переглянути →"}
+                </div>
+              )}
+            </>
+          );
+          if (clickable && onClick) {
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={onClick}
+                className={cn(
+                  "rounded-xl border bg-white px-4 py-4 text-left transition-colors hover:border-emerald/40 hover:bg-emerald/5",
+                  active ? "border-emerald/50 ring-1 ring-emerald/20" : "border-border",
+                )}
+              >
+                {inner}
+              </button>
+            );
+          }
+          return (
+            <div key={label} className="rounded-xl border border-border bg-white px-4 py-4">
+              {inner}
+            </div>
+          );
+        })}
       </div>
+
+      {searchesPanelOpen && (
+        <div className="mb-8 rounded-2xl border border-emerald/30 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[16px] font-bold text-ink">Активні пошуки</h2>
+              <p className="mt-1 text-[12px] text-muted">
+                Знайдені авто в моніторингу та статус відправки в Telegram
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchesPanelOpen(false);
+                setSelectedSearchId(null);
+                setSearchDetail(null);
+              }}
+              className="rounded-full border border-border px-3 py-1.5 text-[12px] font-semibold hover:bg-surface"
+            >
+              Згорнути
+            </button>
+          </div>
+
+          {loadingSearches && activeSearches.length === 0 ? (
+            <div className="flex justify-center py-12">
+              <div className="h-7 w-7 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
+            </div>
+          ) : activeSearches.length === 0 ? (
+            <p className="text-[13px] text-muted">Немає активних пошуків</p>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_1fr]">
+              <div className="max-h-[560px] space-y-2 overflow-y-auto rounded-xl border border-border/70 bg-surface/30 p-2">
+                {activeSearches.map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => void selectSearch(s.id)}
+                    className={cn(
+                      "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
+                      selectedSearchId === s.id
+                        ? "border-emerald/50 bg-emerald/10"
+                        : "border-transparent bg-white hover:border-border",
+                    )}
+                  >
+                    <div className="text-[13px] font-semibold text-ink line-clamp-1">{s.name}</div>
+                    <div className="mt-0.5 text-[11px] text-muted line-clamp-1">{formatSearchFilters(s)}</div>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
+                      <span className="rounded bg-ink/5 px-1.5 py-0.5 font-medium">
+                        нових: {s.new_count}
+                      </span>
+                      <span className="rounded bg-ink/5 px-1.5 py-0.5 font-medium">
+                        усього: {s.total_count}
+                      </span>
+                      <span className="rounded bg-emerald/15 px-1.5 py-0.5 font-medium text-emerald-dark">
+                        TG: {s.telegram_sent_count}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-muted">
+                      {s.user_name}
+                      {s.telegram_connected ? (
+                        <span className="ml-1 text-emerald-dark">· бот підключено</span>
+                      ) : (
+                        <span className="ml-1 text-amber-700">· бот не підключено</span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="min-h-[280px] rounded-xl border border-border/70 bg-surface/20 p-4">
+                {loadingSearchDetail && !searchDetail && (
+                  <div className="flex justify-center py-16">
+                    <div className="h-7 w-7 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
+                  </div>
+                )}
+                {searchDetail && (
+                  <>
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-3">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-ink">{searchDetail.search.name}</h3>
+                        <p className="mt-1 text-[12px] text-muted">{formatSearchFilters(searchDetail.search)}</p>
+                        <p className="mt-1 text-[12px] text-muted">
+                          {searchDetail.search.user_name} · {searchDetail.search.user_email}
+                          {searchDetail.search.telegram_username && (
+                            <> · @{searchDetail.search.telegram_username}</>
+                          )}
+                        </p>
+                        {searchDetail.search.last_checked_at && (
+                          <p className="mt-1 text-[11px] text-muted">
+                            Остання перевірка: {formatKyivDateTime(searchDetail.search.last_checked_at)}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="text-[11px] text-muted">
+                          Telegram відправлено:{" "}
+                          <span className="font-bold text-ink">{searchDetail.telegram_sent_total}</span>
+                          {searchDetail.telegram_pending > 0 && (
+                            <span className="ml-2 text-amber-700">
+                              очікує: {searchDetail.telegram_pending}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => showTelegramForSearch(searchDetail.search.id)}
+                          className="text-[11px] font-semibold text-emerald hover:underline"
+                        >
+                          Історія розсилки для цього пошуку ↓
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-h-[480px] space-y-2 overflow-y-auto">
+                      {searchDetail.listings.length === 0 && (
+                        <p className="text-[13px] text-muted">Поки немає привʼязаних оголошень</p>
+                      )}
+                      {searchDetail.listings.map(row => (
+                        <div
+                          key={row.listing_id}
+                          className="flex gap-3 rounded-lg border border-border/60 bg-white p-2.5"
+                        >
+                          <div className="h-14 w-18 shrink-0 overflow-hidden rounded-md bg-ink/5 sm:h-16 sm:w-24">
+                            {row.image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={row.image} alt={row.title} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-[9px] text-muted">
+                                —
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[12px] font-semibold text-ink line-clamp-2">{row.title}</div>
+                            <div className="mt-0.5 text-[11px] text-muted">
+                              {formatSource(row.source)} · {row.year} ·{" "}
+                              {row.price.toLocaleString("uk-UA")} {row.currency} · {row.region}
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              {row.is_new && (
+                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">
+                                  NEW
+                                </span>
+                              )}
+                              {row.telegram_sent ? (
+                                <span className="rounded-full bg-emerald/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-dark">
+                                  Telegram ✓
+                                  {row.telegram_sent_at
+                                    ? ` · ${formatKyivDateTime(row.telegram_sent_at)}`
+                                    : ""}
+                                </span>
+                              ) : (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                  Telegram очікує
+                                </span>
+                              )}
+                            </div>
+                            {row.url && (
+                              <a
+                                href={row.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-1 inline-block text-[10px] font-semibold text-emerald hover:underline"
+                              >
+                                Оголошення →
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {!loadingSearchDetail && !searchDetail && selectedSearchId && (
+                  <p className="text-[13px] text-muted">Не вдалося завантажити пошук</p>
+                )}
+                {!selectedSearchId && !loadingSearchDetail && (
+                  <p className="text-[13px] text-muted">Оберіть пошук зі списку</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {analytics && (
         <div className="mb-8 rounded-2xl border border-border bg-white p-5">
@@ -381,7 +695,10 @@ export default function AdminParsingPage() {
         </div>
       )}
 
-      <div className="mb-8 rounded-2xl border border-border bg-white p-5">
+      <div
+        id="admin-telegram-notifications"
+        className="mb-8 rounded-2xl border border-border bg-white p-5"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-[16px] font-bold text-ink">Telegram-розсилка</h2>
@@ -389,10 +706,10 @@ export default function AdminParsingPage() {
               Кому і яке авто було відправлено через бота
             </p>
           </div>
-          {selectedRunId && (
+          {(selectedRunId || selectedSearchIdForNotifications) && (
             <button
               type="button"
-              onClick={() => setSelectedRunId(null)}
+              onClick={clearNotificationFilters}
               className="rounded-full border border-border px-3 py-1.5 text-[12px] font-semibold hover:bg-surface"
             >
               Показати всі
@@ -403,6 +720,16 @@ export default function AdminParsingPage() {
         {selectedRunId && (
           <div className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-[12px] text-blue-700">
             Фільтр за запуском від {formatKyivDateTime(runs.find(r => r.id === selectedRunId)?.started_at)}
+          </div>
+        )}
+        {selectedSearchIdForNotifications && (
+          <div className="mt-3 rounded-lg bg-emerald/10 px-3 py-2 text-[12px] text-emerald-dark">
+            Фільтр за пошуком:{" "}
+            <span className="font-semibold">
+              {activeSearches.find(s => s.id === selectedSearchIdForNotifications)?.name ??
+                searchDetail?.search.name ??
+                selectedSearchIdForNotifications}
+            </span>
           </div>
         )}
 

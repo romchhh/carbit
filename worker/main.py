@@ -62,6 +62,9 @@ async def drain_jobs() -> None:
         async with AsyncSessionLocal() as db:
             try:
                 await run_parser_for_search(db, search_id)
+                from app.services.notifications.service import deliver_pending_monitor_telegram
+
+                await deliver_pending_monitor_telegram(db, search_ids=[search_id], limit=30)
                 await db.commit()
                 logger.info("Processed parse job for search %s", search_id)
             except Exception:

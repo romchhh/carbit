@@ -5,7 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.timezone import now_kyiv
 from app.models.models import Listing, SearchListing, SearchQuery, User
-from app.services.notifications.service import create_listing_notification
+from app.services.notifications.service import (
+    create_listing_notification,
+    monitor_telegram_delivery_done,
+)
 
 
 async def link_listing_to_search(
@@ -65,7 +68,7 @@ async def link_listing_to_search(
                     SearchListing.listing_id == listing_id,
                 )
             )
-            if sl:
+            if sl and monitor_telegram_delivery_done(notification):
                 sl.notified_at = now_kyiv()
 
     return True, notification_sent

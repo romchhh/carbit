@@ -116,6 +116,11 @@ async def get_search_results(
     if mark_seen:
         await mark_search_listings_seen(db, sq)
 
+    if (sq.new_count or 0) > 0:
+        from app.services.notifications.service import deliver_pending_monitor_telegram
+
+        await deliver_pending_monitor_telegram(db, search_ids=[sq.id], limit=30)
+
     return SearchLiveResultsOut(search=await search_query_to_out(db, sq), results=results)
 
 

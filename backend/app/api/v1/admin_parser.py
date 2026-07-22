@@ -115,6 +115,103 @@ class ParserNotificationOut(BaseModel):
     listing_image: str | None
 
 
+class AdminActiveSearchOut(BaseModel):
+    id: str
+    name: str
+    user_id: str
+    user_name: str
+    user_email: str
+    telegram_connected: bool
+    telegram_username: str | None
+    brand: str | None
+    model: str | None
+    region: str | None
+    sources: list[str] | None
+    is_active: bool
+    new_count: int
+    total_count: int
+    telegram_sent_count: int
+    last_checked_at: datetime | None
+    created_at: datetime
+
+
+class AdminSearchListingOut(BaseModel):
+    listing_id: str
+    title: str
+    brand: str
+    model: str
+    year: int
+    price: int
+    currency: str
+    region: str
+    source: str
+    url: str
+    image: str | None
+    is_new: bool
+    first_seen_at: datetime
+    notified_at: datetime | None
+    telegram_sent: bool
+    telegram_sent_at: datetime | None
+
+
+class AdminSearchDetailOut(BaseModel):
+    search: AdminActiveSearchOut
+    listings: list[AdminSearchListingOut]
+    telegram_sent_total: int
+    telegram_pending: int
+
+
+def _filters_summary(filters: dict | None) -> tuple[str | None, str | None, str | None, list[str] | None]:
+    data = filters if isinstance(filters, dict) else {}
+    brand = (data.get("brand") or "").strip() or None
+    model = (data.get("model") or "").strip() or None
+    region = (data.get("region") or "").strip() or None
+    sources = data.get("sources")
+    if isinstance(sources, list):
+        sources = [str(s) for s in sources if s]
+    else:
+        sources = None
+    return brand, model, region, sources
+
+
+async def _search_telegram_sent_count(db: AsyncSession, search_id: str) -> int:
+    return (
+        await db.scalar(
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.search_id == search_id,
+                Notification.type == NotificationType.listing_match,
+                Notification.sent_telegram.is_(True),
+            )
+        )
+        or 0
+    )
+
+
+async def _active_search_out(db: AsyncSession, search: SearchQuery, user: User) -> AdminActiveSearchOut:
+    brand, model, region, sources = _filters_summary(search.filters)
+    return AdminActiveSearchOut(
+        id=search.id,
+        name=search.name,
+        user_id=user.id,
+        user_name=user.name,
+        user_email=user.email,
+        telegram_connected=bool(user.telegram_connected),
+        telegram_username=user.telegram_username,
+        brand=brand,
+        model=model,
+        region=region,
+        sources=sources,
+        is_active=bool(search.is_active),
+        new_count=int(search.new_count or 0),
+        total_count=int(search.total_count or 0),
+        telegram_sent_count=await _search_telegram_sent_count(db, search.id),
+        last_checked_at=search.last_checked_at,
+        created_at=search.created_at,
+    )
+
+
 @router.get("/settings", response_model=ParserSettingsOut)
 async def parser_settings(_admin=Depends(get_current_admin)):
     data = await get_parser_settings()
@@ -149,6 +246,110 @@ async def parser_stats(db: AsyncSession = Depends(get_db), _admin=Depends(get_cu
         total_telegram_sent=total_telegram or 0,
         last_run=_run_out(last) if last else None,
         settings=ParserSettingsOut(**settings),
+    )
+
+
+@router.get("/searches", response_model=list[AdminActiveSearchOut])
+async def list_parser_searches(
+    active_only: bool = Query(True),
+    limit: int = Query(100, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    stmt = (
+        select(SearchQuery, User)
+        .join(User, User.id == SearchQuery.user_id)
+        .order_by(desc(SearchQuery.created_at))
+        .limit(limit)
+    )
+    if active_only:
+        stmt = stmt.where(SearchQuery.is_active.is_(True))
+
+    rows = (await db.execute(stmt)).all()
+    out: list[AdminActiveSearchOut] = []
+    for search, user in rows:
+        out.append(await _active_search_out(db, search, user))
+    return out
+
+
+@router.get("/searches/{search_id}", response_model=AdminSearchDetailOut)
+async def get_parser_search_detail(
+    search_id: str,
+    listings_limit: int = Query(80, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    row = await db.execute(
+        select(SearchQuery, User)
+        .join(User, User.id == SearchQuery.user_id)
+        .where(SearchQuery.id == search_id)
+    )
+    pair = row.first()
+    if not pair:
+        raise HTTPException(404, "Пошук не знайдено")
+    search, user = pair
+
+    sent_rows = (
+        await db.execute(
+            select(Notification.listing_id, func.max(Notification.created_at))
+            .where(
+                Notification.search_id == search_id,
+                Notification.type == NotificationType.listing_match,
+                Notification.sent_telegram.is_(True),
+            )
+            .group_by(Notification.listing_id)
+        )
+    ).all()
+    sent_map: dict[str, datetime] = {lid: ts for lid, ts in sent_rows if lid and ts}
+
+    sl_rows = (
+        await db.execute(
+            select(SearchListing, Listing)
+            .join(Listing, Listing.id == SearchListing.listing_id)
+            .where(SearchListing.search_id == search_id)
+            .order_by(desc(SearchListing.first_seen_at))
+            .limit(listings_limit)
+        )
+    ).all()
+
+    listings_out: list[AdminSearchListingOut] = []
+    telegram_sent_total = len(sent_map)
+    telegram_pending = 0
+
+    for sl, listing in sl_rows:
+        sent_at = sent_map.get(listing.id)
+        telegram_sent = sent_at is not None
+        if sl.is_new and not telegram_sent:
+            telegram_pending += 1
+        source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
+        images = listing.images or []
+        listings_out.append(
+            AdminSearchListingOut(
+                listing_id=listing.id,
+                title=listing.title,
+                brand=listing.brand,
+                model=listing.model,
+                year=int(listing.year or 0),
+                price=int(listing.price or 0),
+                currency=listing.currency or "UAH",
+                region=listing.region,
+                source=source,
+                url=listing.url,
+                image=images[0] if images else None,
+                is_new=bool(sl.is_new),
+                first_seen_at=sl.first_seen_at,
+                notified_at=sl.notified_at,
+                telegram_sent=telegram_sent,
+                telegram_sent_at=sent_at,
+            )
+        )
+
+    search_out = await _active_search_out(db, search, user)
+    return AdminSearchDetailOut(
+        search=search_out,
+        listings=listings_out,
+        telegram_sent_total=telegram_sent_total,
+        telegram_pending=telegram_pending,
     )
 
 
@@ -211,6 +412,7 @@ def _notification_out(
 async def parser_notifications(
     limit: int = Query(50, ge=1, le=200),
     run_id: str | None = Query(default=None),
+    search_id: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _admin=Depends(get_current_admin),
 ):
@@ -233,6 +435,9 @@ async def parser_notifications(
             stmt = stmt.where(Notification.created_at >= run.started_at)
             if run.finished_at:
                 stmt = stmt.where(Notification.created_at <= run.finished_at)
+
+    if search_id:
+        stmt = stmt.where(Notification.search_id == search_id)
 
     rows = await db.execute(stmt)
     return [

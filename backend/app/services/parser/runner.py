@@ -29,6 +29,28 @@ logger = logging.getLogger(__name__)
 UpsertedListing = tuple[ListingOut, Listing]
 
 
+async def _deliver_monitor_telegram_for_searches(
+    db: AsyncSession,
+    searches: list[SearchQuery],
+    notifications: int,
+    log: list[str],
+) -> int:
+    try:
+        from app.services.notifications.service import deliver_pending_monitor_telegram
+
+        pending = await deliver_pending_monitor_telegram(
+            db,
+            search_ids=[s.id for s in searches],
+            limit=50,
+        )
+        if pending:
+            log.append(f"  · Догонка Telegram: +{pending}")
+        return notifications + pending
+    except Exception:
+        logger.exception("Pending monitor Telegram delivery failed")
+        return notifications
+
+
 def _monitor_cache_ttl(settings: dict) -> int:
     interval = int(settings.get("interval_seconds") or 900)
     configured = int(settings.get("cache_ttl_seconds") or 1800)
@@ -196,6 +218,9 @@ async def _process_group(
                     )
                     log.append(f"  ✓ З кешу: {len(upserted)} оголошень, нових {new_total}")
                     mark_searches_checked(searches)
+                    notifications = await _deliver_monitor_telegram_for_searches(
+                        db, searches, notifications, log
+                    )
                     return len(upserted), new_total, notifications
 
         # Live-pool: використовуємо якщо пул свіжий і не містить OLX/TG (AUTO.RIA-only).
@@ -225,6 +250,9 @@ async def _process_group(
             await set_filter_cache(fetch_key, listing_ids, ttl_seconds=settings["cache_ttl_seconds"])
             log.append(f"  ✓ З live-pool: {len(pooled)}, нових {new_total}")
             mark_searches_checked(searches)
+            notifications = await _deliver_monitor_telegram_for_searches(
+                db, searches, notifications, log
+            )
             return len(pooled), new_total, notifications
 
         if tg_found_after is not None:
@@ -287,6 +315,9 @@ async def _process_group(
         f"(AUTO.RIA {auto_count}, OLX {olx_count}, TG {tg_count})"
     )
     mark_searches_checked(searches)
+    notifications = await _deliver_monitor_telegram_for_searches(
+        db, searches, notifications, log
+    )
     return found, new_total, notifications
 
 

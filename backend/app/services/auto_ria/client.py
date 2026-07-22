@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
 from app.services.auto_ria.constants import AUTO_RIA_BASE_URL, LANG_ID
+
+logger = logging.getLogger(__name__)
+
+# Скільки спроб при transient-збоях developers.ria.com (HTTPoison :closed тощо).
+_MAX_ATTEMPTS = 3
+_RETRY_BACKOFF_SECONDS = (0.4, 1.0, 2.0)
 
 
 class AutoRiaError(Exception):
@@ -35,6 +42,19 @@ async def get_shared_http_client() -> httpx.AsyncClient:
         return _http_client
 
 
+def _is_transient_http_status(status: int, body: str) -> bool:
+    """Чи варто повторити запит (тимчасовий збій upstream, не логічна помилка)."""
+    if status in (408, 425, 429, 500, 502, 503, 504):
+        return True
+    # AUTO.RIA інколи віддає 404 з тілом Elixir HTTPoison при обриві з'єднання
+    # їхнього проксі до внутрішнього сервісу — це не «ресурс не знайдено».
+    if status == 404:
+        low = (body or "").lower()
+        if "httpoison" in low or "reason: :closed" in low or ":closed" in low:
+            return True
+    return False
+
+
 class AutoRiaClient:
     def __init__(self, api_key: str | None = None):
         self.api_key = (api_key or settings.AUTO_RIA_API_KEY or "").strip()
@@ -46,19 +66,64 @@ class AutoRiaClient:
         if params:
             query.update(params)
 
-        client = await get_shared_http_client()
-        response = await client.get(path, params=query)
+        last_error: Exception | None = None
+        for attempt in range(_MAX_ATTEMPTS):
+            try:
+                client = await get_shared_http_client()
+                response = await client.get(path, params=query)
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
+                last_error = AutoRiaError(f"AUTO.RIA мережева помилка: {exc}")
+                if attempt + 1 >= _MAX_ATTEMPTS:
+                    break
+                delay = _RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)]
+                logger.warning(
+                    "AUTO.RIA network error path=%s attempt=%s/%s: %s — retry in %.1fs",
+                    path,
+                    attempt + 1,
+                    _MAX_ATTEMPTS,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                continue
 
-        if response.status_code >= 400:
-            raise AutoRiaError(
-                f"AUTO.RIA помилка {response.status_code}: {response.text[:200]}",
-                status_code=response.status_code,
-            )
+            if response.status_code >= 400:
+                body = response.text[:200]
+                err = AutoRiaError(
+                    f"AUTO.RIA помилка {response.status_code}: {body}",
+                    status_code=response.status_code,
+                )
+                if (
+                    _is_transient_http_status(response.status_code, body)
+                    and attempt + 1 < _MAX_ATTEMPTS
+                ):
+                    delay = _RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)]
+                    logger.warning(
+                        "AUTO.RIA transient %s path=%s attempt=%s/%s — retry in %.1fs: %s",
+                        response.status_code,
+                        path,
+                        attempt + 1,
+                        _MAX_ATTEMPTS,
+                        delay,
+                        body[:120],
+                    )
+                    last_error = err
+                    await asyncio.sleep(delay)
+                    continue
+                if _is_transient_http_status(response.status_code, body):
+                    raise AutoRiaError(
+                        "AUTO.RIA тимчасово обірвав з'єднання. Спробуйте ще раз.",
+                        status_code=response.status_code,
+                    ) from err
+                raise err
 
-        try:
-            return response.json()
-        except ValueError as exc:
-            raise AutoRiaError("AUTO.RIA повернув некоректну відповідь") from exc
+            try:
+                return response.json()
+            except ValueError as exc:
+                raise AutoRiaError("AUTO.RIA повернув некоректну відповідь") from exc
+
+        assert last_error is not None
+        raise last_error
 
     async def search(self, params: dict[str, Any]) -> dict[str, Any]:
         data = await self.get("/auto/search", params)

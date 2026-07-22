@@ -158,11 +158,20 @@ export const adminApi = {
   parserRuns: (limit = 30) => request<AdminParseRun[]>(`/admin/parser/runs?limit=${limit}`),
   parserListings: (limit = 40) =>
     request<Array<Record<string, unknown>>>(`/admin/parser/listings?limit=${limit}`),
-  parserNotifications: (limit = 50, runId?: string) => {
+  parserNotifications: (limit = 50, runId?: string, searchId?: string) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (runId) params.set("run_id", runId);
+    if (searchId) params.set("search_id", searchId);
     return request<AdminParserNotification[]>(`/admin/parser/notifications?${params}`);
   },
+  parserSearches: (activeOnly = true, limit = 100) =>
+    request<AdminActiveSearch[]>(
+      `/admin/parser/searches?active_only=${activeOnly}&limit=${limit}`,
+    ),
+  parserSearchDetail: (searchId: string, listingsLimit = 80) =>
+    request<AdminSearchDetail>(
+      `/admin/parser/searches/${searchId}?listings_limit=${listingsLimit}`,
+    ),
   triggerParserRun: () => request<AdminParseRun>("/admin/parser/run", { method: "POST" }),
   triggerParserRunSource: (source: "auto_ria" | "olx" | "telegram") =>
     request<AdminParseRun>(`/admin/parser/run/${source}`, { method: "POST" }),
@@ -311,6 +320,52 @@ export interface AdminParserNotification {
   listing_source: string | null;
   listing_url: string | null;
   listing_image: string | null;
+}
+
+export interface AdminActiveSearch {
+  id: string;
+  name: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  telegram_connected: boolean;
+  telegram_username: string | null;
+  brand: string | null;
+  model: string | null;
+  region: string | null;
+  sources: string[] | null;
+  is_active: boolean;
+  new_count: number;
+  total_count: number;
+  telegram_sent_count: number;
+  last_checked_at: string | null;
+  created_at: string;
+}
+
+export interface AdminSearchListingRow {
+  listing_id: string;
+  title: string;
+  brand: string;
+  model: string;
+  year: number;
+  price: number;
+  currency: string;
+  region: string;
+  source: string;
+  url: string;
+  image: string | null;
+  is_new: boolean;
+  first_seen_at: string;
+  notified_at: string | null;
+  telegram_sent: boolean;
+  telegram_sent_at: string | null;
+}
+
+export interface AdminSearchDetail {
+  search: AdminActiveSearch;
+  listings: AdminSearchListingRow[];
+  telegram_sent_total: number;
+  telegram_pending: number;
 }
 
 export interface AdminTelegramChannel {
