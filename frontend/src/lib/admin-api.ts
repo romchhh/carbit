@@ -167,6 +167,8 @@ export const adminApi = {
   triggerParserRunSource: (source: "auto_ria" | "olx" | "telegram") =>
     request<AdminParseRun>(`/admin/parser/run/${source}`, { method: "POST" }),
   telegramWorkerStatus: () => request<AdminTelegramWorkerStatus>("/admin/parser/telegram/status"),
+  telegramResetStuckJobs: () =>
+    request<{ reset: number }>("/admin/parser/telegram/reset-stuck-jobs", { method: "POST" }),
   telethonSessionStatus: () => request<AdminTelethonSessionStatus>("/admin/parser/telethon/session"),
   telethonResetSession: () =>
     request<AdminTelethonSessionReset>("/admin/parser/telethon/session/reset", { method: "POST" }),

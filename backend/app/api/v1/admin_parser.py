@@ -409,6 +409,30 @@ async def telegram_worker_status(_admin=Depends(get_current_admin)):
     return TelegramWorkerStatusOut(**await get_telegram_worker_status())
 
 
+@router.post("/listings/fix-duplicate-links")
+async def fix_duplicate_links(
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    from app.services.listings.duplicates import clear_invalid_duplicate_links
+
+    result = await clear_invalid_duplicate_links(db)
+    await db.commit()
+    return result
+
+
+@router.post("/telegram/reset-stuck-jobs")
+async def reset_stuck_keyword_jobs(_admin=Depends(get_current_admin)):
+    from app.services.telegram_channels.bootstrap import ensure_parser_path
+
+    ensure_parser_path()
+    from parser.channel_media_store import ChannelMediaStore
+
+    store = ChannelMediaStore()
+    stuck = store.reset_stuck_running_jobs(older_than_seconds=0)
+    return {"reset": stuck}
+
+
 async def _channel_out(db: AsyncSession, channel) -> TelegramChannelOut:
     return TelegramChannelOut(
         id=channel.id,

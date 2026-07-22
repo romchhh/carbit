@@ -42,8 +42,12 @@ async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
     vin = (data.vin or extract_vin(data.description, data.title) or "").strip().upper() or None
 
     duplicate = await find_duplicate_of(db, data.model_copy(update={"vin": vin}))
-    is_duplicate = bool(data.is_duplicate or duplicate)
-    duplicate_of = data.duplicate_of or (duplicate.id if duplicate else None)
+    if duplicate:
+        is_duplicate = True
+        duplicate_of = duplicate.id
+    else:
+        is_duplicate = False
+        duplicate_of = None
 
     price_changed = False
     vin_appeared = False

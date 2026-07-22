@@ -164,8 +164,21 @@ async def main() -> None:
         )
 
     async def heartbeat_loop() -> None:
+        from app.services.telegram_channels.bootstrap import ensure_parser_path
+
+        ensure_parser_path()
+        from parser.channel_media_store import ChannelMediaStore
+
+        store = ChannelMediaStore()
         while True:
             settings = await get_parser_settings()
+            # Чистимо jobs, що застрягли (crash попереднього циклу)
+            try:
+                stuck = store.reset_stuck_running_jobs(older_than_seconds=180)
+                if stuck:
+                    logger.warning("Reset %s stuck running keyword jobs", stuck)
+            except Exception:
+                pass
             busy = False
             try:
                 if await process_keyword_queue(service, limit=8):

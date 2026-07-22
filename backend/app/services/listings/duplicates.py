@@ -1,15 +1,13 @@
-"""Крос-джерельне дедуплікування оголошень."""
+"""Крос-джерельне дедуплікування оголошень (лише за VIN)."""
 
 from __future__ import annotations
-
-import re
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.text import norm_text
 from app.models.models import Listing
 from app.schemas.schemas import ListingOut, ListingSourceLink
+from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
 
 _SOURCE_RANK = {
@@ -23,127 +21,52 @@ def _source_rank(source: str) -> int:
     return _SOURCE_RANK.get((source or "").strip().lower(), 9)
 
 
-def _normalize_model_key(model: str, *, brand: str = "") -> str:
-    m = norm_text(model or "")
-    m = re.sub(r"\b(19|20)\d{2}\b", "", m)
-    m = re.sub(r"[^a-z0-9а-яёіїєґ\s-]", " ", m)
-    brand_key = norm_text(brand or "")
-    tokens = [
-        t
-        for t in m.split()
-        if t and (not brand_key or t != brand_key)
-    ]
-    return tokens[0] if tokens else m.strip()
-
-
-def _mileage_close(a: int, b: int) -> bool:
-    if a <= 0 or b <= 0:
-        return False
-    lo, hi = min(a, b), max(a, b)
-    if hi <= 0:
-        return False
-    return (hi - lo) / hi <= 0.08 or abs(hi - lo) <= 3000
-
-
-def _prices_close(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:
-    from app.services.currency import listing_price_uah
-
-    pa = listing_price_uah(getattr(a, "price", 0), getattr(a, "currency", None))
-    pb = listing_price_uah(getattr(b, "price", 0), getattr(b, "currency", None))
-    if pa <= 0 or pb <= 0:
-        return False
-    lo, hi = min(pa, pb), max(pa, pb)
-    return (hi - lo) / hi <= 0.025
+def _normalize_vin(value: str | None) -> str:
+    return (value or "").strip().upper()
 
 
 def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:
-    vin_a = (getattr(a, "vin", None) or "").strip().upper()
-    vin_b = (getattr(b, "vin", None) or "").strip().upper()
-    if vin_a and vin_b and len(vin_a) == 17 and len(vin_b) == 17 and vin_a == vin_b:
-        return True
-
-    brand_a = norm_text(getattr(a, "brand", "") or "")
-    brand_b = norm_text(getattr(b, "brand", "") or "")
-    model_a = _normalize_model_key(getattr(a, "model", "") or "", brand=brand_a)
-    model_b = _normalize_model_key(getattr(b, "model", "") or "", brand=brand_b)
-    year_a = int(getattr(a, "year", 0) or 0)
-    year_b = int(getattr(b, "year", 0) or 0)
-    if not brand_a or not brand_b or brand_a != brand_b:
-        return False
-    if not model_a or not model_b or model_a != model_b:
-        return False
-    if not year_a or year_a != year_b:
-        return False
-
-    if _mileage_close(int(getattr(a, "mileage", 0) or 0), int(getattr(b, "mileage", 0) or 0)):
-        return True
-    # Та сама ціна без близького пробігу — лише repost (пробіг невідомий або збігається).
-    if _prices_close(a, b):
-        ma = int(getattr(a, "mileage", 0) or 0)
-        mb = int(getattr(b, "mileage", 0) or 0)
-        if ma <= 0 or mb <= 0:
-            return True
-        return _mileage_close(ma, mb)
-    return False
+    """Одне авто — лише якщо збігається повний 17-символьний VIN."""
+    vin_a = _normalize_vin(getattr(a, "vin", None))
+    vin_b = _normalize_vin(getattr(b, "vin", None))
+    return bool(vin_a and vin_b and len(vin_a) == 17 and len(vin_b) == 17 and vin_a == vin_b)
 
 
 async def find_duplicate_of(db: AsyncSession, data: ListingOut) -> Listing | None:
-    """Шукає вже збережене оголошення з іншого джерела, схоже на data."""
-    vin = (data.vin or "").strip().upper()
-    if vin and len(vin) == 17:
-        row = await db.scalar(
-            select(Listing).where(
-                func.upper(Listing.vin) == vin,
-                Listing.id != data.id,
-            ).limit(1)
-        )
-        if row:
-            return row
-
-    if not data.brand or not data.model or not data.year:
+    """Шукає оголошення з тим самим VIN (інше джерело / repost)."""
+    vin = _normalize_vin(data.vin)
+    if not vin or len(vin) != 17:
         return None
 
-    brand_key = norm_text(data.brand)
-    model_key = _normalize_model_key(data.model, brand=brand_key)
-
-    candidates = (
-        await db.scalars(
-            select(Listing)
-            .where(
-                func.lower(Listing.brand) == brand_key,
-                Listing.year == data.year,
-                Listing.id != data.id,
-            )
-            .limit(80)
-        )
-    ).all()
-
-    for candidate in candidates:
-        cand_model = _normalize_model_key(candidate.model or "", brand=brand_key)
-        if model_key and cand_model and model_key != cand_model:
-            continue
-        if listings_look_same(data, candidate):
-            return candidate
-    return None
+    row = await db.scalar(
+        select(Listing).where(
+            func.upper(Listing.vin) == vin,
+            Listing.id != data.id,
+        ).limit(1)
+    )
+    return row
 
 
-def _pick_group_members(group: list[ListingOut]) -> list[ListingOut]:
-    """Один запис на джерело (найсвіжіший)."""
-    by_source: dict[str, ListingOut] = {}
-    for item in group:
-        key = (item.source or "").strip().lower() or "unknown"
-        prev = by_source.get(key)
-        if prev is None or (item.published_at or item.found_at) > (prev.published_at or prev.found_at):
-            by_source[key] = item
-    return list(by_source.values())
+def _telegram_url_for(member: ListingOut) -> str:
+    url = (member.url or "").strip()
+    if (member.source or "").lower() != "telegram":
+        return url
+    return fix_telegram_listing_url(member.id, url, images=member.images)
+
+
+def _pick_canonical(group: list[ListingOut], *, prefer_id: str | None = None) -> ListingOut:
+    if prefer_id:
+        for row in group:
+            if row.id == prefer_id:
+                return row
+    return min(group, key=lambda row: (_source_rank(row.source), row.id or ""))
 
 
 def _enrich_from_mirrors(canonical: ListingOut, members: list[ListingOut]) -> ListingOut:
-    """Доповнює AUTO.RIA-картку VIN/фото з дзеркал, якщо бракує."""
     updates: dict = {}
-    if not (canonical.vin or "").strip():
+    if not _normalize_vin(canonical.vin) or len(_normalize_vin(canonical.vin)) != 17:
         for m in members:
-            vin = (m.vin or "").strip().upper()
+            vin = _normalize_vin(m.vin)
             if len(vin) == 17:
                 updates["vin"] = vin
                 break
@@ -157,24 +80,12 @@ def _enrich_from_mirrors(canonical: ListingOut, members: list[ListingOut]) -> Li
     return canonical.model_copy(update=updates)
 
 
-def _pick_canonical(group: list[ListingOut], *, prefer_id: str | None = None) -> ListingOut:
-    if prefer_id:
-        for row in group:
-            if row.id == prefer_id:
-                return row
-    return min(group, key=lambda row: (_source_rank(row.source), row.id or ""))
-
-
 def mark_duplicates_in_pool(
     items: list[ListingOut],
     *,
     prefer_id: str | None = None,
 ) -> list[ListingOut]:
-    """Згортає крос-джерельні дублікати в одну картку.
-
-    Канонічне оголошення — пріоритетно AUTO.RIA; у `alternate_sources` —
-    посилання на інші джерела з іконками на UI.
-    """
+    """Згортає дублікати з однаковим VIN в одну картку з alternate_sources."""
     groups: list[list[ListingOut]] = []
     for item in items:
         placed = False
@@ -188,18 +99,25 @@ def mark_duplicates_in_pool(
 
     result: list[ListingOut] = []
     for group in groups:
+        if len(group) == 1 and not _normalize_vin(group[0].vin):
+            result.append(group[0])
+            continue
+
         canonical = _pick_canonical(group, prefer_id=prefer_id)
         canonical = _enrich_from_mirrors(canonical, group)
 
         alternates: list[ListingSourceLink] = []
         seen_urls: set[str] = set()
-        if canonical.url:
-            seen_urls.add(canonical.url.rstrip("/").split("?", 1)[0])
+        canon_url = _telegram_url_for(canonical) if canonical.source == "telegram" else (canonical.url or "")
+        if canon_url:
+            seen_urls.add(canon_url.rstrip("/").split("?", 1)[0])
+        if canonical.source == "telegram" and canon_url:
+            canonical = canonical.model_copy(update={"url": canon_url})
 
         for member in sorted(group, key=lambda row: (_source_rank(row.source), row.id)):
             if member.id == canonical.id:
                 continue
-            url = (member.url or "").strip()
+            url = _telegram_url_for(member)
             if not url:
                 continue
             url_key = url.rstrip("/").split("?", 1)[0]
@@ -210,7 +128,6 @@ def mark_duplicates_in_pool(
                 ListingSourceLink(source=member.source, url=url, id=member.id)
             )
 
-        # is_new — якщо будь-який член групи був новим у моніторингу
         is_new = any(bool(getattr(m, "is_new", None)) for m in group)
 
         result.append(
@@ -226,21 +143,21 @@ def mark_duplicates_in_pool(
     return result
 
 
+def _pool_item_links_to_any(items: list[ListingOut], candidate: ListingOut) -> bool:
+    return any(listings_look_same(candidate, item) for item in items)
+
+
 async def collapse_listings_with_db_mirrors(
     db: AsyncSession,
     items: list[ListingOut],
     *,
     prefer_id: str | None = None,
 ) -> list[ListingOut]:
-    """
-    Як mark_duplicates_in_pool, але підтягує дзеркала з БД
-    (duplicate_of / VIN / brand+model+year), щоб іконки джерел
-    були і в моніторингах/обраному/сповіщеннях.
-    """
+    """Підтягує дзеркала з БД лише за VIN / duplicate_of з тим самим VIN."""
     if not items:
         return []
 
-    from sqlalchemy import or_, and_
+    from sqlalchemy import or_
 
     from app.services.listings.serialize import listing_to_out
 
@@ -249,9 +166,9 @@ async def collapse_listings_with_db_mirrors(
 
     vins = sorted(
         {
-            (item.vin or "").strip().upper()
+            _normalize_vin(item.vin)
             for item in items
-            if item.vin and len((item.vin or "").strip()) == 17
+            if item.vin and len(_normalize_vin(item.vin)) == 17
         }
     )
     parent_ids = [item.duplicate_of for item in items if item.duplicate_of]
@@ -265,41 +182,14 @@ async def collapse_listings_with_db_mirrors(
         clauses.append(Listing.vin.in_(vins))
 
     if clauses:
-        rows = (
-            await db.scalars(select(Listing).where(or_(*clauses)).limit(800))
-        ).all()
+        rows = (await db.scalars(select(Listing).where(or_(*clauses)).limit(800))).all()
         for row in rows:
             if row.id in pool_by_id:
                 continue
-            pool_by_id[row.id] = listing_to_out(row)
-
-    # Soft-match: ті самі brand/model/year з іншого джерела (без VIN / duplicate_of).
-    fingerprint_keys: set[tuple[str, str, int]] = set()
-    for item in items:
-        brand = (item.brand or "").strip()
-        model = (item.model or "").strip()
-        year = int(item.year or 0)
-        if brand and model and year:
-            fingerprint_keys.add((brand, model, year))
-
-    soft_clauses = [
-        and_(Listing.brand == brand, Listing.model == model, Listing.year == year)
-        for brand, model, year in fingerprint_keys
-    ]
-    if soft_clauses:
-        soft_rows = (
-            await db.scalars(
-                select(Listing)
-                .where(or_(*soft_clauses), Listing.id.notin_(list(pool_by_id.keys()) or [""]))
-                .limit(600)
-            )
-        ).all()
-        for row in soft_rows:
-            if row.id in pool_by_id:
-                continue
             candidate = listing_to_out(row)
-            if any(listings_look_same(candidate, item) for item in items):
-                pool_by_id[row.id] = candidate
+            if not _pool_item_links_to_any(items, candidate):
+                continue
+            pool_by_id[row.id] = candidate
 
     collapsed = mark_duplicates_in_pool(list(pool_by_id.values()), prefer_id=prefer_id)
 
@@ -320,3 +210,23 @@ async def listing_out_with_mirrors(db: AsyncSession, listing: Listing) -> Listin
     out = listing_to_out(listing)
     collapsed = await collapse_listings_with_db_mirrors(db, [out], prefer_id=listing.id)
     return collapsed[0] if collapsed else out
+
+
+async def clear_invalid_duplicate_links(db: AsyncSession) -> dict[str, int]:
+    """Скидає is_duplicate/duplicate_of, якщо VIN не збігається (стара fuzzy-логіка)."""
+    from app.services.listings.serialize import listing_to_out
+
+    rows = (await db.scalars(select(Listing).where(Listing.duplicate_of.isnot(None)).limit(5000))).all()
+    cleared = 0
+    for row in rows:
+        parent = await db.get(Listing, row.duplicate_of) if row.duplicate_of else None
+        if parent is None:
+            row.is_duplicate = False
+            row.duplicate_of = None
+            cleared += 1
+            continue
+        if not listings_look_same(listing_to_out(row), listing_to_out(parent)):
+            row.is_duplicate = False
+            row.duplicate_of = None
+            cleared += 1
+    return {"cleared": cleared, "scanned": len(rows)}

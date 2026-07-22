@@ -102,6 +102,10 @@ async def refresh_telegram_by_keywords(
     from parser.channel_media_store import ChannelMediaStore
 
     store = ChannelMediaStore()
+    # Чистимо застряглі 'running' (воркер впав не завершивши job).
+    stuck = store.reset_stuck_running_jobs(older_than_seconds=120)
+    if stuck:
+        logger.info("Reset %s stuck running keyword jobs", stuck)
     # Прибираємо «мертву» чергу, щоб новий пошук не чекав Tesla-scan з минулої години.
     cancelled = store.cancel_stale_keyword_jobs(older_than_seconds=STALE_JOB_SECONDS)
     if cancelled:

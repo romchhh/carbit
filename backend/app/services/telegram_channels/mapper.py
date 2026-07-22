@@ -110,14 +110,15 @@ def fix_telegram_listing_url(
     *,
     images: list[str] | None = None,
 ) -> str:
-    """Виправляє старі посилання t.me/-100... → t.me/username/msg."""
-    if not url or "t.me/-" not in url:
-        return url
+    """Виправляє посилання t.me/… → канонічний t.me/username/msg з listing_id."""
     if listing_id.startswith("telegram_"):
         body = listing_id.removeprefix("telegram_")
         channel_part, _, msg_part = body.rpartition("_")
         if channel_part and msg_part.isdigit() and not is_numeric_channel_id(channel_part):
             return f"https://t.me/{channel_part}/{msg_part}"
+
+    if not url or "t.me/-" not in url:
+        return url
 
     channel_slug = _channel_slug_from_telegram_images(images)
     if channel_slug:

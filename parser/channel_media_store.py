@@ -367,6 +367,23 @@ class ChannelMediaStore:
             )
             return cur.fetchone() is not None
 
+    def reset_stuck_running_jobs(self, *, older_than_seconds: int = 300) -> int:
+        """Переводить 'running' → 'error' якщо воркер впав і не завершив job."""
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)).isoformat()
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute(
+                """
+                UPDATE keyword_search_queue
+                SET status='error', error='Stuck running — worker crash', finished_at=?
+                WHERE status='running' AND enqueued_at < ?
+                """,
+                (_utcnow(), cutoff),
+            )
+            conn.commit()
+            return cur.rowcount
+
     def keyword_queue_stats(self) -> dict[str, int]:
         with _lock, sqlite3.connect(self.db_path) as conn:
             rows = conn.execute(

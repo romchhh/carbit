@@ -146,6 +146,7 @@ async def count_channel_listings(db: AsyncSession, username: str) -> int:
                 Listing.external_id.ilike(f"{slug}_%"),
                 Listing.url.ilike(f"%t.me/{slug}/%"),
             ),
+            Listing.is_duplicate.is_(False),
         )
     )
     return int(await db.scalar(stmt) or 0)
@@ -169,6 +170,7 @@ async def list_channel_listings(
                 Listing.external_id.ilike(f"{slug}_%"),
                 Listing.url.ilike(f"%t.me/{slug}/%"),
             ),
+            Listing.is_duplicate.is_(False),
         )
         .order_by(Listing.found_at.desc())
         .limit(limit)

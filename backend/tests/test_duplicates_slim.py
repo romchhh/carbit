@@ -72,15 +72,15 @@ class DuplicatesTests(unittest.TestCase):
         self.assertEqual(len(items[0].alternate_sources), 1)
         self.assertEqual(items[0].alternate_sources[0].source, "olx")
 
-    def test_brand_model_year_mileage(self):
+    def test_brand_model_year_mileage_not_duplicate_without_vin(self):
         a = _item(id="a", mileage=80000)
         b = _item(id="b", source="olx", mileage=82000)
-        self.assertTrue(listings_look_same(a, b))
+        self.assertFalse(listings_look_same(a, b))
 
-    def test_same_price_repost(self):
+    def test_same_price_repost_not_duplicate_without_vin(self):
         a = _item(id="a", source="olx", mileage=0, price=7699, currency="USD")
         b = _item(id="b", source="olx", mileage=216000, price=7699, currency="USD")
-        self.assertTrue(listings_look_same(a, b))
+        self.assertFalse(listings_look_same(a, b))
 
     def test_same_price_different_mileage_not_duplicate(self):
         a = _item(
@@ -104,6 +104,7 @@ class DuplicatesTests(unittest.TestCase):
         self.assertFalse(listings_look_same(a, b))
 
     def test_prefer_id_keeps_url_on_detail(self):
+        vin = "WBA8E9C50HK123456"
         items = mark_duplicates_in_pool(
             [
                 _item(
@@ -115,6 +116,7 @@ class DuplicatesTests(unittest.TestCase):
                     mileage=20000,
                     price=19800,
                     url="https://olx.example/b",
+                    vin=vin,
                 ),
                 _item(
                     id="olx_a",
@@ -125,6 +127,7 @@ class DuplicatesTests(unittest.TestCase):
                     mileage=21000,
                     price=19800,
                     url="https://olx.example/a",
+                    vin=vin,
                 ),
             ],
             prefer_id="olx_b",
@@ -159,15 +162,17 @@ class DuplicatesTests(unittest.TestCase):
         self.assertEqual(len(items[0].alternate_sources), 1)
         self.assertEqual(items[0].alternate_sources[0].source, "olx")
     def test_mark_pool_propagates_is_new(self):
+        vin = "WBA8E9C50HK123457"
         items = mark_duplicates_in_pool(
             [
-                _item(id="a", is_new=False),
+                _item(id="a", is_new=False, vin=vin),
                 _item(
                     id="b",
                     source="olx",
                     mileage=82000,
                     url="https://olx.example/1",
                     is_new=True,
+                    vin=vin,
                 ),
             ]
         )

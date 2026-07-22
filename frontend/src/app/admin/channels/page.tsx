@@ -241,8 +241,40 @@ export default function AdminTelegramChannelsPage() {
             <div className="rounded-xl border border-border/60 bg-surface/40 px-3 py-2.5">
               <div className="text-[10px] font-bold uppercase tracking-wide text-muted">Черга keyword</div>
               <div className="mt-1 text-[13px] text-ink">
-                {workerStatus.keyword_queue.pending} очікує · {workerStatus.keyword_queue.running} в роботі
+                {workerStatus.keyword_queue.pending} очікує ·{" "}
+                <span
+                  className={
+                    workerStatus.keyword_queue.running > 0 && !workerStatus.worker_online
+                      ? "font-semibold text-amber-700"
+                      : ""
+                  }
+                >
+                  {workerStatus.keyword_queue.running} в роботі
+                </span>
               </div>
+              {workerStatus.keyword_queue.running > 0 && !workerStatus.worker_online && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void (async () => {
+                      try {
+                        const res = await adminApi.telegramResetStuckJobs();
+                        setMessage(
+                          res.reset > 0
+                            ? `Скинуто ${res.reset} застряглих jobs — вони не блокуватимуть нові пошуки`
+                            : "Застряглих jobs не знайдено",
+                        );
+                        await loadWorkerStatus();
+                      } catch {
+                        setMessage("Помилка скидання jobs");
+                      }
+                    })()
+                  }
+                  className="mt-1.5 text-[11px] font-semibold text-amber-800 hover:underline"
+                >
+                  ⚠ Worker offline — очистити застряглі jobs
+                </button>
+              )}
             </div>
             <div className="rounded-xl border border-border/60 bg-surface/40 px-3 py-2.5 sm:col-span-2">
               <div className="text-[10px] font-bold uppercase tracking-wide text-muted">Розклад</div>
