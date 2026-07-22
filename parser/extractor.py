@@ -14,7 +14,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from .brands_data import CAR_BRANDS, BRAND_CANONICAL
+from .brands_data import CAR_BRANDS, BRAND_CANONICAL, MODEL_AS_BRAND
 from .cities import UKRAINE_CITIES, CITY_CANONICAL
 from .models import CarListing
 
@@ -358,6 +358,23 @@ def _find_brand_model(text_low: str, original_text: str):
         idx = _brand_match(text_low, brand_key)
         if idx is None:
             continue
+        # Перевірка: якщо brand_key — це насправді назва моделі (напр. «discovery»),
+        # то бренд і перша частина моделі вже відомі зі словника MODEL_AS_BRAND.
+        if brand_key in MODEL_AS_BRAND:
+            canonical_brand, base_model = MODEL_AS_BRAND[brand_key]
+            # Намагаємось підхопити суфікс після моделі (напр. «5» у «Discovery 5»)
+            tail = original_text[idx + len(brand_key): idx + len(brand_key) + 20]
+            suffix_words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", tail)
+            suffix = ""
+            for sw in suffix_words[:1]:
+                if YEAR_RE.fullmatch(sw) or sw.lower() in MODEL_STOP_WORDS:
+                    break
+                # Однозначне число ≤ 9 є генерацією моделі (Discovery 5, Discovery 4)
+                if re.fullmatch(r"\d", sw):
+                    suffix = f" {sw}"
+                break
+            return canonical_brand, f"{base_model}{suffix}", idx
+
         brand = BRAND_CANONICAL.get(brand_key, brand_key.title())
         tail = original_text[idx + len(brand_key): idx + len(brand_key) + 40]
         words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", tail)

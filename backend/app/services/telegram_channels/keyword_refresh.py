@@ -53,9 +53,22 @@ def build_telegram_keyword_queries(
     # Спочатку швидкий server-side search — покриває пости глибше за limit історії.
     for q in build_search_keyword_queries(brand, model, max_queries=MAX_TELEGRAM_KEYWORD_QUERIES):
         add(q)
+    # Якщо модель унікальна для бренду (discovery, defender тощо) — пости часто
+    # не мають назви бренду. Додаємо standalone model-запити для глибшого покриття.
+    if brand and model:
+        from app.services.search.brand_model_keywords import (
+            _allows_distinctive_model_without_brand,
+            collect_model_keyword_variants,
+        )
+        if _allows_distinctive_model_without_brand(brand, model):
+            from app.core.text import norm_text
+            for mt in collect_model_keyword_variants(brand, model):
+                mt_k = norm_text(mt)
+                if mt_k and len(mt_k) >= 4:
+                    add(mt)
     if include_history_scan:
         add(encode_telegram_scan_job(brand, model))
-    return out[: MAX_TELEGRAM_KEYWORD_QUERIES + (1 if include_history_scan else 0)]
+    return out[: MAX_TELEGRAM_KEYWORD_QUERIES * 2 + (1 if include_history_scan else 0)]
 
 
 def build_telegram_keyword_query(filters: SearchFilters) -> str | None:

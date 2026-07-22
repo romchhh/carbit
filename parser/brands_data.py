@@ -8,9 +8,11 @@
 CAR_BRANDS = [
     "mercedes-benz", "mercedes benz", "mercedes", "mersedes", "мерседес",
     "land rover", "range rover", "ленд ровер", "рендж ровер",
+    "discovery", "дискавері", "дискавери",  # Land Rover Discovery без явної назви бренду
     "volkswagen", "vw", "фольксваген", "фольксваген", "вольксваген",
     "bmw", "бмв",
     "audi", "ауді", "ауди",
+    "prado", "прадо",  # Toyota Land Cruiser Prado без явної назви бренду
     "toyota", "тойота",
     "lexus", "лексус",
     "skoda", "škoda", "шкода",
@@ -24,11 +26,13 @@ CAR_BRANDS = [
     "kia", "кіа", "киа",
     "nissan", "ніссан", "ниссан",
     "mazda", "мазда",
+    "pajero", "паджеро",  # Mitsubishi Pajero без явної назви бренду
     "mitsubishi", "мітсубісі", "мицубиси",
     "subaru", "субару",
     "honda", "хонда",
     "suzuki", "сузукі", "сузуки",
     "volvo", "вольво",
+    "wrangler", "вранглер",  # Jeep Wrangler без явної назви бренду
     "jeep", "джип",
     "chrysler", "крайслер",
     "dodge", "додж",
@@ -85,16 +89,33 @@ CAR_BRANDS = [
     "renault trucks",
 ]
 
+# Ключ = альтернативна назва (alias), значення = (canonical_brand, model_name).
+# Коли extractor знаходить такий ключ, бренд береться звідси, а MODEL_NAME
+# використовується як початок моделі (а не наступне слово після ключа).
+MODEL_AS_BRAND: dict[str, tuple[str, str]] = {
+    "discovery": ("Land Rover", "Discovery"),
+    "дискавері": ("Land Rover", "Discovery"),
+    "дискавери": ("Land Rover", "Discovery"),
+    "prado": ("Toyota", "Land Cruiser Prado"),
+    "прадо": ("Toyota", "Land Cruiser Prado"),
+    "pajero": ("Mitsubishi", "Pajero"),
+    "паджеро": ("Mitsubishi", "Pajero"),
+    "wrangler": ("Jeep", "Wrangler"),
+    "вранглер": ("Jeep", "Wrangler"),
+}
+
 # для нормалізації бренду до "канонічного" вигляду при виводі користувачу
 BRAND_CANONICAL = {
     "mersedes": "Mercedes-Benz", "мерседес": "Mercedes-Benz",
     "mercedes benz": "Mercedes-Benz", "mercedes-benz": "Mercedes-Benz", "mercedes": "Mercedes-Benz",
     "ленд ровер": "Land Rover", "land rover": "Land Rover",
+    "discovery": "Land Rover", "дискавері": "Land Rover", "дискавери": "Land Rover",
     "рендж ровер": "Range Rover", "range rover": "Range Rover",
     "vw": "Volkswagen", "фольксваген": "Volkswagen", "вольксваген": "Volkswagen", "volkswagen": "Volkswagen",
     "бмв": "BMW", "bmw": "BMW",
     "ауді": "Audi", "ауди": "Audi", "audi": "Audi",
     "тойота": "Toyota", "toyota": "Toyota",
+    "prado": "Toyota", "прадо": "Toyota",
     "лексус": "Lexus", "lexus": "Lexus",
     "škoda": "Skoda", "шкода": "Skoda", "skoda": "Skoda",
     "рено": "Renault", "renault": "Renault",
@@ -108,11 +129,13 @@ BRAND_CANONICAL = {
     "ніссан": "Nissan", "ниссан": "Nissan", "nissan": "Nissan",
     "мазда": "Mazda", "mazda": "Mazda",
     "мітсубісі": "Mitsubishi", "мицубиси": "Mitsubishi", "mitsubishi": "Mitsubishi",
+    "pajero": "Mitsubishi", "паджеро": "Mitsubishi",
     "субару": "Subaru", "subaru": "Subaru",
     "хонда": "Honda", "honda": "Honda",
     "сузукі": "Suzuki", "сузуки": "Suzuki", "suzuki": "Suzuki",
     "вольво": "Volvo", "volvo": "Volvo",
     "джип": "Jeep", "jeep": "Jeep",
+    "wrangler": "Jeep", "вранглер": "Jeep",
     "крайслер": "Chrysler", "chrysler": "Chrysler",
     "додж": "Dodge", "dodge": "Dodge",
     "кадиллак": "Cadillac", "cadillac": "Cadillac",

@@ -160,6 +160,7 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
         clauses.append(Listing.found_at > as_kyiv(found_after))
 
     brand = (filters.brand or "").strip()
+    model_str = (filters.model or "").strip()
     if brand:
         brand_variants = filter_sql_search_tokens(collect_brand_keyword_variants(brand), limit=12)
         brand_clauses = []
@@ -172,10 +173,24 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
                     Listing.description.ilike(like),
                 ]
             )
+        # Якщо модель унікально ідентифікує бренд (Discovery → Land Rover),
+        # старі listings можуть мати brand="Discovery" — додаємо перевірку в brand clause.
+        if model_str:
+            from app.services.search.brand_model_keywords import (
+                _allows_distinctive_model_without_brand,
+                collect_model_keyword_variants,
+            )
+            if _allows_distinctive_model_without_brand(brand, model_str):
+                model_v = filter_sql_search_tokens(
+                    collect_model_keyword_variants(brand, model_str), limit=6
+                )
+                for mv in model_v:
+                    like = f"%{mv}%"
+                    brand_clauses.extend([Listing.brand.ilike(like), Listing.title.ilike(like)])
         if brand_clauses:
             clauses.append(or_(*brand_clauses))
 
-    model = (filters.model or "").strip()
+    model = model_str  # використовуємо вже оголошений model_str
     if model:
         model_variants = filter_sql_search_tokens(
             collect_model_keyword_variants(filters.brand or "", model),
