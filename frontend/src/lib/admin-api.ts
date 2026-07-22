@@ -166,6 +166,7 @@ export const adminApi = {
   triggerParserRun: () => request<AdminParseRun>("/admin/parser/run", { method: "POST" }),
   triggerParserRunSource: (source: "auto_ria" | "olx" | "telegram") =>
     request<AdminParseRun>(`/admin/parser/run/${source}`, { method: "POST" }),
+  telegramWorkerStatus: () => request<AdminTelegramWorkerStatus>("/admin/parser/telegram/status"),
   telegramChannels: () => request<AdminTelegramChannel[]>("/admin/parser/channels"),
   createTelegramChannel: (body: { username: string; title?: string; enabled?: boolean }) =>
     request<AdminTelegramChannel>("/admin/parser/channels", {
@@ -206,7 +207,22 @@ export interface AdminParserSettings {
   notify_telegram: boolean;
   telegram_enabled: boolean;
   telegram_history_limit: number;
+  telegram_worker_poll_seconds: number;
+  telegram_channel_sync_seconds: number;
   notification_max_published_hours: number;
+}
+
+export interface AdminTelegramWorkerStatus {
+  telegram_enabled: boolean;
+  telethon_configured: boolean;
+  worker_online: boolean;
+  worker_heartbeat_age_seconds: number | null;
+  interval_seconds: number;
+  telegram_worker_poll_seconds: number;
+  telegram_channel_sync_seconds: number;
+  telegram_history_limit: number;
+  keyword_queue: { pending: number; running: number; done: number; error: number };
+  schedule_hint: string;
 }
 
 export interface AdminParseRun {

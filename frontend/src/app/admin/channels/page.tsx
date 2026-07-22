@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { adminApi, AdminApiError, type AdminTelegramChannel } from "@/lib/admin-api";
+import { adminApi, AdminApiError, type AdminTelegramChannel, type AdminTelegramWorkerStatus } from "@/lib/admin-api";
 import { formatKyivDateTime } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import type { Listing } from "@/types/api";
@@ -29,18 +29,34 @@ export default function AdminTelegramChannelsPage() {
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<AdminTelegramChannel | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [workerStatus, setWorkerStatus] = useState<AdminTelegramWorkerStatus | null>(null);
+  const [workerPoll, setWorkerPoll] = useState(3);
+  const [workerSync, setWorkerSync] = useState(45);
+  const [workerSaving, setWorkerSaving] = useState(false);
+  const [telegramRunLoading, setTelegramRunLoading] = useState(false);
 
   const selected = channels.find(c => c.id === selectedId) ?? null;
+
+  const loadWorkerStatus = useCallback(async () => {
+    try {
+      const data = await adminApi.telegramWorkerStatus();
+      setWorkerStatus(data);
+      setWorkerPoll(data.telegram_worker_poll_seconds);
+      setWorkerSync(data.telegram_channel_sync_seconds);
+    } catch {
+      setWorkerStatus(null);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await adminApi.telegramChannels();
+      const [data] = await Promise.all([adminApi.telegramChannels(), loadWorkerStatus()]);
       setChannels(data);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadWorkerStatus]);
 
   useEffect(() => {
     void load();
@@ -122,6 +138,37 @@ export default function AdminTelegramChannelsPage() {
     }
   };
 
+  const saveWorkerDelays = async () => {
+    setWorkerSaving(true);
+    setMessage(null);
+    try {
+      await adminApi.updateParserSettings({
+        telegram_worker_poll_seconds: workerPoll,
+        telegram_channel_sync_seconds: workerSync,
+      });
+      setMessage("Затримки worker збережено (підхопить без перезапуску)");
+      await loadWorkerStatus();
+    } catch (err) {
+      setMessage(err instanceof AdminApiError ? err.message : "Не вдалося зберегти");
+    } finally {
+      setWorkerSaving(false);
+    }
+  };
+
+  const runTelegramCollect = async () => {
+    setTelegramRunLoading(true);
+    setMessage(null);
+    try {
+      await adminApi.triggerParserRunSource("telegram");
+      setMessage("Плановий збір Telegram запущено (фільтри користувачів)");
+      await loadWorkerStatus();
+    } catch (err) {
+      setMessage(err instanceof AdminApiError ? err.message : "Помилка запуску");
+    } finally {
+      setTelegramRunLoading(false);
+    }
+  };
+
   if (loading && channels.length === 0) {
     return (
       <div className="flex justify-center py-20">
@@ -149,6 +196,100 @@ export default function AdminTelegramChannelsPage() {
           {message}
         </div>
       )}
+
+      <section className="mb-6 rounded-2xl border border-border/70 bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[16px] font-bold text-ink">Telegram worker</h2>
+            <p className="mt-1 text-[12px] text-muted">
+              Окремий процес: realtime-пости + черга keyword/фото. Плановий цикл по фільтрах — кнопка нижче або scheduler.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void runTelegramCollect()}
+            disabled={telegramRunLoading || workerStatus?.telegram_enabled === false}
+            className="rounded-full bg-sky-600 px-4 py-2 text-[12px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+          >
+            {telegramRunLoading ? "Запуск…" : "Запустити збір зараз"}
+          </button>
+        </div>
+
+        {workerStatus && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-border/60 bg-surface/40 px-3 py-2.5">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-muted">Worker</div>
+              <div
+                className={cn(
+                  "mt-1 text-[14px] font-bold",
+                  workerStatus.worker_online ? "text-emerald-dark" : "text-amber-700",
+                )}
+              >
+                {workerStatus.worker_online
+                  ? "Online"
+                  : workerStatus.worker_heartbeat_age_seconds != null
+                    ? `Offline (${Math.round(workerStatus.worker_heartbeat_age_seconds)} с тому)`
+                    : "Немає heartbeat"}
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-surface/40 px-3 py-2.5">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-muted">Черга keyword</div>
+              <div className="mt-1 text-[13px] text-ink">
+                {workerStatus.keyword_queue.pending} очікує · {workerStatus.keyword_queue.running} в роботі
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-surface/40 px-3 py-2.5 sm:col-span-2">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-muted">Розклад</div>
+              <div className="mt-1 text-[12px] text-muted leading-snug">{workerStatus.schedule_hint}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border/60 pt-4">
+          <label className="min-w-[140px] text-[12px] font-semibold text-muted">
+            Інтервал черги (сек)
+            <input
+              type="number"
+              min={1}
+              max={120}
+              value={workerPoll}
+              onChange={e => setWorkerPoll(Number(e.target.value))}
+              className="mt-1.5 w-full rounded-xl border border-border/80 bg-surface px-3 py-2 text-[14px] text-ink outline-none focus:border-emerald"
+            />
+          </label>
+          <label className="min-w-[140px] text-[12px] font-semibold text-muted">
+            Sync каналів (сек)
+            <input
+              type="number"
+              min={15}
+              max={600}
+              value={workerSync}
+              onChange={e => setWorkerSync(Number(e.target.value))}
+              className="mt-1.5 w-full rounded-xl border border-border/80 bg-surface px-3 py-2 text-[14px] text-ink outline-none focus:border-emerald"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void saveWorkerDelays()}
+            disabled={workerSaving}
+            className="rounded-full border border-border/80 px-4 py-2.5 text-[12px] font-semibold text-ink hover:bg-surface disabled:opacity-60"
+          >
+            {workerSaving ? "Збереження…" : "Зберегти затримки"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void loadWorkerStatus()}
+            className="rounded-full px-3 py-2.5 text-[12px] font-semibold text-emerald hover:underline"
+          >
+            Оновити статус
+          </button>
+        </div>
+        {!workerStatus?.telethon_configured && (
+          <p className="mt-3 text-[11px] text-amber-800">
+            TELETHON_API_ID / TELETHON_API_HASH не налаштовані в .env
+          </p>
+        )}
+      </section>
 
       <form
         onSubmit={e => void handleAdd(e)}
@@ -246,7 +387,8 @@ export default function AdminTelegramChannelsPage() {
             })
           )}
           <p className="px-1 pt-2 text-[11px] text-muted">
-            Після додавання каналу цикл парсингу підтягне історію протягом ~15 хв. Realtime — worker оновлює список кожні ~45 с (перезапуск не обовʼязковий).
+            Новий канал підтягує історію під час наступного планового циклу або після sync worker (інтервал вище).
+            Realtime-пости — одразу, якщо процес telegram_worker запущений.
           </p>
         </div>
 

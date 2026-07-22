@@ -21,7 +21,14 @@ from app.services.telegram_channels.service_loader import get_parser_channels, g
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [telegram-worker] %(message)s")
 logger = logging.getLogger("carbit.telegram_worker")
 
-CHANNEL_SYNC_SECONDS = 45
+
+def _poll_sleep_seconds(settings: dict, *, busy: bool) -> float:
+    poll = max(1, int(settings.get("telegram_worker_poll_seconds") or 3))
+    return 0.5 if busy else float(poll)
+
+
+def _channel_sync_seconds(settings: dict) -> float:
+    return float(max(15, int(settings.get("telegram_channel_sync_seconds") or 45)))
 
 
 async def bootstrap_channels(service, channels: list[str], limit: int) -> None:
@@ -143,7 +150,8 @@ async def channel_sync_loop(
 ) -> None:
     """Підхоплює нові канали з БД без перезапуску worker."""
     while True:
-        await asyncio.sleep(CHANNEL_SYNC_SECONDS)
+        settings = await get_parser_settings()
+        await asyncio.sleep(_channel_sync_seconds(settings))
         try:
             channels = await get_parser_channels()
             new = [ch for ch in channels if ch not in bootstrapped]
@@ -204,6 +212,7 @@ async def main() -> None:
 
     async def heartbeat_loop() -> None:
         while True:
+            settings = await get_parser_settings()
             busy = False
             try:
                 if await process_keyword_queue(service, limit=8):
@@ -216,7 +225,7 @@ async def main() -> None:
             except Exception:
                 logger.exception("Photo queue tick failed")
             await beat("telegram_worker")
-            await asyncio.sleep(0.5 if busy else 3)
+            await asyncio.sleep(_poll_sleep_seconds(settings, busy=busy))
 
     asyncio.create_task(heartbeat_loop())
     asyncio.create_task(

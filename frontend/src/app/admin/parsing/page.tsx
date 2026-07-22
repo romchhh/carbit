@@ -292,6 +292,35 @@ export default function AdminParsingPage() {
               />
             </label>
             <label className="block text-[13px]">
+              <span className="text-muted">Telegram worker: інтервал черги (сек)</span>
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={settings.telegram_worker_poll_seconds ?? 3}
+                onChange={e =>
+                  setSettings({ ...settings, telegram_worker_poll_seconds: Number(e.target.value) })
+                }
+                className="mt-1 w-full rounded-lg border border-border px-3 py-2"
+              />
+              <span className="mt-1 block text-[11px] text-muted">
+                Keyword/фото jobs, коли черга порожня. При активній черзі — ~0,5 с.
+              </span>
+            </label>
+            <label className="block text-[13px]">
+              <span className="text-muted">Telegram worker: sync каналів (сек)</span>
+              <input
+                type="number"
+                min={15}
+                max={600}
+                value={settings.telegram_channel_sync_seconds ?? 45}
+                onChange={e =>
+                  setSettings({ ...settings, telegram_channel_sync_seconds: Number(e.target.value) })
+                }
+                className="mt-1 w-full rounded-lg border border-border px-3 py-2"
+              />
+            </label>
+            <label className="block text-[13px]">
               <span className="text-muted">Telegram: глибина історії (повідомлень/канал)</span>
               <input
                 type="number"

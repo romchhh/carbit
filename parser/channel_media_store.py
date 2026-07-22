@@ -366,3 +366,18 @@ class ChannelMediaStore:
                 [int(x) for x in job_ids],
             )
             return cur.fetchone() is not None
+
+    def keyword_queue_stats(self) -> dict[str, int]:
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT status, COUNT(*) FROM keyword_search_queue
+                GROUP BY status
+                """
+            ).fetchall()
+        out = {"pending": 0, "running": 0, "done": 0, "error": 0}
+        for status, count in rows:
+            key = str(status or "").lower()
+            if key in out:
+                out[key] = int(count)
+        return out

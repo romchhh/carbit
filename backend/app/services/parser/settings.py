@@ -16,6 +16,8 @@ DEFAULT_SETTINGS = {
     "notify_telegram": True,
     "telegram_enabled": True,
     "telegram_history_limit": 500,
+    "telegram_worker_poll_seconds": 3,
+    "telegram_channel_sync_seconds": 45,
     "notification_max_published_hours": 1,
 }
 

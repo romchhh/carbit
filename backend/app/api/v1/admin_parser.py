@@ -34,6 +34,8 @@ class ParserSettingsOut(BaseModel):
     notify_telegram: bool
     telegram_enabled: bool
     telegram_history_limit: int
+    telegram_worker_poll_seconds: int = 3
+    telegram_channel_sync_seconds: int = 45
     notification_max_published_hours: int
 
 
@@ -45,6 +47,8 @@ class ParserSettingsUpdate(BaseModel):
     notify_telegram: bool | None = None
     telegram_enabled: bool | None = None
     telegram_history_limit: int | None = Field(default=None, ge=10, le=3000)
+    telegram_worker_poll_seconds: int | None = Field(default=None, ge=1, le=120)
+    telegram_channel_sync_seconds: int | None = Field(default=None, ge=15, le=600)
     notification_max_published_hours: int | None = Field(default=None, ge=1, le=24)
 
 
@@ -283,6 +287,26 @@ class TelegramChannelUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     enabled: bool | None = None
     sort_order: int | None = Field(default=None, ge=0, le=10_000)
+
+
+class TelegramWorkerStatusOut(BaseModel):
+    telegram_enabled: bool
+    telethon_configured: bool
+    worker_online: bool
+    worker_heartbeat_age_seconds: float | None
+    interval_seconds: int
+    telegram_worker_poll_seconds: int
+    telegram_channel_sync_seconds: int
+    telegram_history_limit: int
+    keyword_queue: dict[str, int]
+    schedule_hint: str
+
+
+@router.get("/telegram/status", response_model=TelegramWorkerStatusOut)
+async def telegram_worker_status(_admin=Depends(get_current_admin)):
+    from app.services.telegram_channels.admin_status import get_telegram_worker_status
+
+    return TelegramWorkerStatusOut(**await get_telegram_worker_status())
 
 
 async def _channel_out(db: AsyncSession, channel) -> TelegramChannelOut:
