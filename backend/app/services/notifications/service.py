@@ -22,6 +22,7 @@ from app.services.notifications.freshness import (
     is_listing_fresh_for_notification,
 )
 from app.services.parser.settings import get_parser_settings
+from app.services.listings.duplicates import listings_look_same
 from app.services.telegram.client import telegram_client, SOURCE_LABELS
 from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
@@ -29,34 +30,40 @@ logger = logging.getLogger(__name__)
 
 
 def monitor_telegram_delivery_done(notification: Notification) -> bool:
-    """Telegram доставлено або свідомо пропущено (дубль / вже слали) — не ретраїмо."""
+    """Telegram доставлено або свідомо пропущено (VIN-дзеркало) — не ретраїмо."""
     if notification.sent_telegram:
         return True
     payload = notification.payload or {}
-    return bool(
-        payload.get("telegram_skipped_duplicate")
-        or payload.get("telegram_skipped_already_notified")
-    )
+    return bool(payload.get("telegram_skipped_duplicate"))
 
 
 async def _duplicate_family_ids(db: AsyncSession, listing: Listing) -> set[str]:
-    """ID цього оголошення + канон / дзеркала через duplicate_of."""
+    """ID оголошення + дзеркала лише при збігу 17-символьного VIN (не вся гілка duplicate_of)."""
     ids = {listing.id}
-    parent = getattr(listing, "duplicate_of", None)
-    if parent:
-        ids.add(parent)
+    vin = (getattr(listing, "vin", None) or "").strip().upper()
+    if len(vin) != 17:
+        return ids
+
+    parent_id = getattr(listing, "duplicate_of", None)
+    if parent_id:
+        parent = await db.get(Listing, parent_id)
+        if parent and listings_look_same(listing, parent):
+            ids.add(parent_id)
+
     rows = (
         await db.scalars(
-            select(Listing.id).where(
+            select(Listing).where(
                 or_(
-                    Listing.id.in_(list(ids)),
-                    Listing.duplicate_of.in_(list(ids)),
                     Listing.duplicate_of == listing.id,
+                    Listing.duplicate_of.in_(list(ids)),
+                    Listing.id.in_(list(ids)),
                 )
-            )
+            ).limit(80)
         )
     ).all()
-    ids.update(rows)
+    for row in rows:
+        if listings_look_same(listing, row):
+            ids.add(row.id)
     return ids
 
 
@@ -67,20 +74,34 @@ async def user_already_notified_for_car(
     *,
     lookback_hours: int = 72,
 ) -> bool:
-    """True, якщо юзеру вже слали listing_match по цьому авто / дзеркалу / двійнику."""
-    family_ids = await _duplicate_family_ids(db, listing)
-    exact = await db.scalar(
-        select(Notification.id).where(
+    """True, якщо юзеру вже успішно слали listing_match по цьому oголошенню / VIN-дзеркалу."""
+    if await db.scalar(
+        select(Notification.id)
+        .where(
             Notification.user_id == user_id,
             Notification.type == NotificationType.listing_match,
-            Notification.listing_id.in_(list(family_ids)),
+            Notification.listing_id == listing.id,
             Notification.sent_telegram.is_(True),
-        ).limit(1)
-    )
-    if exact:
+        )
+        .limit(1)
+    ):
         return True
 
-    # Soft-match лише за VIN (brand/model/year без VIN — різні авто).
+    family_ids = await _duplicate_family_ids(db, listing)
+    other_ids = family_ids - {listing.id}
+    if other_ids:
+        if await db.scalar(
+            select(Notification.id)
+            .where(
+                Notification.user_id == user_id,
+                Notification.type == NotificationType.listing_match,
+                Notification.listing_id.in_(list(other_ids)),
+                Notification.sent_telegram.is_(True),
+            )
+            .limit(1)
+        ):
+            return True
+
     vin = (getattr(listing, "vin", None) or "").strip().upper()
     if not vin or len(vin) != 17:
         return False
@@ -104,6 +125,92 @@ async def user_already_notified_for_car(
     return bool(recent)
 
 
+def _listing_source_label(listing: Listing) -> str:
+    source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
+    return SOURCE_LABELS.get(source, source)
+
+
+async def _vin_family_source_labels(db: AsyncSession, listing: Listing) -> list[str]:
+    family = await _duplicate_family_ids(db, listing)
+    if len(family) <= 1:
+        return [_listing_source_label(listing)]
+    rows = (await db.scalars(select(Listing).where(Listing.id.in_(list(family))))).all()
+    labels = sorted({_listing_source_label(row) for row in rows})
+    return labels
+
+
+async def _prior_telegram_source_labels(
+    db: AsyncSession,
+    user_id: str,
+    listing: Listing,
+) -> list[str]:
+    """Джерела, з яких юзеру вже успішно відправляли TG по VIN-сімʼї (інші listing_id)."""
+    family = await _duplicate_family_ids(db, listing)
+    other_ids = family - {listing.id}
+    if not other_ids:
+        return []
+    rows = (
+        await db.scalars(
+            select(Listing)
+            .join(Notification, Notification.listing_id == Listing.id)
+            .where(
+                Notification.user_id == user_id,
+                Notification.type == NotificationType.listing_match,
+                Notification.sent_telegram.is_(True),
+                Listing.id.in_(list(other_ids)),
+            )
+        )
+    ).all()
+    labels: list[str] = []
+    seen: set[str] = set()
+    for listing_row in rows:
+        label = _listing_source_label(listing_row)
+        if label not in seen:
+            seen.add(label)
+            labels.append(label)
+    return labels
+
+
+async def _user_already_sent_exact_listing(
+    db: AsyncSession,
+    user_id: str,
+    listing_id: str,
+) -> bool:
+    return bool(
+        await db.scalar(
+            select(Notification.id)
+            .where(
+                Notification.user_id == user_id,
+                Notification.type == NotificationType.listing_match,
+                Notification.listing_id == listing_id,
+                Notification.sent_telegram.is_(True),
+            )
+            .limit(1)
+        )
+    )
+
+
+async def build_cross_source_telegram_alert(
+    db: AsyncSession,
+    user_id: str,
+    listing: Listing,
+) -> tuple[str | None, str]:
+    """Текст для TG: дубль з іншого джерела або одразу кілька джерел."""
+    current = _listing_source_label(listing)
+    prior = await _prior_telegram_source_labels(db, user_id, listing)
+    if prior:
+        prev = ", ".join(prior)
+        return (
+            f"Це авто вже знайдено на {prev}. Ось оголошення з {current}.",
+            "🔗",
+        )
+    family_labels = await _vin_family_source_labels(db, listing)
+    if len(family_labels) > 1:
+        names = ", ".join(family_labels)
+        return (f"Знайдено одразу на кількох джерелах: {names}.", "🔗")
+    return None, "🚗"
+
+
 async def _attempt_listing_match_telegram(
     db: AsyncSession,
     user: User,
@@ -113,6 +220,8 @@ async def _attempt_listing_match_telegram(
     *,
     skip_freshness_check: bool,
     max_published_hours: float | None,
+    alert_line: str | None = None,
+    alert_emoji: str = "🚗",
 ) -> bool:
     """Надсилає картку в Telegram; оновлює notification.sent_telegram."""
     if not (user.telegram_connected and user.telegram_id):
@@ -184,6 +293,8 @@ async def _attempt_listing_match_telegram(
             search_name,
             search_id=search.id if search else None,
             listing_id=listing.id,
+            alert_line=alert_line,
+            alert_emoji=alert_emoji,
         )
         if result:
             break
@@ -227,6 +338,9 @@ async def create_listing_notification(
     skipped_duplicate = False
     skipped_already_notified = False
     skipped_no_chat_id = False
+    cross_source_alert: str | None = None
+    cross_source_emoji = "🚗"
+
     if not (user.telegram_connected and user.telegram_id):
         skip_telegram = True
         skipped_no_chat_id = True
@@ -236,23 +350,17 @@ async def create_listing_notification(
                 user.id,
             )
     elif send_telegram:
-        # Дзеркало з тим самим VIN — у TG лише канонічна картка
-        vin = (getattr(listing, "vin", None) or "").strip().upper()
-        if (
-            bool(getattr(listing, "is_duplicate", False))
-            and getattr(listing, "duplicate_of", None)
-            and len(vin) == 17
-        ):
-            skip_telegram = True
-            skipped_duplicate = True
-            logger.info("Skip Telegram notify for VIN-duplicate mirror %s", listing.id)
-        elif await user_already_notified_for_car(db, user.id, listing):
+        if await _user_already_sent_exact_listing(db, user.id, listing.id):
             skip_telegram = True
             skipped_already_notified = True
             logger.info(
-                "Skip Telegram notify for %s: user %s already notified for this car",
+                "Skip Telegram notify for %s: user %s already got this listing_id",
                 listing.id,
                 user.id,
+            )
+        else:
+            cross_source_alert, cross_source_emoji = await build_cross_source_telegram_alert(
+                db, user.id, listing
             )
 
     notification = Notification(
@@ -277,6 +385,7 @@ async def create_listing_notification(
             "telegram_skipped_duplicate": skipped_duplicate,
             "telegram_skipped_already_notified": skipped_already_notified,
             "telegram_skipped_no_chat_id": skipped_no_chat_id,
+            "cross_source_alert": cross_source_alert,
         },
     )
     db.add(notification)
@@ -304,6 +413,8 @@ async def create_listing_notification(
             notification,
             skip_freshness_check=skip_freshness_check,
             max_published_hours=max_published_hours,
+            alert_line=cross_source_alert,
+            alert_emoji=cross_source_emoji,
         )
 
     return notification
@@ -336,6 +447,12 @@ async def notify_monitor_listing_after_link(
     if not notification.sent_telegram and not monitor_telegram_delivery_done(notification):
         # Перша спроба могла не пройти через тимчасову помилку — ще раз
         if user.telegram_connected and user.telegram_id:
+            alert_line = (notification.payload or {}).get("cross_source_alert")
+            alert_emoji = "🔗" if alert_line else "🚗"
+            if alert_line is None:
+                alert_line, alert_emoji = await build_cross_source_telegram_alert(
+                    db, user.id, listing
+                )
             await _attempt_listing_match_telegram(
                 db,
                 user,
@@ -344,6 +461,8 @@ async def notify_monitor_listing_after_link(
                 notification,
                 skip_freshness_check=True,
                 max_published_hours=None,
+                alert_line=alert_line,
+                alert_emoji=alert_emoji,
             )
 
     if monitor_telegram_delivery_done(notification):
@@ -424,6 +543,13 @@ async def deliver_pending_monitor_telegram(
             sl.notified_at = now_kyiv()
             continue
         if latest:
+            payload = latest.payload or {}
+            alert_line = payload.get("cross_source_alert")
+            alert_emoji = "🔗" if alert_line else "🚗"
+            if alert_line is None:
+                alert_line, alert_emoji = await build_cross_source_telegram_alert(
+                    db, user.id, listing
+                )
             ok = await _attempt_listing_match_telegram(
                 db,
                 user,
@@ -432,6 +558,8 @@ async def deliver_pending_monitor_telegram(
                 latest,
                 skip_freshness_check=True,
                 max_published_hours=None,
+                alert_line=alert_line,
+                alert_emoji=alert_emoji,
             )
             if ok:
                 delivered += 1

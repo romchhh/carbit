@@ -97,7 +97,7 @@ class AlreadyNotifiedTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
-    async def test_skips_telegram_for_duplicate_mirror(self):
+    async def test_sends_telegram_for_vin_mirror_with_cross_source_alert(self):
         from app.services.notifications.service import create_listing_notification
 
         listing = SimpleNamespace(
@@ -117,7 +117,7 @@ class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
             published_at=datetime(2026, 7, 15, 10, 0, tzinfo=KYIV_TZ),
             is_duplicate=True,
             duplicate_of="auto_ria_1",
-            vin=None,
+            vin="WBA8E9C50HK123456",
             brand="BMW",
             model="X5",
         )
@@ -135,23 +135,30 @@ class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.services.notifications.service.telegram_client.send_listing_card",
             new_callable=AsyncMock,
+            return_value={"ok": True},
         ) as send:
             with patch(
-                "app.services.notifications.service.user_already_notified_for_car",
+                "app.services.notifications.service._user_already_sent_exact_listing",
                 new_callable=AsyncMock,
                 return_value=False,
             ):
                 with patch(
-                    "app.services.notifications.service.format_display_price",
-                    return_value="30 000 $",
+                    "app.services.notifications.service.build_cross_source_telegram_alert",
+                    new_callable=AsyncMock,
+                    return_value=("Це авто вже знайдено на AUTO.RIA. Ось оголошення з OLX.", "🔗"),
                 ):
-                    notif = await create_listing_notification(
-                        db, user, listing, search=search, send_telegram=True
-                    )
+                    with patch(
+                        "app.services.notifications.service.format_display_price",
+                        return_value="30 000 $",
+                    ):
+                        notif = await create_listing_notification(
+                            db, user, listing, search=search, send_telegram=True
+                        )
 
-        send.assert_not_awaited()
-        self.assertFalse(notif.sent_telegram)
-        self.assertTrue(notif.payload.get("telegram_skipped_duplicate"))
+        send.assert_awaited_once()
+        self.assertTrue(notif.sent_telegram)
+        self.assertEqual(send.await_args.kwargs.get("alert_emoji"), "🔗")
+        self.assertIn("AUTO.RIA", send.await_args.kwargs.get("alert_line", ""))
 
     async def test_telegram_notification_includes_one_photo(self):
         from app.services.notifications.service import create_listing_notification

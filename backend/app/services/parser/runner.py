@@ -91,25 +91,6 @@ async def _link_listings_to_searches(
     new_total = 0
     notifications = 0
     users_cache: dict[str, User | None] = {}
-    notified_cars_in_batch: dict[str, list] = {}
-
-    from app.services.listings.duplicates import listings_look_same
-
-    def _batch_already_notified(user_id: str, listing) -> bool:
-        for prev in notified_cars_in_batch.get(user_id, []):
-            if listings_look_same(prev, listing):
-                return True
-        return False
-
-    def _should_skip_notify_as_mirror(listing) -> bool:
-        """Пропускаємо TG лише для дзеркала з тим самим VIN (не fuzzy brand/year)."""
-        if not bool(getattr(listing, "is_duplicate", False)):
-            return False
-        parent_id = getattr(listing, "duplicate_of", None)
-        if not parent_id:
-            return False
-        vin = (getattr(listing, "vin", None) or "").strip().upper()
-        return len(vin) == 17
 
     for item, listing in upserted:
         for search in searches:
@@ -124,10 +105,6 @@ async def _link_listings_to_searches(
             user = users_cache[search.user_id]
 
             do_notify = notify
-            if do_notify and _should_skip_notify_as_mirror(listing):
-                do_notify = False
-            if do_notify and user and _batch_already_notified(user.id, listing):
-                do_notify = False
 
             is_new, sent = await link_listing_to_search(
                 db,
@@ -139,7 +116,6 @@ async def _link_listings_to_searches(
             if is_new:
                 new_total += 1
             if sent and user:
-                notified_cars_in_batch.setdefault(user.id, []).append(listing)
                 notifications += 1
 
     return new_total, notifications
