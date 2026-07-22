@@ -61,14 +61,10 @@ async def user_already_notified_for_car(
     if exact:
         return True
 
-    # Soft-match: те саме авто під іншим listing_id (OLX repost / інше джерело без duplicate_of).
-    brand = (listing.brand or "").strip()
-    model = (listing.model or "").strip()
-    year = int(listing.year or 0)
-    if not brand or not model or not year:
+    # Soft-match лише за VIN (brand/model/year без VIN — різні авто).
+    vin = (getattr(listing, "vin", None) or "").strip().upper()
+    if not vin or len(vin) != 17:
         return False
-
-    from app.services.listings.duplicates import listings_look_same
 
     since = now_kyiv() - timedelta(hours=max(1, lookback_hours))
     recent = (
@@ -80,18 +76,13 @@ async def user_already_notified_for_car(
                 Notification.type == NotificationType.listing_match,
                 Notification.sent_telegram.is_(True),
                 Notification.created_at >= since,
-                Listing.brand == brand,
-                Listing.model == model,
-                Listing.year == year,
+                func.upper(Listing.vin) == vin,
                 Listing.id.notin_(list(family_ids)),
             )
-            .limit(40)
+            .limit(10)
         )
     ).all()
-    for other in recent:
-        if listings_look_same(listing, other):
-            return True
-    return False
+    return bool(recent)
 
 
 async def create_listing_notification(
@@ -116,10 +107,15 @@ async def create_listing_notification(
 
     skip_telegram = False
     if send_telegram and user.telegram_connected and user.telegram_id:
-        # Дзеркало іншого джерела — у TG лише канонічна картка
-        if bool(getattr(listing, "is_duplicate", False)):
+        # Дзеркало з тим самим VIN — у TG лише канонічна картка
+        vin = (getattr(listing, "vin", None) or "").strip().upper()
+        if (
+            bool(getattr(listing, "is_duplicate", False))
+            and getattr(listing, "duplicate_of", None)
+            and len(vin) == 17
+        ):
             skip_telegram = True
-            logger.info("Skip Telegram notify for duplicate mirror %s", listing.id)
+            logger.info("Skip Telegram notify for VIN-duplicate mirror %s", listing.id)
         elif await user_already_notified_for_car(db, user.id, listing):
             skip_telegram = True
             logger.info(

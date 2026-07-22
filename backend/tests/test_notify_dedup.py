@@ -37,13 +37,14 @@ class AlreadyNotifiedTests(unittest.IsolatedAsyncioTestCase):
     async def test_soft_match_hit(self):
         from app.services.notifications.service import user_already_notified_for_car
 
+        vin = "WBA8E9C50HK123456"
         listing = SimpleNamespace(
             id="olx_2",
             brand="BMW",
             model="X5",
             year=2022,
             mileage=15000,
-            vin=None,
+            vin=vin,
             duplicate_of=None,
             is_duplicate=False,
             title="BMW X5",
@@ -55,18 +56,16 @@ class AlreadyNotifiedTests(unittest.IsolatedAsyncioTestCase):
             model="X5",
             year=2022,
             mileage=15200,
-            vin=None,
+            vin=vin,
             title="BMW X5 xDrive",
             description=None,
         )
 
         db = AsyncMock()
-        # family ids query
         family_result = SimpleNamespace(all=lambda: ["olx_2"])
         recent_result = SimpleNamespace(all=lambda: [other])
 
         async def scalars_side_effect(stmt):
-            # first call family, second recent — approximate by call order
             if not hasattr(scalars_side_effect, "n"):
                 scalars_side_effect.n = 0
             scalars_side_effect.n += 1
@@ -76,6 +75,25 @@ class AlreadyNotifiedTests(unittest.IsolatedAsyncioTestCase):
         db.scalar = AsyncMock(return_value=None)
 
         self.assertTrue(await user_already_notified_for_car(db, "user-1", listing))
+
+    async def test_soft_match_without_vin_is_not_duplicate(self):
+        from app.services.notifications.service import user_already_notified_for_car
+
+        listing = SimpleNamespace(
+            id="olx_2",
+            brand="Zeekr",
+            model="001",
+            year=2025,
+            mileage=5000,
+            vin=None,
+            duplicate_of=None,
+            is_duplicate=False,
+        )
+        db = AsyncMock()
+        db.scalars = AsyncMock(return_value=SimpleNamespace(all=lambda: ["olx_2"]))
+        db.scalar = AsyncMock(return_value=None)
+
+        self.assertFalse(await user_already_notified_for_car(db, "user-1", listing))
 
 
 class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):

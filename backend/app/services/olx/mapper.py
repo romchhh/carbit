@@ -229,6 +229,16 @@ def _listing_mileage_value(listing: OlxListing) -> int:
     return 0
 
 
+def _clean_model_token(model: str, *, brand: str = "") -> str:
+    """Перше слово моделі без року/бренду (для структурованого поля)."""
+    m = norm_text(model or "")
+    m = re.sub(r"\b(19|20)\d{2}\b", "", m)
+    m = re.sub(r"[^a-z0-9а-яёіїєґ\s-]", " ", m)
+    brand_key = norm_text(brand or "")
+    tokens = [t for t in m.split() if t and (not brand_key or t != brand_key)]
+    return tokens[0] if tokens else m.strip()
+
+
 def _split_brand_model(title: str, brand_hint: str = "", model_hint: str = "") -> tuple[str, str]:
     brand = brand_hint.strip()
     model = model_hint.strip()
@@ -272,9 +282,7 @@ def olx_listing_to_listing_out(
     listing_id = listing.listing_id or "unknown"
     title = (listing.title or "OLX").strip()
     brand, model = _split_brand_model(title, brand_hint, model_hint)
-    from app.services.listings.duplicates import _normalize_model_key
-
-    model = _normalize_model_key(model, brand=brand) or model.split()[0] if model else model
+    model = _clean_model_token(model, brand=brand) or (model.split()[0] if model else model)
 
     specs = listing.specs or {}
     fuel = _extract_spec(specs, "палив", "fuel") or ""

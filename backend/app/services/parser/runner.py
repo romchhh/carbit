@@ -26,6 +26,8 @@ from app.services.telegram_channels.cycle import run_telegram_channels_cycle
 
 logger = logging.getLogger(__name__)
 
+UpsertedListing = tuple[ListingOut, Listing]
+
 
 def _monitor_cache_ttl(settings: dict) -> int:
     interval = int(settings.get("interval_seconds") or 900)
@@ -57,7 +59,7 @@ async def _link_listings_to_searches(
     db: AsyncSession,
     *,
     searches: list[SearchQuery],
-    upserted: list[tuple[ListingOut, object]],
+    upserted: list[UpsertedListing],
     parse_sources: list[str],
     notify: bool,
     max_hours: float,
@@ -76,6 +78,16 @@ async def _link_listings_to_searches(
                 return True
         return False
 
+    def _should_skip_notify_as_mirror(listing) -> bool:
+        """Пропускаємо TG лише для дзеркала з тим самим VIN (не fuzzy brand/year)."""
+        if not bool(getattr(listing, "is_duplicate", False)):
+            return False
+        parent_id = getattr(listing, "duplicate_of", None)
+        if not parent_id:
+            return False
+        vin = (getattr(listing, "vin", None) or "").strip().upper()
+        return len(vin) == 17
+
     for item, listing in upserted:
         for search in searches:
             search_sources = normalize_sources(parse_search_filters(search.filters).sources)
@@ -86,7 +98,7 @@ async def _link_listings_to_searches(
             user = users_cache[search.user_id]
 
             do_notify = notify
-            if do_notify and bool(getattr(listing, "is_duplicate", False)):
+            if do_notify and _should_skip_notify_as_mirror(listing):
                 do_notify = False
             if do_notify and user and _batch_already_notified(user.id, listing):
                 do_notify = False
@@ -136,6 +148,7 @@ async def _process_group(
             searches.append(search)
 
     parse_sources = _sources_for_group(group, searches, sources_only=sources_only)
+    upserted: list[UpsertedListing] = []
     tg_found_after = (
         telegram_found_after_cutoff(searches, max_hours=discover_hours)
         if "telegram" in parse_sources
@@ -166,7 +179,7 @@ async def _process_group(
                 if age < cache_reuse_max:
                     log.append(f"  ⊘ Кеш {int(age)}s — пропуск API")
                     listing_ids = list(cached.get("listing_ids") or [])
-                    upserted: list[tuple[ListingOut, object]] = []
+                    upserted.clear()
                     for listing_id in listing_ids:
                         listing = await db.get(Listing, listing_id)
                         if not listing:
@@ -195,11 +208,11 @@ async def _process_group(
         )
         if pooled and not sources_only and not has_olx_or_tg:
             log.append(f"  ↺ Live-pool ({len(pooled)} огол.) — без зовнішніх API")
-            upserted = []
+            upserted.clear()
             for item in pooled:
                 listing = await upsert_listing(db, item)
                 upserted.append((item, listing))
-            listing_ids = [listing.id for _, listing in upserted]
+            listing_ids = [row.id for _, row in upserted]
             new_total, notifications = await _link_listings_to_searches(
                 db,
                 searches=searches,
@@ -245,7 +258,7 @@ async def _process_group(
     found = len(results.items)
     listing_ids: list[str] = []
 
-    upserted = []
+    upserted.clear()
     for item in results.items:
         listing = await upsert_listing(db, item)
         listing_ids.append(listing.id)
