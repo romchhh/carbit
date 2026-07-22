@@ -50,9 +50,15 @@ def listing_region_matches_filter(listing_region: str, filter_region: str) -> bo
 
     if filter_key == "м. київ":
         head = blob.split(",")[0].strip()
-        return head in ("київ", "киев", "kyiv", "kiev") or head.startswith(
+        if head in ("київ", "киев", "kyiv", "kiev") or head.startswith(
             ("київ ", "киев ", "kyiv ", "kiev ", "київ,", "киев,")
-        )
+        ):
+            return True
+        # Авторинок: Бориспіль, Бровари тощо часто шукають разом із «м. Київ»
+        metro = cities_for_region("м. київ")
+        if metro and any(_keyword_in_blob(kw, blob) for kw in metro):
+            return True
+        return False
 
     # Повна назва області в тексті («Вінницька область», «Одеська обл.»)
     if filter_key in blob:

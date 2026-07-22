@@ -95,8 +95,14 @@ async def ensure_joined(client: TelegramClient, channel: str) -> bool:
             log.info("Приєднався до каналу %s", channel)
             return True
         except FloodWaitError as e:
-            log.warning("FloodWait %s сек при вступі в %s", e.seconds, channel)
-            return False
+            log.warning("FloodWait %s сек при вступі в %s — перевіряю read-доступ", e.seconds, channel)
+            # Уже в групі / публічний чат: join throttle не означає «немає доступу».
+            try:
+                async for _ in client.iter_messages(entity, limit=1):
+                    return True
+            except Exception:
+                return False
+            return True
         except ChannelPrivateError:
             log.warning("Канал %s приватний, вступ неможливий без інвайту", channel)
             return False
@@ -114,6 +120,24 @@ async def ensure_joined(client: TelegramClient, channel: str) -> bool:
         try:
             await client(JoinChannelRequest(entity))
             return True
+        except FloodWaitError as e2:
+            log.warning(
+                "FloodWait %s сек (fallback join) %s — перевіряю read-доступ",
+                e2.seconds,
+                channel,
+            )
+            try:
+                async for _ in client.iter_messages(entity, limit=1):
+                    return True
+            except Exception:
+                return False
+            return True
         except Exception as e2:
             log.warning("Не вдалось приєднатись до %s: %s", channel, e2)
-            return False
+            # Останній шанс: якщо історію все ж читаємо — не блокуємо keyword-search.
+            try:
+                async for _ in client.iter_messages(entity, limit=1):
+                    return True
+            except Exception:
+                return False
+            return True

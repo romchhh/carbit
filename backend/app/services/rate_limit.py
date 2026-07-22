@@ -22,6 +22,7 @@ async def enforce_rate_limit(
     limit: int,
     window_seconds: int,
     detail: str = "Занадто багато спроб. Спробуйте пізніше.",
+    code: str | None = None,
 ) -> None:
     """Increment counter for key; raise 429 when over limit within window."""
     redis = await get_redis()
@@ -33,7 +34,27 @@ async def enforce_rate_limit(
         count = 0
 
     if count >= limit:
-        raise HTTPException(status_code=429, detail=detail)
+        retry_after = window_seconds
+        try:
+            ttl = await redis.ttl(full_key)
+            if isinstance(ttl, (int, float)) and int(ttl) > 0:
+                retry_after = int(ttl)
+        except Exception:
+            pass
+        payload: dict | str
+        if code:
+            payload = {
+                "code": code,
+                "message": detail,
+                "retry_after": retry_after,
+            }
+        else:
+            payload = detail
+        raise HTTPException(
+            status_code=429,
+            detail=payload,
+            headers={"Retry-After": str(retry_after)},
+        )
 
     count += 1
     await redis.setex(full_key, window_seconds, str(count))

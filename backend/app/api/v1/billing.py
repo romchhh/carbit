@@ -18,7 +18,7 @@ from app.schemas.schemas import (
 from app.services.billing.liqpay import LiqPayNotConfiguredError, liqpay_configured
 from app.services.billing.notify import notify_plan_activated
 from app.services.billing.payments import list_user_payments
-from app.services.billing.plans import activate_plan, enforce_plan_expiry, get_plan, list_plans
+from app.services.billing.plans import activate_plan, admin_access_days, enforce_plan_expiry, get_plan, list_plans
 from app.services.billing.subscriptions import (
     cancel_active_subscriptions,
     create_checkout,
@@ -301,8 +301,18 @@ async def admin_activate_plan(
     if not user:
         raise HTTPException(404, "User not found")
     previous_plan = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
+    grant_days: int | None = None
+    if body.access_days is not None:
+        grant_days = admin_access_days(days=body.access_days)
+    elif body.access_months is not None:
+        grant_days = admin_access_days(months=body.access_months)
     try:
-        activate_plan(user, body.plan)
+        activate_plan(
+            user,
+            body.plan,
+            access_days=grant_days,
+            extend_from_current=grant_days is not None,
+        )
     except ValueError:
         raise HTTPException(400, "Unknown plan")
     await db.flush()

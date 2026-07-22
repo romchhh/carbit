@@ -44,7 +44,7 @@ class ParserSettingsUpdate(BaseModel):
     cache_ttl_seconds: int | None = Field(default=None, ge=300, le=86400)
     notify_telegram: bool | None = None
     telegram_enabled: bool | None = None
-    telegram_history_limit: int | None = Field(default=None, ge=10, le=500)
+    telegram_history_limit: int | None = Field(default=None, ge=10, le=3000)
     notification_max_published_hours: int | None = Field(default=None, ge=1, le=24)
 
 

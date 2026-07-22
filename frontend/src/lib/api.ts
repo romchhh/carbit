@@ -31,7 +31,12 @@ function apiUrl(): string {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+    public retryAfter?: number,
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -42,15 +47,60 @@ export function getApiErrorMessage(err: unknown, fallback = "Помилка за
   return fallback;
 }
 
-async function parseError(res: Response): Promise<string> {
+export function isSearchRateLimitError(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    return err.status === 429 && (err.code === "search_rate_limit" || /ліміт пошуків/i.test(err.message));
+  }
+  if (typeof err === "string") {
+    return /ліміт пошуків/i.test(err);
+  }
+  return false;
+}
+
+type ParsedApiError = {
+  message: string;
+  code?: string;
+  retryAfter?: number;
+};
+
+async function parseError(res: Response): Promise<ParsedApiError> {
+  let retryAfter: number | undefined;
+  const header = res.headers.get("Retry-After");
+  if (header) {
+    const n = Number(header);
+    if (Number.isFinite(n) && n > 0) retryAfter = Math.floor(n);
+  }
+
   try {
     const body = await res.json();
-    if (typeof body.detail === "string") return body.detail;
-    if (Array.isArray(body.detail)) {
-      return body.detail.map((e: { msg?: string }) => e.msg).filter(Boolean).join(", ") || "Помилка запиту";
+    const detail = body?.detail;
+    if (typeof detail === "string") {
+      return { message: detail, retryAfter };
     }
-  } catch { /* ignore */ }
-  return "Помилка запиту";
+    if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+      const message =
+        typeof detail.message === "string"
+          ? detail.message
+          : typeof detail.detail === "string"
+            ? detail.detail
+            : "Помилка запиту";
+      const code = typeof detail.code === "string" ? detail.code : undefined;
+      const fromBody =
+        typeof detail.retry_after === "number" && detail.retry_after > 0
+          ? Math.floor(detail.retry_after)
+          : undefined;
+      return { message, code, retryAfter: fromBody ?? retryAfter };
+    }
+    if (Array.isArray(detail)) {
+      return {
+        message: detail.map((e: { msg?: string }) => e.msg).filter(Boolean).join(", ") || "Помилка запиту",
+        retryAfter,
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { message: "Помилка запиту", retryAfter };
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -83,7 +133,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new ApiError(res.status, "Некоректне перенаправлення API. Перезберіть backend і frontend.");
   }
 
-  if (!res.ok) throw new ApiError(res.status, await parseError(res));
+  if (!res.ok) {
+    const parsed = await parseError(res);
+    throw new ApiError(res.status, parsed.message, parsed.code, parsed.retryAfter);
+  }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }

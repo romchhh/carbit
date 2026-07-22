@@ -12,6 +12,7 @@ import type { SortOption } from "@/lib/search-catalog";
 import { listingsToExportItems } from "@/lib/export-listings";
 import { SEARCH_HOURLY_LIMIT, SEARCH_PAGE_SIZE, type SearchFreshness } from "@/lib/search-preview";
 import { flavorForLoadMore, flavorForRefresh } from "@/lib/search-flavor";
+import { isSearchRateLimitMessage } from "@/components/search/SearchRateLimitNotice";
 import type { Listing, SourceStatus } from "@/types/api";
 import { cn } from "@/lib/utils";
 
@@ -136,12 +137,12 @@ export function SearchPreviewResults({
           />
         )}
 
-        {error && (
+        {error && !isSearchRateLimitMessage(error) && (
           <div
             role="alert"
-            className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] leading-relaxed text-red-700"
+            className="mb-4 rounded-2xl border border-border/80 bg-surface/70 px-4 py-3 text-[13px] leading-relaxed text-muted"
           >
-            {error}
+            <span className="font-medium text-ink/80">{error}</span>
           </div>
         )}
 

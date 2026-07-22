@@ -59,10 +59,18 @@ function BillingRow({ sub }: { sub: AdminBillingSubscription }) {
   );
 }
 
+const ACCESS_TERM_OPTIONS: { label: string; months: number }[] = [
+  { label: "1 місяць", months: 1 },
+  { label: "3 місяці", months: 3 },
+  { label: "6 місяців", months: 6 },
+  { label: "1 рік", months: 12 },
+];
+
 export default function AdminClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [user, setUser] = useState<AdminUserDetail | null>(null);
   const [saving, setSaving] = useState(false);
+  const [accessMonths, setAccessMonths] = useState(1);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -82,7 +90,22 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
   const changePlan = async (plan: string) => {
     setSaving(true);
     try {
-      await adminApi.updateUser(user.id, { plan });
+      const body: { plan: string; access_months?: number } = { plan };
+      if (plan !== "free") {
+        body.access_months = accessMonths;
+      }
+      await adminApi.updateUser(user.id, body);
+      setUser(await adminApi.user(user.id));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const extendAccess = async () => {
+    if (user.plan === "free") return;
+    setSaving(true);
+    try {
+      await adminApi.updateUser(user.id, { access_months: accessMonths });
       setUser(await adminApi.user(user.id));
     } finally {
       setSaving(false);
@@ -154,6 +177,33 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
 
       <section className="bg-white border border-border rounded-xl p-6 mb-4 space-y-4">
         <h2 className="text-[15px] font-bold text-ink">Тариф</h2>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <label className="text-[12px] font-medium text-muted shrink-0" htmlFor="access-term">
+            Термін доступу
+          </label>
+          <select
+            id="access-term"
+            className="auth-input w-full max-w-[220px] text-[13px]"
+            value={accessMonths}
+            disabled={saving}
+            onChange={e => setAccessMonths(Number(e.target.value))}
+          >
+            {ACCESS_TERM_OPTIONS.map(opt => (
+              <option key={opt.months} value={opt.months}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          {user.plan !== "free" && (
+            <Button variant="secondary" size="sm" loading={saving} onClick={() => void extendAccess()}>
+              Продовжити на обраний термін
+            </Button>
+          )}
+        </div>
+        <p className="text-[11px] text-muted">
+          При зміні платного тарифу доступ додається від поточної дати закінчення (якщо вона ще в майбутньому).
+          12 місяців = 365 днів.
+        </p>
         <div className="flex flex-wrap gap-2">
           {Object.entries(PLAN_LABELS).map(([k, v]) => (
             <button

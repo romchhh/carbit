@@ -6,6 +6,10 @@ import { BrandIcon } from "@/components/search/BrandIcon";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
+import {
+  SearchRateLimitNotice,
+  isSearchRateLimitMessage,
+} from "@/components/search/SearchRateLimitNotice";
 import { IosToggle } from "@/components/ui/IosToggle";
 import { cn } from "@/lib/utils";
 import { getBrandIconUrl } from "@/lib/search-data/brand-icons";
@@ -35,6 +39,7 @@ type Props = {
   searchButtonLabel?: string;
   searchingButtonLabel?: string;
   searchError?: string | null;
+  searchErrorRetryAfter?: number | null;
   onSearch: () => void;
   onSave?: () => void;
   searching?: boolean;
@@ -64,6 +69,7 @@ export function SearchFiltersPanel({
   saveError,
   saveLimitReached,
   searchError,
+  searchErrorRetryAfter,
   telegramConnected,
   monitorConnected,
   connectedMonitorId,
@@ -73,6 +79,7 @@ export function SearchFiltersPanel({
 }: Props) {
   const [advanced, setAdvanced] = useState(false);
   const models = filters.brand ? getModelsForBrand(filters.brand) : [];
+  const rateLimited = isSearchRateLimitMessage(searchError);
 
   const update = (patch: Partial<SearchFilterState>) => {
     onChange({ ...filters, ...patch });
@@ -235,14 +242,19 @@ export function SearchFiltersPanel({
       )}
 
       <div className="mt-4 space-y-3 rounded-[1.35rem] border border-border/80 bg-white px-3 py-3.5 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:px-5">
-        {searchError && (
+        {rateLimited ? (
+          <SearchRateLimitNotice
+            message={searchError}
+            retryAfterSeconds={searchErrorRetryAfter}
+          />
+        ) : searchError ? (
           <div
             role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-[13px] leading-relaxed text-red-700"
+            className="rounded-xl border border-border/80 bg-surface/70 px-3.5 py-3 text-[13px] leading-relaxed text-muted"
           >
-            {searchError}
+            <span className="font-medium text-ink/80">{searchError}</span>
           </div>
-        )}
+        ) : null}
         <button
           type="button"
           onClick={onSearch}
@@ -282,6 +294,7 @@ export function SearchFiltersPanel({
             telegramConnected={telegramConnected}
             monitorConnected={monitorConnected}
             connectedMonitorId={connectedMonitorId}
+            hideSubscriptionPitch={rateLimited}
           />
         )}
       </div>

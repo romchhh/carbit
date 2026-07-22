@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ravon">
+  <circle cx="32" cy="32" r="30" fill="#0B3D91"/>
+  <path fill="#fff" d="M22 18h12.8c6.4 0 10.6 3.5 10.6 9.1 0 4.2-2.3 7.2-6.1 8.4L46 46h-7.4l-5.9-9.6H28.6V46H22V18zm6.6 5.4v8.2h5.6c3.2 0 5-1.5 5-4.1s-1.8-4.1-5-4.1h-5.6z"/>
+  <path fill="#E30613" d="M18 46h28v3.2H18z"/>
+</svg>

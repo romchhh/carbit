@@ -78,8 +78,8 @@ async def process_photo_queue(service, *, limit: int = 5) -> int:
     return done
 
 
-async def process_keyword_queue(service, *, limit: int = 4) -> int:
-    """Scan історії Telegram-каналів за brand/model з live-пошуку."""
+async def process_keyword_queue(service, *, limit: int = 8) -> int:
+    """Scan / Telethon-search історії каналів з live-пошуку (plain search має пріоритет)."""
     from app.services.telegram_channels.bootstrap import ensure_parser_path
 
     ensure_parser_path()
@@ -149,7 +149,7 @@ async def channel_sync_loop(
             new = [ch for ch in channels if ch not in bootstrapped]
             if new:
                 logger.info("Нові канали з адмінки: %s", new)
-                await bootstrap_channels(service, new, history_limit)
+                await bootstrap_channels(service, new, max(history_limit, 500))
                 bootstrapped.update(new)
             active = await service.sync_monitored_channels(channels)
             if new:
@@ -172,14 +172,16 @@ async def main() -> None:
         return
 
     parser_settings = await get_parser_settings()
-    history_limit = int(parser_settings.get("telegram_history_limit", 100))
+    history_limit = max(100, int(parser_settings.get("telegram_history_limit", 500)))
 
     service = get_parser_service()
     await service.start()
     logger.info("Telethon started, channels: %s", channels)
 
     bootstrapped: set[str] = set()
-    await bootstrap_channels(service, channels, history_limit)
+    # Нові/активні групи: мінімум 500 повідомлень, інакше свіжі пости «губляться».
+    bootstrap_limit = max(history_limit, 500)
+    await bootstrap_channels(service, channels, bootstrap_limit)
     bootstrapped.update(channels)
     await beat("telegram_worker")
 
@@ -204,7 +206,7 @@ async def main() -> None:
         while True:
             busy = False
             try:
-                if await process_keyword_queue(service, limit=4):
+                if await process_keyword_queue(service, limit=8):
                     busy = True
             except Exception:
                 logger.exception("Keyword queue tick failed")
@@ -214,7 +216,7 @@ async def main() -> None:
             except Exception:
                 logger.exception("Photo queue tick failed")
             await beat("telegram_worker")
-            await asyncio.sleep(1 if busy else 4)
+            await asyncio.sleep(0.5 if busy else 3)
 
     asyncio.create_task(heartbeat_loop())
     asyncio.create_task(

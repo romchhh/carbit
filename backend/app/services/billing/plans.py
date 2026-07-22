@@ -112,7 +112,36 @@ def enforce_plan_expiry(user) -> bool:
     return True
 
 
-def activate_plan(user, plan_id: str) -> None:
+def admin_access_days(*, months: int | None = None, days: int | None = None) -> int:
+    """Тривалість ручної видачі доступу з адмінки."""
+    if days is not None:
+        return max(1, int(days))
+    if months is None:
+        return 30
+    m = max(1, int(months))
+    if m == 12:
+        return 365
+    return m * 30
+
+
+def _plan_expires_after(user, access_days: int):
+    """Від max(зараз, поточний expiry) — щоб продовження не з’їдало оплачені дні."""
+    base = now_kyiv()
+    current = getattr(user, "plan_expires_at", None)
+    if current is not None:
+        exp = as_kyiv(current)
+        if exp > base:
+            base = exp
+    return base + timedelta(days=access_days)
+
+
+def activate_plan(
+    user,
+    plan_id: str,
+    *,
+    access_days: int | None = None,
+    extend_from_current: bool = False,
+) -> None:
     from app.models.models import PlanTier
 
     if plan_id not in PLANS:
@@ -121,5 +150,12 @@ def activate_plan(user, plan_id: str) -> None:
     if plan_id == "free":
         user.plan_expires_at = None
     else:
-        days = int(PLANS[plan_id].get("period_days") or 30)
-        user.plan_expires_at = now_kyiv() + timedelta(days=days)
+        days = (
+            access_days
+            if access_days is not None
+            else int(PLANS[plan_id].get("period_days") or 30)
+        )
+        if extend_from_current or access_days is not None:
+            user.plan_expires_at = _plan_expires_after(user, days)
+        else:
+            user.plan_expires_at = now_kyiv() + timedelta(days=days)

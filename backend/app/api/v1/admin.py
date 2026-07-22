@@ -19,7 +19,7 @@ from app.services.admin.billing_metrics import (
     list_user_billing,
     recent_billing_issues,
 )
-from app.services.billing.plans import PLANS, get_plan, activate_plan
+from app.services.billing.plans import PLANS, admin_access_days, get_plan, activate_plan
 from app.services.billing.notify import notify_plan_activated
 from app.services.rate_limit import client_ip, enforce_rate_limit
 from app.services.telegram.client import telegram_client
@@ -122,6 +122,9 @@ class AdminUserDetailOut(AdminUserOut):
 class AdminUserUpdate(BaseModel):
     plan: str | None = None
     is_active: bool | None = None
+    """1–36 місяців; 12 = 365 днів. Якщо лише продовження — plan можна не передавати."""
+    access_months: int | None = Field(None, ge=1, le=36)
+    access_days: int | None = Field(None, ge=1, le=1095)
 
 
 class PaginatedUsers(BaseModel):
@@ -374,13 +377,29 @@ async def admin_update_user(
 
     plan_changed = False
     previous_plan: str | None = None
-    if body.plan is not None:
+    grant_days: int | None = None
+    if body.access_days is not None:
+        grant_days = admin_access_days(days=body.access_days)
+    elif body.access_months is not None:
+        grant_days = admin_access_days(months=body.access_months)
+
+    if body.plan is not None or grant_days is not None:
+        target_plan = body.plan
+        if target_plan is None:
+            target_plan = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
+        if grant_days is not None and target_plan == "free":
+            raise HTTPException(400, "Для Free не задають термін — оберіть платний тариф")
         previous_plan = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
         try:
-            activate_plan(user, body.plan)
+            activate_plan(
+                user,
+                target_plan,
+                access_days=grant_days,
+                extend_from_current=grant_days is not None,
+            )
         except ValueError:
             raise HTTPException(400, "Invalid plan")
-        plan_changed = True
+        plan_changed = previous_plan != target_plan or grant_days is not None
     if body.is_active is not None:
         user.is_active = body.is_active
 

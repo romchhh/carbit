@@ -390,6 +390,8 @@ class SubscriptionOut(BaseModel):
 class SubscribeRequest(BaseModel):
     plan: str = Field(pattern=r"^(free|lite|standard|pro)$")
     apply_credit: bool = True
+    access_months: int | None = Field(None, ge=1, le=36)
+    access_days: int | None = Field(None, ge=1, le=1095)
 
 
 class UnsubscribeRequest(BaseModel):

@@ -46,6 +46,7 @@ export default function DashboardPage() {
     loadingMore,
     hasMore,
     error,
+    errorRetryAfter,
     sourceStatuses,
     partial,
     fromCache,
@@ -158,6 +159,7 @@ export default function DashboardPage() {
             onSave={handleSave}
             searching={searching}
             searchError={error}
+            searchErrorRetryAfter={errorRetryAfter}
             saving={saving}
             saveSuccess={saveSuccess}
             saveError={saveError}

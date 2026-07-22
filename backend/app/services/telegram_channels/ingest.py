@@ -271,14 +271,19 @@ async def search_telegram_listings(
         scan_limit=scan_limit,
     )
 
-    # Якщо в БД порожньо — ще раз чекаємо історію каналів (worker часто встигає за 4–8s).
+    # Якщо в БД порожньо — Telethon search + повний history scan, довше чекаємо worker.
     if keyword_refresh and not matched and ((filters.brand or "").strip() or (filters.model or "").strip()):
         try:
             from app.services.telegram_channels.keyword_refresh import (
                 refresh_telegram_by_keywords,
             )
 
-            await refresh_telegram_by_keywords(filters, wait_seconds=10.0)
+            await refresh_telegram_by_keywords(
+                filters,
+                wait_seconds=14.0,
+                force_rescan=True,
+                include_history_scan=True,
+            )
             matched = await _telegram_listings_matching_filters(
                 db,
                 filters,

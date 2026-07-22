@@ -37,7 +37,8 @@ async def _safe_rate_limits(*, user_id: str, mode: str, page: int) -> None:
             key=f"live-search:{user_id}",
             limit=60,
             window_seconds=3600,
-            detail="Ліміт пошуків на годину вичерпано. Спробуйте пізніше.",
+            detail="Ліміт пошуків на годину вичерпано.",
+            code="search_rate_limit",
         )
     except HTTPException:
         raise

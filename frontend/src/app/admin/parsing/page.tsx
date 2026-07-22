@@ -296,8 +296,8 @@ export default function AdminParsingPage() {
               <input
                 type="number"
                 min={10}
-                max={500}
-                value={settings.telegram_history_limit ?? 100}
+                max={3000}
+                value={settings.telegram_history_limit ?? 500}
                 onChange={e => setSettings({ ...settings, telegram_history_limit: Number(e.target.value) })}
                 className="mt-1 w-full rounded-lg border border-border px-3 py-2"
               />

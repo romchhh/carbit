@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .config import settings
 
@@ -213,6 +213,7 @@ class ChannelMediaStore:
         *,
         limit: int = 40,
         cooldown_seconds: int = 120,
+        skip_cooldown: bool = False,
     ) -> list[int]:
         """Ставить keyword-scan по кожному каналу. Повертає id джобів для очікування."""
         query = (query or "").strip()
@@ -253,7 +254,7 @@ class ChannelMediaStore:
                     (query, ch),
                 )
                 done = cur.fetchone()
-                if done and done[1]:
+                if done and done[1] and not skip_cooldown:
                     try:
                         finished = datetime.fromisoformat(str(done[1]))
                         if finished.tzinfo is None:
@@ -277,13 +278,33 @@ class ChannelMediaStore:
             conn.commit()
         return job_ids
 
+    def cancel_stale_keyword_jobs(self, *, older_than_seconds: int = 1800) -> int:
+        """Скидає застарілі pending/running джоби, щоб live-пошук не чекав годинами."""
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=max(60, int(older_than_seconds)))
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute(
+                """
+                UPDATE keyword_search_queue
+                SET status='error', error=?, finished_at=?
+                WHERE status IN ('pending', 'running')
+                  AND enqueued_at < ?
+                """,
+                ("stale/cancelled", _utcnow(), cutoff.isoformat()),
+            )
+            conn.commit()
+            return int(cur.rowcount or 0)
+
     def claim_keyword_jobs(self, *, limit: int = 4) -> list[dict]:
         with _lock, sqlite3.connect(self.db_path) as conn:
+            # Telethon search (plain query) — швидко знаходить старі пости;
+            # __scan__ повзунок історії — повільний і має йти після.
             cur = conn.execute(
                 """
                 SELECT id, query, channel, limit_n FROM keyword_search_queue
                 WHERE status='pending'
-                ORDER BY enqueued_at ASC
+                ORDER BY
+                  CASE WHEN query LIKE '__scan__:%' THEN 1 ELSE 0 END ASC,
+                  enqueued_at ASC
                 LIMIT ?
                 """,
                 (limit,),

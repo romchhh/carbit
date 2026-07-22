@@ -18,6 +18,39 @@ from app.services.telegram_channels.bootstrap import ensure_parser_path
 ensure_parser_path()
 from parser.channel_links import is_numeric_channel_id, public_telegram_message_url
 
+TRANSMISSION_FILTER_ALIASES: dict[str, tuple[str, ...]] = {
+    "автомат": (
+        "автомат",
+        "акпп",
+        "automatic",
+        "automat",
+        "cvt",
+        "варіатор",
+        "variator",
+        "robot",
+        "робот",
+        "dsg",
+        "tiptronic",
+        "типтронік",
+        "typtronic",
+    ),
+    "механіка": ("механ", "manual", "мкпп", "mkpp", "мех"),
+    "механика": ("механ", "manual", "мкпп", "mkpp", "мех"),
+    "робот": ("robot", "dsg", "робот"),
+    "варіатор": ("variator", "cvt", "варіатор"),
+}
+
+
+def _transmission_matches_filter(item: ListingOut, filter_values: list[str]) -> bool:
+    blob = norm_text(f"{item.title} {item.fuel} {item.transmission} {item.description}")
+    item_t = norm_text(item.transmission or "")
+    for value in filter_values:
+        key = norm_text(value)
+        aliases = TRANSMISSION_FILTER_ALIASES.get(key, (key,))
+        if any(alias in blob or alias in item_t for alias in aliases):
+            return True
+    return False
+
 FUEL_LABELS = {
     "petrol": "Бензин",
     "diesel": "Дизель",
@@ -281,9 +314,7 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     if filters.fuel and not any(norm_text(value) in blob for value in filters.fuel):
         return False
 
-    if filters.transmission and not any(
-        norm_text(value) in blob or norm_text(value) in norm_text(item.transmission) for value in filters.transmission
-    ):
+    if filters.transmission and not _transmission_matches_filter(item, filters.transmission):
         return False
 
     from app.services.search.category import listing_matches_category

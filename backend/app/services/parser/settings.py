@@ -15,7 +15,7 @@ DEFAULT_SETTINGS = {
     "cache_ttl_seconds": 1800,
     "notify_telegram": True,
     "telegram_enabled": True,
-    "telegram_history_limit": 100,
+    "telegram_history_limit": 500,
     "notification_max_published_hours": 1,
 }
 

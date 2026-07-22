@@ -115,7 +115,15 @@ export const adminApi = {
     );
   },
   user: (id: string) => request<AdminUserDetail>(`/admin/users/${id}`),
-  updateUser: (id: string, body: { plan?: string; is_active?: boolean }) =>
+  updateUser: (
+    id: string,
+    body: {
+      plan?: string;
+      is_active?: boolean;
+      access_months?: number;
+      access_days?: number;
+    },
+  ) =>
     request<AdminUser>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteUser: (id: string) =>
     request<{ message: string }>(`/admin/users/${id}`, { method: "DELETE" }),

@@ -9,7 +9,10 @@ import time
 from app.core.config import settings as app_settings
 from app.schemas.schemas import SearchFilters
 from app.services.search.brand_model_keywords import (
+    MAX_TELEGRAM_KEYWORD_QUERIES,
     TELEGRAM_HISTORY_SCAN_LIMIT,
+    TELEGRAM_SCAN_QUERY_PREFIX,
+    build_search_keyword_queries,
     encode_telegram_scan_job,
 )
 from app.services.telegram_channels.bootstrap import ensure_parser_path
@@ -17,10 +20,42 @@ from app.services.telegram_channels.service_loader import get_parser_channels
 
 logger = logging.getLogger(__name__)
 
+# Telethon search — швидко знаходить і старі пости (не лише останні N).
+TELEGRAM_SEARCH_LIMIT = 80
 KEYWORD_LIMIT_PER_CHANNEL = TELEGRAM_HISTORY_SCAN_LIMIT
-# Коротка пауза, щоб worker встиг проіндексувати збіги до відповіді пошуку.
-KEYWORD_WAIT_SECONDS = 4.0
+KEYWORD_WAIT_SECONDS = 6.0
 KEYWORD_COOLDOWN_SECONDS = 90
+# Старі pending scan-и (Tesla тощо) блокували live-пошук годинами.
+STALE_JOB_SECONDS = 20 * 60
+
+
+def build_telegram_keyword_queries(
+    filters: SearchFilters,
+    *,
+    include_history_scan: bool = False,
+) -> list[str]:
+    """Запити для worker: спочатку plain Telethon search, опційно повний scan."""
+    brand = (filters.brand or "").strip()
+    model = (filters.model or "").strip()
+    if not brand and not model:
+        return []
+
+    seen: set[str] = set()
+    out: list[str] = []
+
+    def add(q: str) -> None:
+        key = (q or "").strip()
+        if not key or key in seen:
+            return
+        seen.add(key)
+        out.append(key)
+
+    # Спочатку швидкий server-side search — покриває пости глибше за limit історії.
+    for q in build_search_keyword_queries(brand, model, max_queries=MAX_TELEGRAM_KEYWORD_QUERIES):
+        add(q)
+    if include_history_scan:
+        add(encode_telegram_scan_job(brand, model))
+    return out[: MAX_TELEGRAM_KEYWORD_QUERIES + (1 if include_history_scan else 0)]
 
 
 def build_telegram_keyword_query(filters: SearchFilters) -> str | None:
@@ -32,20 +67,31 @@ def build_telegram_keyword_query(filters: SearchFilters) -> str | None:
     return encode_telegram_scan_job(brand, model)
 
 
+def _job_limit_for_query(query: str) -> int:
+    if (query or "").startswith(TELEGRAM_SCAN_QUERY_PREFIX):
+        return KEYWORD_LIMIT_PER_CHANNEL
+    return TELEGRAM_SEARCH_LIMIT
+
+
 async def refresh_telegram_by_keywords(
     filters: SearchFilters,
     *,
     wait_seconds: float = KEYWORD_WAIT_SECONDS,
+    force_rescan: bool = False,
+    include_history_scan: bool = False,
 ) -> int:
     """
-    Ставить у чергу scan історії по всіх увімкнених каналах (variant matching).
+    Ставить у чергу Telethon search (+ опційно scan історії) по каналах.
     Worker індексує знайдене в listings — далі йде звичайний DB-пошук.
     """
     if not app_settings.TELEGRAM_ENABLED:
         return 0
 
-    query = build_telegram_keyword_query(filters)
-    if not query:
+    queries = build_telegram_keyword_queries(
+        filters,
+        include_history_scan=include_history_scan,
+    )
+    if not queries:
         return 0
 
     channels = await get_parser_channels()
@@ -56,12 +102,22 @@ async def refresh_telegram_by_keywords(
     from parser.channel_media_store import ChannelMediaStore
 
     store = ChannelMediaStore()
-    job_ids = store.enqueue_keyword_searches(
-        query,
-        channels,
-        limit=KEYWORD_LIMIT_PER_CHANNEL,
-        cooldown_seconds=KEYWORD_COOLDOWN_SECONDS,
-    )
+    # Прибираємо «мертву» чергу, щоб новий пошук не чекав Tesla-scan з минулої години.
+    cancelled = store.cancel_stale_keyword_jobs(older_than_seconds=STALE_JOB_SECONDS)
+    if cancelled:
+        logger.info("Cancelled %s stale Telegram keyword jobs", cancelled)
+
+    job_ids: list[int] = []
+    for query in queries:
+        job_ids.extend(
+            store.enqueue_keyword_searches(
+                query,
+                channels,
+                limit=_job_limit_for_query(query),
+                cooldown_seconds=KEYWORD_COOLDOWN_SECONDS,
+                skip_cooldown=force_rescan,
+            )
+        )
     if not job_ids:
         return 0
 
@@ -71,10 +127,12 @@ async def refresh_telegram_by_keywords(
 
         age = await heartbeat_age_seconds("telegram_worker")
         if age is None or age > 45:
-            logger.info(
-                "Telegram history scan queued brand=%r model=%r (worker offline/stale, no wait)",
+            logger.warning(
+                "Telegram keyword jobs queued brand=%r model=%r jobs=%s "
+                "(worker offline/stale — запустіть telegram_worker)",
                 filters.brand,
                 filters.model,
+                len(job_ids),
             )
             return len(job_ids)
     except Exception:
@@ -87,7 +145,7 @@ async def refresh_telegram_by_keywords(
     while time.monotonic() < deadline:
         if not store.keyword_jobs_pending(job_ids):
             logger.info(
-                "Telegram history scan ready brand=%r model=%r jobs=%s",
+                "Telegram keyword search ready brand=%r model=%r jobs=%s",
                 filters.brand,
                 filters.model,
                 len(job_ids),
@@ -96,7 +154,7 @@ async def refresh_telegram_by_keywords(
         await asyncio.sleep(0.35)
 
     logger.info(
-        "Telegram history scan timeout brand=%r model=%r jobs=%s (worker ще обробляє)",
+        "Telegram keyword search timeout brand=%r model=%r jobs=%s (worker ще обробляє)",
         filters.brand,
         filters.model,
         len(job_ids),

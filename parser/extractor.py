@@ -197,7 +197,7 @@ MILEAGE_SHORT_K_RE = re.compile(
 PRICE_LABEL_RE = re.compile(
     r"(?:ціна|цена|price|💰|💵|💲)\s*:?\s*"
     r"(?P<amount>\d{1,3}(?:[ .,]\d{3})+|\d{3,8})"
-    r"\s?(?P<cur>[\$€]|грн\.?|uah|usd|eur|у\.?\s?е\.?)?",
+    r"\s?(?P<cur>[\$€₴]|грн\.?|uah|usd|eur|у\.?\s?е\.?)?",
     re.IGNORECASE,
 )
 
@@ -427,7 +427,7 @@ def _find_price(text: str):
             currency = "USD"
         elif cur in ("€", "eur"):
             currency = "EUR"
-        elif "грн" in cur or cur == "uah":
+        elif "грн" in cur or cur in ("uah", "₴"):
             currency = "UAH"
         if _price_in_range(amount, currency):
             if currency is None:
@@ -453,7 +453,7 @@ def _find_price(text: str):
             currency = "USD"
         elif cur in ("€", "eur"):
             currency = "EUR"
-        elif "грн" in cur or cur == "uah":
+        elif "грн" in cur or cur in ("uah", "₴"):
             currency = "UAH"
         elif "у" in cur and "е" in cur:
             currency = "USD"

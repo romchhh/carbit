@@ -2,7 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
-import { listingSearch, fx, getApiErrorMessage } from "@/lib/api";
+import { listingSearch, fx, getApiErrorMessage, isSearchRateLimitError, ApiError } from "@/lib/api";
 import { resolveDisplayCurrency } from "@/lib/display-currency";
 import {
   DEFAULT_FILTERS,
@@ -58,6 +58,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorRetryAfter, setErrorRetryAfter] = useState<number | null>(null);
   const [sourceStatuses, setSourceStatuses] = useState<SourceStatus[]>([]);
   const [partial, setPartial] = useState(false);
   const [fromCache, setFromCache] = useState(false);
@@ -153,6 +154,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setFreshness(nextFreshness);
     setRunning(true);
     setError(null);
+    setErrorRetryAfter(null);
     setPages(Math.max(1, Math.ceil(data.total / SEARCH_PAGE_SIZE)));
   };
 
@@ -219,6 +221,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       const gen = ++searchGen.current;
       setSearching(true);
       setError(null);
+      setErrorRetryAfter(null);
       fullPoolRef.current = [];
       displayCountRef.current = 0;
       poolApiSortRef.current = nextSort;
@@ -263,6 +266,11 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         setFromCache(false);
         setRunning(false);
         setError(getApiErrorMessage(err, "Не вдалось виконати пошук. Спробуйте ще раз."));
+        if (isSearchRateLimitError(err) && err instanceof ApiError) {
+          setErrorRetryAfter(err.retryAfter ?? 3600);
+        } else {
+          setErrorRetryAfter(null);
+        }
       } finally {
         if (gen === searchGen.current) {
           setSearching(false);
@@ -390,6 +398,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setFreshness("new");
     setRunning(false);
     setError(null);
+    setErrorRetryAfter(null);
   }, [user?.preferred_currency]);
 
   return {
@@ -407,6 +416,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     loadingMore,
     hasMore: running && results.length < total,
     error,
+    errorRetryAfter,
     sourceStatuses,
     partial,
     fromCache,
@@ -416,6 +426,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     changeFreshness,
     loadMore,
     reset,
-    clearError: () => setError(null),
+    clearError: () => {
+      setError(null);
+      setErrorRetryAfter(null);
+    },
   };
 }

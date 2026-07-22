@@ -19,6 +19,8 @@ type Props = {
   /** Моніторинг з цими фільтрами уже збережено */
   monitorConnected?: boolean;
   connectedMonitorId?: string | null;
+  /** Ховає окремий pitch підписки (напр. коли вже є rate-limit notice). */
+  hideSubscriptionPitch?: boolean;
   className?: string;
 };
 
@@ -31,6 +33,7 @@ export function SaveSearchCTA({
   telegramConnected,
   monitorConnected,
   connectedMonitorId,
+  hideSubscriptionPitch,
   className,
 }: Props) {
   const { user } = useAuth();
@@ -95,7 +98,7 @@ export function SaveSearchCTA({
 
       {limitReached && <UpgradeOffer title="Ліміт моніторингів вичерпано" compact />}
 
-      {!limitReached && user && (user.plan === "free" || Boolean(successMessage)) && (
+      {!hideSubscriptionPitch && !limitReached && user && (user.plan === "free" || Boolean(successMessage)) && (
         <SubscriptionPitch
           variant="compact"
           planId={user.plan}
