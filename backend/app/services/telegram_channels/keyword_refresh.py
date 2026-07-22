@@ -121,22 +121,30 @@ async def refresh_telegram_by_keywords(
     if not job_ids:
         return 0
 
-    # Немає живого worker — лише ставимо в чергу, не блокуємо live-пошук.
+    worker_online = False
     try:
         from app.services.health import heartbeat_age_seconds
 
         age = await heartbeat_age_seconds("telegram_worker")
-        if age is None or age > 45:
-            logger.warning(
-                "Telegram keyword jobs queued brand=%r model=%r jobs=%s "
-                "(worker offline/stale — запустіть telegram_worker)",
-                filters.brand,
-                filters.model,
-                len(job_ids),
-            )
-            return len(job_ids)
+        worker_online = age is not None and age <= 45
     except Exception:
         logger.debug("Telegram worker heartbeat check failed", exc_info=True)
+
+    if not worker_online:
+        logger.warning(
+            "Telegram keyword jobs queued brand=%r model=%r jobs=%s "
+            "(worker offline — inline Telethon fallback)",
+            filters.brand,
+            filters.model,
+            len(job_ids),
+        )
+        try:
+            from app.services.telegram_channels.keyword_jobs import run_inline_keyword_refresh
+
+            await run_inline_keyword_refresh(job_ids, wait_seconds=max(wait_seconds, 12.0))
+        except Exception:
+            logger.exception("Inline Telegram keyword refresh failed")
+        return len(job_ids)
 
     if not store.keyword_jobs_pending(job_ids):
         return len(job_ids)

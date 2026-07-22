@@ -52,6 +52,19 @@ async def run_telegram_channels_cycle(
         log.append("Telegram: немає каналів — додайте в адмінці /admin/channels")
         return 0
 
+    try:
+        from app.services.health import heartbeat_age_seconds
+
+        age = await heartbeat_age_seconds("telegram_worker")
+        if age is not None and age <= 60:
+            log.append(
+                "Telegram: telegram_worker online — інкремент у окремому процесі, "
+                "scheduler не дублює Telethon (уникаємо конфлікт session)"
+            )
+            return 0
+    except Exception:
+        pass
+
     limit = int(settings.get("telegram_history_limit", 100))
     dedupe_note = " (тест без dedupe)" if ignore_dedupe else ""
     log.append(f"Telegram: останні {limit} повідомлень на канал{dedupe_note}")

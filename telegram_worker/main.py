@@ -15,7 +15,10 @@ from app.core.database import AsyncSessionLocal  # noqa: E402
 from app.services.health import beat  # noqa: E402
 from app.services.parser.settings import get_parser_settings  # noqa: E402
 from app.services.telegram_channels.ingest import ingest_telegram_listing  # noqa: E402
-from app.services.telegram_channels.lazy_photos import attach_photos_to_listing  # noqa: E402
+from app.services.telegram_channels.keyword_jobs import (  # noqa: E402
+    process_keyword_queue,
+    process_photo_queue,
+)
 from app.services.telegram_channels.service_loader import get_parser_channels, get_parser_service  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [telegram-worker] %(message)s")
@@ -51,95 +54,15 @@ async def bootstrap_channels(service, channels: list[str], limit: int) -> None:
                     )
                     if new_count or sent:
                         logger.info(
-                            "Linked %s: new=%s notifications=%s",
+                            "Linked %s: new=%s notifications=%s matched=%s",
                             listing.source_link,
                             new_count,
                             sent,
+                            matched,
                         )
                 await db.commit()
         except Exception:
             logger.exception("Bootstrap failed for %s", channel)
-
-
-async def process_photo_queue(service, *, limit: int = 5) -> int:
-    from app.services.telegram_channels.bootstrap import ensure_parser_path
-
-    ensure_parser_path()
-    from parser.channel_media_store import ChannelMediaStore
-
-    jobs = ChannelMediaStore().claim_photo_jobs(limit=limit)
-    if not jobs:
-        return 0
-
-    done = 0
-    async with AsyncSessionLocal() as db:
-        for listing_id in jobs:
-            try:
-                urls = await attach_photos_to_listing(db, service, listing_id)
-                if urls:
-                    done += 1
-                    logger.info("Lazy photos %s: %s files", listing_id, len(urls))
-            except Exception:
-                logger.exception("Lazy photo job failed for %s", listing_id)
-        await db.commit()
-    return done
-
-
-async def process_keyword_queue(service, *, limit: int = 8) -> int:
-    """Scan / Telethon-search історії каналів з live-пошуку (plain search має пріоритет)."""
-    from app.services.telegram_channels.bootstrap import ensure_parser_path
-
-    ensure_parser_path()
-    from app.services.search.brand_model_keywords import decode_telegram_scan_job
-    from parser.channel_media_store import ChannelMediaStore
-
-    store = ChannelMediaStore()
-    jobs = store.claim_keyword_jobs(limit=limit)
-    if not jobs:
-        return 0
-
-    done = 0
-    for job in jobs:
-        job_id = int(job["id"])
-        query = str(job["query"])
-        channel = str(job["channel"])
-        per_channel = int(job.get("limit") or 500)
-        try:
-            payload = decode_telegram_scan_job(query)
-            if payload:
-                listings = await service.scan_channel_history_for_filters(
-                    channel,
-                    brand=payload["brand"],
-                    model=payload.get("model", ""),
-                    limit=per_channel,
-                )
-            else:
-                listings = await service.search_channel_by_keywords(
-                    channel,
-                    query,
-                    limit=min(per_channel, 100),
-                )
-            async with AsyncSessionLocal() as db:
-                for listing in listings:
-                    item, _new, _sent, matched = await ingest_telegram_listing(
-                        db, listing, notify=False, link_searches=True
-                    )
-                    if matched and not item.images:
-                        await attach_photos_to_listing(db, service, item.id)
-                await db.commit()
-            store.finish_keyword_job(job_id, found=len(listings))
-            done += 1
-            logger.info(
-                "History scan %s brand=%r model=%r → %s listings",
-                channel,
-                payload["brand"] if payload else None,
-                payload.get("model") if payload else query,
-                len(listings),
-            )
-        except Exception as exc:
-            logger.exception("Keyword search failed for %s q=%r", channel, query)
-            store.finish_keyword_job(job_id, found=0, error=str(exc)[:300])
-    return done
 
 
 async def channel_sync_loop(
@@ -159,11 +82,24 @@ async def channel_sync_loop(
                 logger.info("Нові канали з адмінки: %s", new)
                 await bootstrap_channels(service, new, max(history_limit, 500))
                 bootstrapped.update(new)
-            active = await service.sync_monitored_channels(channels)
-            if new:
-                logger.info("Realtime: слухаю %s каналів", len(active))
+            await service.sync_monitored_channels(channels)
         except Exception:
             logger.exception("Channel sync tick failed")
+
+
+async def bootstrap_background(
+    service,
+    channels: list[str],
+    *,
+    bootstrap_limit: int,
+    bootstrapped: set[str],
+) -> None:
+    try:
+        await bootstrap_channels(service, channels, bootstrap_limit)
+        bootstrapped.update(channels)
+        logger.info("Bootstrap finished for %s channel(s)", len(channels))
+    except Exception:
+        logger.exception("Background bootstrap failed")
 
 
 async def main() -> None:
@@ -181,17 +117,22 @@ async def main() -> None:
 
     parser_settings = await get_parser_settings()
     history_limit = max(100, int(parser_settings.get("telegram_history_limit", 500)))
+    bootstrap_limit = max(history_limit, 500)
 
     service = get_parser_service()
     await service.start()
+    await beat("telegram_worker")
     logger.info("Telethon started, channels: %s", channels)
 
     bootstrapped: set[str] = set()
-    # Нові/активні групи: мінімум 500 повідомлень, інакше свіжі пости «губляться».
-    bootstrap_limit = max(history_limit, 500)
-    await bootstrap_channels(service, channels, bootstrap_limit)
-    bootstrapped.update(channels)
-    await beat("telegram_worker")
+    asyncio.create_task(
+        bootstrap_background(
+            service,
+            channels,
+            bootstrap_limit=bootstrap_limit,
+            bootstrapped=bootstrapped,
+        )
+    )
 
     async def on_new_listing(listing) -> None:
         async with AsyncSessionLocal() as db:
