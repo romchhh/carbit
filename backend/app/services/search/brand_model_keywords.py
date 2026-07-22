@@ -173,30 +173,32 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
     "xm": ("xm", "bmw xm"),
 
     # ══ MERCEDES-BENZ ═══════════════════════════════════════════
-    "c-class": ("c-class", "c class", "c класс", "c-класс", "c клас",
-                 "c180", "c200", "c220", "c250", "c300", "c350", "c400", "c43", "c63",
+    # Spaced variants (c 300, c 220…) ставимо ПЕРШИМИ — Telethon шукає по словах,
+    # тому "c 300" знайде пост "MERCEDES-BENZ C 300", а "c300" — ні.
+    "c-class": ("c 300", "c 200", "c 220", "c 250", "c 180", "c 350", "c 400",
+                 "c300", "c200", "c220", "c250", "c180", "c350", "c400", "c43", "c63",
                  "c200d", "c220d", "c250d",
-                 "c 180", "c 200", "c 220", "c 250", "c 300", "c 350", "c 400",
+                 "c-class", "c class", "c класс", "c-класс", "c клас",
                  "w204", "w205", "w206"),
-    "e-class": ("e-class", "e class", "e класс", "e-класс", "e клас",
+    "e-class": ("e 200", "e 220", "e 250", "e 300", "e 350", "e 400", "e 450",
                  "e200", "e220", "e250", "e300", "e350", "e400", "e450", "e43", "e63",
-                 "e 200", "e 220", "e 250", "e 300", "e 350", "e 400", "e 450",
+                 "e-class", "e class", "e класс", "e-класс", "e клас",
                  "w210", "w211", "w212", "w213", "w214"),
-    "s-class": ("s-class", "s class", "s класс", "s-класс",
+    "s-class": ("s 350", "s 400", "s 450", "s 500", "s 550", "s 580",
                  "s350", "s400", "s450", "s500", "s550", "s580", "s63", "s65",
-                 "s 350", "s 400", "s 450", "s 500", "s 550",
+                 "s-class", "s class", "s класс", "s-класс",
                  "w220", "w221", "w222", "w223"),
-    "a-class": ("a-class", "a class", "a класс", "a-класс",
-                 "a150", "a160", "a180", "a200", "a220", "a250", "a35", "a45",
-                 "a 160", "a 180", "a 200", "a 220", "a 250",
+    "a-class": ("a 180", "a 200", "a 220", "a 250",
+                 "a180", "a200", "a220", "a250", "a35", "a45", "a160", "a150",
+                 "a-class", "a class", "a класс", "a-класс",
                  "w176", "w177"),
-    "b-class": ("b-class", "b class", "b класс", "b-класс", "b клас",
-                 "b160", "b180", "b200", "b220",
-                 "b 160", "b 180", "b 200", "b 220",
+    "b-class": ("b 180", "b 200", "b 220",
+                 "b180", "b200", "b220", "b160",
+                 "b-class", "b class", "b класс", "b-класс", "b клас",
                  "w245", "w246", "w247"),
-    "g-class": ("g-class", "g class", "g класс", "g-класс",
-                 "g350", "g400", "g500", "g550", "g63", "g65",
-                 "g 350", "g 500", "g 63",
+    "g-class": ("g 500", "g 350", "g 63",
+                 "g500", "g550", "g63", "g65", "g350", "g400",
+                 "g-class", "g class", "g класс", "g-класс",
                  "gelik", "гелик", "гелендваген", "w463", "w464"),
     "m-class": ("m-class", "ml", "ml-class", "ml класс", "m-клас",
                  "ml250", "ml300", "ml350", "ml500", "ml63",
@@ -970,11 +972,21 @@ def collect_model_keyword_variants(brand: str, model: str) -> tuple[str, ...]:
 
     add(model)
     add(model.replace("-", " "))
+
+    model_key = norm_text(model)
+
+    # ПРІОРИТЕТ: spaced-цифрові варіанти ВІДРАЗУ після назви моделі, ще до OLX-токенів.
+    # Telethon шукає по словах: запит "mercedes c 300" знайде пост "MERCEDES-BENZ C 300",
+    # а запит "mercedes c-class" — НЕ знайде, бо слово «class» відсутнє у пості.
+    for extra in MODEL_EXTRA_ALIASES.get(model_key, ()):
+        ek = norm_text(extra)
+        if re.fullmatch(r"[a-z] \d{2,4}", ek):   # "c 300", "e 220", "s 500" тощо
+            add(extra)
+
     for token in build_model_text_tokens(model, brand_slug):
         add(token)
     add(primary_model_text_token(model, brand_slug))
 
-    model_key = norm_text(model)
     for extra in MODEL_EXTRA_ALIASES.get(model_key, ()):
         add(extra)
 

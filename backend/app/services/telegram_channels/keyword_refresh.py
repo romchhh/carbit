@@ -51,7 +51,9 @@ def build_telegram_keyword_queries(
         out.append(key)
 
     # Спочатку швидкий server-side search — покриває пости глибше за limit історії.
-    for q in build_search_keyword_queries(brand, model, max_queries=MAX_TELEGRAM_KEYWORD_QUERIES):
+    # Використовуємо * 2 внутрішньо, щоб пройти через class-name варіанти і
+    # дістатися цифрових ("c 300", "e 220"), які Telethon реально знаходить.
+    for q in build_search_keyword_queries(brand, model, max_queries=MAX_TELEGRAM_KEYWORD_QUERIES * 2):
         add(q)
     # Якщо модель унікальна для бренду (discovery, defender тощо) — пости часто
     # не мають назви бренду. Додаємо standalone model-запити для глибшого покриття.
@@ -68,7 +70,7 @@ def build_telegram_keyword_queries(
                     add(mt)
     if include_history_scan:
         add(encode_telegram_scan_job(brand, model))
-    return out[: MAX_TELEGRAM_KEYWORD_QUERIES * 2 + (1 if include_history_scan else 0)]
+    return out[: MAX_TELEGRAM_KEYWORD_QUERIES * 3 + (1 if include_history_scan else 0)]
 
 
 def build_telegram_keyword_query(filters: SearchFilters) -> str | None:
