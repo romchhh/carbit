@@ -15,7 +15,12 @@ export function FilterAccordionSection({ title, defaultOpen = true, badge, child
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <section className="border-t border-border/60 pt-3 first:border-t-0 first:pt-0">
+    <section
+      className={cn(
+        "rounded-2xl border px-3 py-2.5 transition-colors sm:px-3.5",
+        open ? "border-border/80 bg-white" : "border-border/50 bg-surface/25",
+      )}
+    >
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
@@ -33,7 +38,7 @@ export function FilterAccordionSection({ title, defaultOpen = true, badge, child
           className={cn("h-4 w-4 shrink-0 text-muted transition-transform", open && "rotate-180")}
         />
       </button>
-      {open ? <div className="mt-2 space-y-2">{children}</div> : null}
+      {open ? <div className="mt-3 space-y-3.5 pb-1">{children}</div> : null}
     </section>
   );
 }

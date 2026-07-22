@@ -97,10 +97,26 @@ export const BODY_TYPE_OPTIONS = [
 ] as const;
 export const SOURCE_OPTIONS = ["AUTO.RIA", "OLX", "Telegram"] as const;
 export const DRIVE_OPTIONS = ["Передній", "Задній", "Повний"] as const;
-export const COLOR_OPTIONS = [
-  "Білий", "Чорний", "Сірий", "Срібний", "Синій", "Червоний",
-  "Зелений", "Жовтий", "Помаранчевий", "Коричневий", "Бежевий", "Фіолетовий",
+export const COLOR_SWATCHES = [
+  { name: "Білий", hex: "#F5F5F5", border: true },
+  { name: "Чорний", hex: "#1A1A1A" },
+  { name: "Сірий", hex: "#8A8F98" },
+  { name: "Срібний", hex: "#C0C5CC" },
+  { name: "Синій", hex: "#2F5BFF" },
+  { name: "Червоний", hex: "#E11D2E" },
+  { name: "Зелений", hex: "#1F8A4C" },
+  { name: "Жовтий", hex: "#F5C518" },
+  { name: "Помаранчевий", hex: "#F97316" },
+  { name: "Коричневий", hex: "#7A4A2A" },
+  { name: "Бежевий", hex: "#D9C3A3" },
+  { name: "Фіолетовий", hex: "#7C3AED" },
 ] as const;
+
+export const COLOR_OPTIONS = COLOR_SWATCHES.map(c => c.name);
+
+export const COLOR_HEX_BY_NAME: Record<string, string> = Object.fromEntries(
+  COLOR_SWATCHES.map(c => [c.name, c.hex]),
+);
 
 export const VEHICLE_TYPE_OPTIONS = ["Легкові", "Вантажні"] as const;
 
