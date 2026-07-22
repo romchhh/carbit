@@ -152,6 +152,20 @@ class SearchFilters(BaseModel):
     power_to: Optional[int] = None
     seats_from: Optional[int] = Field(default=None, ge=1, le=20)
     seats_to: Optional[int] = Field(default=None, ge=1, le=20)
+    doors_from: Optional[int] = Field(default=None, ge=2, le=7)
+    doors_to: Optional[int] = Field(default=None, ge=2, le=7)
+    body_types: Optional[list[str]] = None
+    seller_filter: Optional[str] = None  # private | dealer
+    accident: Optional[str] = None  # none | had
+    zero_mileage: Optional[bool] = None
+    bargain: Optional[bool] = None
+    vin_verified: Optional[bool] = None
+    owners_max: Optional[int] = Field(default=None, ge=1, le=4)
+    in_credit: Optional[str] = None  # show | hide
+    usa_import: Optional[str] = None  # show | hide
+    not_customs: Optional[str] = None  # show | hide (нерозмитнені)
+    metallic: Optional[bool] = None
+    power_unit: Optional[str] = None  # hp | kw
     # Тільки оголошення, опубліковані за останні N днів (напр. 7 = «тільки нові»)
     published_within_days: Optional[int] = Field(default=None, ge=1, le=90)
     # Для моніторингу / Telegram: лише оголошення за останні N годин

@@ -51,6 +51,9 @@ class CarParserService:
         self._joined_cache = set()
         self._slug_cache: dict[str, str] = {}
         self.last_parse_stats: dict = {}
+        self._listen_handlers_registered = False
+        self._peer_to_channel: dict[int, str] = {}
+        self._on_new_listing: Callable[[CarListing], Awaitable[None]] | None = None
 
     async def start(self):
         for name in ("telethon", "telethon.network", "telethon.client"):
@@ -61,10 +64,16 @@ class CarParserService:
     async def stop(self):
         await self.client.disconnect()
 
+    async def _telethon_ref(self, channel: str) -> str:
+        ch = (channel or "").strip()
+        if ch.startswith("@+"):
+            return f"https://t.me/{ch[1:]}"
+        return ch
+
     async def _ensure_joined_cached(self, channel: str) -> bool:
         if channel in self._joined_cache:
             return True
-        ok = await ensure_joined(self.client, channel)
+        ok = await ensure_joined(self.client, await self._telethon_ref(channel))
         if ok:
             self._joined_cache.add(channel)
         return ok
@@ -197,7 +206,7 @@ class CarParserService:
             log.warning("Пропускаю %s - не вдалось приєднатись/отримати доступ", channel)
             return []
 
-        entity = await self.client.get_entity(channel)
+        entity = await self.client.get_entity(await self._telethon_ref(channel))
         if getattr(entity, "username", None):
             self._slug_cache[channel.strip()] = entity.username
 
@@ -272,7 +281,7 @@ class CarParserService:
             log.warning("History scan: пропускаю %s — немає доступу", channel)
             return []
 
-        entity = await self.client.get_entity(channel)
+        entity = await self.client.get_entity(await self._telethon_ref(channel))
         if getattr(entity, "username", None):
             self._slug_cache[channel.strip()] = entity.username
 
@@ -343,7 +352,7 @@ class CarParserService:
             log.warning("Keyword search: пропускаю %s — немає доступу", channel)
             return []
 
-        entity = await self.client.get_entity(channel)
+        entity = await self.client.get_entity(await self._telethon_ref(channel))
         if getattr(entity, "username", None):
             self._slug_cache[channel.strip()] = entity.username
 
@@ -389,45 +398,70 @@ class CarParserService:
         )
         return results
 
+    async def sync_monitored_channels(self, channels: list[str]) -> list[str]:
+        """Приєднується до каналів і оновлює мапу peer_id → @username для listen()."""
+        active: list[str] = []
+        peer_map: dict[int, str] = {}
+        for ch in channels:
+            key = (ch or "").strip()
+            if not key:
+                continue
+            joined = await self._ensure_joined_cached(key)
+            if not joined:
+                continue
+            try:
+                entity = await self.client.get_entity(await self._telethon_ref(key))
+            except Exception as exc:
+                log.warning("sync_monitored_channels: не знайдено %s: %s", key, exc)
+                continue
+            label = f"@{entity.username}" if getattr(entity, "username", None) else key
+            peer_map[get_peer_id(entity)] = label
+            if getattr(entity, "username", None):
+                self._slug_cache[key] = entity.username
+                self._slug_cache[label] = entity.username
+            active.append(key)
+        self._peer_to_channel = peer_map
+        return active
+
+    def _register_listen_handlers(self) -> None:
+        if self._listen_handlers_registered:
+            return
+        self._listen_handlers_registered = True
+
+        def _channel_from_event(chat_id: int) -> str | None:
+            return self._peer_to_channel.get(chat_id)
+
+        @self.client.on(events.Album())
+        async def _album_handler(event):
+            channel = _channel_from_event(event.chat_id)
+            if not channel:
+                return
+            listing = await self._process_group(channel, event.messages)
+            if listing and self._on_new_listing:
+                await self._on_new_listing(listing)
+
+        @self.client.on(events.NewMessage())
+        async def _single_handler(event: events.NewMessage.Event):
+            channel = _channel_from_event(event.chat_id)
+            if not channel:
+                return
+            if event.message.grouped_id:
+                return
+            listing = await self._process_group(channel, [event.message])
+            if listing and self._on_new_listing:
+                await self._on_new_listing(listing)
+
     async def listen(
         self,
         channels: list,
         on_new_listing: Callable[[CarListing], Awaitable[None]],
     ):
         """
-        Постійно слухає нові повідомлення у вказаних каналах і викликає
-        on_new_listing(listing) для кожного розпарсеного оголошення.
-        Запускається "назавжди" - тримай у фоновій задачі/окремому процесі.
+        Постійно слухає нові повідомлення у вказаних каналах.
+        Список каналів можна оновлювати через sync_monitored_channels() (telegram_worker).
         """
-        for ch in channels:
-            await self._ensure_joined_cached(ch)
-        entities = [await self.client.get_entity(ch) for ch in channels]
-        channel_by_peer_id: dict[int, str] = {}
-        for ch, entity in zip(channels, entities):
-            label = f"@{entity.username}" if getattr(entity, "username", None) else ch
-            channel_by_peer_id[get_peer_id(entity)] = label
-            if getattr(entity, "username", None):
-                self._slug_cache[ch.strip()] = entity.username
-                self._slug_cache[label] = entity.username
-
-        def _channel_from_event(chat_id: int) -> str:
-            return channel_by_peer_id.get(chat_id, str(chat_id))
-
-        @self.client.on(events.Album(chats=entities))
-        async def _album_handler(event):
-            channel = _channel_from_event(event.chat_id)
-            listing = await self._process_group(channel, event.messages)
-            if listing:
-                await on_new_listing(listing)
-
-        @self.client.on(events.NewMessage(chats=entities))
-        async def _single_handler(event: events.NewMessage.Event):
-            if event.message.grouped_id:
-                return  # альбоми обробляються окремим хендлером вище
-            channel = _channel_from_event(event.chat_id)
-            listing = await self._process_group(channel, [event.message])
-            if listing:
-                await on_new_listing(listing)
-
-        log.info("Слухаю нові оголошення в каналах: %s", channels)
+        self._on_new_listing = on_new_listing
+        active = await self.sync_monitored_channels(channels)
+        self._register_listen_handlers()
+        log.info("Слухаю нові оголошення в каналах: %s", active)
         await self.client.run_until_disconnected()

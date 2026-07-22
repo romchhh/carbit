@@ -1,19 +1,30 @@
 "use client";
 
+import { FilterAccordionSection } from "@/components/search/FilterAccordionSection";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
+import {
+  FilterBooleanRow,
+  FilterSegmentedRow,
+  FilterTriStateRow,
+} from "@/components/search/FilterTriStateRow";
 import { cn } from "@/lib/utils";
 import {
+  ACCIDENT_FILTER_OPTIONS,
+  BODY_TYPE_OPTIONS,
   COLOR_OPTIONS,
-  DEFAULT_FILTERS,
   DRIVE_OPTIONS,
   FUEL_OPTIONS,
+  OWNERS_FILTER_OPTIONS,
+  SELLER_FILTER_OPTIONS,
   SOURCE_OPTIONS,
   TRANSMISSION_OPTIONS,
+  countAdvancedFilterFields,
   formatDecimalInput,
   toggleValue,
   type SearchFilterState,
 } from "@/lib/search-catalog";
+import { resetAdvancedFilters } from "@/lib/search-filters-api";
 
 type Props = {
   filters: SearchFilterState;
@@ -21,26 +32,35 @@ type Props = {
   onReset: () => void;
 };
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="border-b border-border/60 pb-2 text-[15px] font-bold text-ink">{children}</h3>
-  );
-}
-
 export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
   const update = (patch: Partial<SearchFilterState>) => {
     onChange({ ...filters, ...patch });
   };
 
+  const techBadge = countAdvancedFilterFields(filters, "technical");
+  const conditionBadge = countAdvancedFilterFields(filters, "condition");
+  const originBadge = countAdvancedFilterFields(filters, "origin");
+
   return (
     <div className="mt-4 rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04]">
       <div className="overflow-hidden rounded-t-[1.35rem] border-b border-border/60 bg-surface/50 px-4 py-3.5 sm:px-5">
-        <h2 className="text-[17px] font-bold text-ink">Розширений пошук авто</h2>
+        <h2 className="text-[17px] font-bold text-ink">Розширений пошук</h2>
+        <p className="mt-0.5 text-[12px] text-muted">
+          Як на AUTO.RIA — техніка, стан, походження. AUTO.RIA отримує максимум параметрів у запиті.
+        </p>
       </div>
 
-      <div className="relative z-20 space-y-5 overflow-visible px-4 py-4 sm:px-5">
-        <section className="space-y-2">
-          <SectionTitle>Технічні характеристики</SectionTitle>
+      <div className="relative z-20 space-y-1 overflow-visible px-4 py-4 sm:px-5">
+        <FilterAccordionSection title="Технічні характеристики" badge={techBadge} defaultOpen>
+          <FilterOptionsPopover
+            label="Тип кузова"
+            value=""
+            values={filters.bodyTypes}
+            options={[...BODY_TYPE_OPTIONS]}
+            onChange={() => {}}
+            onToggle={body => update({ bodyTypes: toggleValue(filters.bodyTypes, body) })}
+            multiple
+          />
 
           <FilterOptionsPopover
             label="Тип палива"
@@ -71,6 +91,12 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
             placeholderFrom="0"
             placeholderTo="200"
             suffix="тис. км"
+          />
+
+          <FilterBooleanRow
+            label="Без пробігу"
+            checked={filters.zeroMileage}
+            onChange={zeroMileage => update({ zeroMileage })}
           />
 
           <FilterRangePopover
@@ -104,11 +130,19 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
             multiple
           />
 
+          <FilterBooleanRow
+            label="Металік"
+            checked={filters.metallic}
+            onChange={metallic => update({ metallic })}
+          />
+
           <FilterRangePopover
             label="Витрата палива, л/100 км"
             from={filters.fuelConsumptionFrom}
             to={filters.fuelConsumptionTo}
-            onChange={(fuelConsumptionFrom, fuelConsumptionTo) => update({ fuelConsumptionFrom, fuelConsumptionTo })}
+            onChange={(fuelConsumptionFrom, fuelConsumptionTo) =>
+              update({ fuelConsumptionFrom, fuelConsumptionTo })
+            }
             format={v => formatDecimalInput(v, 1)}
             placeholderFrom="5"
             placeholderTo="12"
@@ -130,23 +164,36 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
             label="Ємність акумулятора, кВт·год"
             from={filters.batteryCapacityFrom}
             to={filters.batteryCapacityTo}
-            onChange={(batteryCapacityFrom, batteryCapacityTo) => update({ batteryCapacityFrom, batteryCapacityTo })}
+            onChange={(batteryCapacityFrom, batteryCapacityTo) =>
+              update({ batteryCapacityFrom, batteryCapacityTo })
+            }
             format={v => formatDecimalInput(v, 1)}
             placeholderFrom="40"
             placeholderTo="100"
             suffix="кВт·год"
           />
 
-          <FilterRangePopover
-            label="Потужність"
-            from={filters.powerFrom}
-            to={filters.powerTo}
-            onChange={(powerFrom, powerTo) => update({ powerFrom, powerTo })}
-            format={v => v.replace(/[^\d]/g, "")}
-            placeholderFrom="100"
-            placeholderTo="300"
-            suffix="к.с."
-          />
+          <div className="space-y-2">
+            <FilterSegmentedRow
+              label="Одиниця потужності"
+              value={filters.powerUnit}
+              options={[
+                { value: "hp", label: "к.с." },
+                { value: "kw", label: "кВт" },
+              ]}
+              onChange={powerUnit => update({ powerUnit })}
+            />
+            <FilterRangePopover
+              label="Потужність"
+              from={filters.powerFrom}
+              to={filters.powerTo}
+              onChange={(powerFrom, powerTo) => update({ powerFrom, powerTo })}
+              format={v => v.replace(/[^\d]/g, "")}
+              placeholderFrom="100"
+              placeholderTo="300"
+              suffix={filters.powerUnit === "kw" ? "кВт" : "к.с."}
+            />
+          </div>
 
           <FilterRangePopover
             label="Кількість місць"
@@ -158,7 +205,69 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
             placeholderTo="7"
             suffix="міс."
           />
-        </section>
+
+          <FilterRangePopover
+            label="Кількість дверей"
+            from={filters.doorsFrom}
+            to={filters.doorsTo}
+            onChange={(doorsFrom, doorsTo) => update({ doorsFrom, doorsTo })}
+            format={v => v.replace(/[^\d]/g, "")}
+            placeholderFrom="3"
+            placeholderTo="5"
+            suffix="двер."
+          />
+        </FilterAccordionSection>
+
+        <FilterAccordionSection title="Стан та історія" badge={conditionBadge} defaultOpen={false}>
+          <FilterSegmentedRow
+            label="Участь у ДТП"
+            value={filters.accident}
+            options={ACCIDENT_FILTER_OPTIONS}
+            onChange={accident => update({ accident })}
+          />
+
+          <FilterSegmentedRow
+            label="Продавець"
+            value={filters.sellerFilter}
+            options={SELLER_FILTER_OPTIONS}
+            onChange={sellerFilter => update({ sellerFilter })}
+          />
+
+          <FilterSegmentedRow
+            label="Власників в Україні, макс."
+            value={filters.ownersMax}
+            options={OWNERS_FILTER_OPTIONS}
+            onChange={ownersMax => update({ ownersMax })}
+          />
+
+          <FilterBooleanRow
+            label="Перевірений VIN"
+            checked={filters.vinVerified}
+            onChange={vinVerified => update({ vinVerified })}
+          />
+
+          <FilterBooleanRow label="Торг" checked={filters.bargain} onChange={bargain => update({ bargain })} />
+
+          <FilterTriStateRow
+            label="В кредиті"
+            value={filters.inCredit}
+            onChange={inCredit => update({ inCredit })}
+          />
+        </FilterAccordionSection>
+
+        <FilterAccordionSection title="Походження та наявність" badge={originBadge} defaultOpen={false}>
+          <FilterTriStateRow
+            label="Авто з США"
+            value={filters.usaImport}
+            onChange={usaImport => update({ usaImport })}
+          />
+
+          <FilterTriStateRow
+            label="Нерозмитнені (під пригон)"
+            value={filters.notCustoms}
+            onChange={notCustoms => update({ notCustoms })}
+          />
+        </FilterAccordionSection>
 
         <section className="space-y-3 border-t border-border/60 pt-4">
           <label className="block text-[12px] font-semibold text-muted">Назва запиту</label>
@@ -195,8 +304,15 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
 
           <button
             type="button"
-            onClick={onReset}
+            onClick={() => onChange(resetAdvancedFilters(filters))}
             className="text-[12px] text-muted underline underline-offset-2 hover:text-ink"
+          >
+            Скинути розширені фільтри
+          </button>
+          <button
+            type="button"
+            onClick={onReset}
+            className="ml-4 text-[12px] text-muted underline underline-offset-2 hover:text-ink"
           >
             Скинути всі фільтри
           </button>

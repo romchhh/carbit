@@ -12,6 +12,11 @@ export type SearchResult = ExportListing & {
 
 export type VehicleCategory = "all" | "used" | "new" | "import";
 
+export type TriFilterValue = "" | "show" | "hide";
+export type SellerFilterValue = "" | "private" | "dealer";
+export type AccidentFilterValue = "" | "none" | "had";
+export type OwnersFilterValue = "" | "1" | "2" | "3" | "4";
+
 export type SearchFilterState = {
   name: string;
   category: VehicleCategory;
@@ -44,12 +49,52 @@ export type SearchFilterState = {
   powerTo: string;
   seatsFrom: string;
   seatsTo: string;
+  bodyTypes: string[];
+  doorsFrom: string;
+  doorsTo: string;
+  sellerFilter: SellerFilterValue;
+  accident: AccidentFilterValue;
+  zeroMileage: boolean;
+  bargain: boolean;
+  vinVerified: boolean;
+  ownersMax: OwnersFilterValue;
+  inCredit: TriFilterValue;
+  usaImport: TriFilterValue;
+  notCustoms: TriFilterValue;
+  metallic: boolean;
+  powerUnit: "hp" | "kw";
 };
 
 export type SortOption = "newest" | "price_asc" | "price_desc" | "year_desc" | "mileage_asc";
 
-export const FUEL_OPTIONS = ["Бензин", "Дизель", "Гібрид", "Електро", "Газ"] as const;
-export const TRANSMISSION_OPTIONS = ["Автомат", "Механіка", "Робот"] as const;
+export const FUEL_OPTIONS = [
+  "Бензин",
+  "Дизель",
+  "Електро",
+  "Газ",
+  "Газ пропан+бензин",
+  "Газ метан+бензин",
+  "Гібрид",
+] as const;
+export const TRANSMISSION_OPTIONS = [
+  "Механіка",
+  "Автомат",
+  "Типтронік",
+  "Робот",
+  "Варіатор",
+  "Редуктор",
+] as const;
+export const BODY_TYPE_OPTIONS = [
+  "Седан",
+  "Універсал",
+  "Хетчбек",
+  "Купе",
+  "Мінівен",
+  "Позашляховик",
+  "Кросовер",
+  "Пікап",
+  "Ліфтбек",
+] as const;
 export const SOURCE_OPTIONS = ["AUTO.RIA", "OLX", "Telegram"] as const;
 export const DRIVE_OPTIONS = ["Передній", "Задній", "Повний"] as const;
 export const COLOR_OPTIONS = [
@@ -58,6 +103,26 @@ export const COLOR_OPTIONS = [
 ] as const;
 
 export const VEHICLE_TYPE_OPTIONS = ["Легкові", "Вантажні"] as const;
+
+export const SELLER_FILTER_OPTIONS = [
+  { value: "" as SellerFilterValue, label: "Всі" },
+  { value: "private" as SellerFilterValue, label: "Приватна особа" },
+  { value: "dealer" as SellerFilterValue, label: "Компанія" },
+];
+
+export const ACCIDENT_FILTER_OPTIONS = [
+  { value: "" as AccidentFilterValue, label: "Всі" },
+  { value: "none" as AccidentFilterValue, label: "Не був" },
+  { value: "had" as AccidentFilterValue, label: "Був" },
+];
+
+export const OWNERS_FILTER_OPTIONS = [
+  { value: "" as OwnersFilterValue, label: "Будь-яка" },
+  { value: "1" as OwnersFilterValue, label: "1" },
+  { value: "2" as OwnersFilterValue, label: "2" },
+  { value: "3" as OwnersFilterValue, label: "3" },
+  { value: "4" as OwnersFilterValue, label: "4+" },
+];
 
 export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
   { value: "all", label: "Всі" },
@@ -117,6 +182,20 @@ export const DEFAULT_FILTERS: SearchFilterState = {
   powerTo: "",
   seatsFrom: "",
   seatsTo: "",
+  bodyTypes: [],
+  doorsFrom: "",
+  doorsTo: "",
+  sellerFilter: "",
+  accident: "",
+  zeroMileage: false,
+  bargain: false,
+  vinVerified: false,
+  ownersMax: "",
+  inCredit: "",
+  usaImport: "",
+  notCustoms: "",
+  metallic: false,
+  powerUnit: "hp",
 };
 
 export const CATALOG_LISTINGS: SearchResult[] = [
@@ -283,4 +362,53 @@ export function sortListingItems(items: Listing[], sort: SortOption): Listing[] 
 
 export function toggleValue(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter(v => v !== value) : [...list, value];
+}
+
+function fieldActive(value: string | boolean | undefined): boolean {
+  if (typeof value === "boolean") return value;
+  return Boolean(value && String(value).trim());
+}
+
+export function countAdvancedFilterFields(
+  filters: SearchFilterState,
+  section: "technical" | "condition" | "origin",
+): number {
+  if (section === "technical") {
+    return [
+      filters.bodyTypes.length,
+      filters.fuels.length,
+      filters.transmissions.length,
+      fieldActive(filters.mileageFrom),
+      fieldActive(filters.mileageTo),
+      filters.zeroMileage,
+      fieldActive(filters.engineVolumeFrom),
+      fieldActive(filters.engineVolumeTo),
+      filters.driveTypes.length,
+      filters.colors.length,
+      filters.metallic,
+      fieldActive(filters.fuelConsumptionFrom),
+      fieldActive(filters.fuelConsumptionTo),
+      fieldActive(filters.rangeFrom),
+      fieldActive(filters.rangeTo),
+      fieldActive(filters.batteryCapacityFrom),
+      fieldActive(filters.batteryCapacityTo),
+      fieldActive(filters.powerFrom),
+      fieldActive(filters.powerTo),
+      fieldActive(filters.seatsFrom),
+      fieldActive(filters.seatsTo),
+      fieldActive(filters.doorsFrom),
+      fieldActive(filters.doorsTo),
+    ].filter(Boolean).length;
+  }
+  if (section === "condition") {
+    return [
+      fieldActive(filters.accident),
+      fieldActive(filters.sellerFilter),
+      fieldActive(filters.ownersMax),
+      filters.vinVerified,
+      filters.bargain,
+      fieldActive(filters.inCredit),
+    ].filter(Boolean).length;
+  }
+  return [fieldActive(filters.usaImport), fieldActive(filters.notCustoms)].filter(Boolean).length;
 }

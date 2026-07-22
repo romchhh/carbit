@@ -6,6 +6,7 @@ import re
 
 from app.core.text import norm_text
 from app.schemas.schemas import ListingOut, SearchFilters
+from app.services.auto_ria.filter_maps import BODY_TYPE_TO_ID
 from app.services.olx.constants import COLOR_NAME_TO_TOKEN, DRIVETRAIN_NAME_TO_TOKEN
 
 _SEATS_NUMBER = re.compile(
@@ -13,12 +14,27 @@ _SEATS_NUMBER = re.compile(
     re.IGNORECASE,
 )
 
+_BODY_ALIASES: dict[str, tuple[str, ...]] = {
+    "седан": ("sedan", "седан"),
+    "універсал": ("універсал", "universal", "wagon"),
+    "хетчбек": ("хетчбек", "hatchback"),
+    "купе": ("купе", "coupe"),
+    "мінівен": ("мінівен", "minivan"),
+    "позашляховик": ("позашляховик", "suv", "внедорожник"),
+    "кросовер": ("кросовер", "crossover"),
+    "пікап": ("пікап", "pickup"),
+    "ліфтбек": ("ліфтбек", "liftback"),
+}
+
 
 def advanced_filters_active(filters: SearchFilters) -> bool:
     return any(
         [
             filters.seats_from is not None,
             filters.seats_to is not None,
+            filters.doors_from is not None,
+            filters.doors_to is not None,
+            bool(filters.body_types),
             filters.engine_volume_from is not None,
             filters.engine_volume_to is not None,
             filters.power_from is not None,
@@ -31,6 +47,16 @@ def advanced_filters_active(filters: SearchFilters) -> bool:
             filters.battery_capacity_to is not None,
             bool(filters.drivetrain),
             bool(filters.colors),
+            filters.seller_filter,
+            filters.accident,
+            filters.zero_mileage,
+            filters.bargain,
+            filters.vin_verified,
+            filters.owners_max is not None,
+            filters.in_credit,
+            filters.usa_import,
+            filters.not_customs,
+            filters.metallic,
         ]
     )
 
@@ -79,6 +105,76 @@ def extract_listing_seats(item: ListingOut) -> int | None:
     return None
 
 
+def extract_listing_doors(item: ListingOut) -> int | None:
+    sd = item.source_data if isinstance(item.source_data, dict) else {}
+    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+    for key in ("door", "doors", "doorCount", "doorInt"):
+        raw = auto.get(key)
+        if raw is not None:
+            digits = re.sub(r"[^\d]", "", str(raw))
+            if digits:
+                value = int(digits)
+                if 2 <= value <= 7:
+                    return value
+    m = re.search(r"(\d)\s*(?:двер|door)", f"{item.title} {item.description or ''}", re.I)
+    if m:
+        value = int(m.group(1))
+        if 2 <= value <= 7:
+            return value
+    return None
+
+
+def extract_listing_owners(item: ListingOut) -> int | None:
+    sd = item.source_data if isinstance(item.source_data, dict) else {}
+    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+    for key in ("ownerCount", "owners", "owner"):
+        raw = auto.get(key)
+        if raw is not None:
+            digits = re.sub(r"[^\d]", "", str(raw))
+            if digits:
+                return int(digits)
+    blob = norm_text(f"{item.title} {item.description or ''}")
+    m = re.search(r"(\d)\s*(?:власник|owner)", blob)
+    if m:
+        return int(m.group(1))
+    if "один власник" in blob or "1 власник" in blob:
+        return 1
+    return None
+
+
+def _listing_haystack(item: ListingOut) -> str:
+    blob = norm_text(f"{item.title} {item.description or ''} {item.fuel} {item.transmission}")
+    sd = item.source_data if isinstance(item.source_data, dict) else {}
+    specs = sd.get("specs") if isinstance(sd.get("specs"), dict) else {}
+    specs_blob = norm_text(" ".join(str(v) for v in specs.values() if isinstance(v, str)))
+    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+    auto_blob = norm_text(
+        " ".join(str(v) for v in auto.values() if isinstance(v, (str, int, float)))
+    )
+    return f"{blob} {specs_blob} {auto_blob}"
+
+
+def _body_matches_filter(item: ListingOut, body_labels: list[str]) -> bool:
+    haystack = _listing_haystack(item)
+    sd = item.source_data if isinstance(item.source_data, dict) else {}
+    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+    body_name = norm_text(str(auto.get("bodyName") or auto.get("subCategoryName") or ""))
+    for label in body_labels:
+        key = norm_text(label)
+        if key in body_name or key in haystack:
+            return True
+        for canonical, aliases in _BODY_ALIASES.items():
+            if norm_text(canonical) != key and canonical not in key:
+                continue
+            if any(alias in haystack or alias in body_name for alias in aliases):
+                return True
+        if key in BODY_TYPE_TO_ID and any(
+            token in haystack for token in (key, key.replace(" ", ""))
+        ):
+            return True
+    return False
+
+
 def _seats_in_range(seats: int, filters: SearchFilters) -> bool:
     if filters.seats_from is not None and seats < filters.seats_from:
         return False
@@ -92,7 +188,7 @@ def listing_matches_seats_filter(item: ListingOut, filters: SearchFilters) -> bo
         return True
     seats = extract_listing_seats(item)
     if seats is None:
-        return False
+        return True
     return _seats_in_range(seats, filters)
 
 
@@ -123,11 +219,125 @@ def _spec_number_from_listing(item: ListingOut, *keys: str) -> float | None:
     return None
 
 
+def _tri_state_matches(
+    mode: str | None,
+    *,
+    show_tokens: tuple[str, ...],
+    hide_tokens: tuple[str, ...],
+    haystack: str,
+    detected: bool | None,
+) -> bool:
+    if not mode or mode.strip().lower() in ("", "all"):
+        return True
+    m = mode.strip().lower()
+    if m == "show":
+        if detected is True:
+            return True
+        return any(token in haystack for token in show_tokens)
+    if m == "hide":
+        if detected is True:
+            return False
+        if detected is False:
+            return True
+        return not any(token in haystack for token in show_tokens)
+    return True
+
+
 def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -> bool:
     if not advanced_filters_active(filters):
         return True
 
     if not listing_matches_seats_filter(item, filters):
+        return False
+
+    if filters.doors_from is not None or filters.doors_to is not None:
+        doors = extract_listing_doors(item)
+        if doors is not None:
+            if filters.doors_from is not None and doors < filters.doors_from:
+                return False
+            if filters.doors_to is not None and doors > filters.doors_to:
+                return False
+
+    if filters.body_types and not _body_matches_filter(item, filters.body_types):
+        return False
+
+    if filters.zero_mileage and item.mileage > 500:
+        return False
+
+    if filters.seller_filter and item.seller_type:
+        want = filters.seller_filter.strip().lower()
+        if want == "private" and item.seller_type != "private":
+            return False
+        if want == "dealer" and item.seller_type != "dealer":
+            return False
+
+    haystack = _listing_haystack(item)
+
+    if filters.accident == "none":
+        if re.search(r"\b(дтп|accident|after crash)\b", haystack):
+            return False
+        sd = item.source_data if isinstance(item.source_data, dict) else {}
+        auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+        damage = norm_text(str(auto.get("damageName") or auto.get("damage") or ""))
+        if damage and any(x in damage for x in ("був", "after", "після")):
+            return False
+    elif filters.accident == "had":
+        if not re.search(r"\b(дтп|accident|після дтп|був у дтп)\b", haystack):
+            sd = item.source_data if isinstance(item.source_data, dict) else {}
+            auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+            damage = norm_text(str(auto.get("damageName") or ""))
+            if "дтп" not in damage and "accident" not in damage:
+                return False
+
+    if filters.bargain:
+        if "торг" not in haystack and "negotiable" not in haystack:
+            return False
+
+    if filters.vin_verified and not item.vin_checked:
+        return False
+
+    if filters.owners_max is not None:
+        owners = extract_listing_owners(item)
+        if owners is not None:
+            limit = 4 if filters.owners_max >= 4 else filters.owners_max
+            if owners > limit:
+                return False
+
+    if filters.in_credit:
+        if not _tri_state_matches(
+            filters.in_credit,
+            show_tokens=("кредит", "застав", "банк", "credit"),
+            hide_tokens=(),
+            haystack=haystack,
+            detected=None,
+        ):
+            return False
+
+    if filters.usa_import:
+        if not _tri_state_matches(
+            filters.usa_import,
+            show_tokens=("сша", "usa", "america", "штати"),
+            hide_tokens=(),
+            haystack=haystack,
+            detected=None,
+        ):
+            return False
+
+    if filters.not_customs:
+        import_hint = any(
+            token in haystack
+            for token in ("нерозмит", "під пригон", "пригон", "на брокера", "customs")
+        )
+        if not _tri_state_matches(
+            filters.not_customs,
+            show_tokens=("нерозмит", "під пригон", "пригон", "на брокера"),
+            hide_tokens=(),
+            haystack=haystack,
+            detected=import_hint if import_hint else None,
+        ):
+            return False
+
+    if filters.metallic and "металік" not in haystack and "metallic" not in haystack:
         return False
 
     if filters.engine_volume_from is not None or filters.engine_volume_to is not None:
@@ -141,6 +351,9 @@ def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -
     if filters.power_from is not None or filters.power_to is not None:
         power = _spec_number_from_listing(item, "потужність", "power", "к.с", "л.с")
         if power is not None:
+            unit = (filters.power_unit or "hp").strip().lower()
+            if unit == "kw":
+                power = power * 1.341
             if filters.power_from is not None and power < filters.power_from:
                 return False
             if filters.power_to is not None and power > filters.power_to:
@@ -174,7 +387,7 @@ def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -
     sd = item.source_data if isinstance(item.source_data, dict) else {}
     specs = sd.get("specs") if isinstance(sd.get("specs"), dict) else {}
     specs_blob = norm_text(" ".join(str(v) for v in specs.values() if isinstance(v, str)))
-    haystack = f"{blob} {specs_blob}"
+    specs_haystack = f"{blob} {specs_blob}"
 
     if filters.drivetrain:
         if specs_blob:
@@ -187,12 +400,21 @@ def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -
                 return False
 
     if filters.colors:
-        if specs_blob:
+        if specs_haystack:
             matched = any(
-                COLOR_NAME_TO_TOKEN.get(norm_text(c), norm_text(c)) in specs_blob
+                COLOR_NAME_TO_TOKEN.get(norm_text(c), norm_text(c)) in specs_haystack
                 for c in filters.colors
             )
             if not matched:
                 return False
 
     return True
+
+
+def filter_listings_by_advanced(
+    items: list[ListingOut],
+    filters: SearchFilters,
+) -> list[ListingOut]:
+    if not advanced_filters_active(filters):
+        return items
+    return [item for item in items if listing_matches_advanced_filters(item, filters)]

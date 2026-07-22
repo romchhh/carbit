@@ -246,6 +246,15 @@ class TelegramClient:
                 ],
             ]
         }
+        if search_id:
+            markup["inline_keyboard"].append(
+                [
+                    {
+                        "text": "⏸ Відключити моніторинг",
+                        "callback_data": f"mon:ask:{search_id}",
+                    }
+                ]
+            )
 
         images = listing.get("images") or []
         raw_image = images[0] if images else listing.get("photo_url")

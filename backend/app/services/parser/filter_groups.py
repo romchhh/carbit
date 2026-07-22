@@ -141,12 +141,15 @@ def merge_filters_for_fetch(filters_list: list[SearchFilters]) -> SearchFilters:
     merged.power_to = _merge_max_values([f.power_to for f in filters_list])
     merged.seats_from = _merge_min_values([f.seats_from for f in filters_list])
     merged.seats_to = _merge_max_values([f.seats_to for f in filters_list])
+    merged.doors_from = _merge_min_values([f.doors_from for f in filters_list])
+    merged.doors_to = _merge_max_values([f.doors_to for f in filters_list])
 
     merged.region = _merge_region([f.region for f in filters_list])
     merged.fuel = _merge_list_union([f.fuel for f in filters_list])
     merged.transmission = _merge_list_union([f.transmission for f in filters_list])
     merged.drivetrain = _merge_list_union([f.drivetrain for f in filters_list])
     merged.colors = _merge_list_union([f.colors for f in filters_list])
+    merged.body_types = _merge_list_union([f.body_types for f in filters_list])
 
     currency = _merge_currency([f.currency for f in filters_list])
     if currency != "MIXED":

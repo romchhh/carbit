@@ -20,6 +20,16 @@ class TelegramChannelNormalizeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             normalize_channel_username("-100123")
 
+    def test_invite_plus_url(self):
+        self.assertEqual(
+            normalize_channel_username("https://t.me/+3nhasZKNXZw4Zjky"),
+            "https://t.me/+3nhasZKNXZw4Zjky",
+        )
+        self.assertEqual(
+            normalize_channel_username("@+3nhasZKNXZw4Zjky"),
+            "https://t.me/+3nhasZKNXZw4Zjky",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

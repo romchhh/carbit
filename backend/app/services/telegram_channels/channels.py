@@ -11,9 +11,22 @@ def normalize_channel_username(value: str) -> str:
     raw = (value or "").strip()
     if not raw:
         raise ValueError("Вкажіть username каналу")
-    if "t.me/" in raw.lower():
-        raw = raw.split("t.me/", 1)[-1]
-    raw = raw.split("?")[0].strip("/").lstrip("@").split("/")[0].strip()
+    lower = raw.lower()
+    if "joinchat/" in lower:
+        invite = raw.split("joinchat/", 1)[-1].split("?")[0].strip("/")
+        if not invite:
+            raise ValueError("Невірне інвайт-посилання")
+        return f"https://t.me/joinchat/{invite}"
+    if "t.me/" in lower:
+        tail = raw.split("t.me/", 1)[-1].split("?")[0].strip("/")
+        if tail.startswith("+"):
+            return f"https://t.me/{tail}"
+        raw = tail
+    raw = raw.split("?")[0].strip("/").split("/")[0].strip()
+    if raw.startswith("@"):
+        raw = raw.lstrip("@")
+    if raw.startswith("+"):
+        return f"https://t.me/{raw}"
     if not raw:
         raise ValueError("Невірний username каналу")
     if raw.lstrip("-").isdigit():
@@ -22,7 +35,21 @@ def normalize_channel_username(value: str) -> str:
 
 
 def channel_slug(username: str) -> str:
-    return username.strip().lstrip("@")
+    raw = (username or "").strip()
+    if "t.me/" in raw.lower():
+        tail = raw.split("t.me/", 1)[-1].split("?")[0].strip("/")
+        if tail.startswith("+"):
+            return tail.lstrip("+")
+        return tail.split("/")[0].lstrip("@")
+    return raw.lstrip("@").lstrip("+")
+
+
+def parser_channel_ref(username: str) -> str:
+    """Формат для Telethon (після normalize в БД)."""
+    raw = (username or "").strip()
+    if raw.startswith("@+"):
+        return f"https://t.me/{raw[1:]}"
+    return raw
 
 
 async def list_channels(db: AsyncSession, *, enabled_only: bool = False) -> list[TelegramChannel]:
@@ -35,7 +62,7 @@ async def list_channels(db: AsyncSession, *, enabled_only: bool = False) -> list
 
 async def list_enabled_usernames(db: AsyncSession) -> list[str]:
     channels = await list_channels(db, enabled_only=True)
-    return [channel.username for channel in channels]
+    return [parser_channel_ref(channel.username) for channel in channels]
 
 
 async def get_channel(db: AsyncSession, channel_id: str) -> TelegramChannel | None:

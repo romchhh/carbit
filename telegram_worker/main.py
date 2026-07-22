@@ -21,6 +21,8 @@ from app.services.telegram_channels.service_loader import get_parser_channels, g
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [telegram-worker] %(message)s")
 logger = logging.getLogger("carbit.telegram_worker")
 
+CHANNEL_SYNC_SECONDS = 45
+
 
 async def bootstrap_channels(service, channels: list[str], limit: int) -> None:
     for channel in channels:
@@ -133,6 +135,29 @@ async def process_keyword_queue(service, *, limit: int = 4) -> int:
     return done
 
 
+async def channel_sync_loop(
+    service,
+    *,
+    history_limit: int,
+    bootstrapped: set[str],
+) -> None:
+    """Підхоплює нові канали з БД без перезапуску worker."""
+    while True:
+        await asyncio.sleep(CHANNEL_SYNC_SECONDS)
+        try:
+            channels = await get_parser_channels()
+            new = [ch for ch in channels if ch not in bootstrapped]
+            if new:
+                logger.info("Нові канали з адмінки: %s", new)
+                await bootstrap_channels(service, new, history_limit)
+                bootstrapped.update(new)
+            active = await service.sync_monitored_channels(channels)
+            if new:
+                logger.info("Realtime: слухаю %s каналів", len(active))
+        except Exception:
+            logger.exception("Channel sync tick failed")
+
+
 async def main() -> None:
     if not app_settings.TELEGRAM_ENABLED:
         logger.error("TELEGRAM_ENABLED=false — worker stopped")
@@ -153,7 +178,9 @@ async def main() -> None:
     await service.start()
     logger.info("Telethon started, channels: %s", channels)
 
+    bootstrapped: set[str] = set()
     await bootstrap_channels(service, channels, history_limit)
+    bootstrapped.update(channels)
     await beat("telegram_worker")
 
     async def on_new_listing(listing) -> None:
@@ -190,6 +217,9 @@ async def main() -> None:
             await asyncio.sleep(1 if busy else 4)
 
     asyncio.create_task(heartbeat_loop())
+    asyncio.create_task(
+        channel_sync_loop(service, history_limit=history_limit, bootstrapped=bootstrapped)
+    )
     await service.listen(channels, on_new_listing)
 
 

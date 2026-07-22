@@ -19,6 +19,13 @@ from app.services.auto_ria.constants import (
     GEARBOX_NAME_TO_ID,
     REGION_TO_STATE_CITY,
 )
+from app.services.auto_ria.filter_maps import (
+    ACCIDENT_TO_DAMAGE,
+    SELLER_TO_RIA,
+    TRI_SHOW_HIDE_TO_RIA,
+    body_type_ids,
+    color_ids,
+)
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
 from app.services.notifications.freshness import auto_ria_top_for_max_hours
 
@@ -71,10 +78,14 @@ async def filters_to_search_params(
             if filters.price_to is not None:
                 params["price_do"] = filter_price_to_uah(filters.price_to, filter_cur)
 
-    if filters.mileage_from is not None:
-        params["raceFrom"] = max(filters.mileage_from // 1000, 0)
-    if filters.mileage_to is not None:
-        params["raceTo"] = max(filters.mileage_to // 1000, 0)
+    if filters.zero_mileage:
+        params["raceFrom"] = 0
+        params["raceTo"] = 0
+    else:
+        if filters.mileage_from is not None:
+            params["raceFrom"] = max(filters.mileage_from // 1000, 0)
+        if filters.mileage_to is not None:
+            params["raceTo"] = max(filters.mileage_to // 1000, 0)
 
     # Свіжі оголошення: top=1 (година), 8 (3г), 14 (12г), 11 (доба)…
     if filters.published_within_hours:
@@ -119,8 +130,65 @@ async def filters_to_search_params(
     elif filters.seats_to is not None and filters.seats_from is None:
         params["seats"] = filters.seats_to
 
-    # Всі / Вживані / Нові / Під пригон
+    if filters.doors_from is not None:
+        params["doorFrom"] = filters.doors_from
+    if filters.doors_to is not None:
+        params["doorTo"] = filters.doors_to
+
+    if filters.body_types:
+        for index, body_id in enumerate(body_type_ids(filters.body_types)):
+            params[f"bodystyle[{index}]"] = body_id
+
+    if filters.colors:
+        for index, color_id in enumerate(color_ids(filters.colors)):
+            params[f"color_id[{index}]"] = color_id
+
+    if filters.metallic:
+        params["metallic"] = 1
+
+    if filters.power_from is not None:
+        params["powerFrom"] = filters.power_from
+    if filters.power_to is not None:
+        params["powerTo"] = filters.power_to
+    if filters.power_from is not None or filters.power_to is not None:
+        unit = (filters.power_unit or "hp").strip().lower()
+        params["power_name"] = 2 if unit == "kw" else 1
+
+    if filters.accident:
+        damage = ACCIDENT_TO_DAMAGE.get(filters.accident.strip().lower())
+        if damage is not None:
+            params["damage"] = damage
+
+    if filters.seller_filter:
+        seller_id = SELLER_TO_RIA.get(filters.seller_filter.strip().lower())
+        if seller_id is not None:
+            params["company_type"] = seller_id
+
+    if filters.bargain:
+        params["bargain"] = 1
+
+    if filters.vin_verified:
+        params["checked_VIN"] = 1
+
+    if filters.in_credit:
+        credit = TRI_SHOW_HIDE_TO_RIA.get(filters.in_credit.strip().lower())
+        if credit is not None:
+            params["under_credit"] = credit
+
+    if filters.usa_import:
+        usa = TRI_SHOW_HIDE_TO_RIA.get(filters.usa_import.strip().lower())
+        if usa is not None:
+            params["from_usa"] = usa
+
     category = (filters.category or "all").strip().lower()
+    if filters.not_customs:
+        customs = filters.not_customs.strip().lower()
+        if customs == "show":
+            params["custom"] = 1
+        elif customs == "hide" and category != "import":
+            params["custom"] = 0
+
+    # Всі / Вживані / Нові / Під пригон
     if category == "used":
         # Класичний вживаний парк (searchType=4), розмитнені.
         params["searchType"] = 4

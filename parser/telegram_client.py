@@ -40,6 +40,25 @@ async def ensure_joined(client: TelegramClient, channel: str) -> bool:
     """
     channel = channel.strip()
 
+    # @+HASH або +HASH (приватний інвайт без повного URL)
+    if channel.startswith("@+"):
+        invite_hash = channel[2:].strip()
+        try:
+            await client(ImportChatInviteRequest(invite_hash))
+            log.info("Приєднався до приватного чату за інвайтом @+%s", invite_hash[:8])
+            return True
+        except UserAlreadyParticipantError:
+            return True
+        except (InviteHashExpiredError, InviteHashInvalidError):
+            log.warning("Інвайт @+%s недійсний/протермінований", invite_hash[:8])
+            return False
+        except FloodWaitError as e:
+            log.warning("FloodWait %s сек при вступі в @+%s", e.seconds, invite_hash[:8])
+            return False
+        except Exception as e:
+            log.warning("Не вдалось приєднатись за @+%s: %s", invite_hash[:8], e)
+            return False
+
     # приватний інвайт-лінк
     if "joinchat/" in channel or "/+" in channel:
         invite_hash = channel.split("joinchat/")[-1].split("/+")[-1].strip("/")

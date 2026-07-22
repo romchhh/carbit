@@ -702,6 +702,29 @@ async def search_listings_outcome(
             )
         successful = filtered_batches
 
+    from app.services.search.advanced_filters import (
+        advanced_filters_active,
+        filter_listings_by_advanced,
+    )
+
+    if advanced_filters_active(filters):
+        filtered_batches = []
+        for source, result in successful:
+            items = filter_listings_by_advanced(list(result.items), filters)
+            filtered_batches.append(
+                (
+                    source,
+                    PaginatedListings(
+                        items=items,
+                        total=len(items),
+                        page=result.page,
+                        per_page=result.per_page,
+                        pages=max((len(items) + result.per_page - 1) // result.per_page, 0),
+                    ),
+                )
+            )
+        successful = filtered_batches
+
     page_items, nav_total, market_total = _sorted_merge_slice(
         successful,
         page=page,
@@ -958,9 +981,15 @@ async def build_live_search_pool(
 
     from app.services.listings.duplicates import mark_duplicates_in_pool
 
-    olx_sorted = mark_duplicates_in_pool(sort_listings(list(olx_result.items), sort_by))
-    telegram_sorted = mark_duplicates_in_pool(
-        sort_listings(list(telegram_result.items), sort_by)
+    from app.services.search.advanced_filters import filter_listings_by_advanced
+
+    olx_sorted = filter_listings_by_advanced(
+        mark_duplicates_in_pool(sort_listings(list(olx_result.items), sort_by)),
+        filters,
+    )
+    telegram_sorted = filter_listings_by_advanced(
+        mark_duplicates_in_pool(sort_listings(list(telegram_result.items), sort_by)),
+        filters,
     )
 
     slots = _build_interleaved_slots(

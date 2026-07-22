@@ -1,4 +1,10 @@
-import type { SearchFilterState } from "@/lib/search-catalog";
+import type {
+  AccidentFilterValue,
+  OwnersFilterValue,
+  SearchFilterState,
+  SellerFilterValue,
+  TriFilterValue,
+} from "@/lib/search-catalog";
 import { DEFAULT_FILTERS } from "@/lib/search-catalog";
 
 export type BackendSearchFilters = {
@@ -30,6 +36,20 @@ export type BackendSearchFilters = {
   power_to?: number | null;
   seats_from?: number | null;
   seats_to?: number | null;
+  doors_from?: number | null;
+  doors_to?: number | null;
+  body_types?: string[] | null;
+  seller_filter?: string | null;
+  accident?: string | null;
+  zero_mileage?: boolean | null;
+  bargain?: boolean | null;
+  vin_verified?: boolean | null;
+  owners_max?: number | null;
+  in_credit?: string | null;
+  usa_import?: string | null;
+  not_customs?: string | null;
+  metallic?: boolean | null;
+  power_unit?: string | null;
   published_within_days?: number | null;
 };
 
@@ -59,6 +79,11 @@ function parseThousandsKm(value: string): number | null {
   return num * 1000;
 }
 
+function mapTri(value: TriFilterValue): string | null {
+  if (!value) return null;
+  return value;
+}
+
 function mapSources(sources: string[]): string[] | null {
   const mapped = sources
     .map(source => SOURCE_TO_BACKEND[source])
@@ -67,7 +92,16 @@ function mapSources(sources: string[]): string[] | null {
   return mapped.length ? mapped : null;
 }
 
+function parseOwnersMax(value: OwnersFilterValue): number | null {
+  if (!value) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function toBackendSearchFilters(filters: SearchFilterState): BackendSearchFilters {
+  const mileageFrom = filters.zeroMileage ? 0 : parseThousandsKm(filters.mileageFrom);
+  const mileageTo = filters.zeroMileage ? 500 : parseThousandsKm(filters.mileageTo);
+
   return {
     brand: filters.brand || null,
     model: filters.model || null,
@@ -76,8 +110,8 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
     price_from: parseNumber(filters.priceFrom),
     price_to: parseNumber(filters.priceTo),
     currency: filters.currency || "USD",
-    mileage_from: parseThousandsKm(filters.mileageFrom),
-    mileage_to: parseThousandsKm(filters.mileageTo),
+    mileage_from: mileageFrom,
+    mileage_to: mileageTo,
     fuel: filters.fuels.length ? [...filters.fuels] : null,
     transmission: filters.transmissions.length ? [...filters.transmissions] : null,
     region: filters.region || null,
@@ -97,6 +131,20 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
     power_to: parseNumber(filters.powerTo),
     seats_from: parseNumber(filters.seatsFrom),
     seats_to: parseNumber(filters.seatsTo),
+    doors_from: parseNumber(filters.doorsFrom),
+    doors_to: parseNumber(filters.doorsTo),
+    body_types: filters.bodyTypes.length ? [...filters.bodyTypes] : null,
+    seller_filter: (filters.sellerFilter || null) as SellerFilterValue | null,
+    accident: (filters.accident || null) as AccidentFilterValue | null,
+    zero_mileage: filters.zeroMileage || null,
+    bargain: filters.bargain || null,
+    vin_verified: filters.vinVerified || null,
+    owners_max: parseOwnersMax(filters.ownersMax),
+    in_credit: mapTri(filters.inCredit),
+    usa_import: mapTri(filters.usaImport),
+    not_customs: mapTri(filters.notCustoms),
+    metallic: filters.metallic || null,
+    power_unit: filters.powerUnit || "hp",
   };
 }
 
@@ -115,6 +163,12 @@ const BACKEND_SOURCE_TO_UI: Record<string, string> = {
   olx: "OLX",
   telegram: "Telegram",
 };
+
+function ownersToUi(value: number | null | undefined): OwnersFilterValue {
+  if (value == null) return "";
+  if (value >= 4) return "4";
+  return String(value) as OwnersFilterValue;
+}
 
 /** Відновлює UI-фільтри зі збереженого моніторингу. */
 export function fromBackendSearchFilters(
@@ -135,6 +189,8 @@ export function fromBackendSearchFilters(
     .map(s => BACKEND_SOURCE_TO_UI[s] || s)
     .filter(Boolean);
 
+  const zeroMileage = Boolean(raw.zero_mileage);
+
   return {
     ...base,
     name: "",
@@ -148,8 +204,8 @@ export function fromBackendSearchFilters(
     priceFrom: formatPlainNumber(raw.price_from as number | null),
     priceTo: formatPlainNumber(raw.price_to as number | null),
     currency,
-    mileageFrom: formatThousandsKm(raw.mileage_from as number | null),
-    mileageTo: formatThousandsKm(raw.mileage_to as number | null),
+    mileageFrom: zeroMileage ? "0" : formatThousandsKm(raw.mileage_from as number | null),
+    mileageTo: zeroMileage ? "0" : formatThousandsKm(raw.mileage_to as number | null),
     fuels: Array.isArray(raw.fuel) ? raw.fuel.map(String) : [],
     transmissions: Array.isArray(raw.transmission) ? raw.transmission.map(String) : [],
     region: String(raw.region || ""),
@@ -168,6 +224,20 @@ export function fromBackendSearchFilters(
     powerTo: formatPlainNumber(raw.power_to as number | null),
     seatsFrom: formatPlainNumber(raw.seats_from as number | null),
     seatsTo: formatPlainNumber(raw.seats_to as number | null),
+    doorsFrom: formatPlainNumber(raw.doors_from as number | null),
+    doorsTo: formatPlainNumber(raw.doors_to as number | null),
+    bodyTypes: Array.isArray(raw.body_types) ? raw.body_types.map(String) : [],
+    sellerFilter: (String(raw.seller_filter || "") || "") as SellerFilterValue,
+    accident: (String(raw.accident || "") || "") as AccidentFilterValue,
+    zeroMileage,
+    bargain: Boolean(raw.bargain),
+    vinVerified: Boolean(raw.vin_verified),
+    ownersMax: ownersToUi(raw.owners_max as number | null),
+    inCredit: (String(raw.in_credit || "") || "") as TriFilterValue,
+    usaImport: (String(raw.usa_import || "") || "") as TriFilterValue,
+    notCustoms: (String(raw.not_customs || "") || "") as TriFilterValue,
+    metallic: Boolean(raw.metallic),
+    powerUnit: raw.power_unit === "kw" ? "kw" : "hp",
   };
 }
 
@@ -200,6 +270,20 @@ const COMPARE_KEYS: (keyof BackendSearchFilters)[] = [
   "power_to",
   "seats_from",
   "seats_to",
+  "doors_from",
+  "doors_to",
+  "body_types",
+  "seller_filter",
+  "accident",
+  "zero_mileage",
+  "bargain",
+  "vin_verified",
+  "owners_max",
+  "in_credit",
+  "usa_import",
+  "not_customs",
+  "metallic",
+  "power_unit",
 ];
 
 function normalizeCompareSlice(filters: BackendSearchFilters): Record<string, unknown> {
@@ -214,6 +298,7 @@ function normalizeCompareSlice(filters: BackendSearchFilters): Record<string, un
       continue;
     }
     if (key === "category" && (value === "all" || value === null)) continue;
+    if (typeof value === "boolean" && value === false) continue;
     out[key] = value;
   }
   if (!out.currency) out.currency = "USD";
@@ -254,4 +339,41 @@ export function buildSearchName(filters: SearchFilterState): string {
     parts.push(filters.region.replace(/^м\.\s*/i, ""));
   }
   return parts.join(" · ");
+}
+
+/** Скидає лише розширені поля, зберігаючи основний пошук. */
+export function resetAdvancedFilters(filters: SearchFilterState): SearchFilterState {
+  const keep: Pick<
+    SearchFilterState,
+    | "name"
+    | "category"
+    | "vehicleType"
+    | "region"
+    | "brand"
+    | "model"
+    | "yearFrom"
+    | "yearTo"
+    | "priceFrom"
+    | "priceTo"
+    | "currency"
+    | "mileageFrom"
+    | "mileageTo"
+    | "sources"
+  > = {
+    name: filters.name,
+    category: filters.category,
+    vehicleType: filters.vehicleType,
+    region: filters.region,
+    brand: filters.brand,
+    model: filters.model,
+    yearFrom: filters.yearFrom,
+    yearTo: filters.yearTo,
+    priceFrom: filters.priceFrom,
+    priceTo: filters.priceTo,
+    currency: filters.currency,
+    mileageFrom: filters.mileageFrom,
+    mileageTo: filters.mileageTo,
+    sources: filters.sources,
+  };
+  return { ...DEFAULT_FILTERS, ...keep };
 }

@@ -91,3 +91,27 @@ async def cancel_subscription(telegram_id: str) -> dict | None:
             logger.error("Backend unsubscribe failed: %s", res.text)
             return None
         return res.json()
+
+
+async def get_monitor_info(telegram_id: str, search_id: str) -> dict | None:
+    url = f"{settings.BACKEND_URL}/internal/bot/monitor/info"
+    headers = {"X-Internal-Secret": settings.INTERNAL_API_SECRET}
+    payload = {"telegram_id": telegram_id, "search_id": search_id}
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.post(url, json=payload, headers=headers)
+        if res.status_code >= 400:
+            logger.error("Backend monitor info failed: %s", res.text)
+            return None
+        return res.json()
+
+
+async def deactivate_monitor(telegram_id: str, search_id: str) -> dict | None:
+    url = f"{settings.BACKEND_URL}/internal/bot/monitor/deactivate"
+    headers = {"X-Internal-Secret": settings.INTERNAL_API_SECRET}
+    payload = {"telegram_id": telegram_id, "search_id": search_id}
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.post(url, json=payload, headers=headers)
+        if res.status_code >= 400:
+            logger.error("Backend monitor deactivate failed: %s", res.text)
+            return None
+        return res.json()

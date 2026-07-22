@@ -1,3 +1,5 @@
+import { FaqAccordion } from "@/components/ui/FaqAccordion";
+
 const FAQ_ITEMS = [
   {
     q: "Звідки беруться оголошення?",
@@ -27,7 +29,7 @@ const FAQ_ITEMS = [
 
 export function LandingFaq() {
   return (
-    <section id="faq" className="bg-white section-y">
+    <section id="faq" className="section-y bg-surface/30">
       <div className="section-wrap">
         <div className="mb-8 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
           <h2 className="text-[28px] font-semibold tracking-[-0.02em] text-ink sm:text-[36px]">
@@ -38,17 +40,7 @@ export function LandingFaq() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 sm:gap-5">
-          {FAQ_ITEMS.map(({ q, a }) => (
-            <div
-              key={q}
-              className="rounded-2xl border border-border/70 bg-white p-6 transition-colors hover:border-emerald/25 sm:p-7"
-            >
-              <h3 className="text-[16px] font-semibold text-ink sm:text-[17px]">{q}</h3>
-              <p className="mt-2.5 text-[14px] leading-relaxed text-muted">{a}</p>
-            </div>
-          ))}
-        </div>
+        <FaqAccordion items={FAQ_ITEMS} />
       </div>
     </section>
   );

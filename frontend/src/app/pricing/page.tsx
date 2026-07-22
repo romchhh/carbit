@@ -2,9 +2,37 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { PricingPlans } from "@/components/pricing/PricingPlans";
 import { CtaLink } from "@/components/ui/CtaLink";
+import { FaqAccordion } from "@/components/ui/FaqAccordion";
 import { cn } from "@/lib/utils";
 import { PRICING_COMPARE, PRICING_PLAN_HEADERS } from "@/lib/pricing-plans";
 import { IconCheck, IconX } from "@/components/icons";
+
+const PRICING_FAQ = [
+  {
+    q: "Можна змінити тариф?",
+    a: "Так, підвищити або понизити можна будь-коли з кабінету без зупинки сервісу.",
+  },
+  {
+    q: "Є пробний період?",
+    a: "Так. Тариф «Безкоштовно» — 7 днів, без прив'язки картки.",
+  },
+  {
+    q: "Звідки беруться оголошення?",
+    a: "AUTO.RIA, OLX та тематичні Telegram-канали авторинку.",
+  },
+  {
+    q: "Як оплатити?",
+    a: "Карткою Visa/Mastercard через LiqPay або банківським переказом. Деталі — у розділі «Оплата і повернення».",
+  },
+  {
+    q: "Чи є повернення коштів?",
+    a: "Так. Умови повернення описані на сторінці /payment.",
+  },
+  {
+    q: "Це фізичний товар?",
+    a: "Ні. Carbit — цифрова підписка; доставка не потрібна, доступ надається онлайн.",
+  },
+] as const;
 
 function Cell({ v }: { v: string | boolean }) {
   if (typeof v === "boolean") {
@@ -89,26 +117,12 @@ export default function PricingPage() {
         </section>
 
         {/* FAQ */}
-        <section className="section-y border-t border-border/60">
+        <section className="section-y border-t border-border/60 bg-surface/30">
           <div className="section-wrap">
-            <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.02em] text-ink mb-8 sm:mb-10">
+            <h2 className="mb-8 text-[28px] font-semibold tracking-[-0.02em] text-ink sm:mb-10 sm:text-[36px]">
               Часті питання
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-              {[
-                ["Можна змінити тариф?", "Так, підвищити або понизити можна будь-коли з кабінету без зупинки сервісу."],
-                ["Є пробний період?", "Так. Тариф «Безкоштовно» — 7 днів, без прив'язки картки."],
-                ["Звідки беруться оголошення?", "AUTO.RIA, OLX та тематичні Telegram-канали авторинку."],
-                ["Як оплатити?", "Карткою Visa/Mastercard через LiqPay або банківським переказом. Деталі — у розділі «Оплата і повернення»."],
-                ["Чи є повернення коштів?", "Так. Умови повернення описані на сторінці /payment."],
-                ["Це фізичний товар?", "Ні. Carbit — цифрова підписка; доставка не потрібна, доступ надається онлайн."],
-              ].map(([q, a]) => (
-                <div key={q} className="card-rounded p-6 sm:p-7 hover:border-emerald/20">
-                  <h4 className="text-[16px] font-semibold text-ink sm:text-[17px]">{q}</h4>
-                  <p className="mt-2.5 text-[14px] text-muted leading-relaxed">{a}</p>
-                </div>
-              ))}
-            </div>
+            <FaqAccordion items={PRICING_FAQ} />
           </div>
         </section>
 

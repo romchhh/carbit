@@ -246,7 +246,7 @@ export default function AdminTelegramChannelsPage() {
             })
           )}
           <p className="px-1 pt-2 text-[11px] text-muted">
-            Після зміни списку перезапустіть telegram_worker для realtime. Цикл парсингу підхопить канали одразу.
+            Після додавання каналу цикл парсингу підтягне історію протягом ~15 хв. Realtime — worker оновлює список кожні ~45 с (перезапуск не обовʼязковий).
           </p>
         </div>
 
@@ -264,7 +264,13 @@ export default function AdminTelegramChannelsPage() {
                   {selected.title && <div className="text-[13px] text-muted">{selected.title}</div>}
                 </div>
                 <a
-                  href={`https://t.me/${selected.username.replace(/^@/, "")}`}
+                  href={
+                    selected.username.includes("t.me/")
+                      ? selected.username.startsWith("http")
+                        ? selected.username
+                        : `https://${selected.username.replace(/^\/\//, "")}`
+                      : `https://t.me/${selected.username.replace(/^@/, "")}`
+                  }
                   target="_blank"
                   rel="noreferrer"
                   className="text-[12px] font-semibold text-emerald hover:underline"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from app.core.timezone import format_kyiv, now_kyiv
@@ -21,6 +22,9 @@ from app.services.telegram_channels.ingest import (
     mark_searches_checked,
     telegram_found_after_cutoff,
 )
+from app.services.telegram_channels.cycle import run_telegram_channels_cycle
+
+logger = logging.getLogger(__name__)
 
 
 def _monitor_cache_ttl(settings: dict) -> int:
@@ -314,11 +318,14 @@ async def run_parser_cycle(
 
     try:
         run_telegram = sources_only is None or "telegram" in sources_only
-        if run_telegram:
-            log.append(
-                "Telegram: ingest через telegram_worker (live + bootstrap); "
-                "у циклі — DB-пошук без keyword refresh"
-            )
+        if run_telegram and settings.get("telegram_enabled", True):
+            try:
+                tg_saved = await run_telegram_channels_cycle(db, settings, log)
+                total_found += tg_saved
+            except Exception as exc:
+                had_errors = True
+                log.append(f"Telegram ingest: {exc}")
+                logger.exception("Telegram channels cycle failed")
 
         rows = await db.scalars(select(SearchQuery).where(SearchQuery.is_active.is_(True)))
         active = [(sq.id, sq.filters) for sq in rows.all()]

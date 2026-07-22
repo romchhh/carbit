@@ -39,6 +39,11 @@ class BotTelegramIdRequest(BaseModel):
     telegram_id: str
 
 
+class BotMonitorRequest(BaseModel):
+    telegram_id: str
+    search_id: str
+
+
 def verify_internal_secret(x_internal_secret: str = Header(...)):
     expected = settings.INTERNAL_API_SECRET or ""
     provided = x_internal_secret or ""
@@ -184,6 +189,69 @@ async def bot_subscription_status(
         "order_id": sub.order_id if sub else None,
         "failed_charges": int(getattr(sub, "failed_charges", 0) or 0) if sub else 0,
         "billing_url": f"{settings.FRONTEND_URL.rstrip('/')}/app/billing",
+    }
+
+
+@router.post("/monitor/info")
+async def bot_monitor_info(
+    body: BotMonitorRequest,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_internal_secret),
+):
+    from app.models.models import SearchQuery
+
+    user = await db.scalar(select(User).where(User.telegram_id == body.telegram_id))
+    if not user:
+        return {"error": "not_registered"}
+    if not user.is_active:
+        return {"error": "account_deactivated"}
+
+    sq = await db.get(SearchQuery, body.search_id)
+    if not sq or sq.user_id != user.id:
+        return {"error": "not_found"}
+
+    return {
+        "success": True,
+        "search_name": sq.name,
+        "is_active": bool(sq.is_active),
+    }
+
+
+@router.post("/monitor/deactivate")
+async def bot_deactivate_monitor(
+    body: BotMonitorRequest,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_internal_secret),
+):
+    from app.models.models import SearchQuery
+
+    user = await db.scalar(select(User).where(User.telegram_id == body.telegram_id))
+    if not user:
+        return {"error": "not_registered"}
+    if not user.is_active:
+        return {"error": "account_deactivated"}
+
+    sq = await db.get(SearchQuery, body.search_id)
+    if not sq or sq.user_id != user.id:
+        return {"error": "not_found"}
+
+    if not sq.is_active:
+        return {
+            "success": True,
+            "already_inactive": True,
+            "search_name": sq.name,
+            "message": f"Моніторинг «{sq.name}» уже вимкнено.",
+        }
+
+    sq.is_active = False
+    await db.flush()
+
+    dashboard_url = f"{settings.FRONTEND_URL.rstrip('/')}/app/monitors"
+    return {
+        "success": True,
+        "search_name": sq.name,
+        "message": f"Моніторинг «{sq.name}» вимкнено. Нові сповіщення не надходитимуть.",
+        "dashboard_url": dashboard_url,
     }
 
 

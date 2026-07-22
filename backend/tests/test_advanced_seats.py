@@ -73,9 +73,9 @@ class AdvancedSeatsTests(unittest.TestCase):
             listing_out_matches_filters(item, SearchFilters(seats_from=5, seats_to=5))
         )
 
-    def test_unknown_seats_fails_when_filter_set(self):
+    def test_unknown_seats_passes_when_not_in_listing(self):
         item = _item(source_data={})
-        self.assertFalse(listing_matches_advanced_filters(item, SearchFilters(seats_from=5)))
+        self.assertTrue(listing_matches_advanced_filters(item, SearchFilters(seats_from=5)))
 
 
 if __name__ == "__main__":

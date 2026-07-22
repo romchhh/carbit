@@ -1,11 +1,14 @@
 import logging
+from html import escape
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from backend_api import (
     cancel_subscription,
+    deactivate_monitor,
+    get_monitor_info,
     get_subscription_status,
     init_telegram_login,
     init_telegram_register,
@@ -124,6 +127,97 @@ async def cmd_cancel(message: Message) -> None:
         return
     extra = f"\nПлатний доступ до: <b>{expires}</b>" if result.get("plan_expires_at") else ""
     await message.answer(f"✅ {text}{extra}", reply_markup=markup)
+
+
+def _telegram_id_from_callback(callback: CallbackQuery) -> str:
+    if not callback.from_user:
+        raise ValueError("Missing sender")
+    return str(callback.from_user.id)
+
+
+def _search_id_from_callback(data: str, prefix: str) -> str | None:
+    if not data.startswith(prefix):
+        return None
+    search_id = data[len(prefix) :].strip()
+    return search_id or None
+
+
+@router.callback_query(F.data.startswith("mon:ask:"))
+async def monitor_disable_ask(callback: CallbackQuery) -> None:
+    search_id = _search_id_from_callback(callback.data or "", "mon:ask:")
+    if not search_id:
+        await callback.answer("Невірне посилання", show_alert=True)
+        return
+
+    telegram_id = _telegram_id_from_callback(callback)
+    info = await get_monitor_info(telegram_id, search_id)
+    if not info:
+        await callback.answer("Не вдалося перевірити моніторинг", show_alert=True)
+        return
+    if info.get("error") == "not_found":
+        await callback.answer("Моніторинг не знайдено", show_alert=True)
+        return
+    if info.get("error") in ("not_registered", "account_deactivated"):
+        await callback.answer("Спочатку підключіть Telegram у кабінеті", show_alert=True)
+        return
+
+    name = escape(str(info.get("search_name") or "моніторинг"))
+    if not info.get("is_active", True):
+        await callback.answer("Моніторинг уже вимкнено", show_alert=True)
+        return
+
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Так, відключити",
+                    callback_data=f"mon:yes:{search_id}",
+                )
+            ],
+            [InlineKeyboardButton(text="↩️ Скасувати", callback_data=f"mon:no:{search_id}")],
+        ]
+    )
+    await callback.message.answer(
+        f"⏸ <b>Відключити моніторинг?</b>\n\n"
+        f"«{name}» — нові авто більше не надходитимуть у Telegram.\n"
+        f"У кабінеті моніторинг можна знову увімкнути.",
+        reply_markup=markup,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("mon:yes:"))
+async def monitor_disable_confirm(callback: CallbackQuery) -> None:
+    search_id = _search_id_from_callback(callback.data or "", "mon:yes:")
+    if not search_id:
+        await callback.answer("Невірне посилання", show_alert=True)
+        return
+
+    telegram_id = _telegram_id_from_callback(callback)
+    result = await deactivate_monitor(telegram_id, search_id)
+    if not result:
+        await callback.answer("Помилка сервера", show_alert=True)
+        return
+    if result.get("error") == "not_found":
+        await callback.answer("Моніторинг не знайдено", show_alert=True)
+        return
+    if result.get("error") in ("not_registered", "account_deactivated"):
+        await callback.answer("Акаунт недоступний", show_alert=True)
+        return
+
+    message = result.get("message") or "Моніторинг вимкнено."
+    dashboard_url = result.get("dashboard_url") or f"{settings.FRONTEND_URL}/app/monitors"
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="📋 Мої моніторинги", url=dashboard_url)]]
+    )
+    await callback.message.edit_text(f"✅ {message}", reply_markup=markup)
+    await callback.answer("Моніторинг вимкнено")
+
+
+@router.callback_query(F.data.startswith("mon:no:"))
+async def monitor_disable_cancel(callback: CallbackQuery) -> None:
+    await callback.message.edit_text("Скасовано. Моніторинг лишається увімкненим.")
+    await callback.answer()
 
 
 @router.message()
