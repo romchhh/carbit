@@ -70,10 +70,13 @@ async def mark_all_searches_seen(
     db: AsyncSession = Depends(get_db),
 ):
     """Скидає new_count для всіх моніторингів користувача (відкриття розділу)."""
+    from app.services.notifications.service import deliver_pending_monitor_telegram
+
     result = await db.scalars(select(SearchQuery).where(SearchQuery.user_id == user_id))
     marked = 0
     for sq in result.all():
         if (sq.new_count or 0) > 0:
+            await deliver_pending_monitor_telegram(db, search_ids=[sq.id], limit=50)
             await mark_search_listings_seen(db, sq)
             marked += 1
     return {"marked": marked}
@@ -113,13 +116,13 @@ async def get_search_results(
         sort_by=sort_by,
     )
 
-    if mark_seen:
-        await mark_search_listings_seen(db, sq)
-
     if (sq.new_count or 0) > 0:
         from app.services.notifications.service import deliver_pending_monitor_telegram
 
-        await deliver_pending_monitor_telegram(db, search_ids=[sq.id], limit=30)
+        await deliver_pending_monitor_telegram(db, search_ids=[sq.id], limit=50)
+
+    if mark_seen:
+        await mark_search_listings_seen(db, sq)
 
     return SearchLiveResultsOut(search=await search_query_to_out(db, sq), results=results)
 
@@ -133,6 +136,10 @@ async def mark_search_seen(
     sq = await db.get(SearchQuery, search_id)
     if not sq or sq.user_id != user_id:
         raise HTTPException(404, "Search not found")
+    if (sq.new_count or 0) > 0:
+        from app.services.notifications.service import deliver_pending_monitor_telegram
+
+        await deliver_pending_monitor_telegram(db, search_ids=[sq.id], limit=50)
     await mark_search_listings_seen(db, sq)
     return await search_query_to_out(db, sq)
 

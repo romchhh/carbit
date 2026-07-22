@@ -299,6 +299,45 @@ async def create_listing_notification(
     return notification
 
 
+async def notify_monitor_listing_after_link(
+    db: AsyncSession,
+    user: User,
+    listing: Listing,
+    search: SearchQuery,
+    *,
+    sl: SearchListing,
+) -> bool:
+    """Telegram одразу після появи авто в моніторингу (skip freshness, повтор при збої)."""
+    settings = await get_parser_settings()
+    if not settings.get("notify_telegram", True):
+        return False
+    if not (user.telegram_connected and user.telegram_id):
+        return False
+
+    notification = await create_listing_notification(
+        db,
+        user,
+        listing,
+        search=search,
+        max_published_hours=None,
+        skip_freshness_check=True,
+    )
+    if not notification.sent_telegram and not monitor_telegram_delivery_done(notification):
+        await _attempt_listing_match_telegram(
+            db,
+            user,
+            listing,
+            search,
+            notification,
+            skip_freshness_check=True,
+            max_published_hours=None,
+        )
+
+    if monitor_telegram_delivery_done(notification):
+        sl.notified_at = now_kyiv()
+    return bool(notification.sent_telegram)
+
+
 async def deliver_pending_monitor_telegram(
     db: AsyncSession,
     *,
@@ -321,6 +360,17 @@ async def deliver_pending_monitor_telegram(
         )
         .limit(1)
     )
+    unsent_notif_subq = (
+        select(Notification.id)
+        .where(
+            Notification.user_id == User.id,
+            Notification.search_id == SearchListing.search_id,
+            Notification.listing_id == SearchListing.listing_id,
+            Notification.type == NotificationType.listing_match,
+            Notification.sent_telegram.is_(False),
+        )
+        .limit(1)
+    )
 
     stmt = (
         select(SearchListing, SearchQuery, User, Listing)
@@ -328,7 +378,7 @@ async def deliver_pending_monitor_telegram(
         .join(User, User.id == SearchQuery.user_id)
         .join(Listing, Listing.id == SearchListing.listing_id)
         .where(
-            SearchListing.is_new.is_(True),
+            or_(SearchListing.is_new.is_(True), exists(unsent_notif_subq)),
             SearchQuery.is_active.is_(True),
             User.telegram_connected.is_(True),
             User.telegram_id.isnot(None),

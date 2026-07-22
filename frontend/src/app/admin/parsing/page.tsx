@@ -505,9 +505,17 @@ export default function AdminParsingPage() {
                                     ? ` · ${formatKyivDateTime(row.telegram_sent_at)}`
                                     : ""}
                                 </span>
-                              ) : (
+                              ) : row.is_new ? (
                                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
                                   Telegram очікує
+                                </span>
+                              ) : row.notified_at ? (
+                                <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-muted">
+                                  Telegram пропущено
+                                </span>
+                              ) : (
+                                <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-muted">
+                                  Без розсилки (базовий склад)
                                 </span>
                               )}
                             </div>

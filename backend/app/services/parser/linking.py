@@ -5,10 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.timezone import now_kyiv
 from app.models.models import Listing, SearchListing, SearchQuery, User
-from app.services.notifications.service import (
-    create_listing_notification,
-    monitor_telegram_delivery_done,
-)
+from app.services.notifications.service import notify_monitor_listing_after_link
 
 
 async def link_listing_to_search(
@@ -20,13 +17,16 @@ async def link_listing_to_search(
     user: User | None,
     max_notification_hours: float | None = None,
     mark_as_new: bool = True,
+    publish_immediately: bool = True,
 ) -> tuple[bool, bool]:
     """Returns (is_new_link, notification_sent).
 
     mark_as_new=False — baseline при збереженні моніторингу (авто з першого пошуку).
-    Авто нове для моніторингу → Telegram відправляється так само як UI показує «нове»,
-    без додаткової перевірки published_at (захист від старих авто реалізований через baseline).
+    publish_immediately=True — commit після нового звʼязку, щоб кабінет і Telegram
+    бачили одне й те саме одночасно (не чекати кінця циклу парсера).
     """
+    del max_notification_hours  # моніторинг: freshness вимкнено в notify_monitor_listing_after_link
+
     existing = await db.scalar(
         select(SearchListing).where(
             SearchListing.search_id == search.id,
@@ -36,40 +36,33 @@ async def link_listing_to_search(
     if existing:
         return False, False
 
-    db.add(
-        SearchListing(
-            search_id=search.id,
-            listing_id=listing_id,
-            is_new=mark_as_new,
-            first_seen_at=now_kyiv(),
-        )
+    sl = SearchListing(
+        search_id=search.id,
+        listing_id=listing_id,
+        is_new=mark_as_new,
+        first_seen_at=now_kyiv(),
     )
+    db.add(sl)
     if mark_as_new:
         search.new_count = (search.new_count or 0) + 1
     search.total_count = (search.total_count or 0) + 1
     search.last_checked_at = now_kyiv()
+    await db.flush()
 
     notification_sent = False
-    if mark_as_new and notify and user and user.telegram_connected:
+    if mark_as_new and notify and user and user.telegram_connected and user.telegram_id:
         listing = await db.get(Listing, listing_id)
         if listing:
-            notification = await create_listing_notification(
+            notification_sent = await notify_monitor_listing_after_link(
                 db,
                 user,
                 listing,
-                search=search,
-                max_published_hours=max_notification_hours,
-                skip_freshness_check=True,
+                search,
+                sl=sl,
             )
-            notification_sent = notification.sent_telegram
-            sl = await db.scalar(
-                select(SearchListing).where(
-                    SearchListing.search_id == search.id,
-                    SearchListing.listing_id == listing_id,
-                )
-            )
-            if sl and monitor_telegram_delivery_done(notification):
-                sl.notified_at = now_kyiv()
+
+    if mark_as_new and publish_immediately:
+        await db.commit()
 
     return True, notification_sent
 
@@ -102,6 +95,7 @@ async def seed_search_baseline(
             notify=False,
             user=None,
             mark_as_new=False,
+            publish_immediately=False,
         )
         if created:
             linked += 1

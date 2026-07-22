@@ -41,7 +41,7 @@ async def _deliver_monitor_telegram_for_searches(
         pending = await deliver_pending_monitor_telegram(
             db,
             search_ids=[s.id for s in searches],
-            limit=50,
+            limit=100,
         )
         if pending:
             log.append(f"  · Догонка Telegram: +{pending}")
@@ -131,7 +131,6 @@ async def _link_listings_to_searches(
                 listing_id=listing.id,
                 notify=do_notify,
                 user=user,
-                max_notification_hours=max_hours,
             )
             if is_new:
                 new_total += 1
@@ -409,6 +408,18 @@ async def run_parser_cycle(
                 except Exception as exc:
                     had_errors = True
                     log.append(f"  ✗ Група {group.key[:8]}…: {exc}")
+
+        try:
+            from app.services.notifications.service import deliver_pending_monitor_telegram
+
+            for _ in range(5):
+                extra = await deliver_pending_monitor_telegram(db, limit=100)
+                if not extra:
+                    break
+                total_notifications += extra
+                log.append(f"· Догонка Telegram (глобально): +{extra}")
+        except Exception:
+            logger.exception("Global pending monitor Telegram delivery failed")
 
         run.status = ParseRunStatus.partial if had_errors else ParseRunStatus.success
         run.filter_groups = groups_count

@@ -69,9 +69,17 @@ async def process_keyword_queue(service, *, limit: int = 8) -> int:
                     limit=min(per_channel, 100),
                 )
             async with AsyncSessionLocal() as db:
+                from app.services.parser.settings import get_parser_settings
+
+                parser_settings = await get_parser_settings()
+                do_notify = bool(parser_settings.get("notify_telegram", True))
                 for listing in listings:
                     item, _new, _sent, matched = await ingest_telegram_listing(
-                        db, listing, notify=False, link_searches=True
+                        db,
+                        listing,
+                        notify=do_notify,
+                        link_searches=True,
+                        parser_service=service,
                     )
                     if matched and not item.images:
                         await attach_photos_to_listing(db, service, item.id)
