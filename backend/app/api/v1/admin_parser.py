@@ -319,6 +319,8 @@ class TelethonSessionStatusOut(BaseModel):
     error: str | None = None
     error_code: str | None = None
     auth_step: str | None = None
+    session_note: str | None = None
+    worker_holds_session: bool = False
 
 
 class TelethonAuthCodeIn(BaseModel):

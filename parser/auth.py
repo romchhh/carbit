@@ -18,6 +18,7 @@ from telethon.errors import SessionPasswordNeededError
 from telethon.errors.rpcerrorlist import AuthKeyDuplicatedError, PhoneCodeInvalidError
 
 from parser.config import settings
+from parser.session_meta import clear_session_meta, write_session_meta
 from parser.telegram_client import build_client
 
 
@@ -56,6 +57,7 @@ async def authorize(*, reset: bool = False) -> None:
 
     if reset:
         removed = reset_session_files()
+        clear_session_meta()
         if removed:
             print("🗑️  Видалено файли сесії:")
             for p in removed:
@@ -103,6 +105,12 @@ async def authorize(*, reset: bool = False) -> None:
             print("✅ Вже авторизовано")
 
         me = await client.get_me()
+        write_session_meta(
+            user_id=me.id,
+            first_name=me.first_name or "",
+            username=me.username,
+            source="cli",
+        )
         username = f"@{me.username}" if me.username else "(без username)"
         print(f"👤 {me.first_name} {username}")
 

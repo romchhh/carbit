@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 PENDING_AUTH_KEY = "telethon:auth:pending"
 PENDING_AUTH_TTL = 600
+WORKER_SESSION_LOCK_SECONDS = 45
 
 
 def _mask_phone(phone: str) -> str:
@@ -53,6 +54,34 @@ def _session_paths() -> list[Path]:
     return out
 
 
+async def _worker_online() -> bool:
+    try:
+        from app.services.health import heartbeat_age_seconds
+
+        age = await heartbeat_age_seconds("telegram_worker")
+        return age is not None and age <= WORKER_SESSION_LOCK_SECONDS
+    except Exception:
+        return False
+
+
+async def _require_worker_stopped_for_auth() -> None:
+    if await _worker_online():
+        raise HTTPException(
+            409,
+            "telegram-worker тримає файл сесії. Спочатку: docker compose stop telegram-worker",
+        )
+
+
+def _status_from_meta(out: dict[str, Any], meta: dict[str, Any] | None, *, note: str | None = None) -> dict[str, Any]:
+    out["authorized"] = True
+    user = (meta or {}).get("user")
+    if isinstance(user, dict):
+        out["user"] = user
+    if note:
+        out["session_note"] = note
+    return out
+
+
 async def _load_pending() -> dict[str, Any] | None:
     redis = await get_redis()
     raw = await redis.get(PENDING_AUTH_KEY)
@@ -76,9 +105,38 @@ async def _clear_pending() -> None:
     await redis.delete(PENDING_AUTH_KEY)
 
 
+def _read_meta() -> dict[str, Any] | None:
+    ensure_parser_path()
+    from parser.session_meta import read_session_meta
+
+    return read_session_meta()
+
+
+def _write_meta_from_me(me, *, source: str = "admin") -> None:
+    ensure_parser_path()
+    from parser.session_meta import write_session_meta
+
+    write_session_meta(
+        user_id=me.id,
+        first_name=me.first_name or "",
+        username=me.username,
+        source=source,
+    )
+
+
+def _clear_meta() -> None:
+    ensure_parser_path()
+    from parser.session_meta import clear_session_meta
+
+    clear_session_meta()
+
+
 async def get_telethon_session_status() -> dict[str, Any]:
     ps = _parser_settings()
     session_file = Path(ps.session_file)
+    worker_up = await _worker_online()
+    meta = _read_meta()
+
     out: dict[str, Any] = {
         "telethon_configured": bool(app_settings.TELETHON_API_ID and app_settings.TELETHON_API_HASH),
         "phone_configured": bool(ps.phone or app_settings.TELETHON_NUMBER),
@@ -90,6 +148,8 @@ async def get_telethon_session_status() -> dict[str, Any]:
         "error": None,
         "error_code": None,
         "auth_step": None,
+        "session_note": None,
+        "worker_holds_session": worker_up,
     }
 
     pending = await _load_pending()
@@ -109,6 +169,18 @@ async def get_telethon_session_status() -> dict[str, Any]:
         out["error_code"] = "no_phone"
         return out
 
+    if worker_up and session_file.exists():
+        return _status_from_meta(
+            out,
+            meta,
+            note="Сесію використовує telegram-worker (це нормально).",
+        )
+
+    if session_file.exists() and meta and meta.get("authorized"):
+        out["authorized"] = True
+        out["user"] = meta.get("user")
+        return out
+
     from parser.telegram_client import build_client
     from telethon.errors.rpcerrorlist import AuthKeyDuplicatedError
 
@@ -117,6 +189,7 @@ async def get_telethon_session_status() -> dict[str, Any]:
         await client.connect()
         if await client.is_user_authorized():
             me = await client.get_me()
+            _write_meta_from_me(me, source="status_check")
             out["authorized"] = True
             out["user"] = {
                 "id": me.id,
@@ -125,14 +198,20 @@ async def get_telethon_session_status() -> dict[str, Any]:
             }
     except AuthKeyDuplicatedError:
         out["error"] = (
-            "Сесію зіпсовано (AuthKeyDuplicated): один .session одночасно з двох IP/процесів. "
-            "Зупиніть telegram-worker, скиньте сесію і увійдіть знову."
+            "Сесію зіпсовано (AuthKeyDuplicated). Зупиніть worker, скиньте сесію, увійдіть знову."
         )
         out["error_code"] = "auth_key_duplicated"
     except Exception as exc:
-        logger.exception("Telethon session check failed")
-        out["error"] = str(exc)[:300]
-        out["error_code"] = "connect_failed"
+        msg = str(exc)
+        if "locked" in msg.lower() and session_file.exists():
+            if meta and meta.get("authorized"):
+                return _status_from_meta(out, meta, note="Файл сесії зайнятий worker — показуємо збережений профіль.")
+            out["error"] = "Файл сесії зайнятий. Зупиніть telegram-worker для перевірки або входу."
+            out["error_code"] = "session_locked"
+        else:
+            logger.exception("Telethon session check failed")
+            out["error"] = msg[:300]
+            out["error_code"] = "connect_failed"
     finally:
         try:
             await client.disconnect()
@@ -143,16 +222,19 @@ async def get_telethon_session_status() -> dict[str, Any]:
 
 
 async def reset_telethon_session() -> dict[str, Any]:
+    await _require_worker_stopped_for_auth()
     removed: list[str] = []
     for path in _session_paths():
         if path.exists():
             path.unlink()
             removed.append(str(path))
+    _clear_meta()
     await _clear_pending()
     return {"removed": removed, "session_file": _parser_settings().session_file}
 
 
 async def send_telethon_login_code() -> dict[str, Any]:
+    await _require_worker_stopped_for_auth()
     ps = _parser_settings()
     phone = (ps.phone or app_settings.TELETHON_NUMBER or "").strip()
     if not phone:
@@ -166,6 +248,7 @@ async def send_telethon_login_code() -> dict[str, Any]:
         await client.connect()
         if await client.is_user_authorized():
             me = await client.get_me()
+            _write_meta_from_me(me, source="admin")
             await _clear_pending()
             return {
                 "status": "already_authorized",
@@ -202,6 +285,7 @@ async def send_telethon_login_code() -> dict[str, Any]:
 
 
 async def confirm_telethon_code(code: str) -> dict[str, Any]:
+    await _require_worker_stopped_for_auth()
     code = (code or "").strip().replace(" ", "")
     if not code or not code.isdigit():
         raise HTTPException(400, "Введіть код з SMS/Telegram (лише цифри)")
@@ -230,6 +314,7 @@ async def confirm_telethon_code(code: str) -> dict[str, Any]:
             raise HTTPException(400, "Невірний код. Спробуйте ще раз або надішліть новий код.") from exc
 
         me = await client.get_me()
+        _write_meta_from_me(me, source="admin")
         await _clear_pending()
         return {
             "status": "ok",
@@ -250,6 +335,7 @@ async def confirm_telethon_code(code: str) -> dict[str, Any]:
 
 
 async def confirm_telethon_password(password: str) -> dict[str, Any]:
+    await _require_worker_stopped_for_auth()
     password = (password or "").strip()
     if not password:
         raise HTTPException(400, "Введіть пароль двофакторної автентифікації")
@@ -271,6 +357,7 @@ async def confirm_telethon_password(password: str) -> dict[str, Any]:
             raise HTTPException(400, "Невірний пароль 2FA") from exc
 
         me = await client.get_me()
+        _write_meta_from_me(me, source="admin")
         await _clear_pending()
         return {
             "status": "ok",

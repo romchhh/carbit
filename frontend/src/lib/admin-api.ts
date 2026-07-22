@@ -251,6 +251,8 @@ export interface AdminTelethonSessionStatus {
   error: string | null;
   error_code: string | null;
   auth_step: string | null;
+  session_note?: string | null;
+  worker_holds_session?: boolean;
 }
 
 export interface AdminTelethonAuthResult {

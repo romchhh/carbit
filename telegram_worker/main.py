@@ -122,6 +122,18 @@ async def main() -> None:
     service = get_parser_service()
     await service.start()
     await beat("telegram_worker")
+    try:
+        me = await service.client.get_me()
+        from parser.session_meta import write_session_meta
+
+        write_session_meta(
+            user_id=me.id,
+            first_name=me.first_name or "",
+            username=me.username,
+            source="telegram_worker",
+        )
+    except Exception:
+        logger.exception("Failed to write Telethon session meta")
     logger.info("Telethon started, channels: %s", channels)
 
     bootstrapped: set[str] = set()

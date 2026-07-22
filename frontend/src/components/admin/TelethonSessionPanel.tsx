@@ -109,7 +109,13 @@ export function TelethonSessionPanel({ onMessage, workerOnline }: Props) {
             </div>
           </div>
 
-          {status.error && (
+          {status.session_note && status.authorized && (
+            <div className="rounded-xl border border-emerald/30 bg-emerald-light/30 px-3 py-2 text-[12px] text-emerald-dark">
+              {status.session_note}
+            </div>
+          )}
+
+          {status.error && !status.authorized && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800">
               {status.error}
             </div>
