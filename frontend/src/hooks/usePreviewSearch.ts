@@ -31,13 +31,12 @@ type PageResult = {
 };
 
 /**
- * Додає унікальні картки в кінець пулу без пересортування вже доданих.
- * Бекенд повертає сторінки з вже відсортованого пулу (newest → oldest),
- * тому достатньо просто дедублювати та дописати в кінець.
- * Пересортування повного пулу викликається лише при явній зміні сортування.
+ * Додає унікальні картки і сортує весь об'єднаний пул.
+ * AUTO.RIA IDs гідратуються постранично і не несуть дат у слотах,
+ * тому лише після отримання повних об'єктів можна правильно відсортувати по даті.
  */
-function mergePoolSorted(pool: Listing[], incoming: Listing[], _sortKey: SortOption): Listing[] {
-  return appendUniqueToPool(pool, incoming);
+function mergePoolSorted(pool: Listing[], incoming: Listing[], sortKey: SortOption): Listing[] {
+  return sortListingItems(appendUniqueToPool(pool, incoming), sortKey);
 }
 
 /** Пул: нові (з API) — в кінець, без дублів. */
@@ -281,8 +280,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         if (first.items.length >= SEARCH_FIRST_BATCH && first.total > SEARCH_FIRST_BATCH) {
           const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2);
           if (gen !== searchGen.current) return;
-          // Другий пакет — append нових в кінець без пересортування вже показаних
-          fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, second.items);
+          // Другий пакет — мержимо та пересортовуємо весь пул.
+          // AUTO.RIA IDs гідратуються постранично, тому новіші авто можуть бути на стор. 2.
+          fullPoolRef.current = mergePoolSorted(fullPoolRef.current, second.items, nextSort);
           const newCount = fullPoolRef.current.length;
           displayPoolRef.current = fullPoolRef.current.slice(0, newCount);
           displayCountRef.current = newCount;

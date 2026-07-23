@@ -135,14 +135,18 @@ async def _collect_ids_raw(
     base_params: dict,
     *,
     max_ids: int,
+    sort_newest: bool = False,
 ) -> tuple[list[str], int]:
     """Paginate AUTO.RIA search with given params, return (ids, api_total). No get_info calls."""
     all_ids: list[str] = []
     total = 0
     api_page = 0
 
+    # order_by=8 → сортування за датою публікації (найновіші спочатку) в AUTO.RIA API.
+    sort_patch: dict = {"order_by": 8} if sort_newest else {}
+
     while len(all_ids) < max_ids:
-        params = {**base_params, "page": api_page, "countpage": 50}
+        params = {**base_params, **sort_patch, "page": api_page, "countpage": 50}
         async with acquire_auto_ria_slot():
             data = await client.search(params)
 
@@ -249,6 +253,7 @@ async def collect_auto_ria_ids(
     filters: SearchFilters,
     *,
     max_ids: int = 500,
+    sort_by: str = "newest",
 ) -> tuple[list[str], int]:
     """Collect AUTO.RIA listing IDs without hydrating details. Much faster than full search.
 
@@ -261,6 +266,7 @@ async def collect_auto_ria_ids(
     except ValueError as exc:
         raise AutoRiaError(str(exc)) from exc
 
+    sort_newest = sort_by in ("newest", "published_desc")
     category = (filters.category or "all").strip().lower()
 
     if category == "all":
@@ -271,7 +277,7 @@ async def collect_auto_ria_ids(
         new_params = _build_new_search_params(base_params)
 
         (used_ids, used_total), (new_ids, new_total) = await asyncio.gather(
-            _collect_ids_raw(client, base_params, max_ids=half),
+            _collect_ids_raw(client, base_params, max_ids=half, sort_newest=sort_newest),
             _collect_new_ids_raw(client, new_params, max_ids=half),
         )
 
@@ -290,7 +296,7 @@ async def collect_auto_ria_ids(
         return combined, used_total + new_total
     else:
         # Category-specific: mapper already set correct searchType/custom
-        return await _collect_ids_raw(client, base_params, max_ids=max_ids)
+        return await _collect_ids_raw(client, base_params, max_ids=max_ids, sort_newest=sort_newest)
 
 
 async def hydrate_auto_ria_ids(

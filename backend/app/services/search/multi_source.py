@@ -906,7 +906,7 @@ async def build_live_search_pool(
     async def run_auto_ria():
         try:
             return await asyncio.wait_for(
-                collect_auto_ria_ids(filters, max_ids=max_ids),
+                collect_auto_ria_ids(filters, max_ids=max_ids, sort_by=sort_by),
                 timeout=AUTO_RIA_POOL_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
