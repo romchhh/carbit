@@ -358,6 +358,18 @@ async def run_parser_cycle(
                 log.append(f"Telegram ingest: {exc}")
                 logger.exception("Telegram channels cycle failed")
 
+        from app.models.models import User
+        from app.services.billing.plans import enforce_active_searches_quota
+
+        # Після кінця trial / downgrade — вимкнути зайві активні моніторинги.
+        active_user_ids = await db.scalars(
+            select(SearchQuery.user_id).where(SearchQuery.is_active.is_(True)).distinct()
+        )
+        for uid in active_user_ids.all():
+            owner = await db.get(User, uid)
+            if owner:
+                await enforce_active_searches_quota(db, owner)
+
         rows = await db.scalars(select(SearchQuery).where(SearchQuery.is_active.is_(True)))
         active = [(sq.id, sq.filters) for sq in rows.all()]
         searches_count = len(active)

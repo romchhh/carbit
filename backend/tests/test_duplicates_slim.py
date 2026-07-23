@@ -138,6 +138,29 @@ class DuplicatesTests(unittest.TestCase):
         self.assertEqual(len(items[0].alternate_sources), 1)
         self.assertEqual(items[0].alternate_sources[0].url, "https://olx.example/a")
 
+    def test_dedupe_same_telegram_post_different_listing_ids(self):
+        from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
+
+        ts = datetime(2026, 7, 20, tzinfo=KYIV_TZ)
+        a = _item(
+            id="telegram_testchannel_100",
+            source="telegram",
+            url="https://t.me/testchannel/100",
+            source_data={"channel": "testchannel", "message_id": 100, "photo_message_ids": [100, 101]},
+            published_at=ts,
+            found_at=ts,
+        )
+        b = _item(
+            id="telegram_TestChannel_100",
+            source="telegram",
+            url="https://t.me/testchannel/100",
+            source_data={"channel": "TestChannel", "message_id": 100, "photo_message_ids": [100, 101]},
+            published_at=ts,
+            found_at=ts,
+        )
+        out = dedupe_telegram_posts_in_pool([a, b])
+        self.assertEqual(len(out), 1)
+
     def test_mark_pool_prefers_auto_ria_and_links_olx(self):
         items = mark_duplicates_in_pool(
             [

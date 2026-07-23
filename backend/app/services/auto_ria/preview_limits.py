@@ -7,7 +7,7 @@ from app.core.redis import get_redis
 # Live search у кабінеті: історичний каталог за фільтрами, порціями по 20
 PREVIEW_MAX_PER_PAGE = 20
 PREVIEW_MAX_PAGE = 25
-PREVIEW_HOURLY_LIMIT = 40
+PREVIEW_HOURLY_LIMIT = 120
 PREVIEW_RATE_TTL_SECONDS = 3600
 
 BROWSE_MAX_PER_PAGE = 12

@@ -17,7 +17,11 @@ load_dotenv(ROOT / ".env")
 class Settings:
     api_id: int = int(os.getenv("TELETHON_API_ID") or os.getenv("TG_API_ID") or "0")
     api_hash: str = os.getenv("TELETHON_API_HASH") or os.getenv("TG_API_HASH") or ""
-    session_name: str = os.getenv("TELETHON_SESSION_NAME") or os.getenv("TG_SESSION_NAME") or "carbit_parser"
+    session_name: str = (
+        (os.getenv("TELETHON_SESSION_NAME") or os.getenv("TG_SESSION_NAME") or "carbit_parser")
+        .strip()
+        or "carbit_parser"
+    )
     phone: str = os.getenv("TELETHON_NUMBER") or os.getenv("TG_PHONE") or os.getenv("TELEGRAM_PHONE") or ""
 
     @property

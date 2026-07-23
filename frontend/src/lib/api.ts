@@ -193,7 +193,7 @@ export const users = {
 export const searches = {
   list: () => request<SearchQuery[]>("/searches"),
   get: (id: string) => request<SearchQuery>(`/searches/${id}`),
-  results: (id: string, page = 1, perPage = 20, sortBy = "price_asc") =>
+  results: (id: string, page = 1, perPage = 20, sortBy: SortOption = "newest") =>
     request<SearchLiveResults>(
       `/searches/${id}/results?page=${page}&per_page=${perPage}&sort_by=${sortBy}`,
     ),
@@ -274,7 +274,7 @@ export const listingSearch = {
     filters: BackendSearchFilters,
     page = 1,
     perPage = 20,
-    sortBy = "price_asc",
+    sortBy: SortOption = "newest",
     mode: AutoRiaSearchMode = "preview",
   ) =>
     cachedAutoRiaSearch(

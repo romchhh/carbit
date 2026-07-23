@@ -49,6 +49,130 @@ def listing_vin_for_dedup(item: ListingOut | Listing) -> str | None:
     return vin if is_valid_vin(vin) else None
 
 
+def _norm_telegram_channel(value: str | None) -> str:
+    return (value or "").strip().lstrip("@").lower()
+
+
+def _telegram_ids_from_listing_id(listing_id: str | None) -> tuple[str, int] | None:
+    lid = (listing_id or "").strip()
+    if not lid.startswith("telegram_"):
+        return None
+    body = lid.removeprefix("telegram_")
+    channel_part, _, msg_part = body.rpartition("_")
+    if not channel_part or not msg_part.isdigit():
+        return None
+    return _norm_telegram_channel(channel_part), int(msg_part)
+
+
+def _telegram_url_dedupe_key(url: str | None) -> str | None:
+    raw = (url or "").strip().rstrip("/")
+    if not raw:
+        return None
+    m = re.search(r"(?:https?://)?t\.me/([^/]+)/(\d+)", raw, re.IGNORECASE)
+    if not m:
+        return None
+    slug = m.group(1).lower()
+    if slug == "c":
+        return None
+    return f"tg:{_norm_telegram_channel(slug)}:{int(m.group(2))}"
+
+
+def telegram_post_dedupe_key(item: ListingOut | Listing) -> str | None:
+    """Один ключ на пост Telegram (канал + primary / album message id)."""
+    source = getattr(item, "source", None)
+    source_val = source.value if hasattr(source, "value") else str(source or "")
+    if source_val.lower() != "telegram":
+        return None
+
+    sd = getattr(item, "source_data", None) or {}
+    if not isinstance(sd, dict):
+        sd = {}
+
+    channel = _norm_telegram_channel(sd.get("channel"))
+    if not channel:
+        parsed = _telegram_ids_from_listing_id(getattr(item, "id", None))
+        if parsed:
+            channel = parsed[0]
+
+    message_ids: list[int] = []
+    for raw_ids in (sd.get("photo_message_ids"), sd.get("group_message_ids")):
+        if not isinstance(raw_ids, list):
+            continue
+        for raw in raw_ids:
+            try:
+                message_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+    if message_ids and channel:
+        return f"tg:{channel}:{min(message_ids)}"
+
+    if channel and sd.get("message_id") is not None:
+        try:
+            return f"tg:{channel}:{int(sd['message_id'])}"
+        except (TypeError, ValueError):
+            pass
+
+    parsed = _telegram_ids_from_listing_id(getattr(item, "id", None))
+    if parsed:
+        return f"tg:{parsed[0]}:{parsed[1]}"
+
+    url_key = _telegram_url_dedupe_key(getattr(item, "url", None))
+    if url_key:
+        return url_key
+    return None
+
+
+def _telegram_listing_rank(row: ListingOut) -> tuple[int, int, int]:
+    return (
+        len(row.images or []),
+        len((row.description or "").strip()),
+        len((row.title or "").strip()),
+    )
+
+
+def _prefer_telegram_listing(a: ListingOut, b: ListingOut) -> ListingOut:
+    """Яку картку лишити при дублі одного TG-поста."""
+    return a if _telegram_listing_rank(a) >= _telegram_listing_rank(b) else b
+
+
+def dedupe_telegram_posts_in_pool(items: list[ListingOut]) -> list[ListingOut]:
+    """Прибирає повтори одного Telegram-поста (різні listing.id / re-ingest)."""
+    if not items:
+        return []
+
+    best: dict[str, ListingOut] = {}
+    for item in items:
+        key = telegram_post_dedupe_key(item)
+        if not key:
+            continue
+        if key not in best:
+            best[key] = item
+        else:
+            best[key] = _prefer_telegram_listing(best[key], item)
+
+    out: list[ListingOut] = []
+    seen_ids: set[str] = set()
+    emitted_tg: set[str] = set()
+
+    for item in items:
+        key = telegram_post_dedupe_key(item)
+        if key:
+            if key in emitted_tg:
+                continue
+            emitted_tg.add(key)
+            row = best[key]
+            if row.id in seen_ids:
+                continue
+            seen_ids.add(row.id)
+            out.append(row)
+            continue
+        if item.id in seen_ids:
+            continue
+        seen_ids.add(item.id)
+        out.append(item)
+    return out
+
+
 def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:
     """Одне авто — лише при збігу валідного 17-символьного VIN."""
     vin_a = listing_vin_for_dedup(a)

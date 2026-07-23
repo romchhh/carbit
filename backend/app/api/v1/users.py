@@ -53,6 +53,10 @@ async def dashboard_stats(
     if not user:
         raise HTTPException(404, "User not found")
 
+    from app.services.billing.plans import enforce_active_searches_quota
+
+    await enforce_active_searches_quota(db, user)
+
     today_start = start_of_kyiv_day()
     yesterday_start = today_start - timedelta(days=1)
 

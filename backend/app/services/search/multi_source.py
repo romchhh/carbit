@@ -119,33 +119,39 @@ def _sorted_merge_slice(
     per_page: int,
     sort_by: str,
 ) -> tuple[list[ListingOut], int, int]:
-    """Зливає джерела: сортує всередині кожного, далі fair interleave (не global sort).
+    """Зливає джерела в один список і сортує глобально (newest / ціна / тощо).
 
-    Повертає (page_items, nav_total, market_total), де:
-    - nav_total  — кількість елементів у пулі (для пагінації, щоб «Показати ще» не крутилось в порожнечу)
-    - market_total — сума реальних API-total з усіх джерел (для відображення «Знайдено N»)
+    Повертає (page_items, nav_total, market_total).
     """
-    prepared: list[tuple[str, list[ListingOut]]] = []
     source_totals = 0
+    merged: list[ListingOut] = []
+    seen_ids: set[str] = set()
 
-    for source, result in batches:
+    for _source, result in batches:
         source_totals += result.total
-        items = sort_listings(list(result.items), sort_by)
-        if items:
-            prepared.append((source, items))
+        for item in result.items:
+            if item.id in seen_ids:
+                continue
+            seen_ids.add(item.id)
+            merged.append(item)
 
-    prepared.sort(key=lambda pair: _SOURCE_BLEND_ORDER.get(pair[0], 99))
+    from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
 
-    # Повний змішаний пул (до page*per_page), щоб пагінація лишалась збалансованою.
-    pool_limit = max(page, 1) * per_page
-    available = sum(len(items) for _, items in prepared)
-    merged_items = _interleave_by_source(prepared, limit=min(pool_limit, available))
+    merged = dedupe_telegram_posts_in_pool(merged)
+    seen_ids.clear()
+    unique: list[ListingOut] = []
+    for item in merged:
+        if item.id in seen_ids:
+            continue
+        seen_ids.add(item.id)
+        unique.append(item)
+    merged_items = sort_listings(unique, sort_by)
 
     start = (page - 1) * per_page
     end = start + per_page
     page_items = merged_items[start:end]
+
     pool_size = len(merged_items)
-    # nav_total — реальна межа пулу, щоб «Показати ще» не крутилось в порожнечу.
     if page_items and len(page_items) < per_page:
         nav_total = start + len(page_items)
     else:
@@ -979,7 +985,7 @@ async def build_live_search_pool(
     if errors and "auto_ria" in sources and len(sources) == 1:
         raise _pick_primary_error(errors)
 
-    from app.services.listings.duplicates import mark_duplicates_in_pool
+    from app.services.listings.duplicates import dedupe_telegram_posts_in_pool, mark_duplicates_in_pool
 
     from app.services.search.advanced_filters import filter_listings_by_advanced
 
@@ -988,7 +994,9 @@ async def build_live_search_pool(
         filters,
     )
     telegram_sorted = filter_listings_by_advanced(
-        mark_duplicates_in_pool(sort_listings(list(telegram_result.items), sort_by)),
+        dedupe_telegram_posts_in_pool(
+            mark_duplicates_in_pool(sort_listings(list(telegram_result.items), sort_by)),
+        ),
         filters,
     )
 

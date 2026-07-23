@@ -347,6 +347,10 @@ export function sortListings(items: SearchResult[], sort: SortOption): SearchRes
       return sorted.sort((a, b) => b.year - a.year);
     case "mileage_asc":
       return sorted.sort((a, b) => a.mileage - b.mileage);
+    case "newest":
+      return sorted.sort(
+        (a, b) => Date.parse(b.published_at || "") - Date.parse(a.published_at || ""),
+      );
     default:
       return sorted;
   }
@@ -358,8 +362,11 @@ export function sortListingItems(items: Listing[], sort: SortOption): Listing[] 
   const priceUah = (item: Listing) =>
     toUah(item.price, resolveListingCurrency(item.currency));
   const publishedMs = (item: Listing) => {
-    const t = Date.parse(item.published_at || "");
-    return Number.isFinite(t) ? t : 0;
+    for (const raw of [item.published_at, item.found_at]) {
+      const t = Date.parse(raw || "");
+      if (Number.isFinite(t)) return t;
+    }
+    return 0;
   };
 
   switch (sort) {

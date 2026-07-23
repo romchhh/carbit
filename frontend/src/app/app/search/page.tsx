@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
+import { RecentSearchesSection } from "@/components/search/RecentSearchesSection";
 import { useAuth } from "@/contexts/AuthProvider";
 import { usePreviewSearch } from "@/hooks/usePreviewSearch";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
@@ -15,6 +16,10 @@ import {
   clearSearchDraft,
   peekSearchDraft,
 } from "@/lib/search-draft";
+import {
+  saveRecentSearch,
+  type RecentSearchEntry,
+} from "@/lib/recent-searches";
 import type { SearchQuery } from "@/types/api";
 
 export default function SearchPage() {
@@ -70,14 +75,27 @@ export default function SearchPage() {
 
     changeFreshness(draft.freshness);
     clearSearchDraft();
+    saveRecentSearch(draft.filters, draft.freshness);
     void runSearch(draft.filters, draft.freshness);
   }, [initialized, authLoading, user, runSearch, changeFreshness]);
 
   const handleSearch = () => {
     clearSaveMessages();
     clearError();
+    saveRecentSearch(filters, freshness);
     void runSearch(filters);
   };
+
+  const handleRecentSelect = useCallback(
+    (entry: RecentSearchEntry) => {
+      clearSaveMessages();
+      clearError();
+      setFilters({ ...entry.filters });
+      changeFreshness(entry.freshness);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [changeFreshness, clearError, clearSaveMessages, setFilters],
+  );
 
   const handleReset = () => {
     clearSaveMessages();
@@ -158,6 +176,8 @@ export default function SearchPage() {
         onFreshnessChange={changeFreshness}
         onLoadMore={loadMore}
       />
+
+      <RecentSearchesSection onSelect={handleRecentSelect} />
     </div>
   );
 }

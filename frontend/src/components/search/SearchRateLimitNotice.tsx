@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { IconClock } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -76,30 +77,44 @@ export function SearchRateLimitNotice({
     <div
       role="status"
       className={cn(
-        "rounded-xl border border-border/80 bg-surface/70 px-3.5 py-3 text-[13px] leading-relaxed text-muted",
+        "flex gap-3 rounded-2xl border border-amber-300/80 bg-amber-50 px-3.5 py-3.5 text-[13px] leading-relaxed shadow-[0_1px_0_rgba(245,158,11,0.12)] sm:px-4",
         className,
       )}
     >
-      <p className="font-medium text-ink/80">
-        {message?.trim() || "Ліміт пошуків на годину вичерпано."}
-      </p>
-      {labels ? (
-        <p className="mt-1">
-          Спробувати знову можна {labels.relative}
-          <span className="text-ink/55"> · близько {labels.absolute}</span>
+      <span
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm"
+        aria-hidden
+      >
+        <span className="text-[18px] leading-none">⏳</span>
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-bold text-amber-950">
+          {message?.trim() || "Ліміт пошуків на годину вичерпано."}
         </p>
-      ) : (
-        <p className="mt-1">Ліміт уже скинувся — можна шукати знову.</p>
-      )}
-      <p className="mt-2">
-        На платному тарифі ліміти вищі.{" "}
-        <Link
-          href="/app/billing"
-          className="font-semibold text-ink/70 underline decoration-border underline-offset-2 transition-colors hover:text-ink"
-        >
-          Оформити підписку
-        </Link>
-      </p>
+        {labels ? (
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-amber-900/80">
+            <IconClock size={14} className="shrink-0 text-amber-700" />
+            <span>
+              Спробувати знову можна{" "}
+              <strong className="font-semibold text-amber-950">{labels.relative}</strong>
+              <span className="text-amber-800/70"> · близько {labels.absolute}</span>
+            </span>
+          </p>
+        ) : (
+          <p className="mt-1.5 text-amber-900/80">
+            Ліміт уже скинувся — можна шукати знову.
+          </p>
+        )}
+        <p className="mt-2.5 text-amber-900/75">
+          На платному тарифі ліміти вищі.{" "}
+          <Link
+            href="/app/billing"
+            className="font-bold text-amber-950 underline decoration-amber-400/70 underline-offset-2 transition-colors hover:text-amber-800"
+          >
+            Оформити підписку →
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

@@ -38,6 +38,11 @@ async def list_searches(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
+    user = await _get_user(user_id, db)
+    from app.services.billing.plans import enforce_active_searches_quota
+
+    await enforce_active_searches_quota(db, user)
+
     result = await db.scalars(
         select(SearchQuery).where(SearchQuery.user_id == user_id).order_by(SearchQuery.created_at.desc())
     )
@@ -151,6 +156,9 @@ async def create_search(
     db: AsyncSession = Depends(get_db),
 ):
     user = await _get_user(user_id, db)
+    from app.services.billing.plans import enforce_active_searches_quota
+
+    await enforce_active_searches_quota(db, user)
     active_count = await db.scalar(
         select(func.count())
         .select_from(SearchQuery)

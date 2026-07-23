@@ -30,7 +30,12 @@ type PageResult = {
   from_cache?: boolean;
 };
 
-/** Пул: нові (з API) — в кінець, без дублів, без пересортування. */
+/** Додає унікальні картки і тримає обране сортування всього пулу. */
+function mergePoolSorted(pool: Listing[], incoming: Listing[], sortKey: SortOption): Listing[] {
+  return sortListingItems(appendUniqueToPool(pool, incoming), sortKey);
+}
+
+/** Пул: нові (з API) — в кінець, без дублів. */
 function appendUniqueToPool(pool: Listing[], incoming: Listing[]): Listing[] {
   if (incoming.length === 0) return pool;
   const seen = new Set(pool.map(item => item.id));
@@ -144,19 +149,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
    * Ніколи не пересортовуємо вже показані картки.
    */
   const applyDisplaySlice = useCallback((count: number) => {
-    const current = displayPoolRef.current;
     const full = fullPoolRef.current;
-
-    // Нові, яких ще не має в displayPool (за порядком з fullPool)
-    const displayIds = new Set(current.map(i => i.id));
-    const additions: Listing[] = [];
-    for (const item of full) {
-      if (!displayIds.has(item.id)) additions.push(item);
-    }
-
-    const merged = [...current, ...additions];
-    const clamped = Math.min(Math.max(count, 0), merged.length);
-    displayPoolRef.current = merged.slice(0, clamped);
+    const clamped = Math.min(Math.max(count, 0), full.length);
+    displayPoolRef.current = full.slice(0, clamped);
     displayCountRef.current = clamped;
     setResults([...displayPoolRef.current]);
     setPage(Math.max(1, Math.ceil(clamped / SEARCH_PAGE_SIZE)));
@@ -229,7 +224,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         ) {
           const data = await searchSlice(nextFilters, apiSort, nextFreshness, apiPage);
           if (gen !== searchGen.current) return;
-          fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, data.items);
+          fullPoolRef.current = mergePoolSorted(fullPoolRef.current, data.items, apiSort);
           if (data.items.length < SEARCH_FIRST_BATCH) break;
           apiPage += 1;
         }
@@ -281,9 +276,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2);
           if (gen !== searchGen.current) return;
           // Другий пакет — append нових в кінець fullPool і displayPool
-          fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, second.items);
+          fullPoolRef.current = mergePoolSorted(fullPoolRef.current, second.items, nextSort);
           const newCount = fullPoolRef.current.length;
-          displayPoolRef.current = [...fullPoolRef.current];
+          displayPoolRef.current = fullPoolRef.current.slice(0, newCount);
           displayCountRef.current = newCount;
           startTransition(() => {
             setResults([...displayPoolRef.current]);
@@ -338,7 +333,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         const data = await searchSlice(nextFilters, apiSort, nextFreshness, apiPage);
         if (gen !== searchGen.current) return;
         lastMeta = data;
-        fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, data.items);
+        fullPoolRef.current = mergePoolSorted(fullPoolRef.current, data.items, apiSort);
         if (data.items.length < SEARCH_FIRST_BATCH) break;
         apiPage += 1;
       }

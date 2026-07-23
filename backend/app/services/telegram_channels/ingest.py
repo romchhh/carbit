@@ -258,7 +258,9 @@ async def _telegram_listings_matching_filters(
             matched.append(item)
             if not (item.images or []):
                 enqueue_listing_photos(item.id)
-    return matched
+    from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
+
+    return dedupe_telegram_posts_in_pool(matched)
 
 
 async def search_telegram_listings(

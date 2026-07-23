@@ -109,6 +109,12 @@ YEAR_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Рік у даті «19.07.2026» / «01/12/2020» — не рік авто.
+_CALENDAR_DATE_YEAR_RE = re.compile(
+    r"\d{1,2}[./]\d{1,2}[./](?P<year>(?:19[5-9]\d|20[0-3]\d))",
+    re.IGNORECASE,
+)
+
 # ціна: $12 000, 12000$, 12 000 usd, 350000 грн, 12000 у.е., €9500, MMR: $7,350
 PRICE_RE = re.compile(
     r"(?:"
@@ -394,9 +400,16 @@ def _find_brand_model(text_low: str, original_text: str):
     return None, None, None
 
 
+def _calendar_date_year_starts(text: str) -> frozenset[int]:
+    return frozenset(m.start("year") for m in _CALENDAR_DATE_YEAR_RE.finditer(text))
+
+
 def _find_year(text: str, brand_pos_hint: Optional[int] = None) -> Optional[int]:
+    date_year_starts = _calendar_date_year_starts(text)
     candidates = []
     for m in YEAR_RE.finditer(text):
+        if m.start() in date_year_starts:
+            continue
         val = int(m.group(1).replace(" ", ""))
         if 1950 <= val <= CURRENT_YEAR + 1:
             candidates.append((m.start(), val))

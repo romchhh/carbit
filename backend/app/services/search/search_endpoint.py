@@ -35,7 +35,7 @@ async def _safe_rate_limits(*, user_id: str, mode: str, page: int) -> None:
     try:
         await enforce_rate_limit(
             key=f"live-search:{user_id}",
-            limit=60,
+            limit=180,
             window_seconds=3600,
             detail="Ліміт пошуків на годину вичерпано.",
             code="search_rate_limit",

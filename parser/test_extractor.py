@@ -189,6 +189,24 @@ W1NWH5AB1SX014976
         listing = _extract("Toyota Camry 2018 9000$\nWBA8E9G50JNU12345\nOfficial import")
         self.assertEqual(listing.condition_flags.get("vin"), "WBA8E9G50JNU12345")
 
+    def test_ford_fusion_arrival_date_not_model_year(self):
+        text = """📍Прибула в Одесу — 19.07.2026
+
+🔥 Ford Fusion SE 2020
+
+✔️ Двигун 1.5 л ✔️ Пробіг — 140 000 км ✔️ Авто заводиться та їде
+
+💰 Ціна з доставкою та розмитненням — 7800$
+
+098-904-36-87"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Ford")
+        self.assertEqual(listing.year, 2020)
+        self.assertEqual(listing.price_amount, 7800)
+        self.assertEqual(listing.mileage_km, 140000)
+        self.assertEqual(listing.location_city, "Одеса")
+        self.assertTrue(is_valid_car_listing(listing))
+
 
 if __name__ == "__main__":
     unittest.main()

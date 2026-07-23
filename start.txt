@@ -80,6 +80,8 @@ TELEGRAM_ENABLED=true
 TELETHON_API_ID=...
 TELETHON_API_HASH=...
 TELETHON_NUMBER=+380...
+# Різна назва локально і на VPS → різні файли database/<name>.session
+TELETHON_SESSION_NAME=carbit_parser
 # Канали для парсингу — в адмінці /admin/channels (не в .env)
 ```
 
@@ -104,11 +106,12 @@ mkdir -p database media
 
 ```bash
 # один раз — локально або на сервері з Python
-python -m parser.auth
-# файл має з’явитись: database/carbit_parser.session
+python auth.py
+# файл: database/<TELETHON_SESSION_NAME>.session
+# (локально й на VPS — різні TELETHON_SESSION_NAME у .env)
 ```
 
-Скопіюй `carbit_parser.session` на сервер у `database/`, якщо авторизувався локально.
+Авторизуйся окремо локально і на VPS (`python auth.py` / адмінка). Не копіюй один `.session` між машинами, якщо обидві мають бути онлайн одночасно.
 
 ---
 
@@ -248,7 +251,9 @@ docker compose start backend bot worker telegram-worker
 
 ## 12. Telethon-сесія (парсер каналів)
 
-Файл: `database/carbit_parser.session` (volume `./database` у Docker).
+Файл: `database/<TELETHON_SESSION_NAME>.session` (за замовчуванням `carbit_parser.session`; volume `./database` у Docker).
+
+Локально й на сервері тримайте **різні** `TELETHON_SESSION_NAME` у `.env`, щоб не ділити один AuthKey.
 
 **Адмінка (рекомендовано):** `/admin/channels` → блок «Telethon-сесія» → зупинити worker → «Скинути сесію» → «Надіслати код» → ввести код (і 2FA за потреби) → `docker compose up -d telegram-worker`.
 

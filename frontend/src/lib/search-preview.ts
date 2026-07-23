@@ -1,7 +1,7 @@
 export const SEARCH_PAGE_SIZE = 10;
 /** Перший запит — щоб показати картки, щойно є 5 результатів. */
 export const SEARCH_FIRST_BATCH = 5;
-export const SEARCH_HOURLY_LIMIT = 40;
+export const SEARCH_HOURLY_LIMIT = 120;
 export const SEARCH_NEW_WITHIN_DAYS = 7;
 
 /** @deprecated Use SEARCH_PAGE_SIZE */

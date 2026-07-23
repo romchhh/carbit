@@ -310,6 +310,10 @@ async def me(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    from app.services.billing.plans import enforce_active_searches_quota
+
+    await enforce_active_searches_quota(db, user)
+
     if user.telegram_connected and user.telegram_id:
         await sync_telegram_avatar(user)
         await db.flush()

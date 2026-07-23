@@ -48,7 +48,7 @@ class LiveSearchPoolConfigTests(unittest.TestCase):
         self.assertGreater(multi_source.AUTO_RIA_POOL_TIMEOUT_SECONDS, 0)
         self.assertGreater(multi_source.OLX_SEARCH_TIMEOUT_SECONDS, 0)
 
-    def test_sorted_merge_interleaves_sources(self):
+    def test_sorted_merge_newest_global_order(self):
         batches = [
             (
                 "auto_ria",
@@ -81,19 +81,16 @@ class LiveSearchPoolConfigTests(unittest.TestCase):
                 ),
             ),
         ]
-        page_items, _total = multi_source._sorted_merge_slice(
+        page_items, nav_total, _market = multi_source._sorted_merge_slice(
             batches,
             page=1,
             per_page=30,
             sort_by="newest",
         )
-        sources = [item.source for item in page_items]
-        self.assertGreaterEqual(sources.count("olx"), 8)
-        self.assertGreaterEqual(sources.count("telegram"), 8)
-        self.assertGreaterEqual(sources.count("auto_ria"), 8)
-        # Перші картки — не суцільний AUTO.RIA
-        self.assertNotEqual(sources[:6], ["auto_ria"] * 6)
-        self.assertEqual(sources[0], "olx")
+        self.assertEqual(page_items[0].id, "a0")
+        published = [item.published_at for item in page_items]
+        self.assertEqual(published, sorted(published, reverse=True))
+        self.assertGreaterEqual(nav_total, len(page_items))
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ PLANS: dict[str, dict] = {
         "searches_limit": 1,
         "accounts_limit": 1,
         "requests_month": 1_000,
-        "requests_hour": 30,
+        "requests_hour": 90,
         "price_uah": 0,
         "period_days": 7,
         "features": [
@@ -27,7 +27,7 @@ PLANS: dict[str, dict] = {
         "searches_limit": 10,
         "accounts_limit": 1,
         "requests_month": 50_000,
-        "requests_hour": 2_000,
+        "requests_hour": 6_000,
         "price_uah": 390,
         "period_days": 30,
         "features": [
@@ -45,7 +45,7 @@ PLANS: dict[str, dict] = {
         "searches_limit": 30,
         "accounts_limit": 3,
         "requests_month": 150_000,
-        "requests_hour": 5_000,
+        "requests_hour": 15_000,
         "price_uah": 790,
         "period_days": 30,
         "features": [
@@ -63,7 +63,7 @@ PLANS: dict[str, dict] = {
         "searches_limit": 100,
         "accounts_limit": 5,
         "requests_month": 500_000,
-        "requests_hour": 10_000,
+        "requests_hour": 30_000,
         "price_uah": 1_790,
         "period_days": 30,
         "features": [
@@ -94,6 +94,35 @@ def effective_searches_limit(user) -> int:
     if getattr(user, "is_trial_active", False) and user.plan.value == "free":
         return get_plan(TRIAL_PLAN_ID)["searches_limit"]
     return get_plan(user.plan.value)["searches_limit"]
+
+
+async def enforce_active_searches_quota(db, user) -> int:
+    """Після кінця trial / downgrade — лишає лише N найстаріших активних моніторингів.
+
+    Повертає кількість призупинених. Без цього ліміт у UI падає до 1,
+    а зайві моніторинги з пробного періоду лишаються активними.
+    """
+    from sqlalchemy import select
+
+    from app.models.models import SearchQuery
+
+    limit = max(0, int(effective_searches_limit(user)))
+    rows = await db.scalars(
+        select(SearchQuery)
+        .where(SearchQuery.user_id == user.id, SearchQuery.is_active.is_(True))
+        .order_by(SearchQuery.created_at.asc())
+    )
+    active = list(rows.all())
+    if len(active) <= limit:
+        return 0
+
+    paused = 0
+    for sq in active[limit:]:
+        sq.is_active = False
+        paused += 1
+    if paused:
+        await db.flush()
+    return paused
 
 
 def enforce_plan_expiry(user) -> bool:
