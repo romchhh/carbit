@@ -790,6 +790,108 @@ async def search_listings(
 # Slot-based pool builder — lazy AUTO.RIA hydration
 # ---------------------------------------------------------------------------
 
+def _listing_to_slot(item: ListingOut) -> dict:
+    """ListingOut → slot для live-pool (AR — stub, OLX/Telegram — повний об'єкт)."""
+    lid = item.id or ""
+    src = (item.source or "").strip().lower()
+    if src in ("auto_ria", "autoria", "auto.ria") or lid.startswith(("auto_ria_", "new_auto_ria_")):
+        if lid.startswith("new_auto_ria_"):
+            return {"s": "n", "i": lid.removeprefix("new_auto_ria_")}
+        return {"s": "r", "i": lid.removeprefix("auto_ria_")}
+    if src == "telegram" or lid.startswith("telegram_"):
+        return {"s": "t", "d": item.model_dump(mode="json")}
+    return {"s": "o", "d": item.model_dump(mode="json")}
+
+
+async def _build_globally_sorted_slots(
+    *,
+    auto_ria_ids: list[str],
+    olx_items: list[ListingOut],
+    telegram_items: list[ListingOut],
+    limit: int,
+    sort_by: str,
+) -> list[dict]:
+    """Глобальне сортування по даті/ціні тощо між усіма джерелами.
+
+    AUTO.RIA IDs гідруємо (з Redis-кешем), щоб знати published_at, потім
+    сортуємо разом з OLX/Telegram. У пул кладемо stubs у вже правильному порядку.
+    """
+    from app.services.listings.duplicates import dedupe_telegram_posts_in_pool, mark_duplicates_in_pool
+    from app.services.search.pool_cache import (
+        _batch_hydrate_auto_ria,
+        _batch_hydrate_new_auto_ria,
+    )
+
+    # Достатньо для перших сторінок; решту AR допишемо в кінці в API-порядку.
+    hydrate_cap = min(max(limit, 0), 200)
+    used_ids = [aid for aid in auto_ria_ids if not aid.startswith("n:")][:hydrate_cap]
+    new_budget = max(0, hydrate_cap - len(used_ids))
+    new_ids = [aid[2:] for aid in auto_ria_ids if aid.startswith("n:")][:new_budget]
+
+    try:
+        hydrated_used, hydrated_new = await asyncio.wait_for(
+            asyncio.gather(
+                _batch_hydrate_auto_ria(used_ids),
+                _batch_hydrate_new_auto_ria(new_ids),
+            ),
+            timeout=45.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("AR hydrate-for-sort timed out; falling back to interleave")
+        return _build_interleaved_slots(
+            auto_ria_ids=auto_ria_ids,
+            olx_items=olx_items,
+            telegram_items=telegram_items,
+            limit=limit,
+            sort_by=sort_by,
+        )
+    except Exception:
+        logger.exception("AR hydrate-for-sort failed; falling back to interleave")
+        return _build_interleaved_slots(
+            auto_ria_ids=auto_ria_ids,
+            olx_items=olx_items,
+            telegram_items=telegram_items,
+            limit=limit,
+            sort_by=sort_by,
+        )
+
+    combined: list[ListingOut] = list(olx_items) + list(telegram_items)
+    combined.extend(hydrated_used.values())
+    combined.extend(hydrated_new.values())
+    combined = dedupe_telegram_posts_in_pool(mark_duplicates_in_pool(combined))
+
+    seen: set[str] = set()
+    unique: list[ListingOut] = []
+    for item in combined:
+        if not item.id or item.id in seen:
+            continue
+        seen.add(item.id)
+        unique.append(item)
+
+    sorted_items = sort_listings(unique, sort_by)
+    hydrated_raw = set(hydrated_used) | set(hydrated_new)
+
+    slots: list[dict] = []
+    for item in sorted_items:
+        if len(slots) >= limit:
+            break
+        slots.append(_listing_to_slot(item))
+
+    # AR без дати (гідрація не вдалась) — в кінець, у порядку API.
+    for aid in auto_ria_ids:
+        if len(slots) >= limit:
+            break
+        raw = aid[2:] if aid.startswith("n:") else aid
+        if raw in hydrated_raw:
+            continue
+        if aid.startswith("n:"):
+            slots.append({"s": "n", "i": raw})
+        else:
+            slots.append({"s": "r", "i": raw})
+
+    return slots[:limit]
+
+
 def _make_ar_slots(auto_ria_ids: list[str]) -> list[dict]:
     slots = []
     for aid in auto_ria_ids:
@@ -808,19 +910,9 @@ def _build_interleaved_slots(
     limit: int,
     sort_by: str = "newest",
 ) -> list[dict]:
-    """Build slot list for the live-search pool.
-
-    For "newest" (and other date/metric sorts): merge OLX+Telegram together
-    by sort order, then interleave AUTO.RIA stubs proportionally.
-    AUTO.RIA IDs are already sorted by the API (newest first), so their
-    relative order is preserved.
-
-    AUTO.RIA entries: {"s":"r"/"n","i":"<id>"} — hydrated on demand.
-    OLX/Telegram entries: {"s":"o"/"t","d":{...}} — ready to use.
-    """
+    """Fallback: round-robin між джерелами (коли гідрація AR недоступна)."""
     ar_slots = _make_ar_slots(auto_ria_ids)
 
-    # Merge OLX + Telegram into one sorted list (both are already sorted by sort_by).
     merged_ot = sort_listings(list(olx_items) + list(telegram_items), sort_by)
     ot_slots: list[dict] = []
     for item in merged_ot:
@@ -832,13 +924,9 @@ def _build_interleaved_slots(
     if not ot_slots:
         return ar_slots[:limit]
 
-    # Interleave AUTO.RIA stubs proportionally across the OLX+Telegram stream.
-    # Every `step` OLX+Telegram slots, insert one AUTO.RIA stub.
-    step = max(1, len(ot_slots) // max(len(ar_slots), 1))
-    slots: list[dict] = []
     seen_ids: set[str] = set()
-    ot_idx = 0
-    ar_idx = 0
+    slots: list[dict] = []
+    queues = [list(ot_slots), list(ar_slots)]
 
     def _add(slot: dict) -> bool:
         sid = slot.get("i") or (slot.get("d") or {}).get("id", "")
@@ -849,28 +937,17 @@ def _build_interleaved_slots(
         slots.append(slot)
         return True
 
-    pos = 0  # counts OLX+Telegram slots placed so far
-    while len(slots) < limit and (ot_idx < len(ot_slots) or ar_idx < len(ar_slots)):
-        # Insert one AUTO.RIA stub every `step` OLX+Telegram items
-        if ar_idx < len(ar_slots) and pos > 0 and pos % step == 0:
-            _add(ar_slots[ar_idx])
-            ar_idx += 1
-            continue
-
-        if ot_idx < len(ot_slots):
-            if _add(ot_slots[ot_idx]):
-                pos += 1
-            ot_idx += 1
-        elif ar_idx < len(ar_slots):
-            _add(ar_slots[ar_idx])
-            ar_idx += 1
-        else:
+    while len(slots) < limit and any(queues):
+        progressed = False
+        for q in queues:
+            if len(slots) >= limit:
+                break
+            while q:
+                if _add(q.pop(0)):
+                    progressed = True
+                    break
+        if not progressed:
             break
-
-    # Append remaining AUTO.RIA stubs at the end if any
-    while len(slots) < limit and ar_idx < len(ar_slots):
-        _add(ar_slots[ar_idx])
-        ar_idx += 1
 
     return slots
 
@@ -1023,13 +1100,34 @@ async def build_live_search_pool(
         filters,
     )
 
-    slots = _build_interleaved_slots(
-        auto_ria_ids=auto_ria_ids,
-        olx_items=olx_sorted,
-        telegram_items=telegram_sorted,
-        limit=POOL_LIMIT,
-        sort_by=sort_by,
-    )
+    # Глобальне сортування по даті між джерелами (не round-robin по source).
+    if auto_ria_ids and (olx_sorted or telegram_sorted):
+        slots = await _build_globally_sorted_slots(
+            auto_ria_ids=auto_ria_ids,
+            olx_items=olx_sorted,
+            telegram_items=telegram_sorted,
+            limit=POOL_LIMIT,
+            sort_by=sort_by,
+        )
+    elif auto_ria_ids and sort_by in ("newest", "published_desc"):
+        # Лише AUTO.RIA + newest: API вже віддав IDs від нових до старих (order_by=7).
+        slots = _make_ar_slots(auto_ria_ids)[:POOL_LIMIT]
+    elif auto_ria_ids:
+        slots = await _build_globally_sorted_slots(
+            auto_ria_ids=auto_ria_ids,
+            olx_items=[],
+            telegram_items=[],
+            limit=POOL_LIMIT,
+            sort_by=sort_by,
+        )
+    else:
+        slots = _build_interleaved_slots(
+            auto_ria_ids=[],
+            olx_items=olx_sorted,
+            telegram_items=telegram_sorted,
+            limit=POOL_LIMIT,
+            sort_by=sort_by,
+        )
 
     nav_total = len(slots)
     market_total = auto_ria_market_total + olx_result.total + telegram_result.total

@@ -31,15 +31,9 @@ type PageResult = {
 };
 
 /**
- * Додає унікальні картки і сортує весь об'єднаний пул.
- * AUTO.RIA IDs гідратуються постранично і не несуть дат у слотах,
- * тому лише після отримання повних об'єктів можна правильно відсортувати по даті.
+ * Додає унікальні картки в кінець пулу (порядок API / попереднього сортування).
+ * Повний re-sort робимо лише при першому показі та при явній зміні сортування.
  */
-function mergePoolSorted(pool: Listing[], incoming: Listing[], sortKey: SortOption): Listing[] {
-  return sortListingItems(appendUniqueToPool(pool, incoming), sortKey);
-}
-
-/** Пул: нові (з API) — в кінець, без дублів. */
 function appendUniqueToPool(pool: Listing[], incoming: Listing[]): Listing[] {
   if (incoming.length === 0) return pool;
   const seen = new Set(pool.map(item => item.id));
@@ -50,6 +44,20 @@ function appendUniqueToPool(pool: Listing[], incoming: Listing[]): Listing[] {
     appended.push(item);
   }
   return appended;
+}
+
+/** Збільшити display: залишити вже показані картки, дописати невідомі з fullPool. */
+function growDisplayStable(shown: Listing[], full: Listing[], targetCount: number): Listing[] {
+  if (targetCount <= shown.length) return shown.slice(0, Math.max(0, targetCount));
+  const ids = new Set(shown.map(item => item.id));
+  const next = [...shown];
+  for (const item of full) {
+    if (next.length >= targetCount) break;
+    if (ids.has(item.id)) continue;
+    next.push(item);
+    ids.add(item.id);
+  }
+  return next;
 }
 
 export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAULT_FILTERS }) {
@@ -86,6 +94,12 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const displayCountRef = useRef(0);
   const poolApiSortRef = useRef<SortOption>("newest");
   const hydratingPoolRef = useRef(false);
+  /**
+   * Остання завантажена сторінка API.
+   * Використовуємо для nextPage замість розрахунку по розміру пулу,
+   * бо деякі AUTO.RIA стаби можуть не гідруватись → пул менший за очікуваний.
+   */
+  const lastApiPageRef = useRef(0);
   const lastSyncedPreferredCurrency = useRef<string | null>(null);
 
   useEffect(() => {
@@ -148,17 +162,22 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   );
 
   /**
-   * Показати count карток із displayPoolRef.
-   * Якщо count > displayPool — домальовуємо з fullPool (у порядку отримання).
-   * Ніколи не пересортовуємо вже показані картки.
+   * Показати count карток.
+   * При збільшенні — не чіпаємо вже показані, лише дописуємо нові з кінця пулу.
+   * При зменшенні / першому показі — беремо зріз з початку fullPool.
    */
   const applyDisplaySlice = useCallback((count: number) => {
     const full = fullPoolRef.current;
     const clamped = Math.min(Math.max(count, 0), full.length);
-    displayPoolRef.current = full.slice(0, clamped);
-    displayCountRef.current = clamped;
+    const shown = displayPoolRef.current;
+    if (clamped > shown.length && shown.length > 0) {
+      displayPoolRef.current = growDisplayStable(shown, full, clamped);
+    } else {
+      displayPoolRef.current = full.slice(0, clamped);
+    }
+    displayCountRef.current = displayPoolRef.current.length;
     setResults([...displayPoolRef.current]);
-    setPage(Math.max(1, Math.ceil(clamped / SEARCH_PAGE_SIZE)));
+    setPage(Math.max(1, Math.ceil(displayCountRef.current / SEARCH_PAGE_SIZE)));
   }, []);
 
   /**
@@ -167,6 +186,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
    */
   const applySortedView = useCallback((sortKey: SortOption, count: number) => {
     const sorted = sortListingItems(fullPoolRef.current, sortKey);
+    fullPoolRef.current = sorted;
     const clamped = Math.min(Math.max(count, 0), sorted.length);
     displayPoolRef.current = sorted.slice(0, clamped);
     displayCountRef.current = clamped;
@@ -218,19 +238,32 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       hydratingPoolRef.current = true;
       const apiSort = poolApiSortRef.current;
       try {
-        let apiPage = Math.floor(fullPoolRef.current.length / SEARCH_FIRST_BATCH) + 1;
-        const maxApiPage = Math.ceil(targetTotal / SEARCH_FIRST_BATCH) + 2;
+        let apiPage = lastApiPageRef.current + 1;
+        const maxApiPage = Math.ceil(targetTotal / SEARCH_FIRST_BATCH) + 4;
+        let emptyPages = 0;
 
         while (
           gen === searchGen.current &&
           fullPoolRef.current.length < targetTotal &&
-          apiPage <= maxApiPage
+          apiPage <= maxApiPage &&
+          emptyPages < 2
         ) {
+          const prevLen = fullPoolRef.current.length;
           const data = await searchSlice(nextFilters, apiSort, nextFreshness, apiPage);
           if (gen !== searchGen.current) return;
-          fullPoolRef.current = mergePoolSorted(fullPoolRef.current, data.items, apiSort);
-          if (data.items.length < SEARCH_FIRST_BATCH) break;
+          fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, data.items);
+          lastApiPageRef.current = Math.max(lastApiPageRef.current, apiPage);
           apiPage += 1;
+          // Зупиняємось тільки якщо API дійсно не повернув нічого (не плутаємо з дедупом)
+          if (data.items.length === 0) {
+            emptyPages += 1;
+          } else {
+            emptyPages = 0;
+          }
+          if (fullPoolRef.current.length === prevLen && data.items.length < SEARCH_FIRST_BATCH) {
+            // Дедуп + мало items: не прогрес, але продовжимо ще 1 сторінку
+            if (data.items.length === 0) break;
+          }
         }
         // НЕ оновлюємо display — щоб фон не пересортував показані картки
       } catch {
@@ -255,6 +288,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       fullPoolRef.current = [];
       displayPoolRef.current = [];
       displayCountRef.current = 0;
+      lastApiPageRef.current = 0;
       poolApiSortRef.current = nextSort;
       scrollToProgress();
 
@@ -262,9 +296,10 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         void fx.rates();
         const first = await searchSlice(nextFilters, nextSort, nextFreshness, 1);
         if (gen !== searchGen.current) return;
+        lastApiPageRef.current = 1;
 
-        // Бекенд вже повертає результати у відсортованому порядку (newest → oldest).
-        // На першому завантаженні сортуємо на клієнті як страховку (кеш міг бути іншого sort_by).
+        // Бекенд повертає результати у відсортованому порядку (newest → oldest).
+        // Клієнтське сортування — додаткова страховка (пул міг бути з іншим sort_by).
         const firstItems = sortListingItems(first.items, nextSort);
         fullPoolRef.current = [...firstItems];
         displayPoolRef.current = [...firstItems];
@@ -277,18 +312,21 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           setSearching(false);
         });
 
-        if (first.items.length >= SEARCH_FIRST_BATCH && first.total > SEARCH_FIRST_BATCH) {
+        if (first.total > first.items.length) {
           const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2);
           if (gen !== searchGen.current) return;
-          // Другий пакет — мержимо та пересортовуємо весь пул.
-          // AUTO.RIA IDs гідратуються постранично, тому новіші авто можуть бути на стор. 2.
-          fullPoolRef.current = mergePoolSorted(fullPoolRef.current, second.items, nextSort);
-          const newCount = fullPoolRef.current.length;
-          displayPoolRef.current = fullPoolRef.current.slice(0, newCount);
-          displayCountRef.current = newCount;
+          lastApiPageRef.current = 2;
+          // Дописуємо стор. 2 в кінець — без пересортування вже показаних карток.
+          fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, second.items);
+          displayPoolRef.current = growDisplayStable(
+            displayPoolRef.current,
+            fullPoolRef.current,
+            fullPoolRef.current.length,
+          );
+          displayCountRef.current = displayPoolRef.current.length;
           startTransition(() => {
             setResults([...displayPoolRef.current]);
-            setPage(Math.max(1, Math.ceil(newCount / SEARCH_PAGE_SIZE)));
+            setPage(Math.max(1, Math.ceil(displayCountRef.current / SEARCH_PAGE_SIZE)));
             syncMeta(second, nextFilters, nextSort, nextFreshness);
           });
         }
@@ -331,17 +369,26 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       targetDisplay: number,
     ) => {
       const apiSort = poolApiSortRef.current;
-      let apiPage = Math.floor(fullPoolRef.current.length / SEARCH_FIRST_BATCH) + 1;
+      // Починаємо з наступної після останньої завантаженої сторінки,
+      // а не розраховуємо по розміру пулу — пул може бути меншим через провал гідрації.
+      let apiPage = lastApiPageRef.current + 1;
       let lastMeta: PageResult | null = null;
+      let emptyPages = 0;
 
-      for (let attempt = 0; attempt < 4; attempt += 1) {
+      for (let attempt = 0; attempt < 6; attempt += 1) {
         if (fullPoolRef.current.length >= targetDisplay) break;
+        if (emptyPages >= 2) break;
         const data = await searchSlice(nextFilters, apiSort, nextFreshness, apiPage);
         if (gen !== searchGen.current) return;
         lastMeta = data;
-        fullPoolRef.current = mergePoolSorted(fullPoolRef.current, data.items, apiSort);
-        if (data.items.length < SEARCH_FIRST_BATCH) break;
+        fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, data.items);
+        lastApiPageRef.current = Math.max(lastApiPageRef.current, apiPage);
         apiPage += 1;
+        if (data.items.length === 0) {
+          emptyPages += 1;
+        } else {
+          emptyPages = 0;
+        }
       }
 
       if (gen !== searchGen.current) return;

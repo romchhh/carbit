@@ -142,8 +142,8 @@ async def _collect_ids_raw(
     total = 0
     api_page = 0
 
-    # order_by=8 → сортування за датою публікації (найновіші спочатку) в AUTO.RIA API.
-    sort_patch: dict = {"order_by": 8} if sort_newest else {}
+    # order_by=7 → date_desc (найновіші); 8 = date_asc (найстаріші). НЕ плутати.
+    sort_patch: dict = {"order_by": 7} if sort_newest else {}
 
     while len(all_ids) < max_ids:
         params = {**base_params, **sort_patch, "page": api_page, "countpage": 50}

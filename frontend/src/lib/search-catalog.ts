@@ -364,9 +364,14 @@ export function sortListingItems(items: Listing[], sort: SortOption): Listing[] 
   const priceUah = (item: Listing) =>
     toUah(item.price, resolveListingCurrency(item.currency));
   const publishedMs = (item: Listing) => {
-    for (const raw of [item.published_at, item.found_at]) {
+    for (const raw of [
+      item.published_at,
+      (item as Listing & { publishedAt?: string }).publishedAt,
+      item.found_at,
+      (item as Listing & { foundAt?: string }).foundAt,
+    ]) {
       const t = Date.parse(raw || "");
-      if (Number.isFinite(t)) return t;
+      if (Number.isFinite(t) && t > 0) return t;
     }
     return 0;
   };
