@@ -23,7 +23,7 @@ export function FreshListingsCarousel({ variant = "landing", limit = 8 }: Props)
     let cancelled = false;
 
     listingSearch
-      .search({ sources: ["auto_ria"] }, 1, limit, "published_desc", "browse")
+      .search({ sources: ["auto_ria"] }, 1, limit, "newest", "browse")
       .then(data => {
         if (cancelled) return;
         setListings(data.items);
