@@ -128,7 +128,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         buildRequestFilters(nextFilters, nextFreshness),
         apiPage,
         SEARCH_FIRST_BATCH,
-        apiSort === "newest" ? "published_desc" : apiSort,
+        apiSort,
         "preview",
       );
       return {
