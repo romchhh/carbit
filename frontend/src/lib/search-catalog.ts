@@ -348,9 +348,11 @@ export function sortListings(items: SearchResult[], sort: SortOption): SearchRes
     case "mileage_asc":
       return sorted.sort((a, b) => a.mileage - b.mileage);
     case "newest":
-      return sorted.sort(
-        (a, b) => Date.parse(b.published_at || "") - Date.parse(a.published_at || ""),
-      );
+      return sorted.sort((a, b) => {
+        const aMs = Date.parse(a.publishedAt || a.foundAt || "") || 0;
+        const bMs = Date.parse(b.publishedAt || b.foundAt || "") || 0;
+        return bMs - aMs;
+      });
     default:
       return sorted;
   }
