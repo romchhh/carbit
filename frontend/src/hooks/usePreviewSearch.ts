@@ -30,9 +30,14 @@ type PageResult = {
   from_cache?: boolean;
 };
 
-/** Додає унікальні картки і тримає обране сортування всього пулу. */
-function mergePoolSorted(pool: Listing[], incoming: Listing[], sortKey: SortOption): Listing[] {
-  return sortListingItems(appendUniqueToPool(pool, incoming), sortKey);
+/**
+ * Додає унікальні картки в кінець пулу без пересортування вже доданих.
+ * Бекенд повертає сторінки з вже відсортованого пулу (newest → oldest),
+ * тому достатньо просто дедублювати та дописати в кінець.
+ * Пересортування повного пулу викликається лише при явній зміні сортування.
+ */
+function mergePoolSorted(pool: Listing[], incoming: Listing[], _sortKey: SortOption): Listing[] {
+  return appendUniqueToPool(pool, incoming);
 }
 
 /** Пул: нові (з API) — в кінець, без дублів. */
@@ -259,15 +264,16 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         const first = await searchSlice(nextFilters, nextSort, nextFreshness, 1);
         if (gen !== searchGen.current) return;
 
-        // Перший пакет сортуємо (тут ще немає показаних карток, тому безпечно)
-        const firstSorted = sortListingItems(first.items, nextSort);
-        fullPoolRef.current = [...firstSorted];
-        displayPoolRef.current = [...firstSorted];
-        displayCountRef.current = firstSorted.length;
+        // Бекенд вже повертає результати у відсортованому порядку (newest → oldest).
+        // На першому завантаженні сортуємо на клієнті як страховку (кеш міг бути іншого sort_by).
+        const firstItems = sortListingItems(first.items, nextSort);
+        fullPoolRef.current = [...firstItems];
+        displayPoolRef.current = [...firstItems];
+        displayCountRef.current = firstItems.length;
 
         startTransition(() => {
-          setResults([...firstSorted]);
-          setPage(Math.max(1, Math.ceil(firstSorted.length / SEARCH_PAGE_SIZE)));
+          setResults([...firstItems]);
+          setPage(Math.max(1, Math.ceil(firstItems.length / SEARCH_PAGE_SIZE)));
           syncMeta(first, nextFilters, nextSort, nextFreshness);
           setSearching(false);
         });
@@ -275,8 +281,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         if (first.items.length >= SEARCH_FIRST_BATCH && first.total > SEARCH_FIRST_BATCH) {
           const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2);
           if (gen !== searchGen.current) return;
-          // Другий пакет — append нових в кінець fullPool і displayPool
-          fullPoolRef.current = mergePoolSorted(fullPoolRef.current, second.items, nextSort);
+          // Другий пакет — append нових в кінець без пересортування вже показаних
+          fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, second.items);
           const newCount = fullPoolRef.current.length;
           displayPoolRef.current = fullPoolRef.current.slice(0, newCount);
           displayCountRef.current = newCount;

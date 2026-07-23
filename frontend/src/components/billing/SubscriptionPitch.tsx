@@ -36,7 +36,8 @@ export function SubscriptionPitch({
 }: Props) {
   const isFree = planId === "free";
   const nextId = nextPaidPlanId(planId, searchesLimit);
-  if (!force && !isFree && !nextId && planId === "pro") return null;
+  // Бізнес (pro) — верхній тариф: без апселу, але плашку з лімітом лишаємо.
+  if (!force && !isFree && !nextId && planId === "pro" && variant === "banner") return null;
 
   const next = nextId ? getPricingPlan(nextId) : null;
   const remaining = Math.max(0, searchesLimit - searchesUsed);

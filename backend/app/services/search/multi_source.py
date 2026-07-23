@@ -790,64 +790,87 @@ async def search_listings(
 # Slot-based pool builder — lazy AUTO.RIA hydration
 # ---------------------------------------------------------------------------
 
+def _make_ar_slots(auto_ria_ids: list[str]) -> list[dict]:
+    slots = []
+    for aid in auto_ria_ids:
+        if aid.startswith("n:"):
+            slots.append({"s": "n", "i": aid[2:]})
+        else:
+            slots.append({"s": "r", "i": aid})
+    return slots
+
+
 def _build_interleaved_slots(
     *,
     auto_ria_ids: list[str],
     olx_items: list[ListingOut],
     telegram_items: list[ListingOut],
     limit: int,
+    sort_by: str = "newest",
 ) -> list[dict]:
-    """Interleave AUTO.RIA IDs (stubs) with full OLX/Telegram listings.
+    """Build slot list for the live-search pool.
 
-    Blend order mirrors _SOURCE_BLEND_ORDER: OLX → Telegram → AUTO.RIA.
-    AUTO.RIA entries stored as {"s":"r","i":"<id>"} — hydrated on demand.
-    OLX/Telegram entries stored as {"s":"o"/"t","d":{...}} — ready to use.
+    For "newest" (and other date/metric sorts): merge OLX+Telegram together
+    by sort order, then interleave AUTO.RIA stubs proportionally.
+    AUTO.RIA IDs are already sorted by the API (newest first), so their
+    relative order is preserved.
+
+    AUTO.RIA entries: {"s":"r"/"n","i":"<id>"} — hydrated on demand.
+    OLX/Telegram entries: {"s":"o"/"t","d":{...}} — ready to use.
     """
-    queues: list[tuple[str, list[dict]]] = []
+    ar_slots = _make_ar_slots(auto_ria_ids)
 
-    if olx_items:
-        queues.append(("o", [{"s": "o", "d": item.model_dump(mode="json")} for item in olx_items]))
-    if telegram_items:
-        queues.append(("t", [{"s": "t", "d": item.model_dump(mode="json")} for item in telegram_items]))
-    if auto_ria_ids:
-        # Нові авто позначені префіксом "n:" → слот {"s":"n","i":"..."}.
-        # Вживані (без префіксу) → {"s":"r","i":"..."}.
-        ar_slots = []
-        for aid in auto_ria_ids:
-            if aid.startswith("n:"):
-                ar_slots.append({"s": "n", "i": aid[2:]})
-            else:
-                ar_slots.append({"s": "r", "i": aid})
-        queues.append(("r", ar_slots))
+    # Merge OLX + Telegram into one sorted list (both are already sorted by sort_by).
+    merged_ot = sort_listings(list(olx_items) + list(telegram_items), sort_by)
+    ot_slots: list[dict] = []
+    for item in merged_ot:
+        src = "t" if (item.source or "").lower() == "telegram" else "o"
+        ot_slots.append({"s": src, "d": item.model_dump(mode="json")})
 
-    if not queues:
-        return []
-    if len(queues) == 1:
-        return queues[0][1][:limit]
+    if not ar_slots:
+        return ot_slots[:limit]
+    if not ot_slots:
+        return ar_slots[:limit]
 
-    seen_ids: set[str] = set()
+    # Interleave AUTO.RIA stubs proportionally across the OLX+Telegram stream.
+    # Every `step` OLX+Telegram slots, insert one AUTO.RIA stub.
+    step = max(1, len(ot_slots) // max(len(ar_slots), 1))
     slots: list[dict] = []
-    q_map = {src: list(items) for src, items in queues}
-    order = [src for src, _ in queues]
+    seen_ids: set[str] = set()
+    ot_idx = 0
+    ar_idx = 0
 
-    while len(slots) < limit:
-        added = False
-        for src in order:
-            if len(slots) >= limit:
-                break
-            q = q_map[src]
-            while q:
-                slot = q.pop(0)
-                sid = slot.get("i") or (slot.get("d") or {}).get("id", "")
-                if sid and sid in seen_ids:
-                    continue
-                if sid:
-                    seen_ids.add(sid)
-                slots.append(slot)
-                added = True
-                break
-        if not added:
+    def _add(slot: dict) -> bool:
+        sid = slot.get("i") or (slot.get("d") or {}).get("id", "")
+        if sid and sid in seen_ids:
+            return False
+        if sid:
+            seen_ids.add(sid)
+        slots.append(slot)
+        return True
+
+    pos = 0  # counts OLX+Telegram slots placed so far
+    while len(slots) < limit and (ot_idx < len(ot_slots) or ar_idx < len(ar_slots)):
+        # Insert one AUTO.RIA stub every `step` OLX+Telegram items
+        if ar_idx < len(ar_slots) and pos > 0 and pos % step == 0:
+            _add(ar_slots[ar_idx])
+            ar_idx += 1
+            continue
+
+        if ot_idx < len(ot_slots):
+            if _add(ot_slots[ot_idx]):
+                pos += 1
+            ot_idx += 1
+        elif ar_idx < len(ar_slots):
+            _add(ar_slots[ar_idx])
+            ar_idx += 1
+        else:
             break
+
+    # Append remaining AUTO.RIA stubs at the end if any
+    while len(slots) < limit and ar_idx < len(ar_slots):
+        _add(ar_slots[ar_idx])
+        ar_idx += 1
 
     return slots
 
@@ -1005,6 +1028,7 @@ async def build_live_search_pool(
         olx_items=olx_sorted,
         telegram_items=telegram_sorted,
         limit=POOL_LIMIT,
+        sort_by=sort_by,
     )
 
     nav_total = len(slots)
