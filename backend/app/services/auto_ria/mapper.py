@@ -146,6 +146,11 @@ async def filters_to_search_params(
     if filters.metallic:
         params["metallic"] = 1
 
+    if filters.engine_volume_from is not None:
+        params["engineVolumeFrom"] = filters.engine_volume_from
+    if filters.engine_volume_to is not None:
+        params["engineVolumeTo"] = filters.engine_volume_to
+
     if filters.power_from is not None:
         params["powerFrom"] = filters.power_from
     if filters.power_to is not None:

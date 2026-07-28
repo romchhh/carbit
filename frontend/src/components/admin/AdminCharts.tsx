@@ -8,28 +8,50 @@ export function AdminBarChart({
   data,
   colorClass = "bg-emerald",
   height = 128,
+  compact,
 }: {
   data: Point[];
   colorClass?: string;
   height?: number;
+  /** Вужчі стовпці + горизонтальний скрол для довгих періодів (30+ днів) */
+  compact?: boolean;
 }) {
   const max = Math.max(...data.map(d => d.count), 1);
+  const isCompact = compact ?? data.length > 14;
+  const barWidth = isCompact ? 22 : undefined;
 
-  return (
-    <div className="flex items-end gap-2" style={{ height }}>
-      {data.map(({ date, count }) => (
-        <div key={date} className="flex flex-1 flex-col items-center gap-1">
+  const chart = (
+    <div
+      className={cn("flex items-end", isCompact ? "gap-1" : "gap-2")}
+      style={{
+        height,
+        minWidth: isCompact ? data.length * 26 : undefined,
+      }}
+    >
+      {data.map(({ date, count }, index) => (
+        <div
+          key={`${date}-${index}`}
+          className={cn("flex flex-col items-center gap-1", !isCompact && "flex-1")}
+          style={barWidth ? { width: barWidth, flexShrink: 0 } : undefined}
+        >
           <span className="text-[10px] font-semibold text-ink/70">{count || ""}</span>
           <div
             className={cn("w-full rounded-t-md transition-all min-h-[4px]", colorClass)}
             style={{ height: `${(count / max) * 100}%` }}
             title={`${date}: ${count}`}
           />
-          <span className="text-[10px] text-muted">{date}</span>
+          <span className="text-[10px] text-muted whitespace-nowrap">
+            {!isCompact || index % 5 === 0 || index === data.length - 1 ? date : ""}
+          </span>
         </div>
       ))}
     </div>
   );
+
+  if (isCompact) {
+    return <div className="overflow-x-auto pb-1">{chart}</div>;
+  }
+  return chart;
 }
 
 export function AdminStatusBadge({ status }: { status: string }) {

@@ -40,6 +40,15 @@ log = logging.getLogger("carbit_parser.service")
 logging.basicConfig(level=logging.INFO)
 
 
+async def _record_telegram_channels(operation: str, *, success: bool = True) -> None:
+    try:
+        from app.services.admin.api_usage import record_api_request
+
+        await record_api_request("telegram_channels", operation, success=success)
+    except Exception:
+        pass
+
+
 class CarParserService:
     def __init__(self, *, fresh_dedupe: bool = False, skip_dedupe: bool = False):
         self.client = build_client()
@@ -217,6 +226,8 @@ class CarParserService:
         async for msg in self.client.iter_messages(entity, limit=limit, min_id=cursor):
             raw_messages.append(msg)
 
+        await _record_telegram_channels("history")
+
         self.last_parse_stats = {
             "messages": len(raw_messages),
             "groups": 0,
@@ -290,6 +301,8 @@ class CarParserService:
         async for msg in self.client.iter_messages(entity, limit=max(10, int(limit))):
             raw_messages.append(msg)
 
+        await _record_telegram_channels("history_scan")
+
         self.last_parse_stats = {
             "messages": len(raw_messages),
             "groups": 0,
@@ -360,6 +373,8 @@ class CarParserService:
         raw_messages = []
         async for msg in self.client.iter_messages(entity, search=query, limit=limit):
             raw_messages.append(msg)
+
+        await _record_telegram_channels("keyword_search")
 
         self.last_parse_stats = {
             "messages": len(raw_messages),

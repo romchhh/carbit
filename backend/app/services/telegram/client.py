@@ -62,6 +62,9 @@ class TelegramClient:
             return None
         async with httpx.AsyncClient(timeout=15) as client:
             res = await client.post(f"{self.base}/{method}", json=payload)
+            from app.services.admin.api_usage import record_api_request
+
+            await record_api_request("telegram_bot", method, success=res.status_code < 400)
             if res.status_code >= 400:
                 logger.error("Telegram API %s: %s", method, res.text)
                 return None
@@ -78,6 +81,9 @@ class TelegramClient:
             return None
         async with httpx.AsyncClient(timeout=30) as client:
             res = await client.post(f"{self.base}/{method}", data=data, files=files)
+            from app.services.admin.api_usage import record_api_request
+
+            await record_api_request("telegram_bot", method, success=res.status_code < 400)
             if res.status_code >= 400:
                 logger.error("Telegram API %s (multipart): %s", method, res.text)
                 return None

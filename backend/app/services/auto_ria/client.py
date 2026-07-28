@@ -62,6 +62,9 @@ class AutoRiaClient:
             raise AutoRiaError("AUTO_RIA_API_KEY не налаштовано")
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        from app.services.admin.api_usage import auto_ria_operation, record_api_request
+
+        operation = auto_ria_operation(path)
         query = {"api_key": self.api_key, "lang_id": LANG_ID}
         if params:
             query.update(params)
@@ -111,18 +114,25 @@ class AutoRiaClient:
                     await asyncio.sleep(delay)
                     continue
                 if _is_transient_http_status(response.status_code, body):
+                    await record_api_request("auto_ria", operation, success=False)
                     raise AutoRiaError(
                         "AUTO.RIA тимчасово обірвав з'єднання. Спробуйте ще раз.",
                         status_code=response.status_code,
                     ) from err
+                await record_api_request("auto_ria", operation, success=False)
                 raise err
 
             try:
-                return response.json()
+                data = response.json()
             except ValueError as exc:
+                await record_api_request("auto_ria", operation, success=False)
                 raise AutoRiaError("AUTO.RIA повернув некоректну відповідь") from exc
 
+            await record_api_request("auto_ria", operation, success=True)
+            return data
+
         assert last_error is not None
+        await record_api_request("auto_ria", operation, success=False)
         raise last_error
 
     async def search(self, params: dict[str, Any]) -> dict[str, Any]:

@@ -142,6 +142,129 @@ def extract_listing_owners(item: ListingOut) -> int | None:
     return None
 
 
+def _normalize_engine_litres(raw: float) -> float | None:
+    """AUTO.RIA: 2.0 л або 1995 см³ → літри."""
+    if raw <= 0:
+        return None
+    if raw > 100:
+        return round(raw / 1000.0, 2)
+    if raw <= 20:
+        return round(raw, 2)
+    return None
+
+
+def extract_listing_engine_volume(item: ListingOut) -> float | None:
+    sd = item.source_data if isinstance(item.source_data, dict) else {}
+    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+    specs = sd.get("specs") if isinstance(sd.get("specs"), dict) else {}
+
+    for source in (auto, specs, sd):
+        for key in (
+            "engineVolume",
+            "engineVolumeLitres",
+            "engine_volume",
+            "volumeLitres",
+            "volume",
+            "engine",
+        ):
+            raw = source.get(key)
+            if raw is None:
+                continue
+            if isinstance(raw, (int, float)):
+                litres = _normalize_engine_litres(float(raw))
+                if litres is not None:
+                    return litres
+            if isinstance(raw, str):
+                match = re.search(r"([\d]+[.,]?\d*)", raw.replace(" ", ""))
+                if match:
+                    litres = _normalize_engine_litres(float(match.group(1).replace(",", ".")))
+                    if litres is not None:
+                        return litres
+            if isinstance(raw, dict):
+                for sub_key in ("liters", "litres", "value", "l"):
+                    sub = raw.get(sub_key)
+                    if isinstance(sub, (int, float)):
+                        litres = _normalize_engine_litres(float(sub))
+                        if litres is not None:
+                            return litres
+
+    blob = norm_text(f"{item.title} {item.description or ''}")
+    for pattern in (
+        r"(\d+[.,]\d+)\s*л\b",
+        r"(\d+[.,]\d+)\s*(?:l|liter|litre)\b",
+        r"об['ʼ]?єм[^\d]{0,8}(\d+[.,]\d+)",
+    ):
+        match = re.search(pattern, blob, re.I)
+        if match:
+            try:
+                litres = float(match.group(1).replace(",", "."))
+                if 0.5 <= litres <= 20:
+                    return round(litres, 2)
+            except ValueError:
+                continue
+    return None
+
+
+def extract_listing_power_hp(item: ListingOut) -> float | None:
+    sd = item.source_data if isinstance(item.source_data, dict) else {}
+    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+    specs = sd.get("specs") if isinstance(sd.get("specs"), dict) else {}
+
+    for source in (auto, specs, sd):
+        for key in ("powerHp", "power", "powerInt", "horsePower", "hp"):
+            raw = source.get(key)
+            if raw is None:
+                continue
+            if isinstance(raw, (int, float)) and float(raw) > 0:
+                return float(raw)
+            if isinstance(raw, str):
+                match = re.search(r"([\d]+)", raw.replace(" ", ""))
+                if match:
+                    return float(match.group(1))
+        power_block = source.get("power")
+        if isinstance(power_block, dict):
+            for sub_key in ("hp", "value", "power"):
+                sub = power_block.get(sub_key)
+                if isinstance(sub, (int, float)) and float(sub) > 0:
+                    return float(sub)
+
+    blob = norm_text(f"{item.title} {item.description or ''}")
+    match = re.search(r"(\d{2,4})\s*(?:к\.?\s*с\.?|л\.?\s*с\.?|hp|кс)\b", blob, re.I)
+    if match:
+        return float(match.group(1))
+    return None
+
+
+def extract_listing_body_label(item: ListingOut) -> str | None:
+    sd = item.source_data if isinstance(item.source_data, dict) else {}
+    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+    specs = sd.get("specs") if isinstance(sd.get("specs"), dict) else {}
+
+    candidates: list[str] = []
+    for source in (auto, sd, specs):
+        for key in ("bodyName", "subCategoryName", "subCategoryNameEng", "body", "тип кузова"):
+            raw = source.get(key)
+            if isinstance(raw, str) and raw.strip():
+                candidates.append(norm_text(raw.strip()))
+
+    for spec_key, spec_value in specs.items():
+        if not isinstance(spec_value, str):
+            continue
+        key = norm_text(str(spec_key))
+        if "кузов" in key or "body" in key:
+            candidates.append(norm_text(spec_value.strip()))
+
+    for label in candidates:
+        if label:
+            return label
+
+    blob = norm_text(f"{item.title} {item.description or ''}")
+    for canonical, aliases in _BODY_ALIASES.items():
+        if canonical in blob or any(alias in blob for alias in aliases):
+            return canonical
+    return None
+
+
 def _listing_haystack(item: ListingOut) -> str:
     blob = norm_text(f"{item.title} {item.description or ''} {item.fuel} {item.transmission}")
     sd = item.source_data if isinstance(item.source_data, dict) else {}
@@ -154,23 +277,20 @@ def _listing_haystack(item: ListingOut) -> str:
     return f"{blob} {specs_blob} {auto_blob}"
 
 
-def _body_matches_filter(item: ListingOut, body_labels: list[str]) -> bool:
-    haystack = _listing_haystack(item)
-    sd = item.source_data if isinstance(item.source_data, dict) else {}
-    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
-    body_name = norm_text(str(auto.get("bodyName") or auto.get("subCategoryName") or ""))
+def _body_label_matches(body_name: str, body_labels: list[str]) -> bool:
+    body = norm_text(body_name)
     for label in body_labels:
         key = norm_text(label)
-        if key in body_name or key in haystack:
+        if key in body or body in key:
             return True
         for canonical, aliases in _BODY_ALIASES.items():
-            if norm_text(canonical) != key and canonical not in key:
+            canon = norm_text(canonical)
+            filter_is_this_type = key == canon or key in aliases or canon in key
+            if not filter_is_this_type:
                 continue
-            if any(alias in haystack or alias in body_name for alias in aliases):
+            if body == canon or body in aliases or any(alias in body for alias in aliases):
                 return True
-        if key in BODY_TYPE_TO_ID and any(
-            token in haystack for token in (key, key.replace(" ", ""))
-        ):
+        if key in BODY_TYPE_TO_ID and key in body:
             return True
     return False
 
@@ -258,8 +378,10 @@ def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -
             if filters.doors_to is not None and doors > filters.doors_to:
                 return False
 
-    if filters.body_types and not _body_matches_filter(item, filters.body_types):
-        return False
+    if filters.body_types:
+        body_name = extract_listing_body_label(item)
+        if body_name and not _body_label_matches(body_name, filters.body_types):
+            return False
 
     if filters.zero_mileage and item.mileage > 500:
         return False
@@ -341,7 +463,9 @@ def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -
         return False
 
     if filters.engine_volume_from is not None or filters.engine_volume_to is not None:
-        engine = _spec_number_from_listing(item, "об'єм", "объем", "engine", "двигун")
+        engine = extract_listing_engine_volume(item)
+        if engine is None:
+            engine = _spec_number_from_listing(item, "об'єм", "объем", "engine", "двигун")
         if engine is not None:
             if filters.engine_volume_from is not None and engine < filters.engine_volume_from:
                 return False
@@ -349,11 +473,13 @@ def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -
                 return False
 
     if filters.power_from is not None or filters.power_to is not None:
-        power = _spec_number_from_listing(item, "потужність", "power", "к.с", "л.с")
+        power = extract_listing_power_hp(item)
+        if power is None:
+            power = _spec_number_from_listing(item, "потужність", "power", "к.с", "л.с")
         if power is not None:
             unit = (filters.power_unit or "hp").strip().lower()
             if unit == "kw":
-                power = power * 1.341
+                power = power / 1.341
             if filters.power_from is not None and power < filters.power_from:
                 return False
             if filters.power_to is not None and power > filters.power_to:

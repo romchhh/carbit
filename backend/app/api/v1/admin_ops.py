@@ -197,3 +197,50 @@ async def admin_listing_detail(
     if not listing:
         raise HTTPException(404, "Listing not found")
     return listing_to_out(listing)
+
+
+class ApiUsageChartPoint(BaseModel):
+    label: str
+    total: int
+    ok: int
+    err: int
+
+
+class ApiUsageOperationRow(BaseModel):
+    operation: str
+    count: int
+
+
+class ApiUsageSourceOut(BaseModel):
+    today_total: int
+    today_ok: int
+    today_err: int
+    period_total: int
+    period_ok: int
+    period_err: int
+    last_hour_total: int
+    avg_per_hour: float
+    avg_per_day: float
+    hourly_chart: list[ApiUsageChartPoint]
+    daily_chart: list[ApiUsageChartPoint]
+    operations_today: list[ApiUsageOperationRow]
+    operations_period: list[ApiUsageOperationRow]
+
+
+class AdminApiUsageOut(BaseModel):
+    generated_at: str
+    hours_window: int
+    days_window: int
+    sources: dict[str, ApiUsageSourceOut]
+
+
+@router.get("/api-usage", response_model=AdminApiUsageOut)
+async def admin_api_usage(
+    hours: int = Query(24, ge=6, le=168),
+    days: int = Query(7, ge=3, le=30),
+    _: str = Depends(get_current_admin),
+):
+    from app.services.admin.api_usage import build_api_usage_report
+
+    data = await build_api_usage_report(hours=hours, days=days)
+    return AdminApiUsageOut(**data)

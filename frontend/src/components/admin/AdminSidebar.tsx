@@ -11,6 +11,7 @@ const links = [
   { href: "/admin/system", label: "Система" },
   { href: "/admin/listings", label: "Оголошення" },
   { href: "/admin/parsing", label: "Парсинг" },
+  { href: "/admin/requests", label: "Запити" },
   { href: "/admin/channels", label: "Telegram" },
   { href: "/admin/clients", label: "Клієнти" },
   { href: "/admin/subscriptions", label: "Підписки" },

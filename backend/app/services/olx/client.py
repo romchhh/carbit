@@ -57,10 +57,20 @@ class OlxClient:
         }
 
     async def _get(self, url: str, *, headers: dict[str, str], params: dict | None = None) -> httpx.Response:
-        if self._client is not None:
-            return await self._client.get(url, headers=headers, params=params)
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
-            return await client.get(url, headers=headers, params=params)
+        from app.services.admin.api_usage import olx_operation, record_api_request
+
+        operation = olx_operation(url)
+        try:
+            if self._client is not None:
+                response = await self._client.get(url, headers=headers, params=params)
+            else:
+                async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+                    response = await client.get(url, headers=headers, params=params)
+            await record_api_request("olx", operation, success=response.status_code < 400)
+            return response
+        except Exception:
+            await record_api_request("olx", operation, success=False)
+            raise
 
     async def fetch_html(self, url: str) -> str:
         last_status: int | None = None

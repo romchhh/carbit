@@ -11,6 +11,8 @@ from app.schemas.schemas import SearchFilters
 from app.services.search.advanced_filters import (
     advanced_filters_active,
     extract_listing_doors,
+    extract_listing_engine_volume,
+    extract_listing_body_label,
     listing_matches_advanced_filters,
 )
 
@@ -121,6 +123,31 @@ class AdvancedSearchPostFilterTests(unittest.TestCase):
             listing_matches_advanced_filters(_item(mileage=10000), SearchFilters(zero_mileage=True))
         )
 
+    def test_engine_volume_applies_when_known(self):
+        item = _item(source_data={"autoData": {"engineVolume": 2.0}})
+        self.assertEqual(extract_listing_engine_volume(item), 2.0)
+        ok = SearchFilters(engine_volume_from=1.8, engine_volume_to=2.2)
+        bad = SearchFilters(engine_volume_from=2.5, engine_volume_to=3.0)
+        self.assertTrue(listing_matches_advanced_filters(item, ok))
+        self.assertFalse(listing_matches_advanced_filters(item, bad))
+
+    def test_engine_volume_passes_when_unknown(self):
+        item = _item(source_data={"autoData": {}})
+        self.assertIsNone(extract_listing_engine_volume(item))
+        self.assertTrue(
+            listing_matches_advanced_filters(item, SearchFilters(engine_volume_from=2.0, engine_volume_to=3.0))
+        )
+
+    def test_body_type_passes_when_unknown(self):
+        item = _item(source_data={"autoData": {}}, title="Toyota Camry")
+        self.assertIsNone(extract_listing_body_label(item))
+        self.assertTrue(listing_matches_advanced_filters(item, SearchFilters(body_types=["Седан"])))
+
+    def test_body_type_rejects_when_known_mismatch(self):
+        item = _item(source_data={"autoData": {"subCategoryName": "Хетчбек"}})
+        self.assertEqual(extract_listing_body_label(item), "хетчбек")
+        self.assertFalse(listing_matches_advanced_filters(item, SearchFilters(body_types=["Седан"])))
+
 
 class AutoRiaExtendedParamsTests(unittest.IsolatedAsyncioTestCase):
     async def test_maps_extended_api_params(self):
@@ -137,6 +164,8 @@ class AutoRiaExtendedParamsTests(unittest.IsolatedAsyncioTestCase):
             power_from=150,
             power_to=300,
             power_unit="hp",
+            engine_volume_from=1.8,
+            engine_volume_to=2.5,
             accident="none",
             seller_filter="private",
             bargain=True,
@@ -167,6 +196,8 @@ class AutoRiaExtendedParamsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("color_id[0]", params)
         self.assertEqual(params.get("metallic"), 1)
         self.assertEqual(params.get("powerFrom"), 150)
+        self.assertEqual(params.get("engineVolumeFrom"), 1.8)
+        self.assertEqual(params.get("engineVolumeTo"), 2.5)
         self.assertEqual(params.get("power_name"), 1)
         self.assertEqual(params.get("damage"), 1)
         self.assertEqual(params.get("company_type"), 1)

@@ -253,6 +253,8 @@ export const adminApi = {
   telegramChannelListings: (id: string, limit = 40) =>
     request<Array<Record<string, unknown>>>(`/admin/parser/channels/${id}/listings?limit=${limit}`),
   analytics: () => request<AdminAnalytics>("/admin/analytics"),
+  apiUsage: (hours = 24, days = 7) =>
+    request<AdminApiUsage>(`/admin/api-usage?hours=${hours}&days=${days}`),
   system: () => request<AdminSystem>("/admin/system"),
   listingsBrowse: (page = 1, opts: { source?: string; search?: string; duplicates_only?: boolean } = {}) => {
     const params = new URLSearchParams({ page: String(page), per_page: "30" });
@@ -419,6 +421,36 @@ export interface AdminTelegramChannel {
   sort_order: number;
   listings_count: number;
   created_at: string;
+}
+
+export interface AdminApiUsageChartPoint {
+  label: string;
+  total: number;
+  ok: number;
+  err: number;
+}
+
+export interface AdminApiUsageSource {
+  today_total: number;
+  today_ok: number;
+  today_err: number;
+  period_total: number;
+  period_ok: number;
+  period_err: number;
+  last_hour_total: number;
+  avg_per_hour: number;
+  avg_per_day: number;
+  hourly_chart: AdminApiUsageChartPoint[];
+  daily_chart: AdminApiUsageChartPoint[];
+  operations_today: { operation: string; count: number }[];
+  operations_period: { operation: string; count: number }[];
+}
+
+export interface AdminApiUsage {
+  generated_at: string;
+  hours_window: number;
+  days_window: number;
+  sources: Record<string, AdminApiUsageSource>;
 }
 
 export interface AdminAnalytics {
