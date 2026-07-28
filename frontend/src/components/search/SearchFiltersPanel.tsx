@@ -53,6 +53,9 @@ type Props = {
   wide?: boolean;
   freshness?: SearchFreshness;
   onFreshnessChange?: (freshness: SearchFreshness) => void;
+  /** Плейсхолдери поля ціни (на лендінгу — без заготовленого діапазону). */
+  pricePlaceholderFrom?: string;
+  pricePlaceholderTo?: string;
 };
 
 export function SearchFiltersPanel({
@@ -76,7 +79,12 @@ export function SearchFiltersPanel({
   wide,
   freshness = "all",
   onFreshnessChange,
+  pricePlaceholderFrom,
+  pricePlaceholderTo,
 }: Props) {
+  const priceDefaults = DEFAULT_PRICE_BY_CURRENCY[filters.currency];
+  const priceFromPlaceholder = pricePlaceholderFrom ?? priceDefaults.from;
+  const priceToPlaceholder = pricePlaceholderTo ?? priceDefaults.to;
   const [advanced, setAdvanced] = useState(false);
   const models = filters.brand ? getModelsForBrand(filters.brand) : [];
   const rateLimited = isSearchRateLimitMessage(searchError);
@@ -186,8 +194,8 @@ export function SearchFiltersPanel({
               onChange={(priceFrom, priceTo) => update({ priceFrom, priceTo })}
               format={formatPriceInput}
               normalize={normalizePriceRange}
-              placeholderFrom={DEFAULT_PRICE_BY_CURRENCY[filters.currency].from}
-              placeholderTo={DEFAULT_PRICE_BY_CURRENCY[filters.currency].to}
+              placeholderFrom={priceFromPlaceholder}
+              placeholderTo={priceToPlaceholder}
               suffix={
                 filters.currency === "USD" ? "$" : filters.currency === "EUR" ? "€" : "грн"
               }

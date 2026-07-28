@@ -229,6 +229,12 @@ def _listing_mileage_value(listing: OlxListing) -> int:
     return 0
 
 
+def _listing_engine_volume_value(listing: OlxListing) -> float | None:
+    from app.services.olx.engine_volume import extract_olx_listing_engine_volume
+
+    return extract_olx_listing_engine_volume(listing)
+
+
 def _clean_model_token(model: str, *, brand: str = "") -> str:
     """Перше слово моделі без року/бренду (для структурованого поля)."""
     m = norm_text(model or "")
@@ -309,6 +315,8 @@ def olx_listing_to_listing_out(
         published_at=published_at,
     )
 
+    engine_volume_l = _listing_engine_volume_value(listing)
+
     return ListingOut(
         id=f"olx_{listing_id}",
         source="olx",
@@ -329,6 +337,7 @@ def olx_listing_to_listing_out(
         vin=vin,
         vin_checked=None,
         vin_check_url=None,
+        engine_volume_l=engine_volume_l,
         source_data={
             "specs": specs,
             "published": listing.published,
@@ -336,6 +345,7 @@ def olx_listing_to_listing_out(
             "raw_params": listing.raw_params,
             "price_original": price_amount,
             "price_currency": price_currency,
+            "engine_volume_l": engine_volume_l,
             "createdTime": (listing.raw_params or {}).get("createdTime")
             if isinstance(listing.raw_params, dict)
             else None,

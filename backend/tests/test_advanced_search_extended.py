@@ -11,10 +11,10 @@ from app.schemas.schemas import SearchFilters
 from app.services.search.advanced_filters import (
     advanced_filters_active,
     extract_listing_doors,
-    extract_listing_engine_volume,
     extract_listing_body_label,
     listing_matches_advanced_filters,
 )
+from app.services.listings.engine_volume import extract_listing_engine_volume
 
 
 def _item(**kwargs):
@@ -130,6 +130,34 @@ class AdvancedSearchPostFilterTests(unittest.TestCase):
         bad = SearchFilters(engine_volume_from=2.5, engine_volume_to=3.0)
         self.assertTrue(listing_matches_advanced_filters(item, ok))
         self.assertFalse(listing_matches_advanced_filters(item, bad))
+
+    def test_engine_volume_from_description_bare(self):
+        item = _item(
+            title="Volkswagen Passat",
+            description="Продам авто, двигун 2.0, один власник",
+            source_data={"autoData": {}},
+        )
+        self.assertEqual(extract_listing_engine_volume(item), 2.0)
+        self.assertTrue(
+            listing_matches_advanced_filters(
+                item,
+                SearchFilters(engine_volume_from=1.8, engine_volume_to=2.2),
+            )
+        )
+        self.assertFalse(
+            listing_matches_advanced_filters(
+                item,
+                SearchFilters(engine_volume_from=2.5, engine_volume_to=3.0),
+            )
+        )
+
+    def test_engine_volume_from_title_decimal(self):
+        item = _item(
+            title="Toyota Camry 2.5 AT",
+            description="",
+            source_data={"autoData": {}},
+        )
+        self.assertEqual(extract_listing_engine_volume(item), 2.5)
 
     def test_engine_volume_passes_when_unknown(self):
         item = _item(source_data={"autoData": {}})

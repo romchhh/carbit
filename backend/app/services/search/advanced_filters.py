@@ -143,66 +143,15 @@ def extract_listing_owners(item: ListingOut) -> int | None:
 
 
 def _normalize_engine_litres(raw: float) -> float | None:
-    """AUTO.RIA: 2.0 л або 1995 см³ → літри."""
-    if raw <= 0:
-        return None
-    if raw > 100:
-        return round(raw / 1000.0, 2)
-    if raw <= 20:
-        return round(raw, 2)
-    return None
+    from app.services.listings.engine_volume import normalize_engine_litres
+
+    return normalize_engine_litres(raw)
 
 
 def extract_listing_engine_volume(item: ListingOut) -> float | None:
-    sd = item.source_data if isinstance(item.source_data, dict) else {}
-    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
-    specs = sd.get("specs") if isinstance(sd.get("specs"), dict) else {}
+    from app.services.listings.engine_volume import extract_listing_engine_volume as _extract
 
-    for source in (auto, specs, sd):
-        for key in (
-            "engineVolume",
-            "engineVolumeLitres",
-            "engine_volume",
-            "volumeLitres",
-            "volume",
-            "engine",
-        ):
-            raw = source.get(key)
-            if raw is None:
-                continue
-            if isinstance(raw, (int, float)):
-                litres = _normalize_engine_litres(float(raw))
-                if litres is not None:
-                    return litres
-            if isinstance(raw, str):
-                match = re.search(r"([\d]+[.,]?\d*)", raw.replace(" ", ""))
-                if match:
-                    litres = _normalize_engine_litres(float(match.group(1).replace(",", ".")))
-                    if litres is not None:
-                        return litres
-            if isinstance(raw, dict):
-                for sub_key in ("liters", "litres", "value", "l"):
-                    sub = raw.get(sub_key)
-                    if isinstance(sub, (int, float)):
-                        litres = _normalize_engine_litres(float(sub))
-                        if litres is not None:
-                            return litres
-
-    blob = norm_text(f"{item.title} {item.description or ''}")
-    for pattern in (
-        r"(\d+[.,]\d+)\s*л\b",
-        r"(\d+[.,]\d+)\s*(?:l|liter|litre)\b",
-        r"об['ʼ]?єм[^\d]{0,8}(\d+[.,]\d+)",
-    ):
-        match = re.search(pattern, blob, re.I)
-        if match:
-            try:
-                litres = float(match.group(1).replace(",", "."))
-                if 0.5 <= litres <= 20:
-                    return round(litres, 2)
-            except ValueError:
-                continue
-    return None
+    return _extract(item)
 
 
 def extract_listing_power_hp(item: ListingOut) -> float | None:
@@ -463,14 +412,14 @@ def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -
         return False
 
     if filters.engine_volume_from is not None or filters.engine_volume_to is not None:
-        engine = extract_listing_engine_volume(item)
-        if engine is None:
-            engine = _spec_number_from_listing(item, "об'єм", "объем", "engine", "двигун")
-        if engine is not None:
-            if filters.engine_volume_from is not None and engine < filters.engine_volume_from:
-                return False
-            if filters.engine_volume_to is not None and engine > filters.engine_volume_to:
-                return False
+        from app.services.listings.engine_volume import listing_engine_volume_in_range
+
+        if not listing_engine_volume_in_range(
+            item,
+            volume_from=filters.engine_volume_from,
+            volume_to=filters.engine_volume_to,
+        ):
+            return False
 
     if filters.power_from is not None or filters.power_to is not None:
         power = extract_listing_power_hp(item)

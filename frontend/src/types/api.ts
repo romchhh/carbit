@@ -53,6 +53,7 @@ export interface Listing {
   fuel: string;
   transmission: string;
   region: string;
+  engine_volume_l?: number | null;
   description?: string | null;
   images: string[];
   url: string;

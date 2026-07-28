@@ -28,7 +28,7 @@ def listing_to_out(listing: Listing) -> ListingOut:
     if source == "telegram" and not (listing.images or []):
         source_data = {"photos_pending": True}
 
-    return ListingOut(
+    out = ListingOut(
         id=listing.id,
         source=source,
         title=listing.title or "",
@@ -56,3 +56,9 @@ def listing_to_out(listing: Listing) -> ListingOut:
         refreshed_at=as_kyiv(listing.refreshed_at) if getattr(listing, "refreshed_at", None) else None,
         found_at=found_at,
     )
+    from app.services.listings.engine_volume import extract_listing_engine_volume
+
+    volume = extract_listing_engine_volume(out)
+    if volume is not None:
+        return out.model_copy(update={"engine_volume_l": volume})
+    return out

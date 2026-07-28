@@ -72,6 +72,11 @@ def sanitize_listing_out(item: ListingOut) -> ListingOut | None:
         data["mileage"] = int(data.get("mileage") or 0)
         data["fuel"] = str(data.get("fuel") or "")
         data["transmission"] = str(data.get("transmission") or "")
+        if data.get("engine_volume_l") is not None:
+            try:
+                data["engine_volume_l"] = round(float(data["engine_volume_l"]), 2)
+            except (TypeError, ValueError):
+                data["engine_volume_l"] = None
         data["region"] = str(data.get("region") or "")
         data["url"] = str(data.get("url") or "")
         data["seller_type"] = str(data.get("seller_type") or "private")
@@ -86,7 +91,14 @@ def sanitize_listing_out(item: ListingOut) -> ListingOut | None:
         if data.get("source_data") is not None:
             data["source_data"] = json_safe(data["source_data"])
 
-        return ListingOut.model_validate(data)
+        from app.services.listings.engine_volume import extract_listing_engine_volume
+
+        validated = ListingOut.model_validate(data)
+        if validated.engine_volume_l is None:
+            volume = extract_listing_engine_volume(validated)
+            if volume is not None:
+                validated = validated.model_copy(update={"engine_volume_l": volume})
+        return validated
     except Exception:
         logger.exception("Dropping listing that failed response sanitize: %s", getattr(item, "id", "?"))
         return None

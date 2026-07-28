@@ -20,6 +20,11 @@ import {
 } from "@/lib/listing-source";
 import { hasVinCheck } from "@/lib/vin-check";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
+import {
+  formatEngineVolume,
+  resolveListingEngineVolume,
+  resolveListingMileage,
+} from "@/lib/listing-specs";
 import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
 import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { listings as listingsApi } from "@/lib/api";
@@ -212,6 +217,8 @@ export function ListingDetailModal({
     Object.keys(listing.source_data).length > 0;
 
   const highlights = hasAutoRiaDetails ? [] : getAutoRiaHighlights(listing.source_data);
+  const mileageKm = resolveListingMileage(listing);
+  const engineVolume = resolveListingEngineVolume(listing);
   const source = listing.source_data ?? {};
   const priceUsd = typeof source.USD === "number" ? source.USD : null;
   const priceEur = typeof source.EUR === "number" ? source.EUR : null;
@@ -220,7 +227,11 @@ export function ListingDetailModal({
     ? []
     : [
         { label: "Рік", value: listing.year ? String(listing.year) : "—" },
-        { label: "Пробіг", value: listing.mileage ? formatMileage(listing.mileage) : "—" },
+        { label: "Пробіг", value: mileageKm != null && mileageKm > 0 ? formatMileage(mileageKm) : "—" },
+        {
+          label: "Обʼєм двигуна",
+          value: engineVolume != null ? formatEngineVolume(engineVolume) : "—",
+        },
         { label: "Паливо", value: listing.fuel || "—" },
         { label: "КПП", value: listing.transmission || "—" },
         { label: "Регіон", value: listing.region || "—" },
@@ -521,9 +532,14 @@ export function ListingDetailModal({
                       {listing.year}
                     </span>
                   )}
-                  {listing.mileage > 0 && (
+                  {mileageKm != null && mileageKm > 0 && (
                     <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
-                      {formatMileage(listing.mileage)}
+                      {formatMileage(mileageKm)}
+                    </span>
+                  )}
+                  {engineVolume != null && (
+                    <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+                      {formatEngineVolume(engineVolume)}
                     </span>
                   )}
                   {listing.transmission && (

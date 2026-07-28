@@ -30,6 +30,9 @@ function parseEngineNumber(raw: unknown): number | null {
   return null;
 }
 
+const ENGINE_TRANS_HINT =
+  "at|mt|cvt|dsg|tiptronic|автомат|мех|tsi|tdi|tdci|hdi|mpi|fsi|gdi|hybrid|plug|бенз|диз|diesel|petrol|benzin";
+
 function readEngineFromSources(...sources: Record<string, unknown>[]): number | null {
   for (const source of sources) {
     for (const key of [
@@ -50,15 +53,18 @@ function readEngineFromSources(...sources: Record<string, unknown>[]): number | 
 
 function readEngineFromSpecValues(specs: Record<string, unknown>): number | null {
   for (const [key, value] of Object.entries(specs)) {
-    if (typeof value !== "string") continue;
     const keyLow = key.toLowerCase();
-    const valueLow = value.toLowerCase();
     if (
       (keyLow.includes("об") && keyLow.includes("єм")) ||
       keyLow.includes("engine") ||
       keyLow.includes("объем") ||
-      valueLow.includes(" л")
+      keyLow.includes("двигун") ||
+      keyLow.includes("motor")
     ) {
+      const parsed = parseEngineNumber(value);
+      if (parsed != null) return parsed;
+    }
+    if (typeof value === "string" && / л\b/i.test(value)) {
       const parsed = parseEngineNumber(value);
       if (parsed != null) return parsed;
     }
@@ -66,7 +72,41 @@ function readEngineFromSpecValues(specs: Record<string, unknown>): number | null
   return null;
 }
 
+function readEngineFromText(text: string): number | null {
+  const blob = text.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!blob) return null;
+
+  for (const pattern of [
+    /(?:об['ʼ]?єм|двигун|мотор|engine|motor)\s*[:\-]?\s*(\d+[.,]?\d*)/i,
+    /(\d+[.,]\d+)\s*(?:л|l|litre|liter|літр)\b/i,
+    /(\d{3,4})\s*(?:см3|см³|cc|куб\.?|cm3)\b/i,
+  ]) {
+    const match = blob.match(pattern);
+    if (!match) continue;
+    const parsed = parseEngineNumber(match[1]);
+    if (parsed != null) return parsed;
+  }
+
+  const transMatch = blob.match(new RegExp(`\\b(\\d\\.\\d)\\s*(?:${ENGINE_TRANS_HINT})\\b`, "i"));
+  if (transMatch) {
+    const parsed = parseEngineNumber(transMatch[1]);
+    if (parsed != null) return parsed;
+  }
+
+  const trailingMatch = blob.match(/\b(\d\.\d)\b(?=\s*(?:$|[/|,]|—|-\s))/);
+  if (trailingMatch) {
+    const parsed = parseEngineNumber(trailingMatch[1]);
+    if (parsed != null && parsed >= 0.8 && parsed <= 8) return parsed;
+  }
+
+  return null;
+}
+
 export function resolveListingEngineVolume(listing: Listing): number | null {
+  if (typeof listing.engine_volume_l === "number" && listing.engine_volume_l > 0) {
+    return listing.engine_volume_l;
+  }
+
   const sd = asRecord(listing.source_data);
   const auto = asRecord(sd.autoData);
   const specs = asRecord(sd.specs);
@@ -77,18 +117,9 @@ export function resolveListingEngineVolume(listing: Listing): number | null {
   const fromSpecs = readEngineFromSpecValues(specs);
   if (fromSpecs != null) return fromSpecs;
 
-  const blob = `${listing.title} ${listing.description ?? ""}`.toLowerCase();
-  for (const pattern of [
-    /(\d+[.,]\d+)\s*л\b/,
-    /(\d+[.,]\d+)\s*(?:l|liter|litre)\b/,
-    /об['ʼ]?єм[^\d]{0,8}(\d+[.,]\d+)/,
-  ]) {
-    const match = blob.match(pattern);
-    if (!match) continue;
-    const litres = Number(match[1].replace(",", "."));
-    if (litres >= 0.5 && litres <= 20) return Math.round(litres * 10) / 10;
-  }
-  return null;
+  const title = listing.title || "";
+  const description = listing.description || "";
+  return readEngineFromText(title) ?? readEngineFromText(description);
 }
 
 function parseMileageNumber(raw: unknown): number | null {

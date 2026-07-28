@@ -137,7 +137,11 @@ MILEAGE_MILES_RE = re.compile(
     re.IGNORECASE,
 )
 
-ENGINE_RE = re.compile(r"(?P<val>\d[.,]\d)\s?л\b", re.IGNORECASE)
+ENGINE_RE = re.compile(
+    r"(?:об['ʼ]?єм|двигун|мотор|engine)[\s:]*(?P<val>\d[.,]\d)"
+    r"|(?P<val>\d[.,]\d)\s?л\b",
+    re.IGNORECASE,
+)
 
 POWER_RE = re.compile(r"(?P<val>\d{2,4})\s?(?:к\.?\s?с\.?|hp|л\.?с\.?)", re.IGNORECASE)
 

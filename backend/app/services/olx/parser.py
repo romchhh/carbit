@@ -314,6 +314,10 @@ def _params_from_embedded(params: object) -> tuple[Optional[str], Optional[str],
                 year = match.group(1)
         if mileage is None and ("пробіг" in name_low or "mileage" in name_low or "mileage" in key):
             mileage = value
+        from app.services.olx.engine_volume import _key_is_engine_volume
+
+        if _key_is_engine_volume(name, key):
+            specs.setdefault("Обʼєм двигуна", value)
     return year, mileage, specs
 
 
@@ -1134,6 +1138,12 @@ def apply_details_to_listing(listing: OlxListing, details: dict) -> None:
     if not listing.mileage:
         listing.mileage = _spec_text(specs, "пробіг", "mileage") or listing.mileage
 
+    from app.services.olx.engine_volume import extract_olx_listing_engine_volume
+
+    engine_volume = extract_olx_listing_engine_volume(listing)
+    if engine_volume is not None:
+        listing.specs = {**(listing.specs or {}), "Обʼєм двигуна": f"{engine_volume:g} л"}
+
     fuel = _spec_text(specs, "палив", "fuel")
     if fuel and "палив" not in (listing.title or "").lower():
         listing.raw_params.setdefault("fuel", fuel)
@@ -1584,8 +1594,9 @@ def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
         return False
 
     if params.engine_from is not None or params.engine_to is not None:
-        engine = _spec_number(listing.specs or {}, "об'єм", "объем", "engine", "л")
-        # Пропускаємо якщо немає даних — краще показати, ніж відкинути
+        from app.services.olx.engine_volume import extract_olx_listing_engine_volume
+
+        engine = extract_olx_listing_engine_volume(listing)
         if engine is not None:
             if params.engine_from is not None and engine < params.engine_from:
                 return False

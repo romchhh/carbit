@@ -7,7 +7,6 @@ import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
   DEFAULT_FILTERS,
-  DEFAULT_PRICE_BY_CURRENCY,
   normalizePriceRange,
   normalizeYearRange,
   type SearchFilterState,
@@ -15,12 +14,10 @@ import {
 import { saveSearchDraft } from "@/lib/search-draft";
 import type { SearchFreshness } from "@/lib/search-preview";
 
-/** Дефолти саме для лендінгу: вся Україна + типовий діапазон ціни. */
+/** Дефолти для лендінгу: вся Україна, без попередньо заданої ціни. */
 const HOME_DEFAULT_FILTERS: SearchFilterState = {
   ...DEFAULT_FILTERS,
   region: "Вся Україна",
-  priceFrom: DEFAULT_PRICE_BY_CURRENCY.USD.from,
-  priceTo: DEFAULT_PRICE_BY_CURRENCY.USD.to,
   currency: "USD",
 };
 
@@ -84,6 +81,8 @@ export function HomeSearchSection() {
             onSearch={handleSearch}
             freshness={freshness}
             onFreshnessChange={setFreshness}
+            pricePlaceholderFrom="Від"
+            pricePlaceholderTo="До"
           />
         </div>
       </section>

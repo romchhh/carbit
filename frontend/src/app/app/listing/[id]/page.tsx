@@ -15,6 +15,11 @@ import { Button } from "@/components/ui/Button";
 import { IconArrowLeft, IconArrowRight, IconGlobe, IconHeart } from "@/components/icons";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
+  formatEngineVolume,
+  resolveListingEngineVolume,
+  resolveListingMileage,
+} from "@/lib/listing-specs";
+import {
   formatMileage,
   cn,
   publishedAgoLabel,
@@ -124,9 +129,19 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     listing.source_data &&
     Object.keys(listing.source_data).length > 0;
 
+  const mileageKm = resolveListingMileage(listing);
+  const engineVolume = resolveListingEngineVolume(listing);
+
   const specs = [
     { label: "Рік", value: listing.year > 0 ? String(listing.year) : null },
-    { label: "Пробіг", value: listing.mileage > 0 ? formatMileage(listing.mileage) : null },
+    {
+      label: "Пробіг",
+      value: mileageKm != null && mileageKm > 0 ? formatMileage(mileageKm) : null,
+    },
+    {
+      label: "Обʼєм двигуна",
+      value: engineVolume != null ? formatEngineVolume(engineVolume) : null,
+    },
     { label: "Паливо", value: listing.fuel?.split(",")[0]?.trim() || null },
     { label: "КПП", value: listing.transmission || null },
     { label: "Регіон", value: listing.region?.split(",")[0]?.trim() || null },
