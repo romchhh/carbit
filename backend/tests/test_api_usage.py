@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -37,19 +37,23 @@ def test_olx_operation(url: str, expected: str) -> None:
 
 @pytest.mark.asyncio
 async def test_record_and_report_api_usage() -> None:
-    redis = MagicMock()
     stored: dict[str, dict[str, int]] = {}
 
-    async def hincrby(key, field, amount):
+    async def hincrby(key: str, field: str, amount: int = 1) -> int:
         stored.setdefault(key, {})
         stored[key][field] = stored[key].get(field, 0) + amount
+        return stored[key][field]
 
-    pipe = MagicMock()
-    pipe.hincrby = MagicMock(side_effect=lambda key, field, amount: hincrby(key, field, amount))
-    pipe.expire = MagicMock(return_value=pipe)
-    pipe.execute = AsyncMock(return_value=[])
+    async def hgetall(key: str) -> dict[str, str]:
+        return {field: str(value) for field, value in stored.get(key, {}).items()}
 
-    redis.pipeline = MagicMock(return_value=pipe)
+    async def expire(key: str, ttl: int) -> None:
+        _ = (key, ttl)
+
+    redis = AsyncMock()
+    redis.hincrby = AsyncMock(side_effect=hincrby)
+    redis.hgetall = AsyncMock(side_effect=hgetall)
+    redis.expire = AsyncMock(side_effect=expire)
 
     with patch("app.services.admin.api_usage.get_redis", AsyncMock(return_value=redis)):
         await record_api_request("auto_ria", "search", success=True, count=2)
@@ -60,11 +64,6 @@ async def test_record_and_report_api_usage() -> None:
     assert stored[hour_key]["total"] == 2
     assert stored[hour_key]["ok"] == 2
     assert stored[hour_key]["op:search"] == 2
-
-    async def hgetall(key):
-        return stored.get(key, {})
-
-    redis.hgetall = AsyncMock(side_effect=hgetall)
 
     with patch("app.services.admin.api_usage.get_redis", AsyncMock(return_value=redis)):
         report = await build_api_usage_report(hours=6, days=3)

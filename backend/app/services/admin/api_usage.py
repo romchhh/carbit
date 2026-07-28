@@ -44,15 +44,13 @@ async def record_api_request(
         now = now_kyiv()
         hour_key = _hour_key(source, now)
         day_key = _day_key(source, now)
-        pipe = redis.pipeline()
         for key, ttl in ((hour_key, HOUR_TTL_SECONDS), (day_key, DAY_TTL_SECONDS)):
-            pipe.hincrby(key, "total", amount)
-            pipe.hincrby(key, "ok" if success else "err", amount)
-            pipe.hincrby(key, f"op:{op}", amount)
-            pipe.expire(key, ttl)
-        await pipe.execute()
+            await redis.hincrby(key, "total", amount)
+            await redis.hincrby(key, "ok" if success else "err", amount)
+            await redis.hincrby(key, f"op:{op}", amount)
+            await redis.expire(key, ttl)
     except Exception:
-        logger.debug("api_usage record failed source=%s op=%s", source, op, exc_info=True)
+        logger.warning("api_usage record failed source=%s op=%s", source, op, exc_info=True)
 
 
 def auto_ria_operation(path: str) -> str:

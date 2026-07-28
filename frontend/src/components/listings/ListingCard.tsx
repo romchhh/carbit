@@ -7,12 +7,17 @@ import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
+import {
+  formatEngineVolume,
+  resolveListingEngineVolume,
+  resolveListingMileage,
+} from "@/lib/listing-specs";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { useVinCheckCache } from "@/hooks/useVinCheckCache";
 import { hasVinCheck, resolveListingVin } from "@/lib/vin-check";
-import { cn, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
+import { cn, formatMileage, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
 import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
@@ -61,6 +66,8 @@ export function ListingCard({
   const cachedVinCheck = useVinCheckCache(resolvedVin);
   const showVinBlock = Boolean(resolvedVin) || hasVinCheck(listing);
   const highlights = getAutoRiaHighlights(listing.source_data).slice(0, 3);
+  const mileageKm = resolveListingMileage(listing);
+  const engineVolume = resolveListingEngineVolume(listing);
   const publishedLabel = publishedAgoLabel(listing.published_at);
   const refreshedLabel =
     listing.refreshed_at && listing.refreshed_at !== listing.published_at
@@ -296,9 +303,14 @@ export function ListingCard({
               {listing.year}
             </span>
           )}
-          {listing.mileage > 0 && (
+          {mileageKm != null && mileageKm > 0 && (
             <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
-              {listing.mileage.toLocaleString("uk-UA")} км
+              {formatMileage(mileageKm)}
+            </span>
+          )}
+          {engineVolume != null && (
+            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+              {formatEngineVolume(engineVolume)}
             </span>
           )}
           {listing.transmission && (

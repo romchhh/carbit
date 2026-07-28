@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import time
@@ -19,6 +20,9 @@ class KVClient(Protocol):
     async def exists(self, key: str) -> int: ...
     async def ttl(self, key: str) -> int: ...
     async def ping(self) -> bool: ...
+    async def hincrby(self, key: str, field: str, amount: int = 1) -> int: ...
+    async def hgetall(self, key: str) -> dict[str, str]: ...
+    async def expire(self, key: str, ttl: int) -> None: ...
 
 
 def resolve_sqlite_path(url: str, root_dir: Path) -> Path:
@@ -117,6 +121,82 @@ class SQLiteKV:
         except Exception:
             return False
 
+    def _load_hash_sync(self, conn: sqlite3.Connection, key: str) -> dict[str, int]:
+        row = conn.execute("SELECT value, expires_at FROM kv WHERE key = ?", (key,)).fetchone()
+        if not row:
+            return {}
+        value, expires_at = row
+        if expires_at is not None and expires_at <= time.time():
+            conn.execute("DELETE FROM kv WHERE key = ?", (key,))
+            return {}
+        if not value:
+            return {}
+        try:
+            raw = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, int] = {}
+        for field, amount in raw.items():
+            try:
+                out[str(field)] = int(amount)
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    def _save_hash_sync(
+        self,
+        conn: sqlite3.Connection,
+        key: str,
+        data: dict[str, int],
+        *,
+        preserve_expiry: bool = True,
+    ) -> None:
+        expires_at: float | None = None
+        if preserve_expiry:
+            row = conn.execute("SELECT expires_at FROM kv WHERE key = ?", (key,)).fetchone()
+            if row:
+                expires_at = row[0]
+        payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        conn.execute(
+            "INSERT INTO kv(key, value, expires_at) VALUES (?, ?, ?)"
+            " ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, payload, expires_at),
+        )
+
+    def _hincrby_sync(self, key: str, field: str, amount: int) -> int:
+        with self._connect() as conn:
+            self._purge_expired(conn)
+            data = self._load_hash_sync(conn, key)
+            new_value = int(data.get(field, 0)) + int(amount)
+            data[field] = new_value
+            self._save_hash_sync(conn, key, data)
+            return new_value
+
+    def _hgetall_sync(self, key: str) -> dict[str, str]:
+        with self._connect() as conn:
+            self._purge_expired(conn)
+            data = self._load_hash_sync(conn, key)
+            return {field: str(value) for field, value in data.items()}
+
+    def _expire_sync(self, key: str, ttl: int) -> None:
+        expires_at = time.time() + max(int(ttl), 1)
+        with self._connect() as conn:
+            row = conn.execute("SELECT 1 FROM kv WHERE key = ?", (key,)).fetchone()
+            if not row:
+                return
+            conn.execute("UPDATE kv SET expires_at = ? WHERE key = ?", (expires_at, key))
+
+    async def hincrby(self, key: str, field: str, amount: int = 1) -> int:
+        return await to_thread(self._hincrby_sync, key, field, amount)
+
+    async def hgetall(self, key: str) -> dict[str, str]:
+        return await to_thread(self._hgetall_sync, key)
+
+    async def expire(self, key: str, ttl: int) -> None:
+        await to_thread(self._expire_sync, key, ttl)
+
 
 class RedisKV:
     """Thin async wrapper around redis.asyncio."""
@@ -152,6 +232,18 @@ class RedisKV:
             return bool(await self._client.ping())
         except Exception:
             return False
+
+    async def hincrby(self, key: str, field: str, amount: int = 1) -> int:
+        return int(await self._client.hincrby(key, field, amount))
+
+    async def hgetall(self, key: str) -> dict[str, str]:
+        raw = await self._client.hgetall(key)
+        if not raw:
+            return {}
+        return {str(field): str(value) for field, value in raw.items()}
+
+    async def expire(self, key: str, ttl: int) -> None:
+        await self._client.expire(key, max(int(ttl), 1))
 
     async def aclose(self) -> None:
         await self._client.aclose()

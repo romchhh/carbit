@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
 import { BrandIcon } from "@/components/search/BrandIcon";
-import { FilterInlineRange } from "@/components/search/FilterInlineRange";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
@@ -23,7 +22,6 @@ import {
   VEHICLE_TYPE_OPTIONS,
   YEAR_MIN,
   YEAR_PLACEHOLDERS,
-  formatDecimalInput,
   formatPriceInput,
   formatYearInput,
   normalizePriceRange,
@@ -206,51 +204,6 @@ export function SearchFiltersPanel({
                   priceTo: "",
                 });
               }}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <FilterInlineRange
-              label="Пробіг"
-              suffix="тис. км"
-              from={filters.mileageFrom}
-              to={filters.mileageTo}
-              onChange={(mileageFrom, mileageTo) => update({ mileageFrom, mileageTo })}
-              format={v => v.replace(/[^\d]/g, "")}
-              placeholderFrom="0"
-              placeholderTo="200"
-              trailing={
-                <button
-                  type="button"
-                  onClick={() =>
-                    update({
-                      zeroMileage: !filters.zeroMileage,
-                      ...(filters.zeroMileage ? {} : { mileageFrom: "0", mileageTo: "0" }),
-                    })
-                  }
-                  className={cn(
-                    "rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors",
-                    filters.zeroMileage
-                      ? "border-emerald bg-emerald text-white"
-                      : "border-border text-muted hover:border-emerald/40",
-                  )}
-                >
-                  0 км
-                </button>
-              }
-            />
-            <FilterInlineRange
-              label="Обʼєм двигуна"
-              suffix="л"
-              from={filters.engineVolumeFrom}
-              to={filters.engineVolumeTo}
-              onChange={(engineVolumeFrom, engineVolumeTo) =>
-                update({ engineVolumeFrom, engineVolumeTo })
-              }
-              format={v => formatDecimalInput(v, 1)}
-              placeholderFrom="1.0"
-              placeholderTo="3.5"
-              inputMode="decimal"
             />
           </div>
 

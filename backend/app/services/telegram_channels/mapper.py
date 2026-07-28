@@ -220,6 +220,7 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
             "price_amount": listing.price_amount,
             "price_currency": original_currency,
             "price_original": listing.price_amount,
+            "engine_volume_l": listing.engine_volume_l,
         },
         price_history=[],
         is_duplicate=False,
