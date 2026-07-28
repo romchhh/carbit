@@ -18,6 +18,7 @@ _ENGINE_PARAM_KEYS = frozenset(
         "enginevolume",
         "engine_volume",
         "motor_engine",
+        "motor_engine_size_litre",
     }
 )
 

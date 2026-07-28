@@ -317,6 +317,9 @@ def olx_listing_to_listing_out(
 
     engine_volume_l = _listing_engine_volume_value(listing)
 
+    raw_params = listing.raw_params if isinstance(listing.raw_params, dict) else {}
+    seller_type = "dealer" if raw_params.get("isBusiness") else "private"
+
     return ListingOut(
         id=f"olx_{listing_id}",
         source="olx",
@@ -333,7 +336,7 @@ def olx_listing_to_listing_out(
         description=listing.description,
         images=images,
         url=listing.url or "",
-        seller_type="private",
+        seller_type=seller_type,
         vin=vin,
         vin_checked=None,
         vin_check_url=None,

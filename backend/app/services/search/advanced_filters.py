@@ -108,14 +108,28 @@ def extract_listing_seats(item: ListingOut) -> int | None:
 def extract_listing_doors(item: ListingOut) -> int | None:
     sd = item.source_data if isinstance(item.source_data, dict) else {}
     auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
-    for key in ("door", "doors", "doorCount", "doorInt"):
-        raw = auto.get(key)
-        if raw is not None:
-            digits = re.sub(r"[^\d]", "", str(raw))
-            if digits:
-                value = int(digits)
-                if 2 <= value <= 7:
-                    return value
+    specs = sd.get("specs") if isinstance(sd.get("specs"), dict) else {}
+
+    for source in (auto, specs):
+        for key in ("door", "doors", "doorCount", "doorInt"):
+            raw = source.get(key) if source is auto else None
+            if raw is not None:
+                digits = re.sub(r"[^\d]", "", str(raw))
+                if digits:
+                    value = int(digits)
+                    if 2 <= value <= 7:
+                        return value
+        for spec_key, spec_value in source.items():
+            if not isinstance(spec_value, str):
+                continue
+            key = str(spec_key).lower()
+            if "двер" in key or "door" in key:
+                digits = re.sub(r"[^\d]", "", spec_value)
+                if digits:
+                    value = int(digits)
+                    if 2 <= value <= 7:
+                        return value
+
     m = re.search(r"(\d)\s*(?:двер|door)", f"{item.title} {item.description or ''}", re.I)
     if m:
         value = int(m.group(1))
@@ -176,6 +190,15 @@ def extract_listing_power_hp(item: ListingOut) -> float | None:
                 sub = power_block.get(sub_key)
                 if isinstance(sub, (int, float)) and float(sub) > 0:
                     return float(sub)
+
+    for spec_key, spec_value in specs.items():
+        if not isinstance(spec_value, str):
+            continue
+        key = str(spec_key).lower()
+        if any(token in key for token in ("потуж", "power", "к.с", "л.с", "hp", "кс")):
+            match = re.search(r"([\d]+)", spec_value.replace(" ", ""))
+            if match:
+                return float(match.group(1))
 
     blob = norm_text(f"{item.title} {item.description or ''}")
     match = re.search(r"(\d{2,4})\s*(?:к\.?\s*с\.?|л\.?\s*с\.?|hp|кс)\b", blob, re.I)
@@ -465,9 +488,14 @@ def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -
     specs_haystack = f"{blob} {specs_blob}"
 
     if filters.drivetrain:
+        from app.services.olx.constants import drivetrain_token_matches
+
         if specs_blob:
             matched = any(
-                DRIVETRAIN_NAME_TO_TOKEN.get(norm_text(d), norm_text(d)) in specs_blob
+                drivetrain_token_matches(
+                    DRIVETRAIN_NAME_TO_TOKEN.get(norm_text(d), norm_text(d)),
+                    specs_blob,
+                )
                 or norm_text(d) in specs_blob
                 for d in filters.drivetrain
             )

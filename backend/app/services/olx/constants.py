@@ -96,6 +96,22 @@ DRIVETRAIN_NAME_TO_TOKEN: dict[str, str] = {
     "повний": "awd",
 }
 
+# Токени з фільтра → ключові слова в тексті/specs OLX (не «awd» у «Повний»).
+DRIVETRAIN_TOKEN_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "fwd": ("перед", "fwd", "front"),
+    "rwd": ("задн", "rwd", "rear"),
+    "awd": ("повн", "awd", "4wd", "4x4", "all-wheel", "full"),
+}
+
+
+def drivetrain_token_matches(token: str, haystack: str) -> bool:
+    text = (haystack or "").lower()
+    if not text:
+        return False
+    key = (token or "").strip().lower()
+    keywords = DRIVETRAIN_TOKEN_KEYWORDS.get(key, (key,))
+    return any(kw in text for kw in keywords if kw)
+
 COLOR_NAME_TO_TOKEN: dict[str, str] = {
     "білий": "біл",
     "чорний": "чорн",

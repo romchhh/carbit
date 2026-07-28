@@ -1615,8 +1615,10 @@ def passes_post_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
     specs = listing.specs or {}
 
     if params.drivetrain:
+        from app.services.olx.constants import drivetrain_token_matches
+
         drivetrain_value = " ".join(v for v in specs.values() if isinstance(v, str)).lower()
-        if drivetrain_value and params.drivetrain.lower() not in drivetrain_value:
+        if drivetrain_value and not drivetrain_token_matches(params.drivetrain, drivetrain_value):
             return False
 
     if params.color:
