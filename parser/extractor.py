@@ -138,8 +138,11 @@ MILEAGE_MILES_RE = re.compile(
 )
 
 ENGINE_RE = re.compile(
+    r"(?:"
     r"(?:об['ʼ]?єм|двигун|мотор|engine)[\s:]*(?P<val>\d[.,]\d)"
-    r"|(?P<val>\d[.,]\d)\s?л\b",
+    r"|"
+    r"(?P<val2>\d[.,]\d)\s?л\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -628,7 +631,8 @@ def extract_car_data(
 
         eng = ENGINE_RE.search(text_low)
         if eng:
-            listing.engine_volume_l = float(eng.group("val").replace(",", "."))
+            raw_val = eng.group("val") or eng.group("val2")
+            listing.engine_volume_l = float(raw_val.replace(",", "."))
 
         power = POWER_RE.search(text_low)
         if power:
