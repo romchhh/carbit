@@ -57,4 +57,10 @@ async def enforce_rate_limit(
         )
 
     count += 1
-    await redis.setex(full_key, window_seconds, str(count))
+    # Не скидаємо вікно на кожному запиті — інакше ліміт «плаває» і ніколи не оновлюється.
+    try:
+        ttl = await redis.ttl(full_key)
+        ttl_seconds = int(ttl) if isinstance(ttl, (int, float)) and int(ttl) > 0 else window_seconds
+    except Exception:
+        ttl_seconds = window_seconds
+    await redis.setex(full_key, ttl_seconds, str(count))

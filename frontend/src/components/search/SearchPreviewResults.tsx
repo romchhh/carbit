@@ -10,7 +10,7 @@ import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import { listingsToExportItems } from "@/lib/export-listings";
-import { SEARCH_HOURLY_LIMIT, SEARCH_PAGE_SIZE, type SearchFreshness } from "@/lib/search-preview";
+import { SEARCH_PAGE_SIZE, type SearchFreshness } from "@/lib/search-preview";
 import { flavorForLoadMore, flavorForRefresh } from "@/lib/search-flavor";
 import { isSearchRateLimitMessage } from "@/components/search/SearchRateLimitNotice";
 import type { Listing, SourceStatus } from "@/types/api";
@@ -179,7 +179,7 @@ export function SearchPreviewResults({
               ніби це один великий автобазар.
             </p>
             <p className="mt-3 text-[11px] text-muted">
-              До {SEARCH_HOURLY_LIMIT} прогулянок ринком на годину — ноги теж втомлюються
+              На підписці — більше пошуків на годину, ніж на безкоштовному тарифі
             </p>
           </div>
         ) : results.length === 0 ? (

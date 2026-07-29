@@ -9,7 +9,7 @@ from app.core.database import AsyncSessionLocal
 from app.schemas.schemas import PaginatedListings, SearchFilters, SourceStatusOut
 from app.services.auto_ria.client import AutoRiaError
 from app.services.auto_ria.errors import raise_auto_ria_http
-from app.services.auto_ria.preview_limits import clamp_preview_request, consume_preview_quota, is_preview_mode
+from app.services.auto_ria.preview_limits import clamp_preview_request, is_preview_mode
 from app.services.fx_rates import refresh_process_rates
 from app.services.listings.sanitize import sanitize_paginated_listings, slim_listing_for_list
 from app.services.olx.errors import OlxError, raise_olx_http
@@ -29,13 +29,22 @@ logger = logging.getLogger(__name__)
 LIVE_SEARCH_CACHE_TTL_SECONDS = 120
 
 
-async def _safe_rate_limits(*, user_id: str, mode: str, page: int) -> None:
+async def _safe_rate_limits(
+    *,
+    user_id: str,
+    mode: str,
+    page: int,
+    hourly_limit: int,
+) -> None:
+    """Ліміт лише на новий пошук (page=1). Пагінація / «Показати ще» не витрачає квоту."""
     if not is_preview_mode(mode):
+        return
+    if page != 1:
         return
     try:
         await enforce_rate_limit(
             key=f"live-search:{user_id}",
-            limit=180,
+            limit=max(1, hourly_limit),
             window_seconds=3600,
             detail="Ліміт пошуків на годину вичерпано.",
             code="search_rate_limit",
@@ -44,15 +53,6 @@ async def _safe_rate_limits(*, user_id: str, mode: str, page: int) -> None:
         raise
     except Exception:
         logger.exception("Live search rate-limit failed — continuing without limit")
-
-    if page != 1:
-        return
-    try:
-        await consume_preview_quota(user_id)
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("Preview quota failed — continuing without quota")
 
 
 async def _ingest_preview_background(
@@ -106,8 +106,14 @@ async def run_live_search(
     per_page: int,
     sort_by: str,
     mode: str,
+    hourly_limit: int = 30,
 ) -> PaginatedListings:
-    await _safe_rate_limits(user_id=user_id, mode=mode, page=page)
+    await _safe_rate_limits(
+        user_id=user_id,
+        mode=mode,
+        page=page,
+        hourly_limit=hourly_limit,
+    )
     page, per_page = clamp_preview_request(page=page, per_page=per_page, mode=mode)
 
     # 1) Пул у KV — «Показати ще» без повторних запитів до OLX/AUTO.RIA

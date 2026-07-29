@@ -353,6 +353,7 @@ class PlanOut(BaseModel):
     searches_limit: int
     requests_month: int
     requests_hour: int
+    live_searches_hour: int = 30
     price_uah: int
     features: list[str]
 

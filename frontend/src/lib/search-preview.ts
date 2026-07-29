@@ -1,7 +1,8 @@
 export const SEARCH_PAGE_SIZE = 10;
 /** Перший запит — щоб показати картки, щойно є 5 результатів. */
 export const SEARCH_FIRST_BATCH = 5;
-export const SEARCH_HOURLY_LIMIT = 120;
+/** Орієнтир для UI (free). На підписці ліміт вищий — див. live_searches_hour у плані. */
+export const SEARCH_HOURLY_LIMIT = 30;
 export const SEARCH_NEW_WITHIN_DAYS = 7;
 
 /** @deprecated Use SEARCH_PAGE_SIZE */

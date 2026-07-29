@@ -7,7 +7,8 @@ from app.core.redis import get_redis
 # Live search у кабінеті: історичний каталог за фільтрами, порціями по 20
 PREVIEW_MAX_PER_PAGE = 20
 PREVIEW_MAX_PAGE = 25
-PREVIEW_HOURLY_LIMIT = 120
+# Fallback, якщо план не передано (free). Плани задають live_searches_hour.
+PREVIEW_HOURLY_LIMIT = 30
 PREVIEW_RATE_TTL_SECONDS = 3600
 
 BROWSE_MAX_PER_PAGE = 12
@@ -18,10 +19,11 @@ def _rate_key(user_id: str) -> str:
     return f"auto_ria:preview:{user_id}"
 
 
-async def consume_preview_quota(user_id: str) -> int:
+async def consume_preview_quota(user_id: str, *, hourly_limit: int | None = None) -> int:
     redis = await get_redis()
     key = _rate_key(user_id)
     raw = await redis.get(key)
+    limit = max(1, int(hourly_limit if hourly_limit is not None else PREVIEW_HOURLY_LIMIT))
 
     if raw is None:
         count = 1
@@ -31,13 +33,13 @@ async def consume_preview_quota(user_id: str) -> int:
         ttl = await redis.ttl(key)
         await redis.setex(key, ttl if ttl > 0 else PREVIEW_RATE_TTL_SECONDS, str(count))
 
-    if count > PREVIEW_HOURLY_LIMIT:
+    if count > limit:
         raise HTTPException(
             429,
             "Ліміт переглядів на годину вичерпано. Збережіть пошук — Carbit "
             "буде надсилати нові авто за вашими фільтрами прямо в Telegram.",
         )
-    return max(PREVIEW_HOURLY_LIMIT - count, 0)
+    return max(limit - count, 0)
 
 
 def clamp_preview_request(*, page: int, per_page: int, mode: str) -> tuple[int, int]:

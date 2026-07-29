@@ -57,8 +57,12 @@ async def live_search(
     sort_by: str = Query("newest"),
     mode: str = Query("preview", pattern="^(preview|browse)$"),
     user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
 ):
     """Live multi-source search (AUTO.RIA + OLX). Also exposed as POST /auto-ria/search."""
+    from app.services.billing.plans import effective_live_searches_hour
+
+    user = await _get_user(user_id, db)
     return await run_live_search(
         filters,
         user_id=user_id,
@@ -66,6 +70,7 @@ async def live_search(
         per_page=per_page,
         sort_by=sort_by,
         mode=mode,
+        hourly_limit=effective_live_searches_hour(user),
     )
 
 

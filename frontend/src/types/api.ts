@@ -147,6 +147,7 @@ export interface Plan {
   searches_limit: number;
   requests_month: number;
   requests_hour: number;
+  live_searches_hour?: number;
   price_uah: number;
   features: string[];
 }
