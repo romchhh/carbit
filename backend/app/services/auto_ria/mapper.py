@@ -376,6 +376,21 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
     fuel = fuel_raw.split(",")[0].strip() if fuel_raw else ""
     transmission = str(auto_data.get("gearboxName") or "")
 
+    # AUTO.RIA часто кладе обʼєм у fuelName («Бензин, 3 л.»), а engineVolume=null.
+    from app.services.listings.engine_volume import (
+        normalize_engine_litres,
+        parse_engine_volume_from_text,
+    )
+
+    engine_volume_l = None
+    raw_volume = auto_data.get("engineVolume")
+    if isinstance(raw_volume, (int, float)):
+        engine_volume_l = normalize_engine_litres(float(raw_volume))
+    elif isinstance(raw_volume, str) and raw_volume.strip():
+        engine_volume_l = parse_engine_volume_from_text(raw_volume)
+    if engine_volume_l is None and fuel_raw:
+        engine_volume_l = parse_engine_volume_from_text(fuel_raw)
+
     dealer = info.get("dealer") if isinstance(info.get("dealer"), dict) else {}
     seller_type = "dealer" if dealer.get("id") or dealer.get("name") else "private"
 
@@ -404,6 +419,7 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
         vin=_extract_vin(info),
         vin_checked=vin_checked,
         vin_check_url=_extract_vin_check_url(info, auto_id),
+        engine_volume_l=engine_volume_l,
         source_data=sanitize_source_data(info, fotos),
         price_history=[],
         is_duplicate=False,

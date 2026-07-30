@@ -21,12 +21,15 @@ from app.services.telegram_channels.service_loader import get_parser_channels
 logger = logging.getLogger(__name__)
 
 # Telethon search — швидко знаходить і старі пости (не лише останні N).
-TELEGRAM_SEARCH_LIMIT = 80
+TELEGRAM_SEARCH_LIMIT = 250
 KEYWORD_LIMIT_PER_CHANNEL = TELEGRAM_HISTORY_SCAN_LIMIT
-KEYWORD_WAIT_SECONDS = 6.0
-KEYWORD_COOLDOWN_SECONDS = 90
+KEYWORD_WAIT_SECONDS = 18.0
+KEYWORD_COOLDOWN_SECONDS = 60
 # Старі pending scan-и (Tesla тощо) блокували live-пошук годинами.
 STALE_JOB_SECONDS = 20 * 60
+# Якщо після швидкого search мало матчів — доганяємо history scan.
+THIN_RESULT_RETRY_THRESHOLD = 15
+THIN_RETRY_WAIT_SECONDS = 28.0
 
 
 def build_telegram_keyword_queries(
@@ -50,13 +53,8 @@ def build_telegram_keyword_queries(
         seen.add(key)
         out.append(key)
 
-    # Спочатку швидкий server-side search — покриває пости глибше за limit історії.
-    # Використовуємо * 2 внутрішньо, щоб пройти через class-name варіанти і
-    # дістатися цифрових ("c 300", "e 220"), які Telethon реально знаходить.
-    for q in build_search_keyword_queries(brand, model, max_queries=MAX_TELEGRAM_KEYWORD_QUERIES * 2):
-        add(q)
-    # Якщо модель унікальна для бренду (discovery, defender тощо) — пости часто
-    # не мають назви бренду. Додаємо standalone model-запити для глибшого покриття.
+    # Спочатку distinctive model (Countryman без Mini) — Telethon знаходить такі пости
+    # краще, ніж загальний «mini».
     if brand and model:
         from app.services.search.brand_model_keywords import (
             _allows_distinctive_model_without_brand,
@@ -68,6 +66,11 @@ def build_telegram_keyword_queries(
                 mt_k = norm_text(mt)
                 if mt_k and len(mt_k) >= 4:
                     add(mt)
+
+    # Далі brand+model / brand варіанти.
+    for q in build_search_keyword_queries(brand, model, max_queries=MAX_TELEGRAM_KEYWORD_QUERIES * 2):
+        add(q)
+
     if include_history_scan:
         add(encode_telegram_scan_job(brand, model))
     return out[: MAX_TELEGRAM_KEYWORD_QUERIES * 3 + (1 if include_history_scan else 0)]

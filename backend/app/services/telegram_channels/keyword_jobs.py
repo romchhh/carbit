@@ -66,7 +66,7 @@ async def process_keyword_queue(service, *, limit: int = 8) -> int:
                 listings = await service.search_channel_by_keywords(
                     channel,
                     query,
-                    limit=min(per_channel, 100),
+                    limit=min(per_channel, 250),
                 )
             async with AsyncSessionLocal() as db:
                 from app.services.parser.settings import get_parser_settings
@@ -132,7 +132,9 @@ async def run_inline_keyword_refresh(
     """
     from app.services.telegram_channels.service_loader import get_parser_service
 
-    service = get_parser_service()
+    # skip_dedupe: keyword-пошук має ПЕРЕПАРСИТИ вже бачені пости —
+    # інакше wrong brand (BMW Garage) лишається назавжди.
+    service = get_parser_service(skip_dedupe=True)
     await service.start()
     try:
         await drain_keyword_jobs_for_ids(service, job_ids, wait_seconds=wait_seconds)

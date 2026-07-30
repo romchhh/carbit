@@ -302,12 +302,14 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         // Клієнтське сортування — додаткова страховка (пул міг бути з іншим sort_by).
         const firstItems = sortListingItems(first.items, nextSort);
         fullPoolRef.current = [...firstItems];
-        displayPoolRef.current = [...firstItems];
-        displayCountRef.current = firstItems.length;
+        // Показуємо одразу до SEARCH_PAGE_SIZE; решту — через «Показати ще».
+        const initialDisplay = firstItems.slice(0, SEARCH_PAGE_SIZE);
+        displayPoolRef.current = [...initialDisplay];
+        displayCountRef.current = initialDisplay.length;
 
         startTransition(() => {
-          setResults([...firstItems]);
-          setPage(Math.max(1, Math.ceil(firstItems.length / SEARCH_PAGE_SIZE)));
+          setResults([...initialDisplay]);
+          setPage(Math.max(1, Math.ceil(initialDisplay.length / SEARCH_PAGE_SIZE)));
           syncMeta(first, nextFilters, nextSort, nextFreshness);
           setSearching(false);
         });
@@ -316,17 +318,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2);
           if (gen !== searchGen.current) return;
           lastApiPageRef.current = 2;
-          // Дописуємо стор. 2 в кінець — без пересортування вже показаних карток.
+          // Дописуємо стор. 2 у пул — без розширення display (лише preload).
           fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, second.items);
-          displayPoolRef.current = growDisplayStable(
-            displayPoolRef.current,
-            fullPoolRef.current,
-            fullPoolRef.current.length,
-          );
-          displayCountRef.current = displayPoolRef.current.length;
           startTransition(() => {
-            setResults([...displayPoolRef.current]);
-            setPage(Math.max(1, Math.ceil(displayCountRef.current / SEARCH_PAGE_SIZE)));
             syncMeta(second, nextFilters, nextSort, nextFreshness);
           });
         }

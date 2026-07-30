@@ -30,8 +30,11 @@ function parseEngineNumber(raw: unknown): number | null {
   return null;
 }
 
+/** Повні слова — стебла «бенз»/«диз» + \b не матчать «бензин»/«дизель». */
+const FUEL_WORD =
+  "бензин(?:овий)?|дизель(?:ний|не)?|дизел|газ(?:овий)?|hybrid|petrol|diesel|benzin|dizel|gasoline";
 const ENGINE_TRANS_HINT =
-  "at|mt|cvt|dsg|tiptronic|автомат|мех|tsi|tdi|tdci|hdi|mpi|fsi|gdi|hybrid|plug|бенз|диз|diesel|petrol|benzin";
+  `at|mt|cvt|dsg|tiptronic|автомат|мех|tsi|tdi|tdci|hdi|mpi|fsi|gdi|hybrid|plug|${FUEL_WORD}`;
 
 function readEngineFromSources(...sources: Record<string, unknown>[]): number | null {
   for (const source of sources) {
@@ -72,24 +75,37 @@ function readEngineFromSpecValues(specs: Record<string, unknown>): number | null
   return null;
 }
 
+function inEngineRange(parsed: number | null): number | null {
+  if (parsed == null) return null;
+  if (parsed < 0.6 || parsed > 10) return null;
+  return parsed;
+}
+
 function readEngineFromText(text: string): number | null {
   const blob = text.toLowerCase().replace(/\s+/g, " ").trim();
   if (!blob) return null;
 
   for (const pattern of [
     /(?:об['ʼ]?єм|двигун|мотор|engine|motor)\s*[:\-]?\s*(\d+[.,]?\d*)/i,
-    /(\d+[.,]\d+)\s*(?:л|l|litre|liter|літр)\b/i,
+    /(\d+[.,]\d+)\s*(?:л|l|litre|liter|літр)\.?\b/i,
+    /(\d{1,2})\s*(?:л|l|litre|liter|літр)\.?\b/i,
+    // «бензин 3.0» / «Дизель, 2.99» — лише десяткове (не рік 2019)
+    new RegExp(`(?:${FUEL_WORD})\\s*[,:]?\\s*(\\d+[.,]\\d+)`, "i"),
+    // «бензин, 3 л»
+    new RegExp(`(?:${FUEL_WORD})\\s*[,:]?\\s*(\\d{1,2})\\s*(?:л|l)\\.?`, "i"),
+    // «3.0 бензин»
+    new RegExp(`(\\d+[.,]\\d+)\\s*(?:${FUEL_WORD})`, "i"),
     /(\d{3,4})\s*(?:см3|см³|cc|куб\.?|cm3)\b/i,
   ]) {
     const match = blob.match(pattern);
     if (!match) continue;
-    const parsed = parseEngineNumber(match[1]);
+    const parsed = inEngineRange(parseEngineNumber(match[1]));
     if (parsed != null) return parsed;
   }
 
-  const transMatch = blob.match(new RegExp(`\\b(\\d\\.\\d)\\s*(?:${ENGINE_TRANS_HINT})\\b`, "i"));
+  const transMatch = blob.match(new RegExp(`\\b(\\d+[.,]\\d+)\\s*(?:${ENGINE_TRANS_HINT})\\b`, "i"));
   if (transMatch) {
-    const parsed = parseEngineNumber(transMatch[1]);
+    const parsed = inEngineRange(parseEngineNumber(transMatch[1]));
     if (parsed != null) return parsed;
   }
 
@@ -116,6 +132,14 @@ export function resolveListingEngineVolume(listing: Listing): number | null {
 
   const fromSpecs = readEngineFromSpecValues(specs);
   if (fromSpecs != null) return fromSpecs;
+
+  // AUTO.RIA fuelName: «Бензин, 3 л.»
+  for (const fuelRaw of [auto.fuelName, sd.fuelName, listing.fuel]) {
+    if (typeof fuelRaw === "string" && fuelRaw.trim()) {
+      const fromFuel = readEngineFromText(fuelRaw);
+      if (fromFuel != null) return fromFuel;
+    }
+  }
 
   const title = listing.title || "";
   const description = listing.description || "";

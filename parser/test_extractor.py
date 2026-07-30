@@ -207,6 +207,44 @@ W1NWH5AB1SX014976
         self.assertEqual(listing.location_city, "Одеса")
         self.assertTrue(is_valid_car_listing(listing))
 
+    def test_mini_countryman_not_bmw_from_service_name(self):
+        """Сервіс «Zolotoy BMW Garage» у тілі не повинен перебивати MINI із заголовка."""
+        text = """MINI COUNTRYMAN S 2013
+Повний привід спорт комплектація автомат
+$10500
+VIN номер: WMWZC5C52DWP34187
+
+Продаю власне авто. Обслуговувались на Zolotoy BMW Garage та Cooper Centre.
+Авто повної комплектації: 1.6 турбований повний привід.
+Рідний пробіг 149 тисяч.
+Київ"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Mini")
+        self.assertIsNotNone(listing.model)
+        self.assertIn("countryman", (listing.model or "").lower())
+        self.assertEqual(listing.year, 2013)
+        self.assertEqual(listing.price_amount, 10500)
+        self.assertEqual(listing.mileage_km, 149000)
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_service_name_before_mini_still_picks_car(self):
+        """Навіть якщо «BMW Garage» згадано раніше за Mini у тексті — беремо авто."""
+        text = (
+            "Обслуговування: Zolotoy BMW Garage\n"
+            "MINI COUNTRYMAN S 2014\n"
+            "$9800 пробіг 120 тис. км Київ"
+        )
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Mini")
+        self.assertIn("countryman", (listing.model or "").lower())
+
+    def test_countryman_without_mini_brand(self):
+        """Лише Countryman у заголовку → Mini Countryman."""
+        text = "Countryman S 2015\n$8500\nпробіг 130 тис км, Київ"
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Mini")
+        self.assertIn("Countryman", listing.model or "")
+
 
 if __name__ == "__main__":
     unittest.main()

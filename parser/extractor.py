@@ -24,7 +24,22 @@ CURRENT_YEAR = datetime.now().year
 WORD_BOUNDARY_BRANDS = {
     "man", "ман", "vw", "kia", "кіа", "киа", "gmc", "daf", "даф", "byd", "mini", "міні",
     "ev", "seat", "сеат", "opel", "опель", "geely", "джили", "nio", "li",
+    "countryman", "кантрімен", "кантримен", "clubman", "клабмен", "paceman", "пейсмен",
 }
+
+# Контекст сервісу/шин — не плутати з маркою авто («Zolotoy BMW Garage», «Cooper Centre»).
+_SERVICE_CONTEXT_RE = re.compile(
+    r"(?:garage|гараж|серв[іи]с|service|centre|center|центр|сто\b|"
+    r"шини|шин[иы]|tires?|tyres?|майстерн|обслугов|обслужув|"
+    r"ремонт\s+(?:авто|машин)|автосерв|автосалон)",
+    re.IGNORECASE,
+)
+
+# Хвости після марки, які майже ніколи не є моделлю авто.
+_FAKE_MODEL_TOKENS = frozenset({
+    "garage", "гараж", "service", "сервіс", "сервис", "centre", "center", "центр",
+    "сто", "шини", "tires", "tyres", "presents", "представляет", "представляє",
+})
 
 MIN_LISTING_CONFIDENCE = 0.33
 
@@ -142,6 +157,14 @@ ENGINE_RE = re.compile(
     r"(?:об['ʼ]?єм|двигун|мотор|engine)[\s:]*(?P<val>\d[.,]\d)"
     r"|"
     r"(?P<val2>\d[.,]\d)\s?л\b"
+    r"|"
+    r"(?P<val3>\d{1,2})\s?л\.?\b"
+    r"|"
+    r"(?:бензин(?:овий)?|дизель(?:ний|не)?|дизел|petrol|diesel|benzin)"
+    r"\s*[,:]?\s*(?P<val4>\d[.,]\d)"
+    r"|"
+    r"(?P<val5>\d[.,]\d)\s*"
+    r"(?:бензин(?:овий)?|дизель(?:ний|не)?|дизел|petrol|diesel|benzin)"
     r")",
     re.IGNORECASE,
 )
@@ -365,46 +388,107 @@ def _brand_match(text_low: str, brand_key: str) -> Optional[int]:
     return idx if idx != -1 else None
 
 
+def _brand_context_is_service(text_low: str, idx: int, brand_len: int) -> bool:
+    """True якщо згадка марки схожа на назву сервісу, а не на авто."""
+    window = text_low[max(0, idx - 36) : idx + brand_len + 48]
+    return bool(_SERVICE_CONTEXT_RE.search(window))
+
+
+def _candidate_from_brand_key(
+    brand_key: str,
+    idx: int,
+    original_text: str,
+) -> tuple[str, str | None]:
+    if brand_key in MODEL_AS_BRAND:
+        canonical_brand, base_model = MODEL_AS_BRAND[brand_key]
+        tail = original_text[idx + len(brand_key) : idx + len(brand_key) + 20]
+        suffix_words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", tail)
+        suffix = ""
+        for sw in suffix_words[:1]:
+            if YEAR_RE.fullmatch(sw) or sw.lower() in MODEL_STOP_WORDS:
+                break
+            if re.fullmatch(r"\d", sw):
+                suffix = f" {sw}"
+            break
+        return canonical_brand, f"{base_model}{suffix}"
+
+    brand = BRAND_CANONICAL.get(brand_key, brand_key.title())
+    tail = original_text[idx + len(brand_key) : idx + len(brand_key) + 40]
+    words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", tail)
+    model_words: list[str] = []
+    for w in words[:3]:
+        if YEAR_RE.fullmatch(w) or YEAR_RE.match(w):
+            break
+        if w.lower() in MODEL_STOP_WORDS:
+            break
+        if w.lower() in ("рік", "года", "року", "р", "р.", "г", "г."):
+            break
+        if w.lower() in _FAKE_MODEL_TOKENS:
+            break
+        model_words.append(w)
+        if len(model_words) >= 2:
+            break
+    model = " ".join(model_words) if model_words else None
+    return brand, model
+
+
+def _score_brand_candidate(
+    *,
+    idx: int,
+    brand_key: str,
+    model: str | None,
+    text_low: str,
+    is_service: bool,
+) -> float:
+    """Вищий score = кращий кандидат. Title/модель > сервіс у тілі."""
+    score = 1000.0 - float(idx)  # раніше в тексті → краще
+    if idx <= 80:
+        score += 250
+    elif idx <= 200:
+        score += 120
+    if brand_key in MODEL_AS_BRAND:
+        score += 180
+    if model:
+        first = model.split()[0].lower()
+        if first not in _FAKE_MODEL_TOKENS and len(first) >= 2:
+            score += 90
+        if first in _FAKE_MODEL_TOKENS:
+            score -= 220
+    if is_service:
+        score -= 400
+    # «BMW Garage» / «Cooper Centre» без моделі авто
+    if is_service and not model:
+        score -= 200
+    return score
+
+
 def _find_brand_model(text_low: str, original_text: str):
-    """Шукає бренд у тексті і намагається витягти 1-2 наступних слова як модель."""
+    """Шукає бренд у тексті і намагається витягти 1-2 наступних слова як модель.
+
+    Кандидати ранжуються: заголовок + реальна модель > згадки сервісів
+    («Zolotoy BMW Garage», «Cooper Centre») у тілі поста.
+    """
+    best: tuple[float, int, str, str | None] | None = None
+
     for brand_key in CAR_BRANDS:
         idx = _brand_match(text_low, brand_key)
         if idx is None:
             continue
-        # Перевірка: якщо brand_key — це насправді назва моделі (напр. «discovery»),
-        # то бренд і перша частина моделі вже відомі зі словника MODEL_AS_BRAND.
-        if brand_key in MODEL_AS_BRAND:
-            canonical_brand, base_model = MODEL_AS_BRAND[brand_key]
-            # Намагаємось підхопити суфікс після моделі (напр. «5» у «Discovery 5»)
-            tail = original_text[idx + len(brand_key): idx + len(brand_key) + 20]
-            suffix_words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", tail)
-            suffix = ""
-            for sw in suffix_words[:1]:
-                if YEAR_RE.fullmatch(sw) or sw.lower() in MODEL_STOP_WORDS:
-                    break
-                # Однозначне число ≤ 9 є генерацією моделі (Discovery 5, Discovery 4)
-                if re.fullmatch(r"\d", sw):
-                    suffix = f" {sw}"
-                break
-            return canonical_brand, f"{base_model}{suffix}", idx
+        brand, model = _candidate_from_brand_key(brand_key, idx, original_text)
+        is_service = _brand_context_is_service(text_low, idx, len(brand_key))
+        score = _score_brand_candidate(
+            idx=idx,
+            brand_key=brand_key,
+            model=model,
+            text_low=text_low,
+            is_service=is_service,
+        )
+        if best is None or score > best[0] or (score == best[0] and idx < best[1]):
+            best = (score, idx, brand, model)
 
-        brand = BRAND_CANONICAL.get(brand_key, brand_key.title())
-        tail = original_text[idx + len(brand_key): idx + len(brand_key) + 40]
-        words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", tail)
-        model_words = []
-        for w in words[:3]:
-            if YEAR_RE.fullmatch(w) or YEAR_RE.match(w):
-                break
-            if w.lower() in MODEL_STOP_WORDS:
-                break
-            if w.lower() in ("рік", "года", "року", "р", "р.", "г", "г."):
-                break
-            model_words.append(w)
-            if len(model_words) >= 2:
-                break
-        model = " ".join(model_words) if model_words else None
-        return brand, model, idx
-    return None, None, None
+    if best is None:
+        return None, None, None
+    return best[2], best[3], best[1]
 
 
 def _calendar_date_year_starts(text: str) -> frozenset[int]:
@@ -631,8 +715,17 @@ def extract_car_data(
 
         eng = ENGINE_RE.search(text_low)
         if eng:
-            raw_val = eng.group("val") or eng.group("val2")
-            listing.engine_volume_l = float(raw_val.replace(",", "."))
+            raw_val = (
+                eng.group("val")
+                or eng.group("val2")
+                or eng.group("val3")
+                or eng.group("val4")
+                or eng.group("val5")
+            )
+            if raw_val:
+                volume = float(raw_val.replace(",", "."))
+                if 0.6 <= volume <= 10.0:
+                    listing.engine_volume_l = volume
 
         power = POWER_RE.search(text_low)
         if power:

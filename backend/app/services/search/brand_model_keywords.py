@@ -24,12 +24,11 @@ from app.services.olx.brand_slugs import (
     slugify,
 )
 
-MAX_TELEGRAM_KEYWORD_QUERIES = 4
+MAX_TELEGRAM_KEYWORD_QUERIES = 8
 MAX_SEARCH_KEYWORD_QUERIES = 10
 TELEGRAM_SCAN_QUERY_PREFIX = "__scan__:"
 # Глибина scan історії каналу при live-пошуку за маркою/моделлю.
-# 500 було замало для активних автоканалів — свіжі пости «губилися».
-TELEGRAM_HISTORY_SCAN_LIMIT = 2000
+TELEGRAM_HISTORY_SCAN_LIMIT = 2500
 
 # RU/UA написання марок (slug → варіанти). Доповнює BRAND_TO_SLUG.
 BRAND_SLUG_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
@@ -1552,6 +1551,33 @@ def _variant_in_haystack(variant: str, hay: str) -> bool:
     return False
 
 
+@lru_cache(maxsize=128)
+def _distinctive_model_tokens_for_brand_slug(slug: str) -> tuple[str, ...]:
+    if not slug:
+        return ()
+    return tuple(
+        sorted(
+            token
+            for token, owner in unique_model_token_owner().items()
+            if owner == slug and len(token) >= 4
+        )
+    )
+
+
+def _brand_distinctive_model_in_text(haystack: str, brand: str) -> bool:
+    """Чи є в тексті унікальна модель цієї марки (для brand-only фільтра)."""
+    slug = resolve_olx_brand_slug(brand) if brand else ""
+    if not slug:
+        return False
+    hay = norm_text(haystack)
+    if not hay:
+        return False
+    for token in _distinctive_model_tokens_for_brand_slug(slug):
+        if _variant_in_haystack(token, hay):
+            return True
+    return False
+
+
 def text_matches_brand_filter(haystack: str, brand: str, *, model: str = "") -> bool:
     if not haystack or not brand:
         return True
@@ -1570,6 +1596,9 @@ def text_matches_brand_filter(haystack: str, brand: str, *, model: str = "") -> 
                 raw, model, brand=brand
             ):
                 return True
+        elif _brand_distinctive_model_in_text(raw, brand):
+            # Brand-only search: «Countryman 2013» без слова Mini все одно Mini.
+            return True
     return False
 
 

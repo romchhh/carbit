@@ -220,7 +220,7 @@ class ChannelMediaStore:
         if not query or not channels:
             return []
 
-        limit = max(10, min(int(limit), 1000))
+        limit = max(10, min(int(limit), 2500))
         cooldown_seconds = max(30, int(cooldown_seconds))
         job_ids: list[int] = []
         now = _utcnow()

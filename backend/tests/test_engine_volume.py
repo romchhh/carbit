@@ -81,6 +81,36 @@ class EngineVolumeExtractTests(unittest.TestCase):
         filters = SearchFilters(engine_volume_from=2.0, engine_volume_to=3.0)
         self.assertTrue(listing_matches_advanced_filters(item, filters))
 
+    def test_fuel_before_decimal(self):
+        item = _item(title="BMW X5", description="бензин 3.0, автомат")
+        self.assertEqual(extract_listing_engine_volume(item), 3.0)
+
+    def test_fuel_after_decimal(self):
+        item = _item(title="Audi A6 3.0 дизель", description="")
+        self.assertEqual(extract_listing_engine_volume(item), 3.0)
+
+    def test_diesel_comma_decimal(self):
+        item = _item(description="Дизель 2,99 л, 4WD")
+        self.assertEqual(extract_listing_engine_volume(item), 2.99)
+
+    def test_auto_ria_fuel_name_integer_litres(self):
+        item = _item(
+            fuel="Бензин",
+            source_data={"autoData": {"fuelName": "Бензин, 3 л.", "engineVolume": None}},
+        )
+        self.assertEqual(extract_listing_engine_volume(item), 3.0)
+
+    def test_auto_ria_fuel_name_diesel(self):
+        item = _item(
+            fuel="Дизель",
+            source_data={"autoData": {"fuelName": "Дизель, 2.99 л.", "engineVolume": None}},
+        )
+        self.assertEqual(extract_listing_engine_volume(item), 2.99)
+
+    def test_fuel_year_not_volume(self):
+        item = _item(title="Volkswagen Passat бензин 2019", description="")
+        self.assertIsNone(extract_listing_engine_volume(item))
+
 
 if __name__ == "__main__":
     unittest.main()

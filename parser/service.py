@@ -131,11 +131,13 @@ class CarParserService:
         group_messages: list,
         *,
         touch_cursor: bool = True,
+        force_reparse: bool = False,
     ) -> Optional[CarListing]:
         """group_messages - список Message з однаковим grouped_id (або 1 повідомлення).
 
         Фото НЕ качаємо тут (lazy): лише валідуємо текст і зберігаємо refs.
         touch_cursor=False — для keyword-пошуку по історії (не зсуваємо інкрементальний cursor).
+        force_reparse=True — ігнорує seen_messages (keyword/history мають виправити wrong brand).
         """
         channel = await self._normalize_channel(channel)
         group_messages = sorted(group_messages, key=lambda m: m.id)
@@ -150,7 +152,7 @@ class CarParserService:
                 self.media_store.advance_cursor(channel, max_id)
             return None
 
-        if not self.skip_dedupe and self.dedupe.is_seen(channel, primary.id):
+        if not force_reparse and not self.skip_dedupe and self.dedupe.is_seen(channel, primary.id):
             self.last_parse_stats["dedupe"] = self.last_parse_stats.get("dedupe", 0) + 1
             if touch_cursor and max_id:
                 self.media_store.advance_cursor(channel, max_id)
@@ -330,7 +332,9 @@ class CarParserService:
             text = self._merge_group_text(group)
             if not message_matches_search_filters(text, brand, model):
                 continue
-            listing = await self._process_group(channel, group, touch_cursor=False)
+            listing = await self._process_group(
+                channel, group, touch_cursor=False, force_reparse=True
+            )
             if listing:
                 results.append(listing)
 
@@ -399,7 +403,9 @@ class CarParserService:
 
         results = []
         for group in all_groups:
-            listing = await self._process_group(channel, group, touch_cursor=False)
+            listing = await self._process_group(
+                channel, group, touch_cursor=False, force_reparse=True
+            )
             if listing:
                 results.append(listing)
 

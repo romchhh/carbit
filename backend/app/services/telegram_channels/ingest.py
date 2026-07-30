@@ -191,7 +191,16 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
                 )
                 for mv in model_v:
                     like = f"%{mv}%"
-                    brand_clauses.extend([Listing.brand.ilike(like), Listing.title.ilike(like)])
+                    # description обовʼязково: при mis-parse brand=BMW title може не
+                    # містити Countryman, а body — так.
+                    brand_clauses.extend(
+                        [
+                            Listing.brand.ilike(like),
+                            Listing.title.ilike(like),
+                            Listing.description.ilike(like),
+                            Listing.model.ilike(like),
+                        ]
+                    )
         if brand_clauses:
             clauses.append(or_(*brand_clauses))
 
@@ -293,16 +302,19 @@ async def search_telegram_listings(
         scan_limit=scan_limit,
     )
 
-    # Якщо в БД порожньо — Telethon search + повний history scan, довше чекаємо worker.
-    if keyword_refresh and not matched and ((filters.brand or "").strip() or (filters.model or "").strip()):
-        try:
-            from app.services.telegram_channels.keyword_refresh import (
-                refresh_telegram_by_keywords,
-            )
+    # Якщо в БД порожньо або замало матчів — Telethon search + history scan.
+    from app.services.telegram_channels.keyword_refresh import (
+        THIN_RESULT_RETRY_THRESHOLD,
+        THIN_RETRY_WAIT_SECONDS,
+        refresh_telegram_by_keywords,
+    )
 
+    thin = len(matched) < THIN_RESULT_RETRY_THRESHOLD
+    if keyword_refresh and thin and ((filters.brand or "").strip() or (filters.model or "").strip()):
+        try:
             await refresh_telegram_by_keywords(
                 filters,
-                wait_seconds=14.0,
+                wait_seconds=THIN_RETRY_WAIT_SECONDS,
                 force_rescan=True,
                 include_history_scan=True,
             )

@@ -238,7 +238,9 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     haystack = f"{item.brand} {item.title} {item.description or ''}"
 
     if filters.brand:
-        # Жорстка відмова: структурована марка оголошення ≠ фільтр (якщо заголовок не підтверджує марку).
+        # Жорстка відмова: структурована марка оголошення ≠ фільтр —
+        # але якщо текст (title/description) підтверджує фільтр, не відкидаємо
+        # (типовий баг: «Zolotoy BMW Garage» → brand=BMW замість Mini з заголовка).
         item_brand_raw = (item.brand or "").strip()
         if item_brand_raw:
             from app.services.olx.brand_slugs import resolve_olx_brand_slug
@@ -246,22 +248,26 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
             filter_slug = resolve_olx_brand_slug(filters.brand)
             item_slug = resolve_olx_brand_slug(item_brand_raw)
             if filter_slug and item_slug and filter_slug != item_slug:
-                from app.services.search.brand_model_keywords import (
-                    _allows_distinctive_model_without_brand,
+                text_confirms_brand = text_matches_brand_filter(
+                    haystack, filters.brand, model=filters.model or ""
                 )
-
-                model_str = (filters.model or "").strip()
-                distinctive = bool(
-                    model_str
-                    and _allows_distinctive_model_without_brand(filters.brand, model_str)
-                    and text_matches_model_filter(
-                        f"{item.model} {item.title} {item.description or ''}",
-                        model_str,
-                        brand=filters.brand,
+                if not text_confirms_brand:
+                    from app.services.search.brand_model_keywords import (
+                        _allows_distinctive_model_without_brand,
                     )
-                )
-                if not distinctive:
-                    return False
+
+                    model_str = (filters.model or "").strip()
+                    distinctive = bool(
+                        model_str
+                        and _allows_distinctive_model_without_brand(filters.brand, model_str)
+                        and text_matches_model_filter(
+                            f"{item.model} {item.title} {item.description or ''}",
+                            model_str,
+                            brand=filters.brand,
+                        )
+                    )
+                    if not distinctive:
+                        return False
 
         if not text_matches_brand_filter(
             haystack, filters.brand, model=filters.model or ""

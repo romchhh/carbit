@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { IconZap } from "@/components/icons";
 import { AppPage, AppSection } from "@/components/layout/AppPage";
 import { LiqPayLogo } from "@/components/brand/LiqPayLogo";
+import { CancelRenewalDialog } from "@/components/billing/CancelRenewalDialog";
 import { PricingPlans, type PricingCardModel } from "@/components/pricing/PricingPlans";
 import { PRICING_PLANS } from "@/lib/pricing-plans";
 import { submitLiqPayCheckout } from "@/lib/liqpay-checkout";
@@ -63,6 +64,9 @@ function BillingPageInner() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState("");
 
   const load = async () => {
     const [nextPlans, nextSub] = await Promise.all([
@@ -85,6 +89,10 @@ function BillingPageInner() {
 
   const liqpayEnabled = Boolean(subscription?.liqpay_enabled);
   const currentPlanId = subscription?.plan ?? user?.plan;
+  const canCancelRenewal =
+    Boolean(subscription) &&
+    subscription?.plan !== "free" &&
+    Boolean(subscription?.recurring_active);
 
   const cards = useMemo(
     () =>
@@ -137,6 +145,29 @@ function BillingPageInner() {
         setError(msg);
       }
       setLoading(null);
+    }
+  };
+
+  const confirmCancelRenewal = async (payload: { reason: string; note: string }) => {
+    setCancelLoading(true);
+    setCancelError("");
+    try {
+      const sub = await billingApi.unsubscribe({
+        reason: payload.reason,
+        note: payload.note || undefined,
+      });
+      setSubscription(sub);
+      await refreshUser();
+      setCancelOpen(false);
+      setSuccess(
+        "Автопродовження скасовано. Доступ збережеться до кінця оплаченого періоду.",
+      );
+    } catch (err) {
+      setCancelError(
+        err instanceof ApiError ? err.message : "Не вдалося скасувати підписку",
+      );
+    } finally {
+      setCancelLoading(false);
     }
   };
 
@@ -209,20 +240,6 @@ function BillingPageInner() {
         <PricingPlans variant="cabinet" plans={cards} onSelect={id => void orderPlan(id)} />
       </div>
 
-      {subscription && subscription.plan !== "free" && subscription.recurring_active && (
-        <p className="mt-8 text-[12px] text-muted">
-          Автопродовження через LiqPay увімкнено
-          {subscription.plan_expires_at
-            ? ` · наступне списання біля ${new Date(subscription.plan_expires_at).toLocaleDateString("uk-UA")}`
-            : ""}
-          . Скасувати можна в{" "}
-          <Link href="/app/account#account-plan" className="font-semibold text-emerald-dark hover:underline">
-            профілі → Підписка
-          </Link>
-          .
-        </p>
-      )}
-
       <div className="mt-8 flex flex-col items-center gap-3 text-center">
         <LiqPayLogo height={28} />
         <p className="max-w-md text-[12px] text-muted">
@@ -239,6 +256,35 @@ function BillingPageInner() {
           )}
         </p>
       </div>
+
+      {canCancelRenewal && (
+        <div className="mt-10 border-t border-border/50 pt-6 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              setCancelError("");
+              setCancelOpen(true);
+            }}
+            className="text-[11px] text-muted/80 underline-offset-2 transition hover:text-muted hover:underline"
+          >
+            Cancel subscription
+          </button>
+          <p className="mx-auto mt-1.5 max-w-sm text-[10px] leading-relaxed text-muted/60">
+            Скасує автопродовження. Доступ лишиться до кінця оплаченого періоду.
+          </p>
+        </div>
+      )}
+
+      <CancelRenewalDialog
+        open={cancelOpen}
+        expiresAt={subscription?.plan_expires_at}
+        loading={cancelLoading}
+        error={cancelError}
+        onClose={() => {
+          if (!cancelLoading) setCancelOpen(false);
+        }}
+        onConfirm={payload => void confirmCancelRenewal(payload)}
+      />
     </AppPage>
   );
 }

@@ -161,6 +161,73 @@ class DuplicatesTests(unittest.TestCase):
         out = dedupe_telegram_posts_in_pool([a, b])
         self.assertEqual(len(out), 1)
 
+    def test_dedupe_telegram_cross_channel_repost(self):
+        from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
+
+        ts = datetime(2026, 7, 20, tzinfo=KYIV_TZ)
+        a = _item(
+            id="telegram_channel_a_10",
+            source="telegram",
+            brand="BMW",
+            model="X5",
+            year=2019,
+            price=25000,
+            currency="USD",
+            mileage=82000,
+            url="https://t.me/channel_a/10",
+            source_data={"channel": "channel_a", "message_id": 10},
+            published_at=ts,
+            found_at=ts,
+            images=["a.jpg", "b.jpg"],
+        )
+        b = _item(
+            id="telegram_channel_b_99",
+            source="telegram",
+            brand="BMW",
+            model="X5",
+            year=2019,
+            price=25000,
+            currency="USD",
+            mileage=83000,  # той самий bucket 80000
+            url="https://t.me/channel_b/99",
+            source_data={"channel": "channel_b", "message_id": 99},
+            published_at=ts,
+            found_at=ts,
+            images=["a.jpg"],
+        )
+        out = dedupe_telegram_posts_in_pool([a, b])
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].id, "telegram_channel_a_10")
+
+    def test_dedupe_telegram_different_price_kept(self):
+        from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
+
+        ts = datetime(2026, 7, 20, tzinfo=KYIV_TZ)
+        a = _item(
+            id="telegram_channel_a_10",
+            source="telegram",
+            brand="BMW",
+            model="X5",
+            year=2019,
+            price=25000,
+            source_data={"channel": "channel_a", "message_id": 10},
+            published_at=ts,
+            found_at=ts,
+        )
+        b = _item(
+            id="telegram_channel_b_99",
+            source="telegram",
+            brand="BMW",
+            model="X5",
+            year=2019,
+            price=27000,
+            source_data={"channel": "channel_b", "message_id": 99},
+            published_at=ts,
+            found_at=ts,
+        )
+        out = dedupe_telegram_posts_in_pool([a, b])
+        self.assertEqual(len(out), 2)
+
     def test_mark_pool_prefers_auto_ria_and_links_olx(self):
         items = mark_duplicates_in_pool(
             [

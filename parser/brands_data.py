@@ -9,6 +9,9 @@ CAR_BRANDS = [
     "mercedes-benz", "mercedes benz", "mercedes", "mersedes", "мерседес",
     "land rover", "range rover", "ленд ровер", "рендж ровер",
     "discovery", "дискавері", "дискавери",  # Land Rover Discovery без явної назви бренду
+    "countryman", "кантрімен", "кантримен",  # Mini Countryman без «Mini»
+    "clubman", "клабмен",
+    "paceman", "пейсмен",
     "volkswagen", "vw", "фольксваген", "фольксваген", "вольксваген",
     "bmw", "бмв",
     "audi", "ауді", "ауди",
@@ -104,6 +107,15 @@ MODEL_AS_BRAND: dict[str, tuple[str, str]] = {
     "паджеро": ("Mitsubishi", "Pajero"),
     "wrangler": ("Jeep", "Wrangler"),
     "вранглер": ("Jeep", "Wrangler"),
+    # Mini: часто пишуть лише модель без «Mini»; «cooper» не додаємо —
+    # занадто багато хибних «Cooper Centre».
+    "countryman": ("Mini", "Countryman"),
+    "кантрімен": ("Mini", "Countryman"),
+    "кантримен": ("Mini", "Countryman"),
+    "clubman": ("Mini", "Clubman"),
+    "клабмен": ("Mini", "Clubman"),
+    "paceman": ("Mini", "Paceman"),
+    "пейсмен": ("Mini", "Paceman"),
 }
 
 # для нормалізації бренду до "канонічного" вигляду при виводі користувачу
@@ -146,6 +158,9 @@ BRAND_CANONICAL = {
     "порше": "Porsche", "porsche": "Porsche",
     "ягуар": "Jaguar", "jaguar": "Jaguar",
     "міні": "Mini", "mini": "Mini",
+    "countryman": "Mini", "кантрімен": "Mini", "кантримен": "Mini",
+    "clubman": "Mini", "клабмен": "Mini",
+    "paceman": "Mini", "пейсмен": "Mini",
     "фіат": "Fiat", "фиат": "Fiat", "fiat": "Fiat",
     "альфа ромео": "Alfa Romeo", "alfa romeo": "Alfa Romeo",
     "сеат": "Seat", "seat": "Seat",

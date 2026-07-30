@@ -9,6 +9,16 @@ from app.schemas.schemas import ListingOut
 
 _APOSTROPHE_RE = re.compile(r"[''`´ʼ]")
 
+# Повні слова палива — стебла «бенз»/«диз» + \b не матчать «бензин»/«дизель».
+_FUEL_WORD = (
+    r"бензин(?:овий)?|дизель(?:ний|не)?|дизел|газ(?:овий)?|"
+    r"hybrid|petrol|diesel|benzin|dizel|gasoline"
+)
+_ENGINE_TRANS_HINT = (
+    rf"at|mt|cvt|dsg|tiptronic|автомат|мех|tsi|tdi|tdci|hdi|mpi|fsi|gdi|hybrid|plug|"
+    rf"{_FUEL_WORD}"
+)
+
 
 def _normalize_spec_key(key: str) -> str:
     return _APOSTROPHE_RE.sub("'", (key or "").strip().lower())
@@ -25,11 +35,6 @@ def _key_is_engine_spec(key: str) -> bool:
     if normalized in {"engine", "motor", "двигун", "мотор"}:
         return True
     return False
-
-_ENGINE_TRANS_HINT = (
-    r"at|mt|cvt|dsg|tiptronic|автомат|мех|tsi|tdi|tdci|hdi|mpi|fsi|gdi|hybrid|plug|"
-    r"бенз|диз|diesel|petrol|benzin"
-)
 
 _STRUCTURED_KEYS = (
     "engineVolume",
@@ -96,6 +101,16 @@ def _from_structured_sources(item: ListingOut) -> float | None:
             if parsed is not None:
                 return parsed
 
+    # AUTO.RIA: fuelName = «Бензин, 3 л.» / «Дизель, 2.99 л.» (engineVolume часто None).
+    for source in (auto, sd):
+        for fuel_key in ("fuelName", "fuel"):
+            raw = source.get(fuel_key)
+            if not isinstance(raw, str) or not raw.strip():
+                continue
+            parsed = _from_text(raw)
+            if parsed is not None:
+                return parsed
+
     return None
 
 
@@ -106,21 +121,28 @@ def _from_text(text: str) -> float | None:
 
     for pattern in (
         r"(?:об['ʼ]?єм|двигун|мотор|engine|motor)\s*[:\-]?\s*(\d+[.,]?\d*)",
-        r"(\d+[.,]\d+)\s*(?:л|l|litre|liter|літр)\b",
-        r"(\d+[.,]\d+)\s*(?:l|liter|litre)\b",
+        # «3.0 л», «2,5 л», «3 л.» (AUTO.RIA fuelName)
+        r"(\d+[.,]\d+)\s*(?:л|l|litre|liter|літр)\.?\b",
+        r"(\d{1,2})\s*(?:л|l|litre|liter|літр)\.?\b",
+        # «бензин 3.0», «Дизель, 2.99» — лише десяткове (не «бензин 2019»)
+        rf"(?:{_FUEL_WORD})\s*[,:]?\s*(\d+[.,]\d+)",
+        # «бензин, 3 л» / «дизель 3л»
+        rf"(?:{_FUEL_WORD})\s*[,:]?\s*(\d{{1,2}})\s*(?:л|l)\.?",
+        # «3.0 бензин», «3,0 дизель»
+        rf"(\d+[.,]\d+)\s*(?:{_FUEL_WORD})",
         r"(\d{3,4})\s*(?:см3|см³|cc|куб\.?|cm3)\b",
     ):
         match = re.search(pattern, blob, re.I)
         if not match:
             continue
         parsed = _litres_from_token(match.group(1))
-        if parsed is not None:
+        if parsed is not None and 0.6 <= parsed <= 10.0:
             return parsed
 
-    match = re.search(rf"\b(\d\.\d)\s*(?:{_ENGINE_TRANS_HINT})\b", blob, re.I)
+    match = re.search(rf"\b(\d+[.,]\d+)\s*(?:{_ENGINE_TRANS_HINT})\b", blob, re.I)
     if match:
         parsed = _litres_from_token(match.group(1))
-        if parsed is not None:
+        if parsed is not None and 0.6 <= parsed <= 10.0:
             return parsed
 
     # «Camry 2.5», «X5 3.0» — десяткове число перед кінцем рядка або розділювачем.
@@ -131,6 +153,11 @@ def _from_text(text: str) -> float | None:
             return parsed
 
     return None
+
+
+def parse_engine_volume_from_text(text: str) -> float | None:
+    """Публічний парсер обʼєму з довільного тексту (fuelName, опис тощо)."""
+    return _from_text(text)
 
 
 def extract_listing_engine_volume(item: ListingOut) -> float | None:
@@ -145,6 +172,13 @@ def extract_listing_engine_volume(item: ListingOut) -> float | None:
     structured = _from_structured_sources(item)
     if structured is not None:
         return structured
+
+    # Поле fuel після split може лишитись «Бензин», але іноді ще містить «Бензин, 3 л».
+    fuel = getattr(item, "fuel", None) or ""
+    if fuel:
+        from_fuel = _from_text(str(fuel))
+        if from_fuel is not None:
+            return from_fuel
 
     title = item.title or ""
     description = item.description or ""

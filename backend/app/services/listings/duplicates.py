@@ -122,6 +122,40 @@ def telegram_post_dedupe_key(item: ListingOut | Listing) -> str | None:
     return None
 
 
+def telegram_content_fingerprint(item: ListingOut | Listing) -> str | None:
+    """Ключ репосту одного авто в різних TG-каналах (бренд+модель+рік+ціна+пробіг)."""
+    source = getattr(item, "source", None)
+    source_val = source.value if hasattr(source, "value") else str(source or "")
+    if source_val.lower() != "telegram":
+        return None
+
+    try:
+        price = int(round(float(getattr(item, "price", 0) or 0)))
+    except (TypeError, ValueError):
+        price = 0
+    if price <= 0:
+        return None
+
+    currency = str(getattr(item, "currency", "") or "").strip().upper() or "USD"
+    year = int(getattr(item, "year", 0) or 0)
+    brand = norm_text(getattr(item, "brand", None) or "")
+    model = norm_text(getattr(item, "model", None) or "")
+    try:
+        mileage = int(getattr(item, "mileage", 0) or 0)
+    except (TypeError, ValueError):
+        mileage = 0
+    mile_bucket = (mileage // 5000) * 5000 if mileage > 0 else 0
+
+    if brand and year >= 1990:
+        return f"tgfp:{brand}:{model}:{year}:{price}:{currency}:{mile_bucket}"
+
+    title = norm_text(getattr(item, "title", None) or "")
+    # Без марки — лише якщо заголовок досить довгий і є рік/ціна.
+    if len(title) >= 24 and year >= 1990:
+        return f"tgfp:t:{title[:72]}:{year}:{price}:{currency}:{mile_bucket}"
+    return None
+
+
 def _telegram_listing_rank(row: ListingOut) -> tuple[int, int, int]:
     return (
         len(row.images or []),
@@ -135,14 +169,14 @@ def _prefer_telegram_listing(a: ListingOut, b: ListingOut) -> ListingOut:
     return a if _telegram_listing_rank(a) >= _telegram_listing_rank(b) else b
 
 
-def dedupe_telegram_posts_in_pool(items: list[ListingOut]) -> list[ListingOut]:
-    """Прибирає повтори одного Telegram-поста (різні listing.id / re-ingest)."""
-    if not items:
-        return []
-
+def _collapse_by_key(
+    items: list[ListingOut],
+    key_fn,
+) -> list[ListingOut]:
     best: dict[str, ListingOut] = {}
+
     for item in items:
-        key = telegram_post_dedupe_key(item)
+        key = key_fn(item)
         if not key:
             continue
         if key not in best:
@@ -152,14 +186,14 @@ def dedupe_telegram_posts_in_pool(items: list[ListingOut]) -> list[ListingOut]:
 
     out: list[ListingOut] = []
     seen_ids: set[str] = set()
-    emitted_tg: set[str] = set()
+    emitted_keys: set[str] = set()
 
     for item in items:
-        key = telegram_post_dedupe_key(item)
+        key = key_fn(item)
         if key:
-            if key in emitted_tg:
+            if key in emitted_keys:
                 continue
-            emitted_tg.add(key)
+            emitted_keys.add(key)
             row = best[key]
             if row.id in seen_ids:
                 continue
@@ -171,6 +205,16 @@ def dedupe_telegram_posts_in_pool(items: list[ListingOut]) -> list[ListingOut]:
         seen_ids.add(item.id)
         out.append(item)
     return out
+
+
+def dedupe_telegram_posts_in_pool(items: list[ListingOut]) -> list[ListingOut]:
+    """Прибирає повтори одного Telegram-поста та крос-канальні репости."""
+    if not items:
+        return []
+    # 1) той самий пост (канал+message_id / album)
+    by_post = _collapse_by_key(items, telegram_post_dedupe_key)
+    # 2) той самий лот, скопійований в інший канал
+    return _collapse_by_key(by_post, telegram_content_fingerprint)
 
 
 def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:

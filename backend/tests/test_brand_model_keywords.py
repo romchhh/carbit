@@ -110,6 +110,67 @@ class BrandModelKeywordTests(unittest.TestCase):
         })
         self.assertTrue(listing_out_matches_filters(item, filters))
 
+    def test_mini_matches_despite_misparsed_bmw_brand(self):
+        """Заголовок MINI + сервіс BMW у описі: структурований brand міг стати BMW."""
+        text = (
+            "MINI COUNTRYMAN S 2013\n"
+            "Обслуговувались на Zolotoy BMW Garage та Cooper Centre.\n"
+            "Рідний пробіг 149 тисяч. $10500"
+        )
+        item = type("Item", (), {
+            "brand": "BMW",
+            "model": "Garage",
+            "title": "MINI COUNTRYMAN S 2013",
+            "year": 2013,
+            "price": 10500,
+            "currency": "USD",
+            "mileage": 149000,
+            "region": "Київ",
+            "source": "telegram",
+            "fuel": "",
+            "transmission": "",
+            "description": text,
+        })()
+        filters = SearchFilters.model_validate({
+            "brand": "Mini",
+            "model": "Countryman",
+            "sources": ["telegram"],
+        })
+        self.assertTrue(listing_out_matches_filters(item, filters))
+
+    def test_countryman_only_matches_mini_brand_filter(self):
+        """Brand-only Mini + текст лише Countryman (без слова Mini)."""
+        item = type("Item", (), {
+            "brand": "BMW",
+            "model": "",
+            "title": "Countryman 2013",
+            "year": 2013,
+            "price": 10500,
+            "currency": "USD",
+            "mileage": 149000,
+            "region": "Київ",
+            "source": "telegram",
+            "fuel": "",
+            "transmission": "",
+            "description": "Countryman S повний привід, BMW Garage обслуговування",
+        })()
+        self.assertTrue(
+            listing_out_matches_filters(
+                item,
+                SearchFilters.model_validate({"brand": "Mini", "sources": ["telegram"]}),
+            )
+        )
+        self.assertTrue(
+            listing_out_matches_filters(
+                item,
+                SearchFilters.model_validate({
+                    "brand": "Mini",
+                    "model": "Countryman",
+                    "sources": ["telegram"],
+                }),
+            )
+        )
+
     def test_sql_tokens_skip_single_letter_noise(self):
         from app.services.search.brand_model_keywords import filter_sql_search_tokens
 
