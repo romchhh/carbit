@@ -1754,7 +1754,26 @@ def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
         elif not _passes_city_query(listing, params.city_query):
             return False
     elif brand_hint or model_hint:
-        if not _title_matches_brand_model(listing, brand=brand_hint, model=model_hint):
+        # Для /brand/model/ достатньо моделі в title (кемрі/camry…) —
+        # OLX path уже відсікає чужі марки, API-query інколи шумить.
+        if params.brand and params.model and model_hint:
+            if _is_non_car_listing(listing):
+                return False
+            from app.services.search.brand_model_keywords import (
+                _haystacks_for_match,
+                text_matches_model_filter,
+            )
+
+            title = listing.title or ""
+            model_ok = any(
+                text_matches_model_filter(h, model_hint, brand=brand_hint or "")
+                for h in _haystacks_for_match(title)
+            )
+            if not model_ok and not _title_matches_brand_model(
+                listing, brand=brand_hint, model=model_hint
+            ):
+                return False
+        elif not _title_matches_brand_model(listing, brand=brand_hint, model=model_hint):
             return False
 
     if not passes_post_filters(listing, params):

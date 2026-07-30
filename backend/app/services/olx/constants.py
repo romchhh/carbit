@@ -8,14 +8,14 @@ OFFERS_API_PATH = "/api/v1/offers/"
 OFFERS_API_LIMIT = 40
 # Орієнтовна кількість карток на HTML-сторінці OLX
 OLX_RESULTS_PER_PAGE = 40
-# Скільки сторінок OLX максимум обходити за один пошук (live / моніторинг)
-# Після API-first + серверних фільтрів 1–2 сторінки достатньо для швидкого live.
-OLX_MAX_SCAN_PAGES = 2
+# Скільки сторінок OLX максимум обходити за один пошук (live / моніторинг).
+# API-first (~40/стор.) тримає це швидким навіть на 4–5 сторінках.
+OLX_MAX_SCAN_PAGES = 4
 # Для великого пулу (live search «усі джерела»)
-OLX_POOL_MAX_SCAN_PAGES = 2
+OLX_POOL_MAX_SCAN_PAGES = 5
 # Live-pool: скільки оголошень максимум тягнути з OLX
-OLX_LIVE_POOL_CAP_WITH_BRAND = 80
-OLX_LIVE_POOL_CAP_NO_BRAND = 40
+OLX_LIVE_POOL_CAP_WITH_BRAND = 200
+OLX_LIVE_POOL_CAP_NO_BRAND = 120
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

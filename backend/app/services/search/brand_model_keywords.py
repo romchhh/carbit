@@ -309,7 +309,7 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
                             "lc120", "lc150", "j120", "j150", "fj120", "fj150",
                             "ленд крузер прадо"),
     "rav4": ("rav4", "рав4", "rav-4", "rav 4"),
-    "camry": ("camry", "камрі", "камри"),
+    "camry": ("camry", "камрі", "камри", "кемрі", "кемри", "кемре", "cemri", "kemri"),
     "corolla": ("corolla", "королла", "корола", "corolla cross", "корола кросс"),
     "highlander": ("highlander", "хайландер"),
     "4runner": ("4runner", "4 runner", "4-runner"),

@@ -75,17 +75,31 @@ def _olx_collect_target(
     needs_post_filter: bool,
     has_text_query: bool = False,
     has_remote_filters: bool = False,
+    pool_mode: bool = False,
 ) -> int:
     """Скільки оголошень потрібно зібрати з OLX перед пост-фільтром."""
+    from app.services.olx.constants import (
+        OLX_LIVE_POOL_CAP_NO_BRAND,
+        OLX_LIVE_POOL_CAP_WITH_BRAND,
+    )
+
+    # Live-pool передає per_page=500 — не роздуваємо target від цього числа.
+    if pool_mode:
+        base = OLX_LIVE_POOL_CAP_WITH_BRAND
+        if has_remote_filters:
+            return base
+        if has_text_query or needs_post_filter:
+            return base + 40
+        return base
+
     end = max(page, 1) * per_page
     if has_remote_filters:
-        # Ціна/рік/регіон уже на сервері OLX — майже без запасу.
-        return end + max(per_page // 4, 8)
+        return end + max(min(per_page, 40), 16)
     if has_text_query:
-        return end + max(per_page, 20)
+        return end + max(per_page, 40)
     if needs_post_filter:
-        return end + max(per_page // 2, 12)
-    return end + max(per_page // 2, 8)
+        return end + max(per_page, 24)
+    return end + max(per_page // 2, 12)
 
 
 def _olx_max_scan_pages(
@@ -99,10 +113,8 @@ def _olx_max_scan_pages(
     from app.services.olx.constants import OLX_MAX_SCAN_PAGES, OLX_POOL_MAX_SCAN_PAGES, OLX_RESULTS_PER_PAGE
 
     cap = OLX_POOL_MAX_SCAN_PAGES if pool_size else OLX_MAX_SCAN_PAGES
-    if has_remote_filters or has_text_query:
-        return min(2, cap)
     raw_est = collect_target
-    if needs_post_filter:
+    if needs_post_filter and not has_remote_filters:
         raw_est = collect_target + OLX_RESULTS_PER_PAGE
     pages = (raw_est + OLX_RESULTS_PER_PAGE - 1) // OLX_RESULTS_PER_PAGE
     return min(max(int(pages), 1), cap)
@@ -114,10 +126,11 @@ def _olx_pool_scan_limits(
     need: int,
     pool_mode: bool,
 ) -> tuple[int, int | None]:
-    """Обмежує глибину скану OLX для live-pool (швидкість > повнота другої сторінки)."""
+    """Обмежує глибину скану OLX для live-pool."""
     from app.services.olx.constants import (
         OLX_LIVE_POOL_CAP_NO_BRAND,
         OLX_LIVE_POOL_CAP_WITH_BRAND,
+        OLX_POOL_MAX_SCAN_PAGES,
     )
 
     if not pool_mode:
@@ -125,8 +138,8 @@ def _olx_pool_scan_limits(
     brand = (filters.brand or "").strip()
     model = (filters.model or "").strip()
     if brand or model:
-        return min(need, OLX_LIVE_POOL_CAP_WITH_BRAND), 2
-    return min(need, OLX_LIVE_POOL_CAP_NO_BRAND), 1
+        return min(need, OLX_LIVE_POOL_CAP_WITH_BRAND), OLX_POOL_MAX_SCAN_PAGES
+    return min(need, OLX_LIVE_POOL_CAP_NO_BRAND), min(3, OLX_POOL_MAX_SCAN_PAGES)
 
 
 async def _fetch_olx_search_html(
@@ -388,6 +401,7 @@ async def _search_olx_body(
         needs_post_filter=needs_pf,
         has_text_query=has_tq,
         has_remote_filters=has_remote,
+        pool_mode=pool_mode,
     )
     scan_need, page_cap = _olx_pool_scan_limits(filters, need=collect_target, pool_mode=pool_mode)
     collect_target = scan_need
