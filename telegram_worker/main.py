@@ -181,7 +181,7 @@ async def main() -> None:
                 pass
             busy = False
             try:
-                if await process_keyword_queue(service, limit=8):
+                if await process_keyword_queue(service, limit=16):
                     busy = True
             except Exception:
                 logger.exception("Keyword queue tick failed")

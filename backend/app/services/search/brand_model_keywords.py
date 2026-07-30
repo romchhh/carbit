@@ -1489,20 +1489,42 @@ def decode_telegram_scan_job(query: str) -> dict[str, str] | None:
     return {"brand": brand, "model": str(data.get("model") or "").strip()}
 
 
+_SERVICE_BRAND_NOISE_RE = re.compile(
+    r"(?:"
+    r"\b(?:bmw|бмв|cooper|купер|mini|міні)\s+"
+    r"(?:garage|гараж|centre|center|центр|service|серв[іи]с|сервис)\b"
+    r"|"
+    r"\b(?:garage|гараж|centre|center|центр|zoloto?y)\s+"
+    r"(?:bmw|бмв|cooper|купер)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def strip_service_brand_noise(text: str) -> str:
+    """Прибирає «BMW Garage» / «Cooper Centre» — не марка/модель авто."""
+    if not text:
+        return ""
+    return _SERVICE_BRAND_NOISE_RE.sub(" ", text)
+
+
 def _haystacks_for_match(text: str) -> tuple[str, ...]:
-    """Raw + homoglyph-normalized (ТЕSLA → TESLA), без дублікатів."""
+    """Текст для матчингу марки/моделі — без «BMW Garage» / «Cooper Centre»."""
     raw = text or ""
     if not raw:
         return ()
+    cleaned = strip_service_brand_noise(raw)
+    base = cleaned if cleaned.strip() else raw
+    variants = [base]
     try:
         from app.services.olx.parser import _normalize_title_for_match
 
-        alt = _normalize_title_for_match(raw)
+        alt = _normalize_title_for_match(base)
+        if alt and alt != base:
+            variants.append(alt)
     except ImportError:
-        alt = raw
-    if alt != raw:
-        return (raw, alt)
-    return (raw,)
+        pass
+    return tuple(variants)
 
 
 def message_matches_search_filters(text: str, brand: str, model: str = "") -> bool:

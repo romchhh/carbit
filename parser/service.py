@@ -27,10 +27,10 @@ from telethon.tl.types import Message
 from telethon.utils import get_peer_id
 
 from .channel_links import is_numeric_channel_id, public_telegram_message_url
-
 from .config import settings
 from .telegram_client import build_client, ensure_joined
 from .extractor import extract_car_data, is_valid_car_listing
+from .freshness import message_date_is_fresh, telegram_scan_cutoff_utc
 from .media import download_photos_by_ids
 from .dedupe import DedupeStore
 from .channel_media_store import ChannelMediaStore
@@ -63,6 +63,10 @@ class CarParserService:
         self._listen_handlers_registered = False
         self._peer_to_channel: dict[int, str] = {}
         self._on_new_listing: Callable[[CarListing], Awaitable[None]] | None = None
+
+    @staticmethod
+    def _message_is_fresh(msg, *, cutoff: datetime | None = None) -> bool:
+        return message_date_is_fresh(getattr(msg, "date", None), cutoff=cutoff)
 
     async def start(self):
         for name in ("telethon", "telethon.network", "telethon.client"):
@@ -168,6 +172,15 @@ class CarParserService:
             photos=[],
         )
 
+        # Не індексуємо пости старші за 3 місяці (навіть якщо проскочили в iter).
+        if listing.posted_at and not message_date_is_fresh(listing.posted_at):
+            if not self.skip_dedupe:
+                self.dedupe.mark_seen(channel, ids)
+            if touch_cursor and max_id:
+                self.media_store.advance_cursor(channel, max_id)
+            self.last_parse_stats["invalid"] = self.last_parse_stats.get("invalid", 0) + 1
+            return None
+
         if not is_valid_car_listing(listing):
             if not self.skip_dedupe:
                 self.dedupe.mark_seen(channel, ids)
@@ -224,8 +237,11 @@ class CarParserService:
         normalized = await self._normalize_channel(channel)
         cursor = 0 if self.skip_dedupe else self.media_store.get_cursor(normalized)
         raw_messages = []
+        cutoff = telegram_scan_cutoff_utc()
         # min_id=cursor → лише id > cursor (після першого bootstrap)
         async for msg in self.client.iter_messages(entity, limit=limit, min_id=cursor):
+            if not self._message_is_fresh(msg, cutoff=cutoff):
+                break  # newest → oldest
             raw_messages.append(msg)
 
         await _record_telegram_channels("history")
@@ -300,7 +316,10 @@ class CarParserService:
 
         normalized = await self._normalize_channel(channel)
         raw_messages: list = []
+        cutoff = telegram_scan_cutoff_utc()
         async for msg in self.client.iter_messages(entity, limit=max(10, int(limit))):
+            if not self._message_is_fresh(msg, cutoff=cutoff):
+                break  # newest → oldest: далі тільки старіше за 3 міс.
             raw_messages.append(msg)
 
         await _record_telegram_channels("history_scan")
@@ -375,7 +394,11 @@ class CarParserService:
 
         normalized = await self._normalize_channel(channel)
         raw_messages = []
+        cutoff = telegram_scan_cutoff_utc()
         async for msg in self.client.iter_messages(entity, search=query, limit=limit):
+            # search не гарантує порядок за датою — лише пропускаємо старі.
+            if not self._message_is_fresh(msg, cutoff=cutoff):
+                continue
             raw_messages.append(msg)
 
         await _record_telegram_channels("keyword_search")

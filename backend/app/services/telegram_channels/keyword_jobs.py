@@ -36,7 +36,7 @@ async def process_photo_queue(service, *, limit: int = 5) -> int:
     return done
 
 
-async def process_keyword_queue(service, *, limit: int = 8) -> int:
+async def process_keyword_queue(service, *, limit: int = 16) -> int:
     """Scan / Telethon-search історії каналів з live-пошуку."""
     ensure_parser_path()
     from app.services.search.brand_model_keywords import decode_telegram_scan_job
@@ -117,7 +117,7 @@ async def drain_keyword_jobs_for_ids(
     while time.monotonic() < deadline:
         if not store.keyword_jobs_pending(job_ids):
             return
-        await process_keyword_queue(service, limit=8)
+        await process_keyword_queue(service, limit=16)
         await asyncio.sleep(0.35)
 
 

@@ -7,29 +7,33 @@ import logging
 import time
 
 from app.core.config import settings as app_settings
+from app.core.text import norm_text
 from app.schemas.schemas import SearchFilters
 from app.services.search.brand_model_keywords import (
-    MAX_TELEGRAM_KEYWORD_QUERIES,
     TELEGRAM_HISTORY_SCAN_LIMIT,
     TELEGRAM_SCAN_QUERY_PREFIX,
     build_search_keyword_queries,
+    collect_brand_keyword_variants,
+    collect_model_keyword_variants,
     encode_telegram_scan_job,
+    _allows_distinctive_model_without_brand,
 )
 from app.services.telegram_channels.bootstrap import ensure_parser_path
 from app.services.telegram_channels.service_loader import get_parser_channels
 
 logger = logging.getLogger(__name__)
 
-# Telethon search — швидко знаходить і старі пости (не лише останні N).
+# Telethon search — швидко знаходить пости глибше за повзунок історії.
 TELEGRAM_SEARCH_LIMIT = 250
 KEYWORD_LIMIT_PER_CHANNEL = TELEGRAM_HISTORY_SCAN_LIMIT
-KEYWORD_WAIT_SECONDS = 18.0
-KEYWORD_COOLDOWN_SECONDS = 60
-# Старі pending scan-и (Tesla тощо) блокували live-пошук годинами.
+# Мало запитів × канали: інакше черга 200+ джобів і Countryman не встигає.
+KEYWORD_WAIT_SECONDS = 25.0
+KEYWORD_COOLDOWN_SECONDS = 45
 STALE_JOB_SECONDS = 20 * 60
-# Якщо після швидкого search мало матчів — доганяємо history scan.
 THIN_RESULT_RETRY_THRESHOLD = 15
-THIN_RETRY_WAIT_SECONDS = 28.0
+THIN_RETRY_WAIT_SECONDS = 40.0
+# Жорсткий ліміт plain Telethon-запитів (без __scan__).
+MAX_LIVE_TELEGRAM_SEARCH_QUERIES = 4
 
 
 def build_telegram_keyword_queries(
@@ -37,7 +41,7 @@ def build_telegram_keyword_queries(
     *,
     include_history_scan: bool = False,
 ) -> list[str]:
-    """Запити для worker: спочатку plain Telethon search, опційно повний scan."""
+    """Короткий пріоритетний список запитів — щоб worker встиг за wait_seconds."""
     brand = (filters.brand or "").strip()
     model = (filters.model or "").strip()
     if not brand and not model:
@@ -50,30 +54,57 @@ def build_telegram_keyword_queries(
         key = (q or "").strip()
         if not key or key in seen:
             return
+        # Відсікаємо шум на кшталт «Mini Mini Countryman».
+        parts = key.split()
+        if len(parts) >= 3 and parts[0].lower() == parts[1].lower():
+            return
         seen.add(key)
         out.append(key)
 
-    # Спочатку distinctive model (Countryman без Mini) — Telethon знаходить такі пости
-    # краще, ніж загальний «mini».
-    if brand and model:
-        from app.services.search.brand_model_keywords import (
-            _allows_distinctive_model_without_brand,
-            collect_model_keyword_variants,
-        )
-        if _allows_distinctive_model_without_brand(brand, model):
-            from app.core.text import norm_text
-            for mt in collect_model_keyword_variants(brand, model):
-                mt_k = norm_text(mt)
-                if mt_k and len(mt_k) >= 4:
-                    add(mt)
+    # 1) Distinctive model без бренду — Telethon часто знаходить саме так.
+    if brand and model and _allows_distinctive_model_without_brand(brand, model):
+        for mt in collect_model_keyword_variants(brand, model):
+            mt_k = norm_text(mt)
+            if mt_k and len(mt_k) >= 4 and " " not in mt_k.strip():
+                add(mt)
+            if len(out) >= 2:
+                break
+        # також «міні кантрімен» / «Mini Countryman» як цілі фрази нижче
 
-    # Далі brand+model / brand варіанти.
-    for q in build_search_keyword_queries(brand, model, max_queries=MAX_TELEGRAM_KEYWORD_QUERIES * 2):
-        add(q)
+    # 2) Найкращі brand+model (latin + один cyrillic).
+    if brand and model:
+        primary = build_search_keyword_queries(brand, model, max_queries=6)
+        for q in primary:
+            qn = norm_text(q)
+            # лише фрази з моделлю або короткі distinctive
+            if model and norm_text(model).split()[0] not in qn and len(qn) < 4:
+                continue
+            add(q)
+            if len([x for x in out if not x.startswith(TELEGRAM_SCAN_QUERY_PREFIX)]) >= (
+                MAX_LIVE_TELEGRAM_SEARCH_QUERIES
+            ):
+                break
+
+    if not model and brand:
+        for bv in collect_brand_keyword_variants(brand)[:2]:
+            add(bv)
+
+    if model and not brand:
+        for mt in collect_model_keyword_variants("", model)[:2]:
+            if len(norm_text(mt)) >= 3:
+                add(mt)
+
+    # Обрізаємо plain search
+    plain = [q for q in out if not q.startswith(TELEGRAM_SCAN_QUERY_PREFIX)]
+    plain = plain[:MAX_LIVE_TELEGRAM_SEARCH_QUERIES]
+    out = list(plain)
 
     if include_history_scan:
-        add(encode_telegram_scan_job(brand, model))
-    return out[: MAX_TELEGRAM_KEYWORD_QUERIES * 3 + (1 if include_history_scan else 0)]
+        scan = encode_telegram_scan_job(brand, model)
+        if scan:
+            out.append(scan)
+
+    return out
 
 
 def build_telegram_keyword_query(filters: SearchFilters) -> str | None:
@@ -120,11 +151,9 @@ async def refresh_telegram_by_keywords(
     from parser.channel_media_store import ChannelMediaStore
 
     store = ChannelMediaStore()
-    # Чистимо застряглі 'running' (воркер впав не завершивши job).
     stuck = store.reset_stuck_running_jobs(older_than_seconds=120)
     if stuck:
         logger.info("Reset %s stuck running keyword jobs", stuck)
-    # Прибираємо «мертву» чергу, щоб новий пошук не чекав Tesla-scan з минулої години.
     cancelled = store.cancel_stale_keyword_jobs(older_than_seconds=STALE_JOB_SECONDS)
     if cancelled:
         logger.info("Cancelled %s stale Telegram keyword jobs", cancelled)
@@ -142,6 +171,18 @@ async def refresh_telegram_by_keywords(
         )
     if not job_ids:
         return 0
+
+    logger.info(
+        "Telegram keyword enqueue brand=%r model=%r queries=%s channels=%s jobs=%s "
+        "history_scan=%s force=%s",
+        filters.brand,
+        filters.model,
+        queries,
+        len(channels),
+        len(job_ids),
+        include_history_scan,
+        force_rescan,
+    )
 
     worker_online = False
     try:
@@ -163,7 +204,7 @@ async def refresh_telegram_by_keywords(
         try:
             from app.services.telegram_channels.keyword_jobs import run_inline_keyword_refresh
 
-            await run_inline_keyword_refresh(job_ids, wait_seconds=max(wait_seconds, 12.0))
+            await run_inline_keyword_refresh(job_ids, wait_seconds=max(wait_seconds, 20.0))
         except Exception:
             logger.exception("Inline Telegram keyword refresh failed")
         return len(job_ids)

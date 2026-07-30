@@ -235,6 +235,15 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     ):
         return False
 
+    if (item.source or "").lower() == "telegram":
+        from app.services.telegram_channels.freshness import telegram_listing_is_fresh
+
+        if not telegram_listing_is_fresh(
+            getattr(item, "published_at", None),
+            found_at=getattr(item, "found_at", None),
+        ):
+            return False
+
     haystack = f"{item.brand} {item.title} {item.description or ''}"
 
     if filters.brand:

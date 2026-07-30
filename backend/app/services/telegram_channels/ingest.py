@@ -88,6 +88,22 @@ async def ingest_telegram_listing(
         placeholder = car_listing_to_listing_out(car_listing)
         return placeholder, 0, 0, False
 
+    from app.services.telegram_channels.freshness import (
+        TELEGRAM_LISTING_MAX_AGE_DAYS,
+        telegram_listing_is_fresh,
+    )
+
+    posted = getattr(car_listing, "posted_at", None)
+    if posted is not None and not telegram_listing_is_fresh(posted):
+        logger.debug(
+            "Skip telegram ingest: older than %s days, channel=%s msg=%s",
+            TELEGRAM_LISTING_MAX_AGE_DAYS,
+            getattr(car_listing, "channel", ""),
+            getattr(car_listing, "message_id", ""),
+        )
+        placeholder = car_listing_to_listing_out(car_listing)
+        return placeholder, 0, 0, False
+
     item = car_listing_to_listing_out(car_listing)
     _save_photo_refs_from_car(car_listing)
     listing = await upsert_listing(db, item)
@@ -163,6 +179,11 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
 
     if found_after is not None:
         clauses.append(Listing.found_at > as_kyiv(found_after))
+
+    # Жорстке вікно: не показуємо TG-пости старші за 3 місяці.
+    from app.services.telegram_channels.freshness import telegram_published_cutoff
+
+    clauses.append(Listing.published_at >= telegram_published_cutoff())
 
     brand = (filters.brand or "").strip()
     model_str = (filters.model or "").strip()
@@ -289,7 +310,14 @@ async def search_telegram_listings(
                 refresh_telegram_by_keywords,
             )
 
-            await refresh_telegram_by_keywords(filters)
+            # Завжди history scan при наявності марки/моделі — інакше рідкісні
+            # пости (Mini Countryman) не потрапляють у індекс за час wait.
+            await refresh_telegram_by_keywords(
+                filters,
+                include_history_scan=bool(
+                    (filters.brand or "").strip() or (filters.model or "").strip()
+                ),
+            )
         except Exception:
             logger.exception("Telegram keyword refresh failed")
 
@@ -302,7 +330,7 @@ async def search_telegram_listings(
         scan_limit=scan_limit,
     )
 
-    # Якщо в БД порожньо або замало матчів — Telethon search + history scan.
+    # Якщо в БД порожньо або замало матчів — ще раз force + довший wait.
     from app.services.telegram_channels.keyword_refresh import (
         THIN_RESULT_RETRY_THRESHOLD,
         THIN_RETRY_WAIT_SECONDS,

@@ -26,8 +26,8 @@ TELEGRAM_POOL_CAP = 500
 TELEGRAM_MAX_SCAN = 4000
 AUTO_RIA_PAGE_SIZE = 50
 AUTO_RIA_POOL_TIMEOUT_SECONDS = 90.0
-# Keyword wait ~18s + thin history retry ~28s — інакше wait_for обріже TG.
-TELEGRAM_POOL_TIMEOUT_SECONDS = 55.0
+# Keyword wait ~25s + thin history retry ~40s.
+TELEGRAM_POOL_TIMEOUT_SECONDS = 75.0
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
 _SOURCE_BLEND_ORDER = {"olx": 0, "telegram": 1, "auto_ria": 2}
 
