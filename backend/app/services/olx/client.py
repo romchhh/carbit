@@ -8,7 +8,6 @@ import httpx
 
 from app.services.olx.constants import (
     BASE_URL,
-    CARS_CATEGORY_ID,
     MAX_RETRIES,
     OFFERS_API_LIMIT,
     OFFERS_API_PATH,
@@ -20,7 +19,7 @@ from app.services.olx.errors import OlxError
 from app.services.olx.parser import (
     OlxListing,
     OlxSearchParams,
-    build_offers_api_query,
+    build_offers_api_params,
     parse_listing_details,
     parse_offers_api_payload,
 )
@@ -127,21 +126,11 @@ class OlxClient:
         page: int = 1,
         limit: int = OFFERS_API_LIMIT,
     ) -> list[OlxListing]:
-        """Fallback через офіційний JSON API, коли HTML SSR порожній."""
-        query = build_offers_api_query(params)
-        if not query:
+        """Офіційний JSON API /api/v1/offers/ з серверними фільтрами."""
+        api_params = build_offers_api_params(params, page=page, limit=limit)
+        # Без query/фільтрів API віддає всю категорію — не викликаємо «вхолосту».
+        if "query" not in api_params and not params.has_remote_filters():
             return []
-
-        offset = max(page - 1, 0) * max(limit, 1)
-        api_params: dict[str, str | int] = {
-            "offset": offset,
-            "limit": max(limit, 1),
-            "query": query,
-            "category_id": CARS_CATEGORY_ID,
-            "currency": (params.currency or "UAH").upper(),
-        }
-        if params.sort_order:
-            api_params["sort_by"] = params.sort_order
 
         url = f"{BASE_URL}{OFFERS_API_PATH}"
         last_status: int | None = None

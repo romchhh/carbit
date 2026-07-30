@@ -4,8 +4,6 @@ import asyncio
 import json
 import random
 
-import copy
-
 from app.schemas.schemas import PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.mapper import sort_listings
@@ -70,28 +68,43 @@ def _listing_dedupe_key(listing: OlxListing) -> str:
     return f"title:{(listing.title or '').strip().lower()}"
 
 
-def _olx_collect_target(*, page: int, per_page: int, needs_post_filter: bool, has_text_query: bool = False) -> int:
+def _olx_collect_target(
+    *,
+    page: int,
+    per_page: int,
+    needs_post_filter: bool,
+    has_text_query: bool = False,
+    has_remote_filters: bool = False,
+) -> int:
     """Скільки оголошень потрібно зібрати з OLX перед пост-фільтром."""
     end = max(page, 1) * per_page
+    if has_remote_filters:
+        # Ціна/рік/регіон уже на сервері OLX — майже без запасу.
+        return end + max(per_page // 4, 8)
     if has_text_query:
-        # text_query відсікає частину — збираємо 2× запас (не більше, щоб не таймаутити)
-        return end + max(per_page * 2, 40)
-    if needs_post_filter:
         return end + max(per_page, 20)
+    if needs_post_filter:
+        return end + max(per_page // 2, 12)
     return end + max(per_page // 2, 8)
 
 
-def _olx_max_scan_pages(*, collect_target: int, needs_post_filter: bool, pool_size: bool, has_text_query: bool = False) -> int:
+def _olx_max_scan_pages(
+    *,
+    collect_target: int,
+    needs_post_filter: bool,
+    pool_size: bool,
+    has_text_query: bool = False,
+    has_remote_filters: bool = False,
+) -> int:
     from app.services.olx.constants import OLX_MAX_SCAN_PAGES, OLX_POOL_MAX_SCAN_PAGES, OLX_RESULTS_PER_PAGE
 
     cap = OLX_POOL_MAX_SCAN_PAGES if pool_size else OLX_MAX_SCAN_PAGES
+    if has_remote_filters or has_text_query:
+        return min(2, cap)
     raw_est = collect_target
-    if has_text_query:
-        # text_query: максимум 3 сторінки — для Zeekr/NIO/тощо вся Україна має <100 оголошень
-        return min(3, cap)
-    elif needs_post_filter:
-        raw_est = max(collect_target * 2, collect_target + OLX_RESULTS_PER_PAGE)
-    pages = (raw_est + OLX_RESULTS_PER_PAGE - 1) // OLX_RESULTS_PER_PAGE + 1
+    if needs_post_filter:
+        raw_est = collect_target + OLX_RESULTS_PER_PAGE
+    pages = (raw_est + OLX_RESULTS_PER_PAGE - 1) // OLX_RESULTS_PER_PAGE
     return min(max(int(pages), 1), cap)
 
 
@@ -101,15 +114,19 @@ def _olx_pool_scan_limits(
     need: int,
     pool_mode: bool,
 ) -> tuple[int, int | None]:
-    """Обмежує глибину скану OLX для широких фільтрів (ціна без марки тощо)."""
+    """Обмежує глибину скану OLX для live-pool (швидкість > повнота другої сторінки)."""
+    from app.services.olx.constants import (
+        OLX_LIVE_POOL_CAP_NO_BRAND,
+        OLX_LIVE_POOL_CAP_WITH_BRAND,
+    )
+
     if not pool_mode:
         return need, None
     brand = (filters.brand or "").strip()
     model = (filters.model or "").strip()
     if brand or model:
-        return min(need, 220), None
-    # Без марки OLX не фільтрує ціну в URL — пост-фільтр по всіх авто; 3–4 сторінки достатньо.
-    return min(need, 100), 3
+        return min(need, OLX_LIVE_POOL_CAP_WITH_BRAND), 2
+    return min(need, OLX_LIVE_POOL_CAP_NO_BRAND), 1
 
 
 async def _fetch_olx_search_html(
@@ -176,59 +193,63 @@ async def _collect_from_params(
 
     while pages_scanned < active.max_pages and len(collected) < target_count:
         current_page = start_page + pages_scanned
-        try:
-            html, active, url = await _fetch_olx_search_html(
-                client, active, filters, page=current_page
-            )
-        except OlxError as exc:
-            if exc.status_code == 404 and pages_scanned > 0:
-                # 404 на не-першій сторінці = вийшли за межі видачі
-                break
-            if pages_scanned == 0:
-                # Перша сторінка — критична помилка, піднімаємо вгору
-                raise
-            # Інші помилки на наступних сторінках — пропускаємо, не зупиняємо цикл
-            pages_scanned += 1
-            continue
+        html = ""
+        url = f"olx-api://offers?page={current_page}"
+        page_listings: list[OlxListing] = []
+        used_api = False
 
+        # API-first: швидший JSON з тими ж filter_* що й у HTML URL.
         try:
-            page_listings = await asyncio.to_thread(parse_listing_page, html)
-        except Exception as exc:
-            message = f"Виняток при парсингу сторінки видачі OLX: {exc}"
-            await notify_admin_parsing_error(
-                source="OLX",
-                error=message,
-                url=url,
-                details=type(exc).__name__,
-            )
-            raise OlxError("Помилка парсингу OLX") from exc
+            api_listings = await client.fetch_offers_api(active, page=current_page)
+            if api_listings:
+                page_listings = api_listings
+                used_api = True
+        except Exception:
+            page_listings = []
 
-        if not page_listings and pages_scanned == 0 and html_looks_like_results_page(html):
-            await asyncio.sleep(1.5)
+        if not page_listings:
             try:
                 html, active, url = await _fetch_olx_search_html(
                     client, active, filters, page=current_page
                 )
+            except OlxError as exc:
+                if exc.status_code == 404 and pages_scanned > 0:
+                    break
+                if pages_scanned == 0:
+                    raise
+                pages_scanned += 1
+                continue
+
+            try:
                 page_listings = await asyncio.to_thread(parse_listing_page, html)
-            except OlxError:
-                page_listings = []
-            except Exception:
-                page_listings = []
+            except Exception as exc:
+                message = f"Виняток при парсингу сторінки видачі OLX: {exc}"
+                await notify_admin_parsing_error(
+                    source="OLX",
+                    error=message,
+                    url=url,
+                    details=type(exc).__name__,
+                )
+                raise OlxError("Помилка парсингу OLX") from exc
 
-        # HTML SSR інколи «порожній» (бот/CDN), хоча видача жива — беремо JSON API.
-        # API-доповнення викликаємо лише як fallback, щоб не подвоювати запити.
-        if not page_listings:
-            api_listings = await client.fetch_offers_api(active, page=current_page)
-            if api_listings:
-                page_listings = api_listings
-                url = f"{url} [api-fallback]"
+            if not page_listings and pages_scanned == 0 and html_looks_like_results_page(html):
+                await asyncio.sleep(1.5)
+                try:
+                    html, active, url = await _fetch_olx_search_html(
+                        client, active, filters, page=current_page
+                    )
+                    page_listings = await asyncio.to_thread(parse_listing_page, html)
+                except OlxError:
+                    page_listings = []
+                except Exception:
+                    page_listings = []
 
-        if not page_listings and pages_scanned == 0 and html_looks_like_results_page(html):
+        if not page_listings and pages_scanned == 0 and html and html_looks_like_results_page(html):
             await notify_admin_parsing_error(
                 source="OLX",
                 error="Сторінка видачі OLX завантажена, але оголошення не розпарсились",
                 url=url,
-                details="HTML і API fallback не дали оголошень — перевірте селектори/API",
+                details="API-first і HTML не дали оголошень — перевірте селектори/API",
             )
         if not page_listings:
             break
@@ -261,7 +282,10 @@ async def _collect_from_params(
             api_page_limit=OFFERS_API_LIMIT,
         ):
             break
-        await asyncio.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
+        # API швидший — коротша пауза між сторінками
+        delay_lo = MIN_DELAY if not used_api else min(MIN_DELAY, 0.15)
+        delay_hi = MAX_DELAY if not used_api else min(MAX_DELAY, 0.35)
+        await asyncio.sleep(random.uniform(delay_lo, delay_hi))
 
     return collected
 
@@ -281,7 +305,7 @@ def _cache_key(
         "per_page": per_page,
         "sort_by": sort_by,
         "enrich": enrich_details,
-        "olx_q": "paginate-v2",
+        "olx_q": "api-first-filters-v1",
     }
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
@@ -316,7 +340,31 @@ async def _search_olx_body(
     per_page: int = 20,
     sort_by: str = "newest",
     enrich_details: bool = True,
+    use_cache: bool = False,
+    cache_ttl_seconds: int = 120,
 ) -> PaginatedListings:
+    """Ядро OLX-пошуку (без семафора). Live/monitor можуть ділити process-cache."""
+    if use_cache:
+        key = _cache_key(
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            enrich_details=enrich_details,
+        )
+        return await get_or_fetch(
+            key,
+            lambda: _search_olx_body(
+                filters,
+                page=page,
+                per_page=per_page,
+                sort_by=sort_by,
+                enrich_details=enrich_details,
+                use_cache=False,
+            ),
+            ttl_seconds=cache_ttl_seconds,
+        )
+
     page = max(page, 1)
     per_page = max(per_page, 1)
 
@@ -332,23 +380,26 @@ async def _search_olx_body(
 
     needs_pf = params.needs_post_filter()
     has_tq = bool(params.text_query)
+    has_remote = params.has_remote_filters()
     pool_mode = per_page >= 80
     collect_target = _olx_collect_target(
         page=page if not pool_mode else 1,
         per_page=per_page,
         needs_post_filter=needs_pf,
         has_text_query=has_tq,
+        has_remote_filters=has_remote,
     )
     scan_need, page_cap = _olx_pool_scan_limits(filters, need=collect_target, pool_mode=pool_mode)
     collect_target = scan_need
     if pool_mode:
-        collect_target = min(collect_target, per_page * 2)
+        collect_target = min(collect_target, per_page)
 
     params.max_pages = _olx_max_scan_pages(
         collect_target=collect_target,
         needs_post_filter=needs_pf,
         pool_size=pool_mode,
         has_text_query=has_tq,
+        has_remote_filters=has_remote,
     )
     if page_cap is not None:
         params.max_pages = min(params.max_pages, page_cap)

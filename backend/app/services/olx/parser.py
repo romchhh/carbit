@@ -11,7 +11,8 @@ from bs4 import BeautifulSoup
 from app.services.olx.constants import (
     BASE_URL,
     CATEGORY_PATH,
-    CONDITION_MAP,
+    COLOR_NAME_TO_ENUM,
+    DRIVETRAIN_MAP,
     FUEL_KEYWORDS,
     FUEL_MAP,
     TRANSMISSION_KEYWORDS,
@@ -29,6 +30,8 @@ class OlxSearchParams:
     # Текстовий пошук OLX: /q-zeekr-001/ — для марок без taxonomy-path
     text_query: Optional[str] = None
     region_label: Optional[str] = None
+    region_id: Optional[int] = None
+    city_id: Optional[int] = None
     condition: Optional[str] = None
     city_query: Optional[str] = None
     price_from: Optional[int] = None
@@ -39,11 +42,19 @@ class OlxSearchParams:
     mileage_from: Optional[int] = None
     mileage_to: Optional[int] = None
     fuel: Optional[str] = None
+    fuels: list[str] = field(default_factory=list)
     transmission: Optional[str] = None
+    transmissions: list[str] = field(default_factory=list)
     engine_from: Optional[float] = None
     engine_to: Optional[float] = None
     drivetrain: Optional[str] = None
+    drivetrains: list[str] = field(default_factory=list)
     color: Optional[str] = None
+    color_enum: Optional[str] = None
+    color_enums: list[str] = field(default_factory=list)
+    body_enums: list[str] = field(default_factory=list)
+    car_from_enums: list[str] = field(default_factory=list)
+    condition_enums: list[str] = field(default_factory=list)
     consumption_from: Optional[float] = None
     consumption_to: Optional[float] = None
     ev_range_from: Optional[int] = None
@@ -59,7 +70,37 @@ class OlxSearchParams:
     # OLX «Сортувати за: Найновіші» — search[order]=created_at:desc
     sort_order: str = "created_at:desc"
 
+    def has_remote_filters(self) -> bool:
+        """Фільтри, які OLX приймає в URL/API (менше пост-скану)."""
+        return any(
+            [
+                self.price_from is not None,
+                self.price_to is not None,
+                self.year_from is not None,
+                self.year_to is not None,
+                self.mileage_from is not None,
+                self.mileage_to is not None,
+                self.engine_from is not None,
+                self.engine_to is not None,
+                self.region_id is not None,
+                self.city_id is not None,
+                bool(self.fuels) or bool(self.fuel),
+                bool(self.transmissions) or (
+                    bool(self.transmission) and self.transmission in TRANSMISSION_MAP
+                ),
+                bool(self.color_enums) or bool(self.color_enum),
+                bool(self.drivetrains)
+                or (bool(self.drivetrain) and self.drivetrain in DRIVETRAIN_MAP),
+                bool(self.body_enums),
+                bool(self.car_from_enums),
+                bool(self.condition_enums),
+                self.seats_from is not None,
+                self.seats_to is not None,
+            ]
+        )
+
     def needs_post_filter(self) -> bool:
+        # Soft post-filter лишаємо як страховку, навіть якщо фільтри вже в URL.
         return any(
             [
                 self.region_label,
@@ -72,11 +113,18 @@ class OlxSearchParams:
                 self.mileage_from is not None,
                 self.mileage_to is not None,
                 self.fuel,
+                self.fuels,
                 self.transmission,
+                self.transmissions,
                 self.engine_from is not None,
                 self.engine_to is not None,
                 self.drivetrain,
+                self.drivetrains,
                 self.color,
+                self.color_enums,
+                self.body_enums,
+                self.car_from_enums,
+                self.condition_enums,
                 self.consumption_from is not None,
                 self.consumption_to is not None,
                 self.ev_range_from is not None,
@@ -91,10 +139,10 @@ class OlxSearchParams:
         )
 
     def needs_detail_fetch(self) -> bool:
+        # Кузов/колір/привід/обʼєм/місця вже в API URL — детальні HTML-сторінки
+        # потрібні лише для полів, яких немає в серверних фільтрах.
         return any(
             [
-                self.drivetrain,
-                self.color,
                 self.consumption_from is not None,
                 self.consumption_to is not None,
                 self.ev_range_from is not None,
@@ -103,10 +151,6 @@ class OlxSearchParams:
                 self.battery_to is not None,
                 self.power_from is not None,
                 self.power_to is not None,
-                self.seats_from is not None,
-                self.seats_to is not None,
-                self.engine_from is not None,
-                self.engine_to is not None,
             ]
         )
 
@@ -131,7 +175,6 @@ class OlxListing:
     raw_params: dict = field(default_factory=dict)
 
 
-VIN_PATTERN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")  # legacy; prefer extract_vin
 PLACEHOLDER_IMAGE_MARKERS = ("no_thumbnail", "/app/static/")
 
 
@@ -145,13 +188,166 @@ def is_valid_image_url(url: object) -> TypeGuard[str]:
     return not any(marker in lowered for marker in PLACEHOLDER_IMAGE_MARKERS)
 
 
+def _append_enum_multi(
+    items: list[tuple[str, str]],
+    *,
+    key: str,
+    values: list[str],
+    html: bool,
+) -> None:
+    for idx, value in enumerate(values):
+        if not value:
+            continue
+        if html:
+            items.append((f"search[{key}][{idx}]", str(value)))
+        else:
+            items.append((f"{key}[{idx}]", str(value)))
+
+
+def build_olx_filter_query_items(
+    params: OlxSearchParams,
+    *,
+    html: bool = True,
+) -> list[tuple[str, str]]:
+    """Параметри фільтрів OLX у форматі HTML (`search[...]`) або API (без префікса).
+
+    Формат як у браузері, напр.:
+    search[filter_float_price:from]=100000
+    search[filter_float_motor_year:from]=2018
+    search[filter_enum_color][0]=2
+    search[region_id]=25
+    """
+
+    def key(name: str) -> str:
+        return f"search[{name}]" if html else name
+
+    items: list[tuple[str, str]] = []
+    if params.price_from is not None:
+        items.append((key("filter_float_price:from"), str(int(params.price_from))))
+    if params.price_to is not None:
+        items.append((key("filter_float_price:to"), str(int(params.price_to))))
+    if params.year_from is not None:
+        items.append((key("filter_float_motor_year:from"), str(int(params.year_from))))
+    if params.year_to is not None:
+        items.append((key("filter_float_motor_year:to"), str(int(params.year_to))))
+    if params.mileage_from is not None:
+        items.append((key("filter_float_motor_mileage_thou:from"), str(int(params.mileage_from))))
+    if params.mileage_to is not None:
+        items.append((key("filter_float_motor_mileage_thou:to"), str(int(params.mileage_to))))
+    if params.engine_from is not None:
+        items.append(
+            (key("filter_float_motor_engine_size_litre:from"), str(float(params.engine_from)))
+        )
+    if params.engine_to is not None:
+        items.append(
+            (key("filter_float_motor_engine_size_litre:to"), str(float(params.engine_to)))
+        )
+    if params.region_id is not None:
+        items.append((key("region_id"), str(int(params.region_id))))
+    if params.city_id is not None and not html:
+        # HTML search[city_id] ігнорується; для HTML лишаємо /q-kyiv/.
+        items.append(("city_id", str(int(params.city_id))))
+
+    fuel_keys = list(params.fuels) if params.fuels else ([params.fuel] if params.fuel else [])
+    fuel_vals = [FUEL_MAP[k] for k in fuel_keys if k in FUEL_MAP]
+    if fuel_vals:
+        _append_enum_multi(items, key="filter_enum_fuel_type", values=fuel_vals, html=html)
+
+    gear_keys = (
+        list(params.transmissions)
+        if params.transmissions
+        else ([params.transmission] if params.transmission else [])
+    )
+    gear_vals = [TRANSMISSION_MAP[k] for k in gear_keys if k in TRANSMISSION_MAP]
+    if gear_vals:
+        _append_enum_multi(
+            items, key="filter_enum_transmission_type", values=gear_vals, html=html
+        )
+
+    drive_keys = (
+        list(params.drivetrains)
+        if params.drivetrains
+        else ([params.drivetrain] if params.drivetrain else [])
+    )
+    drive_vals = [DRIVETRAIN_MAP[k] for k in drive_keys if k in DRIVETRAIN_MAP]
+    if drive_vals:
+        _append_enum_multi(items, key="filter_enum_drive_type", values=drive_vals, html=html)
+
+    color_vals = list(params.color_enums) if params.color_enums else []
+    if not color_vals:
+        color_val = params.color_enum or (
+            COLOR_NAME_TO_ENUM.get((params.color or "").strip().lower()) if params.color else None
+        )
+        if color_val:
+            color_vals = [str(color_val)]
+    if color_vals:
+        _append_enum_multi(items, key="filter_enum_color", values=color_vals, html=html)
+
+    if params.body_enums:
+        _append_enum_multi(
+            items, key="filter_enum_car_body", values=list(params.body_enums), html=html
+        )
+    if params.car_from_enums:
+        _append_enum_multi(
+            items, key="filter_enum_car_from", values=list(params.car_from_enums), html=html
+        )
+    if params.condition_enums:
+        _append_enum_multi(
+            items,
+            key="filter_enum_condition",
+            values=list(params.condition_enums),
+            html=html,
+        )
+
+    if params.seats_from is not None or params.seats_to is not None:
+        lo = int(params.seats_from or params.seats_to or 2)
+        hi = int(params.seats_to or params.seats_from or lo)
+        if lo > hi:
+            lo, hi = hi, lo
+        seat_vals: list[str] = []
+        seen_seats: set[str] = set()
+        for n in range(max(lo, 2), min(hi, 8) + 1):
+            val = "8_and_more" if n >= 8 else str(n)
+            if val not in seen_seats:
+                seen_seats.add(val)
+                seat_vals.append(val)
+        _append_enum_multi(items, key="filter_enum_seats_num", values=seat_vals, html=html)
+
+    return items
+
+
+def build_offers_api_params(
+    params: OlxSearchParams,
+    *,
+    page: int = 1,
+    limit: int = 40,
+) -> dict[str, str | int]:
+    """GET /api/v1/offers/ query params з фільтрами."""
+    from app.services.olx.constants import CARS_CATEGORY_ID
+
+    offset = max(page - 1, 0) * max(limit, 1)
+    api: dict[str, str | int] = {
+        "offset": offset,
+        "limit": max(limit, 1),
+        "category_id": CARS_CATEGORY_ID,
+        "currency": (params.currency or "UAH").upper(),
+    }
+    query = build_offers_api_query(params)
+    if query:
+        api["query"] = query
+    if params.sort_order:
+        api["sort_by"] = params.sort_order
+    for key, value in build_olx_filter_query_items(params, html=False):
+        api[key] = value
+    return api
+
+
 def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
-    """Будує URL з path-фільтрів (марка/модель/місто) та безпечних query-параметрів.
+    """Будує URL з path (марка/модель/місто) + query-фільтрів OLX.
 
-    Рік, пробіг, паливо тощо в query OLX часто ламають SSR — їх фільтруємо
-    пост-фільтром у passes_olx_filters(). Сортування та валюта в query працюють.
-
-    Якщо марки немає в taxonomy OLX (Zeekr тощо) — text_query → /q-zeekr/ або /q-zeekr-001/.
+    Серверні фільтри: ціна, рік (motor_year), пробіг (thou), обʼєм, region_id,
+    fuel/transmission/color/seats/drive — у форматі search[filter_…].
+    Якщо марки немає в taxonomy OLX (Zeekr тощо) — text_query → /q-zeekr-001/.
     """
     from app.services.olx.brand_slugs import (
         brand_uses_olx_text_search,
@@ -175,7 +371,13 @@ def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
         # Не чіпаємо params (пост-фільтр лишає brand_label/model_label)
 
     if text_q:
-        # Кирилиця в /q-мерседес/ має бути %-encoded
+        from app.services.olx.brand_slugs import OLX_TEXT_SEARCH_SLUGS
+
+        # /tesla/q-tesla-model-s/ — бренд у path, якщо taxonomy є.
+        # /q-zeekr-001/ — без /zeekr/ (404).
+        brand_slug = (brand or resolve_olx_brand_slug(brand_hint) or "").strip().lower()
+        if brand_slug and brand_slug not in OLX_TEXT_SEARCH_SLUGS:
+            path_parts.append(quote(brand_slug, safe="-._~"))
         path_parts.append("q-" + quote(text_q, safe="-._~"))
     elif brand:
         path_parts.append(quote(brand.lower(), safe="-._~"))
@@ -184,18 +386,22 @@ def build_search_url(params: OlxSearchParams, page: int = 1) -> str:
 
     path = "/" + "/".join(path_parts) + "/"
 
-    # Місто як q- працює лише разом із brand-path; для text_query фільтруємо місто постфактум
-    if params.city_query and not text_q:
+    # Місто як /q-kyiv/: лише без region_id і без text_query (інакше ламає /q-model/).
+    # Область — через search[region_id]; м. Київ у API — city_id.
+    if params.city_query and not params.region_id and not text_q:
         path = path.rstrip("/") + f"/q-{params.city_query.lower().strip()}/"
 
-    query: dict[str, str] = {"currency": (params.currency or "UAH").upper()}
+    query_items: list[tuple[str, str]] = [
+        ("currency", (params.currency or "UAH").upper()),
+    ]
     if params.sort_order:
-        query["search[order]"] = params.sort_order
+        query_items.append(("search[order]", params.sort_order))
+    query_items.extend(build_olx_filter_query_items(params, html=True))
     if page > 1:
-        query["page"] = str(page)
+        query_items.append(("page", str(page)))
 
     url = urljoin(BASE_URL, path)
-    return f"{url}?{urlencode(query)}"
+    return f"{url}?{urlencode(query_items)}"
 
 
 def _extract_id_from_url(url: str) -> Optional[str]:
@@ -467,11 +673,6 @@ def _location_parts_from_listing(listing: OlxListing) -> dict[str, str]:
                 parts["region"] = value.strip().lower()
                 break
     return parts
-
-
-def _location_blob_from_listing(listing: OlxListing) -> str:
-    parts = _location_parts_from_listing(listing)
-    return " ".join(parts.values())
 
 
 # city_query slug → ключові слова для пост-фільтра регіону (text_query не додає /q-city/)

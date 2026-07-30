@@ -19,15 +19,16 @@ from app.services.telegram_channels.ingest import search_telegram_listings
 
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
 # Бюджет лише на HTTP-сканування після acquire_olx_slot (черга не входить у wait_for).
-OLX_SEARCH_TIMEOUT_SECONDS = 40.0
+OLX_SEARCH_TIMEOUT_SECONDS = 22.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
 SOURCE_POOL_CAP = 500
 TELEGRAM_POOL_CAP = 500
 TELEGRAM_MAX_SCAN = 4000
 AUTO_RIA_PAGE_SIZE = 50
-AUTO_RIA_POOL_TIMEOUT_SECONDS = 90.0
-# Keyword wait ~25s + thin history retry ~40s.
-TELEGRAM_POOL_TIMEOUT_SECONDS = 75.0
+# Live pool збирає лише IDs — 25 с достатньо; 90 с тримало весь gather.
+AUTO_RIA_POOL_TIMEOUT_SECONDS = 25.0
+# TG keyword wait ~5 с + запас; history scan не блокує.
+TELEGRAM_POOL_TIMEOUT_SECONDS = 12.0
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
 _SOURCE_BLEND_ORDER = {"olx": 0, "telegram": 1, "auto_ria": 2}
 
@@ -269,6 +270,8 @@ async def _search_single_source(
                 per_page=per_page,
                 sort_by=sort_by,
                 enrich_details=olx_enrich_details,
+                use_cache=use_cache,
+                cache_ttl_seconds=cache_ttl_seconds,
             )
     return await search_auto_ria(
         filters,
@@ -389,6 +392,8 @@ async def _search_olx_safe(
                     page=page,
                     per_page=per_page,
                     sort_by=sort_by,
+                    use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
                 ),
                 timeout=OLX_SEARCH_TIMEOUT_SECONDS,
             )
@@ -574,6 +579,8 @@ async def search_listings_outcome(
                         per_page=pool_need,
                         sort_by=sort_by,
                         enrich_details=olx_enrich_details,
+                        use_cache=use_cache,
+                        cache_ttl_seconds=cache_ttl_seconds,
                     ),
                     timeout=OLX_SEARCH_TIMEOUT_SECONDS,
                 )
@@ -1005,6 +1012,8 @@ async def build_live_search_pool(
                         per_page=max_ids,
                         sort_by=sort_by,
                         enrich_details=olx_enrich_details,
+                        use_cache=True,
+                        cache_ttl_seconds=120,
                     ),
                     timeout=OLX_SEARCH_TIMEOUT_SECONDS,
                 )

@@ -26,13 +26,12 @@ logger = logging.getLogger(__name__)
 # Telethon search — швидко знаходить пости глибше за повзунок історії.
 TELEGRAM_SEARCH_LIMIT = 250
 KEYWORD_LIMIT_PER_CHANNEL = TELEGRAM_HISTORY_SCAN_LIMIT
-# Мало запитів × канали: інакше черга 200+ джобів і Countryman не встигає.
-KEYWORD_WAIT_SECONDS = 25.0
+# Короткий wait лише на plain Telethon search (не на __scan__ історії).
+KEYWORD_WAIT_SECONDS = 5.0
 KEYWORD_COOLDOWN_SECONDS = 45
 STALE_JOB_SECONDS = 20 * 60
-THIN_RESULT_RETRY_THRESHOLD = 15
-THIN_RETRY_WAIT_SECONDS = 40.0
-# Жорсткий ліміт plain Telethon-запитів (без __scan__).
+# Фоновий deep-refresh, якщо в БД мало матчів (не блокує відповідь).
+THIN_RESULT_RETRY_THRESHOLD = 8
 MAX_LIVE_TELEGRAM_SEARCH_QUERIES = 4
 
 
@@ -128,10 +127,13 @@ async def refresh_telegram_by_keywords(
     wait_seconds: float = KEYWORD_WAIT_SECONDS,
     force_rescan: bool = False,
     include_history_scan: bool = False,
+    wait_for_history_scan: bool = False,
 ) -> int:
     """
     Ставить у чергу Telethon search (+ опційно scan історії) по каналах.
-    Worker індексує знайдене в listings — далі йде звичайний DB-пошук.
+
+    За замовчуванням чекаємо лише plain keyword-джоби (швидкі).
+    History scan (__scan__) іде у фон — не блокує live-пошук.
     """
     if not app_settings.TELEGRAM_ENABLED:
         return 0
@@ -158,31 +160,43 @@ async def refresh_telegram_by_keywords(
     if cancelled:
         logger.info("Cancelled %s stale Telegram keyword jobs", cancelled)
 
-    job_ids: list[int] = []
+    plain_job_ids: list[int] = []
+    scan_job_ids: list[int] = []
     for query in queries:
-        job_ids.extend(
-            store.enqueue_keyword_searches(
-                query,
-                channels,
-                limit=_job_limit_for_query(query),
-                cooldown_seconds=KEYWORD_COOLDOWN_SECONDS,
-                skip_cooldown=force_rescan,
-            )
+        ids = store.enqueue_keyword_searches(
+            query,
+            channels,
+            limit=_job_limit_for_query(query),
+            cooldown_seconds=KEYWORD_COOLDOWN_SECONDS,
+            skip_cooldown=force_rescan,
         )
+        if (query or "").startswith(TELEGRAM_SCAN_QUERY_PREFIX):
+            scan_job_ids.extend(ids)
+        else:
+            plain_job_ids.extend(ids)
+
+    job_ids = plain_job_ids + scan_job_ids
     if not job_ids:
         return 0
 
+    wait_ids = job_ids if wait_for_history_scan else plain_job_ids
+
     logger.info(
-        "Telegram keyword enqueue brand=%r model=%r queries=%s channels=%s jobs=%s "
-        "history_scan=%s force=%s",
+        "Telegram keyword enqueue brand=%r model=%r queries=%s channels=%s "
+        "plain_jobs=%s scan_jobs=%s wait=%s history_scan=%s force=%s",
         filters.brand,
         filters.model,
         queries,
         len(channels),
-        len(job_ids),
+        len(plain_job_ids),
+        len(scan_job_ids),
+        wait_seconds if wait_ids else 0,
         include_history_scan,
         force_rescan,
     )
+
+    if not wait_ids or wait_seconds <= 0:
+        return len(job_ids)
 
     worker_online = False
     try:
@@ -196,7 +210,7 @@ async def refresh_telegram_by_keywords(
     if not worker_online:
         logger.warning(
             "Telegram keyword jobs queued brand=%r model=%r jobs=%s "
-            "(worker offline — inline Telethon fallback)",
+            "(worker offline — inline Telethon fallback for plain only)",
             filters.brand,
             filters.model,
             len(job_ids),
@@ -204,30 +218,49 @@ async def refresh_telegram_by_keywords(
         try:
             from app.services.telegram_channels.keyword_jobs import run_inline_keyword_refresh
 
-            await run_inline_keyword_refresh(job_ids, wait_seconds=max(wait_seconds, 20.0))
+            # Inline лише plain search — history scan лишається pending для worker.
+            await run_inline_keyword_refresh(
+                plain_job_ids,
+                wait_seconds=max(float(wait_seconds), 6.0),
+            )
         except Exception:
             logger.exception("Inline Telegram keyword refresh failed")
         return len(job_ids)
 
-    if not store.keyword_jobs_pending(job_ids):
+    if not store.keyword_jobs_pending(wait_ids):
         return len(job_ids)
 
     deadline = time.monotonic() + max(0.5, float(wait_seconds))
     while time.monotonic() < deadline:
-        if not store.keyword_jobs_pending(job_ids):
+        if not store.keyword_jobs_pending(wait_ids):
             logger.info(
-                "Telegram keyword search ready brand=%r model=%r jobs=%s",
+                "Telegram keyword search ready brand=%r model=%r waited_jobs=%s",
                 filters.brand,
                 filters.model,
-                len(job_ids),
+                len(wait_ids),
             )
             return len(job_ids)
-        await asyncio.sleep(0.35)
+        await asyncio.sleep(0.25)
 
     logger.info(
-        "Telegram keyword search timeout brand=%r model=%r jobs=%s (worker ще обробляє)",
+        "Telegram keyword search timeout brand=%r model=%r waited_jobs=%s "
+        "(scan/worker ще в фоні)",
         filters.brand,
         filters.model,
-        len(job_ids),
+        len(wait_ids),
     )
     return len(job_ids)
+
+
+async def enqueue_telegram_deep_refresh(filters: SearchFilters) -> None:
+    """Фоновий force+history scan без очікування (для thin results)."""
+    try:
+        await refresh_telegram_by_keywords(
+            filters,
+            wait_seconds=0,
+            force_rescan=True,
+            include_history_scan=True,
+            wait_for_history_scan=False,
+        )
+    except Exception:
+        logger.exception("Background Telegram deep refresh failed")

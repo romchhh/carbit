@@ -15,8 +15,8 @@ from fastapi import HTTPException
 
 # Live multi-source searches in flight (each may fan out to 3 sources)
 LIVE_SEARCH_LIMIT = 8
-# Concurrent OLX scrapes (slow + polite delays — keep low)
-OLX_SCRAPE_LIMIT = 2
+# Concurrent OLX scrapes (API-first швидший за HTML — можна трохи вище)
+OLX_SCRAPE_LIMIT = 3
 # Concurrent AUTO.RIA search pipelines (API key shared)
 AUTO_RIA_SEARCH_LIMIT = 6
 

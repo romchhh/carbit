@@ -165,11 +165,13 @@ async def main() -> None:
 
     async def heartbeat_loop() -> None:
         from app.services.telegram_channels.bootstrap import ensure_parser_path
+        from app.services.telegram_channels.purge import purge_stale_telegram_listings
 
         ensure_parser_path()
         from parser.channel_media_store import ChannelMediaStore
 
         store = ChannelMediaStore()
+        last_purge_mono = 0.0
         while True:
             settings = await get_parser_settings()
             # Чистимо jobs, що застрягли (crash попереднього циклу)
@@ -190,6 +192,20 @@ async def main() -> None:
                     busy = True
             except Exception:
                 logger.exception("Photo queue tick failed")
+
+            # Раз на годину — видаляємо TG-лоти старші за 3 місяці.
+            now_mono = asyncio.get_event_loop().time()
+            if now_mono - last_purge_mono >= 3600:
+                try:
+                    async with AsyncSessionLocal() as db:
+                        purged = await purge_stale_telegram_listings(db)
+                        await db.commit()
+                    if purged:
+                        logger.info("Purged %s stale Telegram listings (>3 months)", purged)
+                    last_purge_mono = now_mono
+                except Exception:
+                    logger.exception("Telegram stale purge failed")
+
             await beat("telegram_worker")
             await asyncio.sleep(_poll_sleep_seconds(settings, busy=busy))
 

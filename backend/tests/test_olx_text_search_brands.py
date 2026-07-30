@@ -44,8 +44,9 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         )
         self.assertEqual(params.text_query, "byd song plus")
         url = build_search_url(params)
-        self.assertIn("/q-byd-song-plus/", url)
-        self.assertNotIn("/legkovye-avtomobili/byd/", url)
+        # BYD має taxonomy /byd/ — як Tesla: /byd/q-byd-song-plus/
+        self.assertIn("/byd/q-byd-song-plus/", url)
+        self.assertNotIn("/byd/song-plus/", url)
 
     def test_text_search_uses_brand_only_url(self):
         params = filters_to_olx_params(

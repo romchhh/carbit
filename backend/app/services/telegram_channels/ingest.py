@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -307,16 +308,18 @@ async def search_telegram_listings(
     if keyword_refresh:
         try:
             from app.services.telegram_channels.keyword_refresh import (
+                KEYWORD_WAIT_SECONDS,
                 refresh_telegram_by_keywords,
             )
 
-            # Завжди history scan при наявності марки/моделі — інакше рідкісні
-            # пости (Mini Countryman) не потрапляють у індекс за час wait.
+            # History scan у чергу, але не чекаємо його — інакше live search = 30–60+ с.
             await refresh_telegram_by_keywords(
                 filters,
+                wait_seconds=KEYWORD_WAIT_SECONDS,
                 include_history_scan=bool(
                     (filters.brand or "").strip() or (filters.model or "").strip()
                 ),
+                wait_for_history_scan=False,
             )
         except Exception:
             logger.exception("Telegram keyword refresh failed")
@@ -330,30 +333,18 @@ async def search_telegram_listings(
         scan_limit=scan_limit,
     )
 
-    # Якщо в БД порожньо або замало матчів — ще раз force + довший wait.
+    # Мало матчів — deep refresh у фон (не блокує відповідь користувачу).
     from app.services.telegram_channels.keyword_refresh import (
         THIN_RESULT_RETRY_THRESHOLD,
-        THIN_RETRY_WAIT_SECONDS,
-        refresh_telegram_by_keywords,
+        enqueue_telegram_deep_refresh,
     )
 
     thin = len(matched) < THIN_RESULT_RETRY_THRESHOLD
     if keyword_refresh and thin and ((filters.brand or "").strip() or (filters.model or "").strip()):
         try:
-            await refresh_telegram_by_keywords(
-                filters,
-                wait_seconds=THIN_RETRY_WAIT_SECONDS,
-                force_rescan=True,
-                include_history_scan=True,
-            )
-            matched = await _telegram_listings_matching_filters(
-                db,
-                filters,
-                found_after=found_after,
-                scan_limit=scan_limit,
-            )
+            asyncio.create_task(enqueue_telegram_deep_refresh(filters))
         except Exception:
-            logger.exception("Telegram keyword refresh retry failed")
+            logger.exception("Failed to schedule Telegram deep refresh")
 
     matched = sort_listings(matched, sort_by)
     total = len(matched)

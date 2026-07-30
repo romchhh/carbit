@@ -40,9 +40,11 @@ def _listing(listing_id: str, source: str, *, minutes_ago: int = 0) -> ListingOu
 
 class LiveSearchPoolConfigTests(unittest.TestCase):
     def test_pool_caps_are_bounded(self):
-        self.assertLessEqual(pool_cache.LIVE_POOL_SIZE, 150)
-        self.assertLessEqual(multi_source.SOURCE_POOL_CAP, 150)
+        # Live pool тримає слоти з 3 джерел; OLX/TG всередині ріжуть глибше самі.
+        self.assertLessEqual(pool_cache.LIVE_POOL_SIZE, 500)
+        self.assertLessEqual(multi_source.SOURCE_POOL_CAP, 500)
         self.assertEqual(pool_cache.LIVE_POOL_SIZE, multi_source.SOURCE_POOL_CAP)
+        self.assertLessEqual(multi_source.OLX_SEARCH_TIMEOUT_SECONDS, 25.0)
 
     def test_auto_ria_pool_timeout_defined(self):
         self.assertGreater(multi_source.AUTO_RIA_POOL_TIMEOUT_SECONDS, 0)

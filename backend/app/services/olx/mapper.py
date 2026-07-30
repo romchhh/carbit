@@ -6,13 +6,22 @@ from typing import Any
 
 from app.core.text import norm_text
 from app.schemas.schemas import ListingOut, SearchFilters
-from app.services.auto_ria.mapper import sort_listings
 from app.services.olx.constants import (
+    BODY_NAME_TO_ENUM,
+    CAR_FROM_USA,
     CATEGORY_TO_CONDITION,
+    COLOR_NAME_TO_ENUM,
     COLOR_NAME_TO_TOKEN,
+    CONDITION_ENUM_AFTER_ACCIDENT,
+    CONDITION_ENUM_FIRST_OWNER,
+    CONDITION_ENUM_NOT_BIT,
     DRIVETRAIN_NAME_TO_TOKEN,
     FUEL_NAME_TO_KEY,
+    KYIV_REGION_KEYS,
+    MODEL_SLUG_ALIASES,
+    OLX_KYIV_CITY_ID,
     REGION_TO_CITY_QUERY,
+    REGION_TO_OLX_REGION_ID,
     TRANSMISSION_NAME_TO_KEY,
 )
 from app.services.olx.dates import resolve_olx_published_at, resolve_olx_refreshed_at
@@ -23,9 +32,7 @@ from app.services.olx.brand_slugs import (
     compose_olx_text_query,
     resolve_olx_brand_slug,
     resolve_olx_model_slug,
-    slugify,
 )
-from app.services.olx.constants import MODEL_SLUG_ALIASES
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
 
 
@@ -69,9 +76,19 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
 
     if filters.region and norm_text(filters.region) not in ("вся україна", ""):
         params.region_label = filters.region.strip()
-        params.city_query = REGION_TO_CITY_QUERY.get(
-            norm_text(filters.region), slugify_region(filters.region)
-        )
+        region_key = norm_text(filters.region)
+        if region_key in KYIV_REGION_KEYS:
+            # API: city_id=268; HTML: /q-kyiv/ (search[city_id] на OLX не працює)
+            params.city_id = OLX_KYIV_CITY_ID
+            params.city_query = "kyiv"
+        else:
+            # HTML/API: search[region_id] / region_id (напр. Львівська=5)
+            params.region_id = REGION_TO_OLX_REGION_ID.get(region_key)
+            if params.region_id is None:
+                # Луганська тощо без geo-id — fallback на /q-…/ + пост-фільтр
+                params.city_query = REGION_TO_CITY_QUERY.get(
+                    region_key, slugify_region(filters.region)
+                )
 
     filter_cur = resolve_filter_currency(filters.currency)
     if filter_cur == "USD":
@@ -86,40 +103,76 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
     params.year_from = filters.year_from
     params.year_to = filters.year_to
 
-    if filters.mileage_from is not None:
-        params.mileage_from = max(filters.mileage_from // 1000, 0)
-    if filters.mileage_to is not None:
-        params.mileage_to = max(filters.mileage_to // 1000, 0)
+    if filters.zero_mileage:
+        params.mileage_to = 0
+    else:
+        if filters.mileage_from is not None:
+            params.mileage_from = max(filters.mileage_from // 1000, 0)
+        if filters.mileage_to is not None:
+            params.mileage_to = max(filters.mileage_to // 1000, 0)
 
     params.engine_from = filters.engine_volume_from
     params.engine_to = filters.engine_volume_to
 
     if filters.fuel:
+        fuels: list[str] = []
         for fuel in filters.fuel:
             key = FUEL_NAME_TO_KEY.get(norm_text(fuel))
-            if key:
-                params.fuel = key
-                break
+            if key and key not in fuels:
+                fuels.append(key)
+        params.fuels = fuels
+        params.fuel = fuels[0] if fuels else None
 
     if filters.transmission:
+        gears: list[str] = []
         for gear in filters.transmission:
-            key = TRANSMISSION_NAME_TO_KEY.get(norm_text(gear))
-            if key:
-                params.transmission = key
-                break
+            gear_key = norm_text(gear)
+            key = "tiptronic" if "типтрон" in gear_key else TRANSMISSION_NAME_TO_KEY.get(gear_key)
+            if key and key not in gears:
+                gears.append(key)
+        params.transmissions = gears
+        params.transmission = gears[0] if gears else None
 
     if filters.drivetrain:
+        drives: list[str] = []
         for drive in filters.drivetrain:
             token = DRIVETRAIN_NAME_TO_TOKEN.get(norm_text(drive))
-            if token:
-                params.drivetrain = token
-                break
+            if token and token not in drives:
+                drives.append(token)
+        params.drivetrains = drives
+        params.drivetrain = drives[0] if drives else None
 
     if filters.colors:
+        color_enums: list[str] = []
         for color in filters.colors:
-            token = COLOR_NAME_TO_TOKEN.get(norm_text(color), norm_text(color))
-            params.color = token
-            break
+            color_key = norm_text(color)
+            enum_id = COLOR_NAME_TO_ENUM.get(color_key)
+            if enum_id and enum_id not in color_enums:
+                color_enums.append(enum_id)
+            if params.color is None:
+                params.color = COLOR_NAME_TO_TOKEN.get(color_key, color_key)
+                params.color_enum = enum_id
+        params.color_enums = color_enums
+
+    if filters.body_types:
+        bodies: list[str] = []
+        for body in filters.body_types:
+            enum_id = BODY_NAME_TO_ENUM.get(norm_text(body))
+            if enum_id and enum_id not in bodies:
+                bodies.append(enum_id)
+        params.body_enums = bodies
+
+    if filters.usa_import and str(filters.usa_import).strip().lower() == "show":
+        params.car_from_enums = [CAR_FROM_USA]
+
+    condition_enums: list[str] = []
+    if filters.accident == "none":
+        condition_enums.append(CONDITION_ENUM_NOT_BIT)
+    elif filters.accident == "had":
+        condition_enums.append(CONDITION_ENUM_AFTER_ACCIDENT)
+    if filters.owners_max == 1:
+        condition_enums.append(CONDITION_ENUM_FIRST_OWNER)
+    params.condition_enums = condition_enums
 
     params.consumption_from = filters.fuel_consumption_from
     params.consumption_to = filters.fuel_consumption_to
@@ -364,4 +417,4 @@ def olx_listing_to_listing_out(
     )
 
 
-__all__ = ["filters_to_olx_params", "olx_listing_to_listing_out", "sort_listings"]
+__all__ = ["filters_to_olx_params", "olx_listing_to_listing_out"]
