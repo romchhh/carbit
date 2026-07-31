@@ -210,6 +210,8 @@ class DuplicatesTests(unittest.TestCase):
             model="X5",
             year=2019,
             price=25000,
+            title="BMW X5 2019 channel A",
+            description="Інший опис авто A з унікальним текстом для відбитка",
             source_data={"channel": "channel_a", "message_id": 10},
             published_at=ts,
             found_at=ts,
@@ -221,7 +223,123 @@ class DuplicatesTests(unittest.TestCase):
             model="X5",
             year=2019,
             price=27000,
+            title="BMW X5 2019 channel B",
+            description="Зовсім інший опис авто B щоб текст не збігся випадково",
             source_data={"channel": "channel_b", "message_id": 99},
+            published_at=ts,
+            found_at=ts,
+        )
+        out = dedupe_telegram_posts_in_pool([a, b])
+        self.assertEqual(len(out), 2)
+
+    def test_dedupe_telegram_same_text_price_edit(self):
+        """Репост того самого тексту з іншою ціною → одна картка."""
+        from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
+
+        ts = datetime(2026, 7, 31, tzinfo=KYIV_TZ)
+        body = (
+            "ПРОДАМ ФОЛЬЦВАГЕН ТУАРЕГ R LINE 2014 года, 3.6 бензин. "
+            "Машина в отличном состоянии и не требует никакого ремонта. Все опции."
+        )
+        a = _item(
+            id="telegram_avtobazar_group_100",
+            source="telegram",
+            brand="Volkswagen",
+            model="Touareg",
+            year=2014,
+            price=17000,
+            currency="UAH",
+            title=body[:80],
+            description=body,
+            source_data={"channel": "avtobazar_group", "message_id": 100},
+            published_at=ts,
+            found_at=ts,
+            images=["a.jpg"],
+        )
+        b = _item(
+            id="telegram_avtobazar_group_101",
+            source="telegram",
+            brand="Volkswagen",
+            model="Touareg",
+            year=2014,
+            price=16000,
+            currency="UAH",
+            title=body[:80],
+            description=body,
+            source_data={"channel": "avtobazar_group", "message_id": 101},
+            published_at=ts,
+            found_at=ts,
+            images=["a.jpg", "b.jpg"],
+        )
+        out = dedupe_telegram_posts_in_pool([a, b])
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].id, "telegram_avtobazar_group_101")
+
+    def test_dedupe_telegram_same_channel_short_title_close_price(self):
+        from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
+
+        ts = datetime(2026, 7, 31, tzinfo=KYIV_TZ)
+        a = _item(
+            id="telegram_avtobazar_group_1",
+            source="telegram",
+            brand="Lada",
+            model="",
+            year=2014,
+            price=18000,
+            currency="UAH",
+            title="Lada ння дзеркал 2014",
+            description="",
+            source_data={"channel": "avtobazar_group", "message_id": 1},
+            published_at=ts,
+            found_at=ts,
+        )
+        b = _item(
+            id="telegram_avtobazar_group_2",
+            source="telegram",
+            brand="Lada",
+            model="",
+            year=2014,
+            price=18500,
+            currency="UAH",
+            title="Lada ння дзеркал 2014",
+            description="",
+            source_data={"channel": "avtobazar_group", "message_id": 2},
+            published_at=ts,
+            found_at=ts,
+        )
+        out = dedupe_telegram_posts_in_pool([a, b])
+        self.assertEqual(len(out), 1)
+
+    def test_dedupe_telegram_same_title_far_price_kept(self):
+        """Різні авто з однаковою короткою назвою, але різною ціною — не зливати."""
+        from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
+
+        ts = datetime(2026, 7, 31, tzinfo=KYIV_TZ)
+        a = _item(
+            id="telegram_avtobazar_group_10",
+            source="telegram",
+            brand="Audi",
+            model="SQ5",
+            year=2018,
+            price=22000,
+            title="Audi SQ5 2018",
+            description="",
+            region="Україна",
+            source_data={"channel": "avtobazar_group", "message_id": 10},
+            published_at=ts,
+            found_at=ts,
+        )
+        b = _item(
+            id="telegram_avtobazar_group_11",
+            source="telegram",
+            brand="Audi",
+            model="SQ5",
+            year=2018,
+            price=29000,
+            title="Audi SQ5 2018",
+            description="",
+            region="Львів",
+            source_data={"channel": "avtobazar_group", "message_id": 11},
             published_at=ts,
             found_at=ts,
         )

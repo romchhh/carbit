@@ -1,7 +1,8 @@
-"""Крос-джерельне дедуплікування оголошень (лише за VIN)."""
+"""Крос-джерельне дедуплікування оголошень (VIN + Telegram reposts)."""
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 from sqlalchemy import func, select
@@ -12,6 +13,18 @@ from app.models.models import Listing
 from app.schemas.schemas import ListingOut, ListingSourceLink
 from app.services.telegram_channels.mapper import fix_telegram_listing_url
 from app.services.vin import is_valid_vin
+
+# Прибираємо телефони / ціни з тексту, щоб репост із новою ціною схлопувався.
+_TG_TEXT_NOISE_RE = re.compile(
+    r"(?:"
+    r"\b(?:\+?38)?0\d{8,10}\b"
+    r"|\b\d{1,3}(?:[ \u00a0]\d{3})+\s*(?:грн|\$|usd|eur|у\.?\s?е\.?)?\b"
+    r"|\b\d{3,6}\s*(?:грн|\$|usd|eur)\b"
+    r"|https?://\S+"
+    r"|t\.me/\S+"
+    r")",
+    re.IGNORECASE,
+)
 
 
 _SOURCE_RANK = {
@@ -122,8 +135,83 @@ def telegram_post_dedupe_key(item: ListingOut | Listing) -> str | None:
     return None
 
 
+def _telegram_price_bucket(price: int, *, step: int | None = None) -> int:
+    """Груба ціна: step=500 (~дрібні правки), step=2000 (короткі дублі в каналі)."""
+    if price <= 0:
+        return 0
+    if step is None:
+        step = 500 if price < 50_000 else 1000
+    return int(round(price / step) * step)
+
+
+def _telegram_body_for_fingerprint(item: ListingOut | Listing) -> str:
+    title = (getattr(item, "title", None) or "").strip()
+    desc = (getattr(item, "description", None) or "").strip()
+    # Якщо description починається з title — не дублюємо.
+    if desc and title and norm_text(desc).startswith(norm_text(title)[:40]):
+        raw = desc
+    else:
+        raw = f"{title}\n{desc}".strip()
+    cleaned = _TG_TEXT_NOISE_RE.sub(" ", raw)
+    return re.sub(r"\s+", " ", norm_text(cleaned)).strip()
+
+
+def telegram_text_fingerprint(item: ListingOut | Listing) -> str | None:
+    """Один і той самий текст оголошення (репост / правка ціни), крос-канально."""
+    source = getattr(item, "source", None)
+    source_val = source.value if hasattr(source, "value") else str(source or "")
+    if source_val.lower() != "telegram":
+        return None
+
+    body = _telegram_body_for_fingerprint(item)
+    if len(body) < 48:
+        return None
+    digest = hashlib.sha1(body.encode("utf-8")).hexdigest()[:16]
+    year = int(getattr(item, "year", 0) or 0)
+    year_part = str(year) if year >= 1990 else "0"
+    return f"tgtxt:{digest}:{year_part}"
+
+
+def telegram_channel_title_fingerprint(item: ListingOut | Listing) -> str | None:
+    """Той самий короткий пост у каналі (різні message_id / близька ціна)."""
+    source = getattr(item, "source", None)
+    source_val = source.value if hasattr(source, "value") else str(source or "")
+    if source_val.lower() != "telegram":
+        return None
+
+    sd = getattr(item, "source_data", None) or {}
+    if not isinstance(sd, dict):
+        sd = {}
+    channel = _norm_telegram_channel(sd.get("channel"))
+    if not channel:
+        parsed = _telegram_ids_from_listing_id(getattr(item, "id", None))
+        if parsed:
+            channel = parsed[0]
+    if not channel:
+        return None
+
+    title = norm_text(getattr(item, "title", None) or "")
+    if len(title) < 12:
+        body = _telegram_body_for_fingerprint(item)
+        title = body[:72] if len(body) >= 12 else ""
+    if len(title) < 12:
+        return None
+
+    year = int(getattr(item, "year", 0) or 0)
+    if year < 1990:
+        return None
+    try:
+        price = int(round(float(getattr(item, "price", 0) or 0)))
+    except (TypeError, ValueError):
+        price = 0
+    if price <= 0:
+        return None
+    # step=2000: 16k≈17k, 18k≈18.5k; 22k≠29k лишаються різними
+    return f"tgch:{channel}:{title[:80]}:{year}:{_telegram_price_bucket(price, step=2000)}"
+
+
 def telegram_content_fingerprint(item: ListingOut | Listing) -> str | None:
-    """Ключ репосту одного авто в різних TG-каналах (бренд+модель+рік+ціна+пробіг)."""
+    """Ключ репосту одного авто в різних TG-каналах (бренд+модель+рік+ціна±bucket)."""
     source = getattr(item, "source", None)
     source_val = source.value if hasattr(source, "value") else str(source or "")
     if source_val.lower() != "telegram":
@@ -136,6 +224,7 @@ def telegram_content_fingerprint(item: ListingOut | Listing) -> str | None:
     if price <= 0:
         return None
 
+    price_bucket = _telegram_price_bucket(price)
     currency = str(getattr(item, "currency", "") or "").strip().upper() or "USD"
     year = int(getattr(item, "year", 0) or 0)
     brand = norm_text(getattr(item, "brand", None) or "")
@@ -147,20 +236,24 @@ def telegram_content_fingerprint(item: ListingOut | Listing) -> str | None:
     mile_bucket = (mileage // 5000) * 5000 if mileage > 0 else 0
 
     if brand and year >= 1990:
-        return f"tgfp:{brand}:{model}:{year}:{price}:{currency}:{mile_bucket}"
+        return f"tgfp:{brand}:{model}:{year}:{price_bucket}:{currency}:{mile_bucket}"
 
     title = norm_text(getattr(item, "title", None) or "")
     # Без марки — лише якщо заголовок досить довгий і є рік/ціна.
     if len(title) >= 24 and year >= 1990:
-        return f"tgfp:t:{title[:72]}:{year}:{price}:{currency}:{mile_bucket}"
+        return f"tgfp:t:{title[:72]}:{year}:{price_bucket}:{currency}:{mile_bucket}"
     return None
 
 
-def _telegram_listing_rank(row: ListingOut) -> tuple[int, int, int]:
+def _telegram_listing_rank(row: ListingOut) -> tuple:
+    published = getattr(row, "published_at", None) or getattr(row, "found_at", None)
+    # newer → більший ts для порівняння
+    ts = published.timestamp() if published is not None else 0.0
     return (
         len(row.images or []),
         len((row.description or "").strip()),
         len((row.title or "").strip()),
+        ts,
     )
 
 
@@ -213,8 +306,12 @@ def dedupe_telegram_posts_in_pool(items: list[ListingOut]) -> list[ListingOut]:
         return []
     # 1) той самий пост (канал+message_id / album)
     by_post = _collapse_by_key(items, telegram_post_dedupe_key)
-    # 2) той самий лот, скопійований в інший канал
-    return _collapse_by_key(by_post, telegram_content_fingerprint)
+    # 2) той самий текст (репост / правка ціни), крос-канально
+    by_text = _collapse_by_key(by_post, telegram_text_fingerprint)
+    # 3) короткий дубль у тому ж каналі (однаковий title+рік)
+    by_channel = _collapse_by_key(by_text, telegram_channel_title_fingerprint)
+    # 4) бренд+модель+рік+ціна±bucket (класичний fingerprint)
+    return _collapse_by_key(by_channel, telegram_content_fingerprint)
 
 
 def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:
