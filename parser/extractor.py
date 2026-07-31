@@ -39,7 +39,23 @@ _SERVICE_CONTEXT_RE = re.compile(
 _FAKE_MODEL_TOKENS = frozenset({
     "garage", "гараж", "service", "сервіс", "сервис", "centre", "center", "центр",
     "сто", "шини", "tires", "tyres", "presents", "представляет", "представляє",
+    "модель", "model", "марка", "brand", "ціна", "цена", "price",
+    "пробіг", "пробег", "рік", "год", "двигун", "паливо", "коробка", "привід",
 })
+
+# Салонний формат: «Марка: Audi | Модель: Q5 |»
+_LABELED_BRAND_RE = re.compile(
+    r"(?:марка|brand)\s*:\s*"
+    r"(?P<brand>[A-Za-zА-Яа-яЁёЇїІіЄєҐґ][\w.\- ]{0,40}?)"
+    r"(?=\s*[|\n,]|$)",
+    re.IGNORECASE,
+)
+_LABELED_MODEL_RE = re.compile(
+    r"(?:модель|model)\s*:\s*"
+    r"(?P<model>[A-Za-zА-Яа-яЁёЇїІіЄєҐґ0-9][\w.\- ]{0,40}?)"
+    r"(?=\s*[|\n,]|$)",
+    re.IGNORECASE,
+)
 
 MIN_LISTING_CONFIDENCE = 0.33
 
@@ -86,7 +102,8 @@ SEARCH_REQUEST_PATTERNS = [
         r"терміново\s+шукаю",
         r"срочно\s+(?:ищу|ищем)",
         r"маєте\s+(?:таке|таку|такий)?\s*авто",
-        r"є\s+(?:у\s+вас\s+)?(?:таке|таку|такий)?\s*авто",
+        # не ловити «потребує Авто» (є в кінці слова)
+        r"(?<![А-Яа-яЁёІіЇїЄєҐґA-Za-z])є\s+(?:у\s+вас\s+)?(?:таке|таку|такий)?\s*авто",
         r"в\s+пошуках",
         r"в\s+поиске",
         r"buying\s+car",
@@ -136,19 +153,24 @@ PRICE_RE = re.compile(
     r"(?P<label>mmr|ціна|цена|price|💰|💵|💲)\s*:?\s*"
     r")?"
     r"(?P<cur_before>[\$€])?\s?"
+    # не «a7 2013» → 7201
+    r"(?<![A-Za-zА-Яа-яЁёІіЇїЄєҐґ0-9/])"
     r"(?P<amount>\d{1,3}(?:[ .,]\d{3})+(?:[.,]\d{1,2})?|\d{4,8})"
-    r"\s?(?P<cur_after>\$|€|грн\.?|uah|usd|eur|у\.?\s?е\.?)?",
+    r"\s?(?P<cur_after>\$|€|₴|💵|💲|💰|грн\.?|uah|usd|eur|у\.?\s?е\.?)?",
     re.IGNORECASE,
 )
 
 MILEAGE_RE = re.compile(
-    r"(?P<val>\d{1,3}(?:[ .,]\d{3})?)\s?"
-    r"(?P<unit>тис\.?\s?км|тыс\.?\s?км|км)",
+    # (?<!\d) — не відрізати «263км» з «96263км»
+    r"(?<!\d)(?P<val>\d{1,3}(?:[ .,]\d{3})?)\s?"
+    r"(?P<unit>тис\.?\s?км|тыс\.?\s?км|т\.?\s*км|км)",
     re.IGNORECASE,
 )
 
 MILEAGE_MILES_RE = re.compile(
-    r"(?P<val>\d{1,3}(?:[ .,]\d{3})?)\s?(?:miles|mil\b|миль)",
+    r"(?P<val>\d{1,3}(?:[ .,]\d{3})?)\s*"
+    r"(?P<thou>т\.?|тис\.?|тыс\.?|k\.?)?\s*"
+    r"(?:miles|mil\b|миль|мил\.?)",
     re.IGNORECASE,
 )
 
@@ -164,7 +186,16 @@ ENGINE_RE = re.compile(
     r"\s*[,:]?\s*(?P<val4>\d[.,]\d)"
     r"|"
     r"(?P<val5>\d[.,]\d)\s*"
-    r"(?:бензин(?:овий)?|дизель(?:ний|не)?|дизел|petrol|diesel|benzin)"
+    r"(?:бензин(?:овий)?|дизель(?:ний|не)?|дизел|petrol|diesel|benzin|бенз\b)"
+    r"|"
+    # «2024. 2.0. 14т.миль» — обʼєм після року без «л»
+    r"(?:19|20)\d{2}\s*[.]\s*(?P<val6>\d[.,]\d)\b"
+    r"|"
+    # «2.5 Т» / «2.5T» (турбо) без «л» (лат. T / кир. Т)
+    r"(?P<val7>\d[.,]\d)\s*[tт]\b"
+    r"|"
+    # «1.4 TSI» / «2.0 TDI»
+    r"(?P<val8>\d[.,]\d)\s*(?:tsi|tfsi|tdi|gdi|mpi|hdi|dci|cdi)\b"
     r")",
     re.IGNORECASE,
 )
@@ -232,15 +263,17 @@ MILEAGE_SHORT_K_RE = re.compile(
 
 PRICE_LABEL_RE = re.compile(
     r"(?:ціна|цена|price|💰|💵|💲)\s*:?\s*"
+    r"(?<![A-Za-zА-Яа-яЁёІіЇїЄєҐґ0-9/])"
     r"(?P<amount>\d{1,3}(?:[ .,]\d{3})+|\d{3,8})"
     r"\s?(?P<cur>[\$€₴]|грн\.?|uah|usd|eur|у\.?\s?е\.?)?",
     re.IGNORECASE,
 )
 
 MILEAGE_LABEL_RE = re.compile(
-    r"(?:пробіг|пробег|mileage|📏)[ \t]*:?[ \t]*"
-    r"(?P<val>\d{1,3}(?:[ .,]\d{3})?)[ \t]*"
-    r"(?P<unit>тис\.?[ \t]?км|тыс\.?[ \t]?км|км)?",
+    r"(?:проб[іi]г[іи]?|пробег[ие]?|mileage|📏|🏃|🛣(?:️)?)[ \t]*[-–—:,]?[ \t]*"
+    # 45 000 / 23000 км / 85 (тис.) / 253т. км / «на пробігі 96263км»
+    r"(?P<val>\d{1,3}(?:[ .,]\d{3})+|\d{4,7}|\d{1,3})[ \t]*"
+    r"(?P<unit>тис\.?[ \t]?км|тыс\.?[ \t]?км|т\.?[ \t]*км|км)?",
     re.IGNORECASE,
 )
 
@@ -248,9 +281,21 @@ MODEL_STOP_WORDS = frozenset({
     "рік", "года", "року", "р", "р.", "ціна", "цена", "price", "пробіг", "пробег",
     "бензин", "дизель", "газ", "автомат", "механіка", "механика", "типтронік",
     "тип", "кузов", "седан", "хетчбек", "продаю", "продам", "sale",
+    "модель", "model", "марка", "brand", "двигун", "паливо", "коробка", "привід",
+    "привод", "engine", "fuel",
 })
 
+# Суфікси моделі після MODEL_AS_BRAND («Discovery Sport», «Countryman S»)
+_MODEL_AS_BRAND_SUFFIXES = frozenset({
+    "sport", "спорт", "sportback", "coupe", "купе", "cabrio", "tour", "gt", "gti",
+    "gte", "gtd", "r", "rs", "amg", "se", "sv", "hse",
+    "ii", "iii", "iv", "v", "vi", "vii", "viii",
+})
+
+_ROMAN_MODEL_SUFFIXES = frozenset({"ii", "iii", "iv", "v", "vi", "vii", "viii"})
+
 TRANSMISSION_MAP = {
+    "механічна": "manual", "механическая": "manual",
     "механіка": "manual", "механика": "manual", "ручна": "manual", "мкпп": "manual",
     "автомат": "automatic", "акпп": "automatic", "typtronic": "automatic", "типтронік": "automatic",
     "варіатор": "variator", "вариатор": "variator", "cvt": "variator",
@@ -264,7 +309,7 @@ DRIVE_MAP = {
 }
 
 FUEL_MAP = {
-    "бензин": "petrol", "petrol": "petrol", "gasoline": "petrol",
+    "бензин": "petrol", "бенз": "petrol", "petrol": "petrol", "gasoline": "petrol",
     "дизель": "diesel", "дизел": "diesel", "diesel": "diesel",
     "газ/бензин": "gas_petrol", "газ": "gas", "гбо": "gas", "lpg": "gas",
     "гібрид": "hybrid", "гибрид": "hybrid", "hybrid": "hybrid",
@@ -274,7 +319,10 @@ FUEL_MAP = {
 CONDITION_KEYWORDS = {
     "not_damaged": ["не бита", "не бит", "не крашена", "не крашен", "без дтп", "не в дтп", "не аварійна"],
     "damaged": ["бита", "потребує ремонту", "після дтп", "аварийна", "аварійна", "требует ремонта"],
-    "customs_cleared": ["розмитнено", "розмитнена", "растаможен", "на укр номерах", "на єврономерах"],
+    "customs_cleared": [
+        "розмитнено", "розмитнена", "розмитнений", "растаможен", "растаможенный",
+        "на укр номерах", "на єврономерах",
+    ],
     "not_customs_cleared": ["без розмитнення", "не розмитнена", "на транзитах", "без растаможки"],
     "on_sale": ["терміново", "срочно", "торг", "без торгу", "торг доречний"],
 }
@@ -296,7 +344,9 @@ def normalize_listing_text(raw_text: str) -> str:
 def is_promo_or_spam(text_low: str) -> bool:
     if not text_low.strip():
         return False
-    return any(pattern.search(text_low) for pattern in SPAM_PATTERNS)
+    # «(не реклама)» / «не реклама» — заперечення, не спам
+    cleaned = re.sub(r"[\(\[]?\s*не\s+реклама\s*[\)\]]?", " ", text_low)
+    return any(pattern.search(cleaned) for pattern in SPAM_PATTERNS)
 
 
 def is_car_search_request(text: str) -> bool:
@@ -401,14 +451,21 @@ def _candidate_from_brand_key(
 ) -> tuple[str, str | None]:
     if brand_key in MODEL_AS_BRAND:
         canonical_brand, base_model = MODEL_AS_BRAND[brand_key]
-        tail = original_text[idx + len(brand_key) : idx + len(brand_key) + 20]
+        tail = original_text[idx + len(brand_key) : idx + len(brand_key) + 28]
         suffix_words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", tail)
         suffix = ""
-        for sw in suffix_words[:1]:
+        for sw in suffix_words[:2]:
             if YEAR_RE.fullmatch(sw) or sw.lower() in MODEL_STOP_WORDS:
                 break
             if re.fullmatch(r"\d", sw):
                 suffix = f" {sw}"
+                break
+            if sw.lower() in _MODEL_AS_BRAND_SUFFIXES:
+                if sw.lower() in _ROMAN_MODEL_SUFFIXES:
+                    suffix = f" {sw.upper()}"
+                else:
+                    suffix = f" {sw.title()}" if sw.isascii() else f" {sw.capitalize()}"
+                break
             break
         return canonical_brand, f"{base_model}{suffix}"
 
@@ -424,6 +481,9 @@ def _candidate_from_brand_key(
         if w.lower() in ("рік", "года", "року", "р", "р.", "г", "г."):
             break
         if w.lower() in _FAKE_MODEL_TOKENS:
+            break
+        # «Kona 40kw» — ємність батареї, не частина моделі
+        if re.fullmatch(r"\d+[.,]?\d*(?:kw|kwh|квт)", w, re.IGNORECASE):
             break
         model_words.append(w)
         if len(model_words) >= 2:
@@ -462,12 +522,55 @@ def _score_brand_candidate(
     return score
 
 
+def _labeled_brand_model(original_text: str) -> tuple[str, str | None, int] | None:
+    """Парсить «Марка: Audi | Модель: Q5 |» — надійніше за хвіст після бренду."""
+    brand_m = _LABELED_BRAND_RE.search(original_text or "")
+    if not brand_m:
+        return None
+    brand_chunk = brand_m.group("brand").strip()
+    chunk_low = brand_chunk.lower()
+    resolved_brand: str | None = None
+    brand_key_hit: str | None = None
+    for brand_key in CAR_BRANDS:
+        if _brand_match(chunk_low, brand_key) is None:
+            continue
+        brand_key_hit = brand_key
+        if brand_key in MODEL_AS_BRAND:
+            resolved_brand, _ = MODEL_AS_BRAND[brand_key]
+        else:
+            resolved_brand = BRAND_CANONICAL.get(brand_key, brand_key.title())
+        break
+    if not resolved_brand or not brand_key_hit:
+        return None
+
+    model: str | None = None
+    model_m = _LABELED_MODEL_RE.search(original_text or "")
+    if model_m:
+        raw_model = model_m.group("model").strip()
+        words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", raw_model)
+        model_words: list[str] = []
+        for w in words[:3]:
+            wl = w.lower()
+            if YEAR_RE.fullmatch(w) or wl in MODEL_STOP_WORDS or wl in _FAKE_MODEL_TOKENS:
+                break
+            model_words.append(w)
+            if len(model_words) >= 2:
+                break
+        model = " ".join(model_words) if model_words else None
+    return resolved_brand, model, brand_m.start("brand")
+
+
 def _find_brand_model(text_low: str, original_text: str):
     """Шукає бренд у тексті і намагається витягти 1-2 наступних слова як модель.
 
     Кандидати ранжуються: заголовок + реальна модель > згадки сервісів
     («Zolotoy BMW Garage», «Cooper Centre») у тілі поста.
     """
+    labeled = _labeled_brand_model(original_text)
+    if labeled is not None:
+        brand, model, pos = labeled
+        return brand, model, pos
+
     best: tuple[float, int, str, str | None] | None = None
 
     for brand_key in CAR_BRANDS:
@@ -532,7 +635,27 @@ def _looks_like_phone_amount(amount: float) -> bool:
     if amount != int(amount):
         return False
     digits = str(int(amount))
-    return len(digits) >= 10 and digits.startswith("0")
+    # 06732150… (обрізане regex) або повні 10 цифр
+    return digits.startswith("0") and 7 <= len(digits) <= 12
+
+
+def _correct_mislabelled_uah(amount: float, currency: str | None, text: str) -> str | None:
+    """Типова помилка «17800₴» замість «17800$» на оголошеннях з VIN / імпортом."""
+    if currency != "UAH":
+        return currency
+    if not (3_000 <= amount <= 200_000):
+        return currency
+    text_low = (text or "").lower()
+    if re.search(r"(?:тис|тысяч)\w*\s*(?:грн|грив)", text_low):
+        return currency
+    if _extract_vin(text or ""):
+        return "USD"
+    if any(
+        h in text_low
+        for h in ("сша", "америц", "під ключ", "под ключ", "mmr", "auction", "copart", "iaai")
+    ):
+        return "USD"
+    return currency
 
 
 def _find_price(text: str):
@@ -550,10 +673,14 @@ def _find_price(text: str):
             currency = "EUR"
         elif "грн" in cur or cur in ("uah", "₴"):
             currency = "UAH"
+        # «💰7800$» / сама 💵 як мітка ціни без явної валюти після суми
+        if currency is None and any(e in (label_match.group(0) or "") for e in ("💰", "💵", "💲")):
+            currency = "USD"
         if _price_in_range(amount, currency):
             if currency is None:
                 from .currency import infer_currency
                 currency = infer_currency(amount, None, text)
+            currency = _correct_mislabelled_uah(amount, currency, text)
             labeled_hits.append((amount, currency))
     if labeled_hits:
         return labeled_hits[-1]
@@ -570,7 +697,7 @@ def _find_price(text: str):
 
         cur = (m.group("cur_before") or m.group("cur_after") or "").lower()
         currency = None
-        if cur in ("$", "usd"):
+        if cur in ("$", "usd") or cur in ("💵", "💲", "💰"):
             currency = "USD"
         elif cur in ("€", "eur"):
             currency = "EUR"
@@ -591,7 +718,8 @@ def _find_price(text: str):
             score += 2
         if has_label:
             score += 3
-        if best is None or score > best_score:
+        # при рівному score — пізніша ціна (часто актуальна)
+        if best is None or score >= best_score:
             best = (amount, currency)
             best_score = score
 
@@ -603,6 +731,7 @@ def _find_price(text: str):
         from .currency import infer_currency
 
         currency = infer_currency(amount, None, text)
+    currency = _correct_mislabelled_uah(amount, currency, text)
     return amount, currency
 
 
@@ -612,7 +741,13 @@ def _find_mileage(text: str) -> Optional[int]:
         val = _normalize_amount(label.group("val"))
         if val is not None:
             unit = (label.group("unit") or "").lower()
-            if unit and ("тис" in unit or "тыс" in unit):
+            unit_compact = unit.replace(" ", "")
+            if unit and (
+                "тис" in unit_compact
+                or "тыс" in unit_compact
+                or unit_compact.startswith("т.")
+                or unit_compact.startswith("ткм")
+            ):
                 return int(val * 1000)
             if val < 1000:
                 return int(val * 1000)
@@ -625,26 +760,29 @@ def _find_mileage(text: str) -> Optional[int]:
         if val is not None and 1 <= val <= 999:
             return int(val * 1000)
 
-    m = MILEAGE_RE.search(text)
-    if m:
-        val = _normalize_amount(m.group("val"))
-        if val is not None:
-            unit = m.group("unit").lower()
-            if "тис" in unit or "тыс" in unit:
-                val *= 1000
-            return int(val)
-
+    # Повні км («96263км») раніше за короткі «N км», щоб не відрізати хвіст
     full_km = MILEAGE_FULL_KM_RE.search(text)
     if full_km:
         val = _normalize_amount(full_km.group("val"))
         if val is not None:
             return int(val)
 
+    m = MILEAGE_RE.search(text)
+    if m:
+        val = _normalize_amount(m.group("val"))
+        if val is not None:
+            unit = m.group("unit").lower().replace(" ", "")
+            if "тис" in unit or "тыс" in unit or unit.startswith("т.") or unit.startswith("ткм"):
+                val *= 1000
+            return int(val)
+
     miles = MILEAGE_MILES_RE.search(text)
     if miles:
         val = _normalize_amount(miles.group("val"))
         if val is not None:
-            return int(val * 1609.34)
+            if miles.group("thou"):
+                val *= 1000
+            return int(val * 1.60934)
     return None
 
 
@@ -721,6 +859,9 @@ def extract_car_data(
                 or eng.group("val3")
                 or eng.group("val4")
                 or eng.group("val5")
+                or eng.group("val6")
+                or eng.group("val7")
+                or eng.group("val8")
             )
             if raw_val:
                 volume = float(raw_val.replace(",", "."))
@@ -734,6 +875,10 @@ def extract_car_data(
         listing.transmission = _find_mapped(text_low, TRANSMISSION_MAP)
         listing.drive_type = _find_mapped(text_low, DRIVE_MAP)
         listing.fuel_type = _find_mapped(text_low, FUEL_MAP)
+        if listing.fuel_type is None and re.search(
+            r"\b\d{2,3}\s*(?:kw|kwh|квт)\b", text_low
+        ):
+            listing.fuel_type = "electric"
         listing.location_city = _find_city(text_low)
 
         phone_m = PHONE_RE.search(text)

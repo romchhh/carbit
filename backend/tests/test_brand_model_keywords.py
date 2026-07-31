@@ -88,6 +88,19 @@ class BrandModelKeywordTests(unittest.TestCase):
             text_matches_model_filter("Tesla model S plaid", "Model S", brand="Tesla")
         )
 
+    def test_renault_megan_typo_matches_megane(self):
+        self.assertTrue(
+            message_matches_search_filters("Renault Megan 3 2012 $9600", "Renault", "Megane")
+        )
+        self.assertTrue(
+            text_matches_model_filter("Megan 3", "Megane", brand="Renault")
+        )
+
+    def test_golf_vii_without_volkswagen_word(self):
+        self.assertTrue(
+            message_matches_search_filters("Golf VII 2013рік 1.2 бензин 7800$", "Volkswagen", "Golf")
+        )
+
     def test_telegram_listing_matches_cyrillic_title(self):
         item = type("Item", (), {
             "brand": "",

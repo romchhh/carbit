@@ -568,7 +568,7 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
 
     # ══ RENAULT ═════════════════════════════════════════════════
     "duster": ("duster", "дастер"),
-    "megane": ("megane", "меган", "мегане"),
+    "megane": ("megane", "megan", "меган", "мегане"),
     "clio": ("clio", "кліо"),
     "laguna": ("laguna", "лагуна"),
     "scenic": ("scenic", "сценік", "grand scenic"),
@@ -1269,6 +1269,14 @@ def _generated_short_model_variants(brand: str, model: str) -> list[str]:
     return out
 
 
+# Часті заголовки лише з моделлю («Golf VII», «Passat B8») без Volkswagen.
+_VW_MODELS_WITHOUT_BRAND = frozenset({
+    "golf", "passat", "polo", "tiguan", "touareg", "jetta", "arteon", "touran",
+    "caddy", "transporter", "multivan", "amarok", "scirocco", "sharan", "tour",
+    "id3", "id4", "id5", "id6", "id7", "id buzz",
+})
+
+
 def _allows_distinctive_model_without_brand(brand: str, model: str) -> bool:
     """Модель у FE унікальна для марки → brand може не бути в тексті."""
     slug = resolve_olx_brand_slug(brand) if brand else ""
@@ -1282,6 +1290,13 @@ def _allows_distinctive_model_without_brand(brand: str, model: str) -> bool:
 
     if slug == "tesla" and re.match(r"^model\s+[3sxy]$", norm_text(model)):
         return True
+    if slug in ("volkswagen", "vw") and norm_text(model) in _VW_MODELS_WITHOUT_BRAND:
+        return True
+    # «Golf VII» — core token golf
+    if slug in ("volkswagen", "vw"):
+        for token in _identity_tokens(model):
+            if norm_text(token) in _VW_MODELS_WITHOUT_BRAND:
+                return True
     return False
 
 

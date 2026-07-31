@@ -138,6 +138,23 @@ def telegram_media_url(local_path: str) -> str:
     return f"/api/v1/telegram-media/{rel.as_posix()}"
 
 
+def _looks_like_dealer(text: str) -> bool:
+    low = (text or "").lower()
+    return any(
+        token in low
+        for token in (
+            "автосалон",
+            "автосалоні",
+            "салон «",
+            "салон \"",
+            "dealer",
+            "автодилер",
+            "imperiya",
+            "імперія авто",
+        )
+    )
+
+
 def _build_title(listing: Any) -> str:
     parts = [listing.brand, listing.model]
     title = " ".join(part for part in parts if part)
@@ -203,7 +220,8 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
         description=listing.raw_text,
         images=images,
         url=telegram_message_url(listing.channel, listing.message_id, listing.source_link),
-        seller_type="private",
+        seller_type="dealer" if _looks_like_dealer(raw_text) else "private",
+        engine_volume_l=listing.engine_volume_l,
         vin=vin,
         vin_checked=None,
         vin_check_url=None,
@@ -221,6 +239,9 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
             "price_currency": original_currency,
             "price_original": listing.price_amount,
             "engine_volume_l": listing.engine_volume_l,
+            "drive_type": listing.drive_type,
+            "fuel_type": listing.fuel_type,
+            "transmission": listing.transmission,
         },
         price_history=[],
         is_duplicate=False,

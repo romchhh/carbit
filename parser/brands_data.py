@@ -12,6 +12,7 @@ CAR_BRANDS = [
     "countryman", "кантрімен", "кантримен",  # Mini Countryman без «Mini»
     "clubman", "клабмен",
     "paceman", "пейсмен",
+    "golf", "гольф",  # VW Golf без «Volkswagen»
     "volkswagen", "vw", "фольксваген", "фольксваген", "вольксваген",
     "bmw", "бмв",
     "audi", "ауді", "ауди",
@@ -116,6 +117,8 @@ MODEL_AS_BRAND: dict[str, tuple[str, str]] = {
     "клабмен": ("Mini", "Clubman"),
     "paceman": ("Mini", "Paceman"),
     "пейсмен": ("Mini", "Paceman"),
+    "golf": ("Volkswagen", "Golf"),
+    "гольф": ("Volkswagen", "Golf"),
 }
 
 # для нормалізації бренду до "канонічного" вигляду при виводі користувачу
@@ -126,6 +129,7 @@ BRAND_CANONICAL = {
     "discovery": "Land Rover", "дискавері": "Land Rover", "дискавери": "Land Rover",
     "рендж ровер": "Range Rover", "range rover": "Range Rover",
     "vw": "Volkswagen", "фольксваген": "Volkswagen", "вольксваген": "Volkswagen", "volkswagen": "Volkswagen",
+    "golf": "Volkswagen", "гольф": "Volkswagen",
     "бмв": "BMW", "bmw": "BMW",
     "ауді": "Audi", "ауди": "Audi", "audi": "Audi",
     "тойота": "Toyota", "toyota": "Toyota",

@@ -245,6 +245,265 @@ VIN номер: WMWZC5C52DWP34187
         self.assertEqual(listing.brand, "Mini")
         self.assertIn("Countryman", listing.model or "")
 
+    def test_salon_labeled_audi_q5(self):
+        """Формат салону: Марка/Модель/Ціна/Пробіг/Рік/Двигун + VIN + США."""
+        text = """🔴 Марка: Audi | Модель: Q5 |
+Ціна: 37900 $ | Пробіг: 23000 | Рік: 2023
+
+Двигун: 2.0 | Паливо: Бензин | Коробка: Автомат | Привід: Повний |
+Тип авто: Позашляховик / Кросовер |
+
+📦 Авто в наявності в салоні
+#Київ Автосалон «Імперія Авто»
+
+WA1EAAFY1R2037060
+Авто пригнане з США
++38 0990317664 Олексій
+#Audi
+#від_30000_до_40000$
+"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Audi")
+        self.assertEqual(listing.model, "Q5")
+        self.assertEqual(listing.year, 2023)
+        self.assertEqual(listing.price_amount, 37900)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.mileage_km, 23000)
+        self.assertEqual(listing.engine_volume_l, 2.0)
+        self.assertEqual(listing.fuel_type, "petrol")
+        self.assertEqual(listing.transmission, "automatic")
+        self.assertEqual(listing.drive_type, "awd")
+        self.assertEqual(listing.location_city, "Київ")
+        self.assertEqual((listing.condition_flags or {}).get("vin"), "WA1EAAFY1R2037060")
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_mileage_plain_five_digits(self):
+        listing = _extract("BMW X5 2020, ціна 25000$, Пробіг: 45000, Київ")
+        self.assertEqual(listing.mileage_km, 45000)
+
+    def test_uah_typo_with_vin_treated_as_usd(self):
+        """«17800₴» при VIN — типова помилка символу валюти → USD."""
+        text = """Volkswagen Touareg
+Рік - 2014
+3,0 дизель
+АКПП
+Повний привід
+Пробіг 231 тис км
+Vin: WVGEP9BP9ED013812
+Місто Бориспіль
+Ціна 17800₴
+☎️ 0686654727"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Volkswagen")
+        self.assertEqual(listing.model, "Touareg")
+        self.assertEqual(listing.year, 2014)
+        self.assertEqual(listing.price_amount, 17800)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.mileage_km, 231000)
+        self.assertEqual(listing.engine_volume_l, 3.0)
+        self.assertEqual(listing.fuel_type, "diesel")
+        self.assertEqual((listing.condition_flags or {}).get("vin"), "WVGEP9BP9ED013812")
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_real_uah_price_still_uah(self):
+        listing = _extract("Audi A4 2016, ціна 650 000 грн, Київ")
+        self.assertEqual(listing.price_currency, "UAH")
+
+    def test_ne_reklama_not_spam(self):
+        self.assertFalse(is_promo_or_spam("машина реальна (не реклама), доступна до продажу"))
+        self.assertTrue(is_promo_or_spam("це реклама каналу, підпишись"))
+
+    def test_kia_rio_emoji_card(self):
+        text = """🚗: Kia Rio
+📆Рік: 2012
+🏃Пробіг: 199 тис. км
+⚙️Двигун: Бензин 1.4л
+🕹Коробка Передач: Механічна
+🛞Привід: Передній
+💸Ціна: 8800$
+🇺🇦Місто: Сумська обл., Кролевець
+📱Телефон: 066 330 4631"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Kia")
+        self.assertEqual(listing.model, "Rio")
+        self.assertEqual(listing.year, 2012)
+        self.assertEqual(listing.mileage_km, 199000)
+        self.assertEqual(listing.engine_volume_l, 1.4)
+        self.assertEqual(listing.fuel_type, "petrol")
+        self.assertEqual(listing.transmission, "manual")
+        self.assertEqual(listing.drive_type, "fwd")
+        self.assertEqual(listing.price_amount, 8800)
+        self.assertEqual(listing.location_city, "Кролевець")
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_renault_kangoo_full_km_mileage(self):
+        text = (
+            "Renault Kangoo Maxi 12.2021р.випуску, пригнаний з Бельгії 06.2026р, "
+            "розмитнений-100%+сертифікат, авто в гарному стані, "
+            "пройшов ТО в Бельгії на пробігі 96263км , 22.10.25. "
+            "без ДТП, можливо установка кондиціонера +$ -12500$ Дніпро 0958431995"
+        )
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Renault")
+        self.assertIn("Kangoo", listing.model or "")
+        self.assertEqual(listing.year, 2021)
+        self.assertEqual(listing.mileage_km, 96263)
+        self.assertEqual(listing.price_amount, 12500)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.location_city, "Дніпро")
+        self.assertTrue((listing.condition_flags or {}).get("not_damaged"))
+        self.assertTrue((listing.condition_flags or {}).get("customs_cleared"))
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_not_search_request_potrebuye_avto(self):
+        """«Вкладень не потребує Авто» — продаж, не запит «є авто?»."""
+        text = (
+            "Golf VII 2013рік\n1.2 бензин\nВкладень не потребує\n"
+            "Авто від власника\n💰7800$"
+        )
+        self.assertFalse(is_car_search_request(text))
+
+    def test_hyundai_kona_40kw(self):
+        text = (
+            "Hyundai Kona 40kw, 2020р, пригнана з Німеччини 12.2025, "
+            "вже на Українській регістрації, перша регистрація 2021р, "
+            "пройшов ТО в Німеччині 07.2025р. -18800$ Дніпро 0958431995"
+        )
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Hyundai")
+        self.assertEqual(listing.model, "Kona")
+        self.assertEqual(listing.year, 2020)
+        self.assertEqual(listing.price_amount, 18800)
+        self.assertEqual(listing.fuel_type, "electric")
+        self.assertEqual(listing.location_city, "Дніпро")
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_golf_vii_without_vw_brand(self):
+        text = """🚘
+Golf VII 2013рік 
+1.2 бензин
+Авто доглянуте,без гнилі,без рижиків
+Вкладень не потребує 
+Авто від власника
+☎️0964666184
+💰7800$"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Volkswagen")
+        self.assertIn("Golf", listing.model or "")
+        self.assertIn("VII", listing.model or "")
+        self.assertEqual(listing.year, 2013)
+        self.assertEqual(listing.price_amount, 7800)
+        self.assertEqual(listing.engine_volume_l, 1.2)
+        self.assertEqual(listing.fuel_type, "petrol")
+        self.assertFalse(is_car_search_request(text))
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_skoda_octavia_a7_price_emoji(self):
+        text = """Skoda Octavia A7 2013 1.4 TSI•
+Коробка Механіка бст
+Привід передній
+придбана з салону( 1 власник)
+Авто в Києві
+9600💵
+0673215050"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Skoda")
+        self.assertIn("Octavia", listing.model or "")
+        self.assertEqual(listing.year, 2013)
+        self.assertEqual(listing.price_amount, 9600)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.engine_volume_l, 1.4)
+        self.assertEqual(listing.transmission, "manual")
+        self.assertEqual(listing.drive_type, "fwd")
+        self.assertEqual(listing.location_city, "Київ")
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_renault_megan_typo_mileage_t_km(self):
+        """«Megan» + «253т. км» + emoji-рядки."""
+        text = """🚐 Renault Megan 3 
+📆 Рік - 2012
+🛣️ Пробіг - 253т. км
+🛢 Паливо - дизель
+🕹️ Механіка, передній привід
+💵 $9600
+🌏 Київ
+📱 Тел. 0665940968
+
+Авто з-за кордону — це не реклама салону"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Renault")
+        self.assertIn("Megan", listing.model or "")
+        self.assertEqual(listing.year, 2012)
+        self.assertEqual(listing.price_amount, 9600)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.mileage_km, 253000)
+        self.assertEqual(listing.fuel_type, "diesel")
+        self.assertEqual(listing.transmission, "manual")
+        self.assertEqual(listing.drive_type, "fwd")
+        self.assertEqual(listing.location_city, "Київ")
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_volvo_s80_benz_turbo(self):
+        text = """🛞Volvo s80 II🛞
+       2006рік.
+🔥2.5 Т, бенз🔥
+АКПП (aisin 6-ст) 
+
+  пробіг: 180тис🎁
+
+Перша  офіційна Volvo s80 II, куплена у дилера в Одесі! 
+
+Літня шини Continental 2025 рік.
+
+Автомобіль вартий вашої уваги, навіть аварійне колесо рідне
+
+💰Ціна: 8850$ 🍯
+Одеська обл., м.Біляївка
+0969712307-Ivan"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Volvo")
+        self.assertIn("s80", (listing.model or "").lower())
+        self.assertEqual(listing.year, 2006)
+        self.assertEqual(listing.price_amount, 8850)
+        self.assertEqual(listing.mileage_km, 180000)
+        self.assertEqual(listing.engine_volume_l, 2.5)
+        self.assertEqual(listing.fuel_type, "petrol")
+        self.assertEqual(listing.transmission, "automatic")
+        self.assertEqual(listing.location_city, "Біляївка")
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_land_rover_discovery_sport_import(self):
+        text = """🚗LAND ROVER DISCOVERY SPORT S.
+
+2024. 2.0. 14т.миль.
+VIN - SALCJ2FX3RH351759.
+
+Машина реальна (не реклама), доступна до продажу ! Куплена в Америці. Пливе в Литву (порт Клайпеда). Звідти автовозом доставляємо в Україну.
+
+🔜Судозахід в Литву- 29.08.2026.
+
+💰26500$ – ціна під ключ на Українському обліку (без ремонту).
+
+Авто повністю на ходу (Run and Drive).
+Має незначне пошкодження заднього правого колеса. Ремонт мінімальний!
+
+Можливий безготівковий розрахунок!
+
+➡️TG: @dmytro_cantora
+🗣️Дані для контакту: +380933002003"""
+        self.assertFalse(is_promo_or_spam(text.lower()))
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Land Rover")
+        self.assertIn("sport", (listing.model or "").lower())
+        self.assertEqual(listing.year, 2024)
+        self.assertEqual(listing.price_amount, 26500)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.engine_volume_l, 2.0)
+        self.assertIsNotNone(listing.mileage_km)
+        self.assertAlmostEqual(listing.mileage_km, 14000 * 1.60934, delta=50)
+        self.assertEqual((listing.condition_flags or {}).get("vin"), "SALCJ2FX3RH351759")
+        self.assertTrue(is_valid_car_listing(listing))
+
 
 if __name__ == "__main__":
     unittest.main()
