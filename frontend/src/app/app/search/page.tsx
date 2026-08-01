@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
@@ -20,6 +20,8 @@ import {
   saveRecentSearch,
   type RecentSearchEntry,
 } from "@/lib/recent-searches";
+import type { SearchFilterState } from "@/lib/search-catalog";
+import type { SearchFreshness } from "@/lib/search-preview";
 import type { SearchQuery } from "@/types/api";
 
 export default function SearchPage() {
@@ -55,6 +57,13 @@ export default function SearchPage() {
     clearError,
   } = usePreviewSearch();
 
+  /** Після завершення пошуку дописати фото першого авто в «Останні пошуки». */
+  const pendingRecentPreviewRef = useRef<{
+    filters: SearchFilterState;
+    freshness: SearchFreshness;
+  } | null>(null);
+  const wasSearchingRef = useRef(false);
+
   useEffect(() => {
     if (!initialized || authLoading || !user) return;
     searchesApi
@@ -75,16 +84,38 @@ export default function SearchPage() {
 
     changeFreshness(draft.freshness);
     clearSearchDraft();
+    pendingRecentPreviewRef.current = {
+      filters: draft.filters,
+      freshness: draft.freshness,
+    };
     saveRecentSearch(draft.filters, draft.freshness);
     void runSearch(draft.filters, draft.freshness);
   }, [initialized, authLoading, user, runSearch, changeFreshness]);
 
+  useEffect(() => {
+    if (searching) {
+      wasSearchingRef.current = true;
+      return;
+    }
+    if (!wasSearchingRef.current) return;
+    wasSearchingRef.current = false;
+    const pending = pendingRecentPreviewRef.current;
+    if (!pending) return;
+    pendingRecentPreviewRef.current = null;
+    const previewImage = results[0]?.images?.[0] ?? null;
+    if (!previewImage) return;
+    saveRecentSearch(pending.filters, pending.freshness, { previewImage });
+  }, [searching, results]);
+
   const handleSearch = () => {
     clearSaveMessages();
     clearError();
+    pendingRecentPreviewRef.current = { filters, freshness };
     saveRecentSearch(filters, freshness);
     void runSearch(filters);
   };
+
+  const filtersPanelRef = useRef<HTMLDivElement>(null);
 
   const handleRecentSelect = useCallback(
     (entry: RecentSearchEntry) => {
@@ -92,7 +123,13 @@ export default function SearchPage() {
       clearError();
       setFilters({ ...entry.filters });
       changeFreshness(entry.freshness);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.requestAnimationFrame(() => {
+        filtersPanelRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+          inline: "nearest",
+        });
+      });
     },
     [changeFreshness, clearError, clearSaveMessages, setFilters],
   );
@@ -134,7 +171,7 @@ export default function SearchPage() {
         </span>
       </div>
 
-      <div className="mb-5 sm:mb-6">
+      <div ref={filtersPanelRef} className="mb-5 scroll-mt-4 sm:mb-6">
         <SearchFiltersPanel
           wide
           filters={filters}

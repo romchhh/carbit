@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { IconArrowRight, IconClock, IconSearch } from "@/components/icons";
 import { AppSection } from "@/components/layout/AppPage";
 import { formatSearchDesc } from "@/lib/format-search-desc";
@@ -75,8 +76,21 @@ export function RecentSearchesSection({ limit = 8, className, onSelect }: Props)
                 onClick={() => onSelect(entry)}
                 className="flex w-full items-center gap-3 px-3 py-3 text-left sm:gap-4 sm:px-4 sm:py-3.5"
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface text-muted ring-1 ring-border/70">
-                  <IconSearch size={16} />
+                <span className="relative h-12 w-[4.25rem] shrink-0 overflow-hidden rounded-xl bg-surface ring-1 ring-border/70 sm:h-14 sm:w-24">
+                  {entry.previewImage ? (
+                    <Image
+                      src={entry.previewImage}
+                      alt=""
+                      fill
+                      className="object-cover"
+                      sizes="96px"
+                      unoptimized
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-muted">
+                      <IconSearch size={16} />
+                    </span>
+                  )}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-semibold text-ink sm:text-[15px]">

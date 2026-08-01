@@ -16,6 +16,8 @@ export type RecentSearchEntry = {
   filters: SearchFilterState;
   freshness: SearchFreshness;
   at: string;
+  /** Фото першого авто з останнього запуску цього пошуку */
+  previewImage?: string | null;
 };
 
 function normalizeFilters(raw: unknown): SearchFilterState | null {
@@ -42,13 +44,28 @@ function normalizeEntry(raw: unknown): RecentSearchEntry | null {
     typeof item.id === "string" && item.id
       ? item.id
       : `${at}:${name}:${freshness}`;
+  const previewImage =
+    typeof item.previewImage === "string" && item.previewImage.trim()
+      ? item.previewImage.trim()
+      : null;
 
-  return { id, name, filters, freshness, at };
+  return { id, name, filters, freshness, at, previewImage };
 }
 
 function notifyChanged() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(CHANGED_EVENT));
+}
+
+function matchesEntry(
+  item: RecentSearchEntry,
+  filters: SearchFilterState,
+  freshness: SearchFreshness,
+): boolean {
+  return (
+    searchFiltersMatchUi(toBackendSearchFilters(item.filters), filters) &&
+    item.freshness === freshness
+  );
 }
 
 export function loadRecentSearches(): RecentSearchEntry[] {
@@ -66,28 +83,38 @@ export function loadRecentSearches(): RecentSearchEntry[] {
   }
 }
 
+export type SaveRecentSearchOptions = {
+  previewImage?: string | null;
+};
+
 export function saveRecentSearch(
   filters: SearchFilterState,
   freshness: SearchFreshness = "all",
+  options?: SaveRecentSearchOptions,
 ): RecentSearchEntry {
+  const freshnessNorm: SearchFreshness = freshness === "new" ? "new" : "all";
+  const current = typeof window === "undefined" ? [] : loadRecentSearches();
+  const previous = current.find(item => matchesEntry(item, filters, freshnessNorm));
+  const previewImage =
+    options && "previewImage" in options
+      ? options.previewImage?.trim() || null
+      : previous?.previewImage ?? null;
+
   const entry: RecentSearchEntry = {
     id: `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
     name: buildSearchName(filters),
     filters: { ...filters },
-    freshness: freshness === "new" ? "new" : "all",
+    freshness: freshnessNorm,
     at: new Date().toISOString(),
+    previewImage,
   };
 
   if (typeof window === "undefined") return entry;
 
-  const current = loadRecentSearches().filter(
-    item =>
-      !(
-        searchFiltersMatchUi(toBackendSearchFilters(item.filters), filters) &&
-        item.freshness === entry.freshness
-      ),
+  const next = [entry, ...current.filter(item => !matchesEntry(item, filters, freshnessNorm))].slice(
+    0,
+    MAX_ITEMS,
   );
-  const next = [entry, ...current].slice(0, MAX_ITEMS);
   localStorage.setItem(KEY, JSON.stringify(next));
   notifyChanged();
   return entry;
