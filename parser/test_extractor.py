@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from parser.extractor import (
     extract_car_data,
     is_car_search_request,
-    is_promo_or_spam,
     is_valid_car_listing,
     normalize_listing_text,
 )
@@ -66,9 +65,8 @@ class ExtractorTests(unittest.TestCase):
         listing = _extract("Roman продам авто без посередників, 2015 рік, 12000$")
         self.assertNotEqual(listing.brand, "MAN")
 
-    def test_spam_webinar(self):
+    def test_webinar_without_car_fields_not_listing(self):
         text = "Вебінар 15 липня: як продавати авто в 2026 році. Підпишись на канал!"
-        self.assertTrue(is_promo_or_spam(text.lower()))
         listing = _extract(text)
         self.assertFalse(is_valid_car_listing(listing))
 
@@ -309,9 +307,35 @@ Vin: WVGEP9BP9ED013812
         listing = _extract("Audi A4 2016, ціна 650 000 грн, Київ")
         self.assertEqual(listing.price_currency, "UAH")
 
-    def test_ne_reklama_not_spam(self):
-        self.assertFalse(is_promo_or_spam("машина реальна (не реклама), доступна до продажу"))
-        self.assertTrue(is_promo_or_spam("це реклама каналу, підпишись"))
+    def test_salon_nissan_qashqai_with_business_ad_footer(self):
+        """Футер «Реклама бізнесу» не відсікає реальне оголошення салону."""
+        text = """🔴 Марка: Nissan | Модель: Qashqai |
+Ціна: 18200 $ | Пробіг: 164000 | Рік: 2018
+
+Двигун: 1.6 | Паливо: Дизель | Коробка: Автомат | Привід: Передній |
+Тип авто: Позашляховик / Кросовер |
+
+📦 Авто в наявності в салоні
+#Київ Автосалон «Імперія Авто»
+SJNFDAJ11U2746847
+📞 Контакти:
++38 0675760057 Андрій
+#Nissan
+📢 Реклама бізнесу
+💰 Авто в лізинг / кредит"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Nissan")
+        self.assertEqual(listing.model, "Qashqai")
+        self.assertEqual(listing.year, 2018)
+        self.assertEqual(listing.price_amount, 18200)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.mileage_km, 164000)
+        self.assertEqual(listing.engine_volume_l, 1.6)
+        self.assertEqual(listing.fuel_type, "diesel")
+        self.assertEqual(listing.transmission, "automatic")
+        self.assertEqual(listing.drive_type, "fwd")
+        self.assertEqual((listing.condition_flags or {}).get("vin"), "SJNFDAJ11U2746847")
+        self.assertTrue(is_valid_car_listing(listing))
 
     def test_kia_rio_emoji_card(self):
         text = """🚗: Kia Rio
@@ -491,7 +515,6 @@ VIN - SALCJ2FX3RH351759.
 
 ➡️TG: @dmytro_cantora
 🗣️Дані для контакту: +380933002003"""
-        self.assertFalse(is_promo_or_spam(text.lower()))
         listing = _extract(text)
         self.assertEqual(listing.brand, "Land Rover")
         self.assertIn("sport", (listing.model or "").lower())

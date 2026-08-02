@@ -59,33 +59,6 @@ _LABELED_MODEL_RE = re.compile(
 
 MIN_LISTING_CONFIDENCE = 0.33
 
-SPAM_PATTERNS = [
-    re.compile(p, re.IGNORECASE)
-    for p in (
-        r"вебінар",
-        r"webinar",
-        r"підпиш(?:ись|іться)",
-        r"подпис(?:ывай|ывайтесь|аться)",
-        r"хочеш\s+продати\s+авто",
-        r"продай\s+(?:сво[єe]\s+)?авто",
-        r"навчання\s+(?:з\s+)?(?:продаж|авто)",
-        r"тренінг",
-        r"реклам(?:а|ний|не)",
-        r"спонсор",
-        r"promокод",
-        r"giveaway",
-        r"розіграш",
-        r"наш\s+канал",
-        r"переход(?:ь|ьте)\s+по\s+посилан",
-        r"безкоштовн(?:ий|а)\s+(?:курс|урок)",
-        r"криптовалют",
-        r"обмін\s+квартир",
-        r"здаю\s+в\s+оренду",
-        r"вакансія",
-        r"набір\s+в\s+команду",
-    )
-]
-
 # Запит «шукаю авто», а не пропозиція продажу
 SEARCH_REQUEST_PATTERNS = [
     re.compile(p, re.IGNORECASE)
@@ -341,14 +314,6 @@ def normalize_listing_text(raw_text: str) -> str:
     return text.strip()
 
 
-def is_promo_or_spam(text_low: str) -> bool:
-    if not text_low.strip():
-        return False
-    # «(не реклама)» / «не реклама» — заперечення, не спам
-    cleaned = re.sub(r"[\(\[]?\s*не\s+реклама\s*[\)\]]?", " ", text_low)
-    return any(pattern.search(cleaned) for pattern in SPAM_PATTERNS)
-
-
 def is_car_search_request(text: str) -> bool:
     """True, якщо пост — запит на купівлю («шукаю X5 до 65$»), а не оголошення продажу."""
     raw = (text or "").strip()
@@ -385,17 +350,13 @@ def is_car_search_request(text: str) -> bool:
 
 
 def is_valid_car_listing(listing: CarListing) -> bool:
-    """Чи варто зберігати/показувати оголошення (відсікає рекламу та порожні альбоми)."""
+    """Чи варто зберігати/показувати оголошення (відсікає запити на купівлю та порожні пости)."""
     text = (listing.raw_text or "").strip()
-    text_low = text.lower()
 
     if not text and listing.confidence <= 0:
         return False
 
     if is_car_search_request(text):
-        return False
-
-    if is_promo_or_spam(text_low):
         return False
 
     has_brand = bool(listing.brand)
@@ -904,7 +865,7 @@ def extract_car_data(
         listing.confidence = round(
             (found_key / 3) * 0.7 + (found_secondary / len(secondary_fields)) * 0.3, 2
         )
-        listing.needs_review = found_key < 2 or is_promo_or_spam(text_low) or is_car_search_request(text)
+        listing.needs_review = found_key < 2 or is_car_search_request(text)
 
     except Exception:
         listing.needs_review = True
