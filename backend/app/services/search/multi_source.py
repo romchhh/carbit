@@ -798,6 +798,18 @@ async def search_listings(
 # Slot-based pool builder — lazy AUTO.RIA hydration
 # ---------------------------------------------------------------------------
 
+
+def _filter_listings_by_brand_model(
+    items: list[ListingOut],
+    filters: SearchFilters,
+) -> list[ListingOut]:
+    if not ((filters.brand or "").strip() or (filters.model or "").strip()):
+        return items
+    from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+    return [item for item in items if listing_out_matches_filters(item, filters)]
+
+
 def _listing_to_slot(item: ListingOut) -> dict:
     """ListingOut → slot для live-pool (AR — stub, OLX/Telegram — повний об'єкт)."""
     lid = item.id or ""
@@ -818,6 +830,7 @@ async def _build_globally_sorted_slots(
     telegram_items: list[ListingOut],
     limit: int,
     sort_by: str,
+    filters: SearchFilters | None = None,
 ) -> list[dict]:
     """Глобальне сортування по даті/ціні тощо між усіма джерелами.
 
@@ -867,6 +880,8 @@ async def _build_globally_sorted_slots(
     combined.extend(hydrated_used.values())
     combined.extend(hydrated_new.values())
     combined = dedupe_telegram_posts_in_pool(mark_duplicates_in_pool(combined))
+    if filters is not None:
+        combined = _filter_listings_by_brand_model(combined, filters)
 
     seen: set[str] = set()
     unique: list[ListingOut] = []
@@ -976,7 +991,7 @@ async def build_live_search_pool(
     Returns (slots, nav_total, market_total, source_statuses).
     """
     from app.services.auto_ria.service import collect_auto_ria_ids
-    from app.services.search.pool_cache import LIVE_POOL_SIZE as POOL_LIMIT
+    from app.services.search.pool_cache import LIVE_POOL_SIZE as POOL_LIMIT, filter_auto_ria_ids_by_filters
 
     sources = normalize_sources(filters.sources)
     source_statuses: list[SourceSearchStatus] = []
@@ -1095,17 +1110,33 @@ async def build_live_search_pool(
     if errors and "auto_ria" in sources and len(sources) == 1:
         raise _pick_primary_error(errors)
 
+    from app.services.auto_ria.catalog import model_filter_needs_post_filter
+    from app.services.auto_ria.client import AutoRiaClient
     from app.services.listings.duplicates import dedupe_telegram_posts_in_pool, mark_duplicates_in_pool
 
     from app.services.search.advanced_filters import filter_listings_by_advanced
 
+    brand_model_filter = bool((filters.brand or "").strip() or (filters.model or "").strip())
+    model_post_filter = False
+    if brand_model_filter and (filters.model or "").strip():
+        try:
+            model_post_filter = await model_filter_needs_post_filter(AutoRiaClient(), filters)
+        except Exception:
+            logger.exception("model_post_filter check failed in pool build")
+
+    if model_post_filter and auto_ria_ids:
+        auto_ria_ids = await filter_auto_ria_ids_by_filters(auto_ria_ids, filters)
+
+    olx_filtered = _filter_listings_by_brand_model(list(olx_result.items), filters)
+    telegram_filtered = _filter_listings_by_brand_model(list(telegram_result.items), filters)
+
     olx_sorted = filter_listings_by_advanced(
-        mark_duplicates_in_pool(sort_listings(list(olx_result.items), sort_by)),
+        mark_duplicates_in_pool(sort_listings(olx_filtered, sort_by)),
         filters,
     )
     telegram_sorted = filter_listings_by_advanced(
         dedupe_telegram_posts_in_pool(
-            mark_duplicates_in_pool(sort_listings(list(telegram_result.items), sort_by)),
+            mark_duplicates_in_pool(sort_listings(telegram_filtered, sort_by)),
         ),
         filters,
     )
@@ -1118,6 +1149,7 @@ async def build_live_search_pool(
             telegram_items=telegram_sorted,
             limit=POOL_LIMIT,
             sort_by=sort_by,
+            filters=filters,
         )
     elif auto_ria_ids and sort_by in ("newest", "published_desc"):
         # Лише AUTO.RIA + newest: API вже віддав IDs від нових до старих (order_by=7).
@@ -1129,6 +1161,7 @@ async def build_live_search_pool(
             telegram_items=[],
             limit=POOL_LIMIT,
             sort_by=sort_by,
+            filters=filters,
         )
     else:
         slots = _build_interleaved_slots(
@@ -1140,7 +1173,28 @@ async def build_live_search_pool(
         )
 
     nav_total = len(slots)
-    market_total = auto_ria_market_total + olx_result.total + telegram_result.total
+    if brand_model_filter:
+        market_total = nav_total
+    else:
+        market_total = auto_ria_market_total + olx_result.total + telegram_result.total
+
+    if brand_model_filter:
+        source_statuses = [
+            SourceSearchStatus(
+                source=row.source,
+                item_count=(
+                    len(olx_sorted)
+                    if row.source == "OLX"
+                    else len(telegram_sorted)
+                    if row.source == "Telegram"
+                    else len(auto_ria_ids)
+                    if row.source == "AUTO.RIA"
+                    else row.item_count
+                ),
+                error=row.error,
+            )
+            for row in source_statuses
+        ]
 
     await _notify_partial_source_failures(source_statuses, filters)
 

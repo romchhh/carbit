@@ -35,8 +35,9 @@ def _pool_market_total_for_cache(
     model_post_filter: bool,
     market_total: int,
     nav_total: int,
+    brand_model_filter: bool = False,
 ) -> int | None:
-    if model_post_filter:
+    if model_post_filter or brand_model_filter:
         return None
     return market_total if market_total > nav_total else None
 
@@ -182,6 +183,7 @@ async def run_live_search(
         partial = any(s.error for s in sources) and any(s.item_count > 0 for s in sources)
 
         model_post_filter = False
+        brand_model_filter = bool((filters.brand or "").strip() or (filters.model or "").strip())
         if (filters.model or "").strip():
             try:
                 from app.services.auto_ria.client import AutoRiaClient
@@ -194,6 +196,7 @@ async def run_live_search(
             model_post_filter=model_post_filter,
             market_total=market_total,
             nav_total=nav_total,
+            brand_model_filter=brand_model_filter,
         )
 
         logger.info(

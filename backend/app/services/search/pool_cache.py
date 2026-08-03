@@ -277,6 +277,46 @@ def _search_needs_listing_filter(filters: SearchFilters | None) -> bool:
     return bool((filters.brand or "").strip() or (filters.model or "").strip())
 
 
+def _filter_listings_by_brand_model(
+    items: list[ListingOut],
+    filters: SearchFilters,
+) -> list[ListingOut]:
+    if not _search_needs_listing_filter(filters):
+        return items
+    from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+    return [item for item in items if listing_out_matches_filters(item, filters)]
+
+
+async def filter_auto_ria_ids_by_filters(
+    auto_ria_ids: list[str],
+    filters: SearchFilters,
+) -> list[str]:
+    """Гідратує AUTO.RIA IDs і лишає лише ті, що проходять brand/model фільтр."""
+    if not auto_ria_ids or not _search_needs_listing_filter(filters):
+        return auto_ria_ids
+
+    from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+    used_ids = [aid for aid in auto_ria_ids if not aid.startswith("n:")]
+    new_ids = [aid[2:] for aid in auto_ria_ids if aid.startswith("n:")]
+
+    hydrated_used, hydrated_new = await asyncio.gather(
+        _batch_hydrate_auto_ria(used_ids),
+        _batch_hydrate_new_auto_ria(new_ids),
+    )
+
+    filtered: list[str] = []
+    for aid in auto_ria_ids:
+        if aid.startswith("n:"):
+            listing = hydrated_new.get(aid[2:])
+        else:
+            listing = hydrated_used.get(aid)
+        if listing and listing_out_matches_filters(listing, filters):
+            filtered.append(aid)
+    return filtered
+
+
 async def _collect_matching_listings_from_slots(
     slots: list[dict],
     filters: SearchFilters,
