@@ -30,6 +30,17 @@ logger = logging.getLogger(__name__)
 LIVE_SEARCH_CACHE_TTL_SECONDS = 120
 
 
+def _pool_market_total_for_cache(
+    *,
+    model_post_filter: bool,
+    market_total: int,
+    nav_total: int,
+) -> int | None:
+    if model_post_filter:
+        return None
+    return market_total if market_total > nav_total else None
+
+
 async def _safe_rate_limits(
     *,
     user_id: str,
@@ -127,7 +138,6 @@ async def run_live_search(
 
     # 2) Будуємо слот-пул: AUTO.RIA — тільки IDs (швидко), OLX/Telegram — повні об'єкти
     pool_data: dict | None = None
-    source_statuses: list[SourceSearchStatus] = []
 
     async with acquire_live_search_slot():
         # Stampede guard: інший запит міг уже заповнити кеш, поки ми чекали слот
@@ -137,6 +147,10 @@ async def run_live_search(
                 cached_pool, page=page, per_page=per_page, filters=filters
             )
 
+        slots: list[dict] = []
+        nav_total = 0
+        market_total = 0
+        source_statuses: list[SourceSearchStatus] = []
         try:
             slots, nav_total, market_total, source_statuses = await build_live_search_pool(
                 filters,
@@ -176,8 +190,10 @@ async def run_live_search(
             except Exception:
                 logger.exception("model_post_filter check failed")
 
-        pool_market_total = None if model_post_filter else (
-            market_total if market_total > nav_total else None
+        pool_market_total = _pool_market_total_for_cache(
+            model_post_filter=model_post_filter,
+            market_total=market_total,
+            nav_total=nav_total,
         )
 
         logger.info(
