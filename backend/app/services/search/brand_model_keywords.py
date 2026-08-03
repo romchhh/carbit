@@ -9,7 +9,7 @@ import json
 import re
 from functools import lru_cache
 
-from app.core.text import norm_text
+from app.core.text import norm_text, bounded_substring
 from app.services.search.fe_catalog import (
     _identity_tokens,
     unique_model_token_owner,
@@ -1826,6 +1826,8 @@ def _variant_in_haystack(variant: str, hay: str) -> bool:
             )
         )
     if v in hay:
+        if not bounded_substring(hay, v):
+            return False
         return True
     # «c300» ↔ «c 300»: однолітерний префікс + цифри — шукаємо обидві форми.
     m = re.fullmatch(r"([a-z])(\d{2,4})", v)
@@ -1894,14 +1896,15 @@ def text_matches_model_filter(haystack: str, model: str, *, brand: str = "") -> 
         if compound is not None:
             if compound:
                 return True
-            continue
+            return False
         hay = norm_text(raw)
         if not hay:
             continue
         for variant in collect_model_keyword_variants(brand, model):
             if _variant_in_haystack(variant, hay):
                 return True
-        if norm_text(model) in hay:
+        model_norm = norm_text(model)
+        if model_norm and bounded_substring(hay, model_norm):
             return True
         if _regex_model_match(hay, brand, model):
             return True

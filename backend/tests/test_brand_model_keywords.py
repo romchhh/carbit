@@ -163,6 +163,13 @@ class BrandModelKeywordTests(unittest.TestCase):
                 title,
             )
 
+    def test_c_class_coupe_rejects_glc_via_variant_substring(self):
+        from app.services.search.brand_model_keywords import _variant_in_haystack, norm_text
+
+        hay = norm_text("Mercedes-Benz GLC-Class Coupe")
+        self.assertFalse(_variant_in_haystack("C-Class Coupe", hay))
+        self.assertTrue(_variant_in_haystack("GLC Coupe", hay))
+
     def test_c_class_coupe_variants_no_bare_coupe(self):
         variants = collect_model_keyword_variants("Mercedes-Benz", "C-Class Coupe")
         self.assertNotIn("coupe", [norm_text(v) for v in variants])

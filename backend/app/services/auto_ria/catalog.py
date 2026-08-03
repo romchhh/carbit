@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from app.core.text import norm_text
+from app.core.text import norm_text, bounded_substring
 from app.services.auto_ria.client import AutoRiaClient
 from app.services.auto_ria.constants import DEFAULT_CATEGORY_ID
 
@@ -61,6 +61,24 @@ async def resolve_mark_id(client: AutoRiaClient, brand: str) -> int | None:
     return None
 
 
+def _model_catalog_match(
+    target: str,
+    target_key: str,
+    name: str,
+    name_n: str,
+    name_key: str,
+) -> bool:
+    if target == name_n or target_key == name_key:
+        return True
+    if target_key and name_key.startswith(target_key):
+        return True
+    if target_key and bounded_substring(name_key, target_key):
+        return True
+    if target and bounded_substring(name_n, target):
+        return True
+    return False
+
+
 async def resolve_model_id(client: AutoRiaClient, mark_id: int, model: str) -> int | None:
     if not model:
         return None
@@ -84,7 +102,7 @@ async def resolve_model_id(client: AutoRiaClient, mark_id: int, model: str) -> i
         name = str(item.get("name", ""))
         name_n = norm_text(name)
         name_key = _normalize_model_key(name)
-        if target in name_n or name_n in target or target_key in name_key or name_key in target_key:
+        if _model_catalog_match(target, target_key, name, name_n, name_key):
             partial.append((len(name_key), item))
     if partial:
         partial.sort(key=lambda pair: pair[0], reverse=True)
