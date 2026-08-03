@@ -18,6 +18,10 @@ type Props = {
   emptyLabel?: string;
   className?: string;
   getOptionIcon?: (option: string) => string | null | undefined;
+  /** Кастомний пошук (UA/RU аліаси тощо). */
+  filterOptionsFn?: (options: string[], query: string) => string[];
+  /** Підстановка канонічної назви при Enter (напр. «хундай» → Hyundai). */
+  resolveQueryFn?: (query: string) => string | null;
 };
 
 export function FilterOptionsPopover({
@@ -33,6 +37,8 @@ export function FilterOptionsPopover({
   emptyLabel = "Будь-яка",
   className,
   getOptionIcon,
+  filterOptionsFn,
+  resolveQueryFn,
 }: Props) {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -50,10 +56,24 @@ export function FilterOptionsPopover({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = query.trim();
   const filtered = normalizedQuery
-    ? options.filter(o => o.toLowerCase().includes(normalizedQuery)).slice(0, 100)
+    ? (filterOptionsFn ?? ((opts, q) => opts.filter(o => o.toLowerCase().includes(q.trim().toLowerCase()))))(
+        options,
+        normalizedQuery,
+      ).slice(0, 100)
     : options.slice(0, 100);
+
+  const tryCommitQuery = () => {
+    const resolved = resolveQueryFn?.(normalizedQuery);
+    if (resolved) {
+      select(resolved);
+      return;
+    }
+    if (filtered.length === 1) {
+      select(filtered[0]);
+    }
+  };
 
   const display = multiple
     ? values.length > 0
@@ -97,6 +117,12 @@ export function FilterOptionsPopover({
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    tryCommitQuery();
+                  }
+                }}
                 placeholder="Пошук..."
                 className="input-field"
                 autoFocus

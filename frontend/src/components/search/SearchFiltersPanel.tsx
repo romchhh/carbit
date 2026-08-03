@@ -14,6 +14,12 @@ import { IosToggle } from "@/components/ui/IosToggle";
 import { cn } from "@/lib/utils";
 import { getBrandIconUrl } from "@/lib/search-data/brand-icons";
 import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
+import {
+  filterBrandOptions,
+  filterModelOptions,
+  resolveBrandQuery,
+  resolveModelQuery,
+} from "@/lib/search-data/brand-model-resolve";
 import { UKRAINE_REGIONS } from "@/lib/search-data/regions";
 import {
   CATEGORY_OPTIONS,
@@ -153,6 +159,8 @@ export function SearchFiltersPanel({
               searchable
               emptyLabel="Будь-яка марка"
               getOptionIcon={getBrandIconUrl}
+              filterOptionsFn={(opts, q) => filterBrandOptions(opts, q)}
+              resolveQueryFn={q => resolveBrandQuery(q, BRANDS)}
             />
             <FilterOptionsPopover
               label="Модель"
@@ -162,6 +170,12 @@ export function SearchFiltersPanel({
               searchable
               emptyLabel="Будь-яка модель"
               disabled={!filters.brand}
+              filterOptionsFn={(opts, q) =>
+                filters.brand ? filterModelOptions(filters.brand, opts, q) : []
+              }
+              resolveQueryFn={q =>
+                filters.brand ? resolveModelQuery(filters.brand, q, models) : null
+              }
             />
           </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconArrowRight } from "@/components/icons";
@@ -10,11 +10,13 @@ import { FavoriteListingsSection } from "@/components/listings/FavoriteListingsS
 import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
+import { RecentSearchesSection } from "@/components/search/RecentSearchesSection";
 import { MonitorSearchCard } from "@/components/search/MonitorSearchCard";
 import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 import { useAuth } from "@/contexts/AuthProvider";
 import { usePreviewSearch } from "@/hooks/usePreviewSearch";
+import { useRecentSearches } from "@/hooks/useRecentSearches";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
 import { searches as searchesApi, users as usersApi } from "@/lib/api";
 import { findMatchingSearch } from "@/lib/search-filters-api";
@@ -58,10 +60,24 @@ export default function DashboardPage() {
     reset,
     clearError,
   } = usePreviewSearch();
+  const filtersPanelRef = useRef<HTMLDivElement>(null);
   const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } =
     useSaveSearch(created => {
       setSearches(prev => [created, ...prev.filter(s => s.id !== created.id)]);
     });
+  const { trackSearchStart, handleRecentSelect } = useRecentSearches({
+    filters,
+    freshness,
+    searching,
+    results,
+    setFilters,
+    changeFreshness,
+    scrollTargetRef: filtersPanelRef,
+    onBeforeSelect: () => {
+      clearSaveMessages();
+      clearError();
+    },
+  });
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const matchingMonitor = useMemo(
@@ -112,6 +128,7 @@ export default function DashboardPage() {
   const handleSearch = () => {
     clearSaveMessages();
     clearError();
+    trackSearchStart();
     void runSearch(filters);
   };
 
@@ -149,7 +166,7 @@ export default function DashboardPage() {
 
       <div className="mb-8">
         <h2 className="text-[17px] font-bold text-ink">Новий моніторинг</h2>
-        <div className="mt-4">
+        <div ref={filtersPanelRef} className="mt-4 scroll-mt-4">
           <SearchFiltersPanel
             wide
             filters={filters}
@@ -249,6 +266,8 @@ export default function DashboardPage() {
       <RecentListingsSection className="mb-10" />
 
       <FavoriteListingsSection className="mb-10" />
+
+      <RecentSearchesSection onSelect={handleRecentSelect} />
 
       <div className="mt-10">
         <FreshListingsCarousel variant="dashboard" />

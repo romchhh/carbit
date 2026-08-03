@@ -325,7 +325,7 @@ export const favorites = {
 
 // ── Notifications ─────────────────────────────────────
 export const notifications = {
-  list: (page = 1, unreadOnly = false, sortBy: SortOption = "newest", perPage = 50) =>
+  list: (page = 1, unreadOnly = false, sortBy: SortOption = "newest", perPage = 20) =>
     request<PaginatedNotifications>(
       `/notifications?page=${page}&per_page=${perPage}&unread_only=${unreadOnly}&sort_by=${sortBy}`,
     ),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 
+from app.core.text import norm_text
 from app.schemas.schemas import SearchFilters
 from app.services.search.brand_model_keywords import (
     build_search_keyword_queries,
@@ -100,6 +101,45 @@ class BrandModelKeywordTests(unittest.TestCase):
         self.assertTrue(
             message_matches_search_filters("Golf VII 2013рік 1.2 бензин 7800$", "Volkswagen", "Golf")
         )
+
+    def test_mercedes_c_class_coupe_strict(self):
+        brand = "Mercedes-Benz"
+        model = "C-Class Coupe"
+        should_match = [
+            "Mercedes-Benz C-Class Coupe 2019",
+            "Mercedes-Benz C 300 Coupe 2018",
+            "Mercedes C220 Coupe AMG",
+            "Mercedes-Benz C-Class Coupe 18200$ SJNFDAJ11U2746847",
+        ]
+        should_reject = [
+            "Mercedes-Benz C-Class 2019 sedan",
+            "Mercedes-Benz E-Class 220",
+            "Mercedes-Benz E-Class Coupe 2019",
+            "Mercedes-Benz S-Class 500",
+            "Mercedes-Benz S-Class Coupe 2020",
+            "Mercedes-Benz GLE 350",
+            "Mercedes-Benz GLE Coupe 2020",
+            "Mercedes-Benz GLC 300",
+            "Mercedes-Benz GLC Coupe 2021",
+            "Mercedes-Benz CLS 350",
+            "Mercedes-Benz CL 500",
+            "Mercedes-Benz CLA 200",
+        ]
+        for title in should_match:
+            self.assertTrue(
+                text_matches_model_filter(title, model, brand=brand),
+                title,
+            )
+        for title in should_reject:
+            self.assertFalse(
+                text_matches_model_filter(title, model, brand=brand),
+                title,
+            )
+
+    def test_c_class_coupe_variants_no_bare_coupe(self):
+        variants = collect_model_keyword_variants("Mercedes-Benz", "C-Class Coupe")
+        self.assertNotIn("coupe", [norm_text(v) for v in variants])
+        self.assertNotIn("class coupe", [norm_text(v) for v in variants])
 
     def test_telegram_listing_matches_cyrillic_title(self):
         item = type("Item", (), {

@@ -149,7 +149,7 @@ MILEAGE_MILES_RE = re.compile(
 
 ENGINE_RE = re.compile(
     r"(?:"
-    r"(?:об['ʼ]?єм|двигун|мотор|engine)[\s:]*(?P<val>\d[.,]\d)"
+    r"(?:об['ʼ]?єм(?:\s+двигуна)?|двигун|мотор|engine)[\s:]*(?P<val>\d[.,]\d)"
     r"|"
     r"(?P<val2>\d[.,]\d)\s?л\b"
     r"|"
@@ -235,6 +235,7 @@ MILEAGE_SHORT_K_RE = re.compile(
 )
 
 PRICE_LABEL_RE = re.compile(
+    r"(?:(?:стартова|ринкова|start|market)\s+)?"
     r"(?:ціна|цена|price|💰|💵|💲)\s*:?\s*"
     r"(?<![A-Za-zА-Яа-яЁёІіЇїЄєҐґ0-9/])"
     r"(?P<amount>\d{1,3}(?:[ .,]\d{3})+|\d{3,8})"
@@ -309,6 +310,17 @@ def normalize_listing_text(raw_text: str) -> str:
     text = text.replace("**", "").replace("__", "")
     text = HASHTAG_RE.sub(_hashtag_replacer, text)
     text = re.sub(r"[\u00a0\u202f\u2009]", " ", text)
+    text = text.translate(
+        str.maketrans(
+            {
+                "\u2018": "'",  # ‘
+                "\u2019": "'",  # ’
+                "\u02bc": "'",  # ʼ
+                "\u02bb": "'",  # ʻ
+                "\u0060": "'",  # `
+            }
+        )
+    )
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
@@ -437,6 +449,8 @@ def _candidate_from_brand_key(
     for w in words[:3]:
         if YEAR_RE.fullmatch(w) or YEAR_RE.match(w):
             break
+        if re.fullmatch(r"[\-–—/|]+", w):
+            continue
         if w.lower() in MODEL_STOP_WORDS:
             break
         if w.lower() in ("рік", "года", "року", "р", "р.", "г", "г."):
@@ -449,7 +463,7 @@ def _candidate_from_brand_key(
         model_words.append(w)
         if len(model_words) >= 2:
             break
-    model = " ".join(model_words) if model_words else None
+    model = " ".join(model_words).strip(" -–—/|") if model_words else None
     return brand, model
 
 

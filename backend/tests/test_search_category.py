@@ -46,6 +46,14 @@ class CategoryMatchTests(unittest.TestCase):
         self.assertTrue(listing_matches_category(item, "import"))
         self.assertFalse(listing_matches_category(item, "used"))
 
+    def test_import_europe_phrase(self):
+        desc = """Ford Focus - 2014
+Пригнано з Європи 🇪🇺
+🛣 Пробіг: 210 тис. км"""
+        item = _item(title="Ford Focus 2014", description=desc, mileage=210000)
+        self.assertTrue(listing_matches_category(item, "import"))
+        self.assertFalse(listing_matches_category(item, "used"))
+
     def test_new_by_mileage(self):
         item = _item(mileage=200, title="Audi A4")
         self.assertTrue(listing_matches_category(item, "new"))

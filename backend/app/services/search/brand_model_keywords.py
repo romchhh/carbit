@@ -183,6 +183,11 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
                  "c200d", "c220d", "c250d",
                  "c-class", "c class", "c класс", "c-класс", "c клас",
                  "w204", "w205", "w206"),
+    "c-class coupe": (
+        "c class coupe", "c-class coupe", "c coupe", "c-class-coupe", "cclasscoupe",
+        "c 300 coupe", "c300 coupe", "c 220 coupe", "c220 coupe",
+        "w204", "w205", "c204", "c205",
+    ),
     "e-class": ("e 200", "e 220", "e 250", "e 300", "e 350", "e 400", "e 450",
                  "e200", "e220", "e250", "e300", "e350", "e400", "e450", "e43", "e63",
                  "e-class", "e class", "e класс", "e-класс", "e клас",
@@ -1080,7 +1085,7 @@ def collect_model_keyword_variants(brand: str, model: str) -> tuple[str, ...]:
         if key and key not in seen:
             seen.add(key)
             deduped.append(token)
-    return tuple(deduped)
+    return tuple(_filter_compound_body_variants(model, deduped))
 
 
 def _generated_model_ru_variants(model: str) -> list[str]:
@@ -1092,17 +1097,30 @@ def _generated_model_ru_variants(model: str) -> list[str]:
     class_m = re.match(r"^([A-Za-z])-Class\b", base, re.IGNORECASE)
     if class_m:
         letter = class_m.group(1).lower()
-        out.extend(
-            [
-                f"{letter}-class",
-                f"{letter} class",
-                f"{letter} класс",
-                f"{letter}-класс",
-                f"{letter} клас",
-                f"{letter}класс",
-                f"{letter}-клас",
-            ]
-        )
+        compound = _compound_body_model_parts(base)
+        if compound:
+            base_part, body_part = compound
+            body_l = body_part.lower()
+            out.extend(
+                [
+                    f"{letter} class {body_l}",
+                    f"{letter}-class {body_l}",
+                    f"{letter} {body_l}",
+                    f"{letter}-class-{body_l}",
+                ]
+            )
+        else:
+            out.extend(
+                [
+                    f"{letter}-class",
+                    f"{letter} class",
+                    f"{letter} класс",
+                    f"{letter}-класс",
+                    f"{letter} клас",
+                    f"{letter}класс",
+                    f"{letter}-клас",
+                ]
+            )
 
     # C 300, C 220 тощо: «letter space digits» → variant «c300», «c 300», «c-class»
     letter_digit_m = re.match(r"^([A-Za-z])\s+(\d{2,4})$", base)
@@ -1154,11 +1172,13 @@ def _generated_model_ru_variants(model: str) -> list[str]:
         out.extend([f"{a}{b}", f"{a} {b}", f"{a}-{b}"])
 
     words = [w for w in re.split(r"[\s\-./]+", base) if w]
-    if len(words) >= 2:
+    if len(words) >= 2 and not _compound_body_model_parts(base):
         out.append(words[-1])
         out.append(" ".join(words[-2:]).lower())
         if len(words[-1]) >= 4:
             out.append(words[-1].lower())
+    elif len(words) >= 2 and _compound_body_model_parts(base):
+        out.append(" ".join(words[-2:]).lower())
 
     alnum = re.sub(r"[\s\-._]+", "", base.lower())
     if alnum and alnum != base.lower():
@@ -1175,6 +1195,218 @@ def _generated_model_ru_variants(model: str) -> list[str]:
 
 # Занадто короткі / шумні токени не годяться для SQL ILIKE і standalone match
 _SQL_SKIP_TOKENS = frozenset({"model", "models", "s", "x", "y", "3"})
+
+# «C-Class Coupe», «GLC Coupe» — body-style не має матчитись окремо як «coupe».
+_COMPOUND_BODY_SUFFIXES = frozenset({
+    "coupe", "cabrio", "sportback", "roadster", "convertible",
+    "allroad", "avant", "wagon", "touring", "plus",
+    "купе", "кабріо", "кабрио",
+})
+
+_BODY_STYLE_ALIASES: dict[str, tuple[str, ...]] = {
+    "coupe": ("coupe", "купе", "coupé"),
+    "cabrio": ("cabrio", "cabriolet", "кабріо", "кабрио"),
+    "sportback": ("sportback", "sport back"),
+    "roadster": ("roadster",),
+    "convertible": ("convertible",),
+    "allroad": ("allroad", "all road"),
+    "avant": ("avant",),
+    "wagon": ("wagon", "universal", "универсал", "універсал"),
+    "touring": ("touring",),
+    "plus": ("plus",),
+    "купе": ("купе", "coupe"),
+    "кабріо": ("кабріо", "кабрио", "cabrio"),
+    "кабрио": ("кабрио", "кабріо", "cabrio"),
+}
+
+# Конфлікти для Mercedes compound-моделей (інша лінійка в тексті).
+_MERCEDES_COMPOUND_CONFLICTS: dict[str, tuple[str, ...]] = {
+    "c-class": (
+        r"\be[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bs[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bgl[cebsak]\b",
+        r"\bcls\b",
+        r"\bcla\b",
+        r"\bcle\b",
+        r"\bcl[\s\-]?\d",
+        r"\bamg\s+gt",
+    ),
+    "e-class": (
+        r"\bc[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bs[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bgl[cebsak]\b",
+        r"\bcls\b",
+        r"\bcla\b",
+        r"\bcle\b",
+        r"\bcl[\s\-]?\d",
+    ),
+    "s-class": (
+        r"\bc[\s\-]?(?:class|клас|\d{2,3})",
+        r"\be[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bgl[cebsak]\b",
+        r"\bcls\b",
+        r"\bcla\b",
+        r"\bcle\b",
+        r"\bcl[\s\-]?\d",
+    ),
+    "glc": (
+        r"\bgle\b",
+        r"\bgla\b",
+        r"\bglb\b",
+        r"\bgls\b",
+        r"\bc[\s\-]?(?:class|клас|\d{2,3})",
+        r"\be[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bs[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bcls\b",
+    ),
+    "gle": (
+        r"\bglc\b",
+        r"\bgla\b",
+        r"\bglb\b",
+        r"\bgls\b",
+        r"\bc[\s\-]?(?:class|клас|\d{2,3})",
+        r"\be[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bs[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bcls\b",
+    ),
+}
+
+
+def _compound_body_model_parts(model: str) -> tuple[str, str] | None:
+    """«C-Class Coupe» → ('C-Class', 'Coupe')."""
+    model = (model or "").strip()
+    if not model:
+        return None
+    parts = [p for p in re.split(r"[\s\-/]+", model) if p]
+    if len(parts) < 2:
+        return None
+    suffix = norm_text(parts[-1])
+    if suffix not in _COMPOUND_BODY_SUFFIXES:
+        return None
+    base = " ".join(parts[:-1]).strip()
+    if not base:
+        return None
+    return base, parts[-1]
+
+
+def _normalize_mercedes_class_key(base: str) -> str:
+    mk = norm_text(base)
+    m = re.fullmatch(r"([a-z]) class", mk)
+    if m:
+        return f"{m.group(1)}-class"
+    return mk.replace(" ", "-")
+
+
+def _hay_has_body_style(hay: str, body: str) -> bool:
+    body_key = norm_text(body)
+    aliases = _BODY_STYLE_ALIASES.get(body_key, (body_key,))
+    for alias in aliases:
+        if alias in hay:
+            return True
+        if re.search(
+            rf"(?<![a-zа-яёіїє0-9]){re.escape(alias)}(?![a-zа-яёіїє0-9])",
+            hay,
+            re.IGNORECASE,
+        ):
+            return True
+    return False
+
+
+def _mercedes_compound_conflicts(hay: str, base: str) -> bool:
+    base_key = _normalize_mercedes_class_key(base)
+    if base_key.startswith("gl") and len(base_key) <= 4:
+        base_key = base_key  # glc, gle
+    patterns = _MERCEDES_COMPOUND_CONFLICTS.get(base_key, ())
+    for pat in patterns:
+        if re.search(pat, hay, re.IGNORECASE):
+            return True
+    return False
+
+
+def _compound_base_matches(hay: str, base: str, body: str) -> bool:
+    hay_n = norm_text(hay)
+    body_n = norm_text(body)
+    base_n = norm_text(base)
+
+    compound_variants = {
+        f"{base_n} {body_n}",
+        f"{base_n.replace(' ', '-')}-{body_n}",
+        f"{base_n.replace(' ', '-')} {body_n}",
+        re.sub(r"[\s\-]+", "", f"{base_n}{body_n}"),
+    }
+    if any(v in hay_n for v in compound_variants):
+        return True
+
+    class_m = re.fullmatch(r"([a-z]) class", base_n) or re.fullmatch(
+        r"([a-z])-class", base_n.replace(" ", "-")
+    )
+    if class_m:
+        letter = class_m.group(1)
+        if re.search(
+            rf"\b{letter}[\s\-]?(?:class|клас)[\s\-]?{re.escape(body_n)}\b",
+            hay_n,
+        ):
+            return True
+        if re.search(rf"\b{letter}[\s\-]?(?:class|клас)\b", hay_n):
+            return True
+        if re.search(rf"\b{letter}[\s\-]?\d{{2,3}}[a-z]?\b", hay_n):
+            return True
+        return False
+
+    compact_base = re.sub(r"[\s\-]+", "", base_n)
+    if compact_base and compact_base in hay_n:
+        return True
+    if compact_base and f"{compact_base} {body_n}" in hay_n:
+        return True
+    return False
+
+
+def _text_matches_compound_body_model(hay: str, brand: str, model: str) -> bool | None:
+    """Строгий матч для «X Coupe» / «X-Class Coupe». None — не compound-модель."""
+    parts = _compound_body_model_parts(model)
+    if not parts:
+        return None
+    base, body = parts
+    hay_n = norm_text(hay)
+    if not _hay_has_body_style(hay_n, body):
+        return False
+    brand_slug = resolve_olx_brand_slug(brand) if brand else ""
+    if brand_slug in ("mercedes-benz", "mercedes") and _mercedes_compound_conflicts(hay_n, base):
+        return False
+    return _compound_base_matches(hay_n, base, body)
+
+
+def _filter_compound_body_variants(model: str, variants: list[str]) -> list[str]:
+    parts = _compound_body_model_parts(model)
+    if not parts:
+        return variants
+    base, body = parts
+    body_key = norm_text(body)
+    base_key = norm_text(base)
+    skip_exact = {body_key, *(_BODY_STYLE_ALIASES.get(body_key, ())), "class coupe", f"class {body_key}"}
+    out: list[str] = []
+    seen: set[str] = set()
+    for token in variants:
+        key = norm_text(token)
+        if not key or key in seen:
+            continue
+        if key in skip_exact:
+            continue
+        # «mercedes coupe» / «mersedes coupe» — body без бази
+        if key.endswith(f" {body_key}") and base_key not in key and "class" not in key:
+            if len(key.split()) <= 3:
+                continue
+        # c-class без coupe — для C-Class Coupe не використовуємо голі c300/c220
+        if _compound_body_model_parts(model) and re.fullmatch(r"c[\s\-]?\d{2,3}[a-z]?", key):
+            if body_key not in key and "coupe" not in key and "купе" not in key:
+                continue
+        if _compound_body_model_parts(model) and key in {
+            "c-class", "c class", "c клас", "c класс", "c-класс", "c-клас",
+        }:
+            continue
+        seen.add(key)
+        out.append(token)
+    return out
 
 
 def _model_core_tokens(brand: str, model: str) -> tuple[str, ...]:
@@ -1643,6 +1875,11 @@ def text_matches_model_filter(haystack: str, model: str, *, brand: str = "") -> 
     if not haystack or not model:
         return True
     for raw in _haystacks_for_match(haystack):
+        compound = _text_matches_compound_body_model(raw, brand, model)
+        if compound is not None:
+            if compound:
+                return True
+            continue
         hay = norm_text(raw)
         if not hay:
             continue

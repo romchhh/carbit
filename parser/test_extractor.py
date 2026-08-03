@@ -527,6 +527,36 @@ VIN - SALCJ2FX3RH351759.
         self.assertEqual((listing.condition_flags or {}).get("vin"), "SALCJ2FX3RH351759")
         self.assertTrue(is_valid_car_listing(listing))
 
+    def test_ford_focus_auction_autopark(self):
+        text = """Ford Focus - 2014
+🔥Стартова ціна: 3000$
+💵Ринкова ціна: 4990$
+
+Пригнано з Європи 🇪🇺
+
+💥 В середу 10:00–19:00 лот буде доступний на Autopark.ua
+👉 Для участі в АУКЦІОНІ переходь на сайт
+
+🛣 Пробіг: 210 тис. км
+⛽️ Паливо: Бензин
+⚙️ Об‘єм двигуна: 1.0
+🔻 Привід: Передній
+🕹 КПП: Механіка
+📍 Місто: Львів"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Ford")
+        self.assertEqual(listing.model, "Focus")
+        self.assertEqual(listing.year, 2014)
+        self.assertEqual(listing.price_amount, 4990)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.mileage_km, 210000)
+        self.assertEqual(listing.engine_volume_l, 1.0)
+        self.assertEqual(listing.fuel_type, "petrol")
+        self.assertEqual(listing.transmission, "manual")
+        self.assertEqual(listing.drive_type, "fwd")
+        self.assertEqual(listing.location_city, "Львів")
+        self.assertTrue(is_valid_car_listing(listing))
+
 
 if __name__ == "__main__":
     unittest.main()

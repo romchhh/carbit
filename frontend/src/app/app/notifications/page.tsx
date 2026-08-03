@@ -22,12 +22,17 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "mileage_asc", label: "За пробігом" },
 ];
 
+const PAGE_SIZE = 20;
+
 export default function NotificationsPage() {
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [total, setTotal] = useState(0);
   const [sort, setSort] = useState<SortOption>("newest");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
   const listingItems = useMemo(
@@ -42,8 +47,10 @@ export default function NotificationsPage() {
   const load = useCallback(async (nextSort: SortOption) => {
     setLoading(true);
     try {
-      const data = await notificationsApi.list(1, false, nextSort, 100);
+      const data = await notificationsApi.list(1, false, nextSort, PAGE_SIZE);
       setTotal(data.total);
+      setPage(1);
+      setHasMore(data.items.length > 0 && data.items.length < data.total);
 
       // Opening the section counts as reading — clear unread badges.
       if (data.unread > 0) {
@@ -58,6 +65,29 @@ export default function NotificationsPage() {
       setLoading(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const data = await notificationsApi.list(nextPage, false, sort, PAGE_SIZE);
+      setItems(prev => {
+        const seen = new Set(prev.map(item => item.id));
+        const next = [...prev];
+        for (const item of data.items) {
+          if (seen.has(item.id)) continue;
+          seen.add(item.id);
+          next.push(item);
+        }
+        return next;
+      });
+      setPage(nextPage);
+      setHasMore(nextPage * PAGE_SIZE < data.total);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore, page, sort]);
 
   useEffect(() => {
     void load(sort);
@@ -126,6 +156,11 @@ export default function NotificationsPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-[13px] text-muted">
                 {total} {total === 1 ? "сповіщення" : total < 5 ? "сповіщення" : "сповіщень"}
+                {items.length < total && (
+                  <span className="ml-1.5 text-muted/80">
+                    · показано {items.length}
+                  </span>
+                )}
                 {unread > 0 && (
                   <span className="ml-2 font-semibold text-emerald-dark">{unread} нових</span>
                 )}
@@ -204,6 +239,17 @@ export default function NotificationsPage() {
               </div>
             ))}
           </div>
+
+          {hasMore && (
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[13px] font-semibold text-muted transition-colors hover:border-ink/20 hover:text-ink disabled:opacity-60"
+            >
+              {loadingMore ? "Завантаження..." : `Показати ще (${Math.min(PAGE_SIZE, total - items.length)})`}
+            </button>
+          )}
         </>
       )}
 
