@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from app.core.database import AsyncSessionLocal
 from app.schemas.schemas import PaginatedListings, SearchFilters, SourceStatusOut
 from app.services.auto_ria.client import AutoRiaError
+from app.services.auto_ria.catalog import model_filter_needs_post_filter
 from app.services.auto_ria.errors import raise_auto_ria_http
 from app.services.auto_ria.preview_limits import clamp_preview_request, is_preview_mode
 from app.services.fx_rates import refresh_process_rates
@@ -91,9 +92,10 @@ async def _page_from_cached_pool(
     *,
     page: int,
     per_page: int,
+    filters: SearchFilters,
 ) -> PaginatedListings:
     """Slice a page from the cached slot pool, hydrating AUTO.RIA items on demand."""
-    page_result = await slice_pool(cached_pool, page=page, per_page=per_page)
+    page_result = await slice_pool(cached_pool, page=page, per_page=per_page, filters=filters)
     page_result.items = [slim_listing_for_list(item) for item in page_result.items]
     return sanitize_paginated_listings(page_result)
 
@@ -119,7 +121,9 @@ async def run_live_search(
     # 1) Пул у KV — «Показати ще» без повторних запитів до OLX/AUTO.RIA
     cached_pool = await get_live_pool(filters, sort_by)
     if cached_pool is not None:
-        return await _page_from_cached_pool(cached_pool, page=page, per_page=per_page)
+        return await _page_from_cached_pool(
+            cached_pool, page=page, per_page=per_page, filters=filters
+        )
 
     # 2) Будуємо слот-пул: AUTO.RIA — тільки IDs (швидко), OLX/Telegram — повні об'єкти
     pool_data: dict | None = None
@@ -129,7 +133,9 @@ async def run_live_search(
         # Stampede guard: інший запит міг уже заповнити кеш, поки ми чекали слот
         cached_pool = await get_live_pool(filters, sort_by)
         if cached_pool is not None:
-            return await _page_from_cached_pool(cached_pool, page=page, per_page=per_page)
+            return await _page_from_cached_pool(
+                cached_pool, page=page, per_page=per_page, filters=filters
+            )
 
         try:
             slots, nav_total, market_total, source_statuses = await build_live_search_pool(
@@ -161,6 +167,19 @@ async def run_live_search(
         sources = _outcome_sources(source_statuses)
         partial = any(s.error for s in sources) and any(s.item_count > 0 for s in sources)
 
+        model_post_filter = False
+        if (filters.model or "").strip():
+            try:
+                from app.services.auto_ria.client import AutoRiaClient
+
+                model_post_filter = await model_filter_needs_post_filter(AutoRiaClient(), filters)
+            except Exception:
+                logger.exception("model_post_filter check failed")
+
+        pool_market_total = None if model_post_filter else (
+            market_total if market_total > nav_total else None
+        )
+
         logger.info(
             "live_search pool_built user=%s page=%s slots=%s market_total=%s partial=%s sources=%s",
             user_id,
@@ -174,9 +193,10 @@ async def run_live_search(
         pool_data = {
             "slots": slots,
             "total": nav_total,
-            "market_total": market_total if market_total > nav_total else None,
+            "market_total": pool_market_total,
             "sources": [s.model_dump() if hasattr(s, "model_dump") else s.__dict__ for s in sources],
             "partial": partial,
+            "model_post_filter": model_post_filter,
         }
 
         await set_live_pool(
@@ -184,15 +204,18 @@ async def run_live_search(
             sort_by,
             slots=slots,
             total=nav_total,
-            market_total=market_total if market_total > nav_total else None,
+            market_total=pool_market_total,
             sources=sources,
             partial=partial,
+            model_post_filter=model_post_filter,
             ttl_seconds=LIVE_SEARCH_CACHE_TTL_SECONDS,
         )
 
     # 3) Гідратуємо лише поточну сторінку (10 AUTO.RIA get_info замість 500)
     assert pool_data is not None
-    results = await _page_from_cached_pool(pool_data, page=page, per_page=per_page)
+    results = await _page_from_cached_pool(
+        pool_data, page=page, per_page=per_page, filters=filters
+    )
 
     if page == 1:
         try:

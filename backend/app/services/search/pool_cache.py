@@ -77,6 +77,7 @@ async def set_live_pool(
     market_total: int | None = None,
     sources: list[SourceStatusOut] | list[dict] | None = None,
     partial: bool = False,
+    model_post_filter: bool = False,
     ttl_seconds: int = LIVE_POOL_TTL_SECONDS,
 ) -> None:
     try:
@@ -89,6 +90,7 @@ async def set_live_pool(
             "partial": partial,
             "total": total,
             "market_total": market_total,
+            "model_post_filter": model_post_filter,
         }
         await redis.setex(
             live_pool_cache_key(filters, sort_by),
@@ -269,6 +271,36 @@ async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
     return items
 
 
+def _search_needs_listing_filter(filters: SearchFilters | None) -> bool:
+    if not filters:
+        return False
+    return bool((filters.brand or "").strip() or (filters.model or "").strip())
+
+
+async def _collect_matching_listings_from_slots(
+    slots: list[dict],
+    filters: SearchFilters,
+    *,
+    limit: int,
+    batch_size: int = 20,
+) -> list[ListingOut]:
+    """Сканує слоти з початку, гідратує пачками, повертає перші limit збігів."""
+    from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+    items: list[ListingOut] = []
+    idx = 0
+    while idx < len(slots) and len(items) < limit:
+        batch = slots[idx : idx + batch_size]
+        idx += batch_size
+        hydrated = await _hydrate_page_slots(batch)
+        for listing in hydrated:
+            if listing_out_matches_filters(listing, filters):
+                items.append(listing)
+                if len(items) >= limit:
+                    break
+    return items
+
+
 # ---------------------------------------------------------------------------
 # Pool pagination
 # ---------------------------------------------------------------------------
@@ -279,6 +311,7 @@ async def slice_pool(
     *,
     page: int,
     per_page: int,
+    filters: SearchFilters | None = None,
 ) -> PaginatedListings:
     """Повертає одну сторінку з пулу, гідратуючи AUTO.RIA-стаби за потреби."""
     slots = pool.get("slots")
@@ -290,12 +323,23 @@ async def slice_pool(
     total = int(pool.get("total") or len(slots))
     raw_market = pool.get("market_total")
     market_total = int(raw_market) if raw_market is not None else None
+    model_post_filter = bool(pool.get("model_post_filter"))
 
     start = (page - 1) * per_page
     end = start + per_page
-    page_slots = slots[start:end]
 
-    items = await _hydrate_page_slots(page_slots)
+    if model_post_filter and _search_needs_listing_filter(filters):
+        items = await _collect_matching_listings_from_slots(slots, filters, limit=end)
+        items = items[start:end]
+        market_total = None
+    else:
+        page_slots = slots[start:end]
+        items = await _hydrate_page_slots(page_slots)
+        if _search_needs_listing_filter(filters):
+            from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+            items = [item for item in items if listing_out_matches_filters(item, filters)]
+
     pages = (total + per_page - 1) // per_page if total else 0
 
     sources_raw = pool.get("sources") or []
@@ -367,8 +411,15 @@ async def try_load_pool_listings(
         # Новий формат: slots
         slots = pool.get("slots")
         if slots:
-            page_slots = slots[:max_items]
-            items = await _hydrate_page_slots(page_slots)
+            if _search_needs_listing_filter(filters):
+                items = await _collect_matching_listings_from_slots(
+                    slots[:max_items * 3],
+                    filters,
+                    limit=max_items,
+                )
+            else:
+                page_slots = slots[:max_items]
+                items = await _hydrate_page_slots(page_slots)
             if items:
                 return items[:max_items]
 

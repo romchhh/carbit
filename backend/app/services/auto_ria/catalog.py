@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any
 
 from app.core.text import norm_text, bounded_substring
@@ -15,6 +16,8 @@ _models_cache: dict[int, list[dict[str, Any]]] = {}
 def _normalize_model_key(value: str) -> str:
     """Порівняння моделей: «GLE Coupe» ≈ «GLE-Class Coupe», «купе» ≈ coupe."""
     text = norm_text(value)
+    # AUTO.RIA часто: «C-Класс Купе» замість «C-Class Coupe»
+    text = re.sub(r"([a-z])[\s\-]*(?:клас(?:с)?|class)", r"\1 ", text, flags=re.I)
     for src, dst in (
         ("(купе)", " coupe "),
         ("(coupe)", " coupe "),
@@ -115,3 +118,15 @@ async def resolve_model_id(client: AutoRiaClient, mark_id: int, model: str) -> i
             return None
         return int(best["value"])
     return None
+
+
+async def model_filter_needs_post_filter(client: AutoRiaClient, filters) -> bool:
+    """True, якщо AUTO.RIA не має точного model_id — потрібен пост-фільтр по title/model."""
+    model = (getattr(filters, "model", None) or "").strip()
+    brand = (getattr(filters, "brand", None) or "").strip()
+    if not model or not brand:
+        return False
+    mark_id = await resolve_mark_id(client, brand)
+    if mark_id is None:
+        return False
+    return await resolve_model_id(client, mark_id, model) is None
