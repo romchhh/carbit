@@ -136,6 +136,33 @@ class BrandModelKeywordTests(unittest.TestCase):
                 title,
             )
 
+    def test_mercedes_s_class_coupe_strict(self):
+        brand = "Mercedes-Benz"
+        model = "S-Class Coupe"
+        should_match = [
+            "Mercedes-Benz S-Class Coupe 2020",
+            "Mercedes S500 Coupe 2019",
+            "Mercedes-Benz S 500 Coupe",
+            "Mercedes S Coupe AMG",
+        ]
+        should_reject = [
+            "Mercedes-Benz S-Class 500",
+            "Mercedes-Benz S-Class 500 sedan",
+            "Mercedes-Benz E-Class Coupe 2019",
+            "Mercedes-Benz C-Class Coupe 2019",
+            "Mercedes-Benz CLS 350",
+        ]
+        for title in should_match:
+            self.assertTrue(
+                text_matches_model_filter(title, model, brand=brand),
+                title,
+            )
+        for title in should_reject:
+            self.assertFalse(
+                text_matches_model_filter(title, model, brand=brand),
+                title,
+            )
+
     def test_c_class_coupe_variants_no_bare_coupe(self):
         variants = collect_model_keyword_variants("Mercedes-Benz", "C-Class Coupe")
         self.assertNotIn("coupe", [norm_text(v) for v in variants])

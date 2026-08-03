@@ -53,8 +53,10 @@ async def filters_to_search_params(
         params["marka_id[0]"] = mark_id
         model_id = await resolve_model_id(client, mark_id, filters.model or "")
         if filters.model and model_id is None:
-            raise ValueError(f"Модель «{filters.model}» не знайдено в AUTO.RIA")
-        params["model_id[0]"] = model_id or 0
+            # Рідкісні кузови (S-Class Coupe тощо) — пошук по марці + пост-фільтр title/model.
+            params["model_id[0]"] = 0
+        else:
+            params["model_id[0]"] = model_id or 0
 
     if filters.year_from:
         params["s_yers[0]"] = filters.year_from

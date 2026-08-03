@@ -185,12 +185,21 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         )
         self.assertEqual(cabrio.model, "cabrio")
 
-        for model in ("GLC Coupe", "GLE Coupe", "C-Class Coupe", "CLE"):
+        for model in ("GLC Coupe", "GLE Coupe", "C-Class Coupe", "S-Class Coupe", "CLE"):
             p = filters_to_olx_params(
                 SearchFilters(brand="Mercedes-Benz", model=model, currency="UAH")
             )
             self.assertIsNotNone(p.text_query, model)
             self.assertIn("mersedes", (p.text_query or "").lower(), model)
+            if model.endswith("Coupe") and "Class" in model:
+                self.assertNotEqual((p.text_query or "").strip(), "mersedes coupe", model)
+                self.assertIn("coupe", (p.text_query or "").lower(), model)
+
+    def test_mercedes_s_class_coupe_olx_query(self):
+        from app.services.olx.brand_slugs import compose_olx_text_query
+
+        q = compose_olx_text_query("Mercedes-Benz", "S-Class Coupe")
+        self.assertEqual(q, "mersedes s class coupe")
 
     def test_mercedes_brand_path(self):
         params = filters_to_olx_params(

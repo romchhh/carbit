@@ -196,6 +196,17 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
                  "s350", "s400", "s450", "s500", "s550", "s580", "s63", "s65",
                  "s-class", "s class", "s класс", "s-класс",
                  "w220", "w221", "w222", "w223"),
+    "s-class coupe": (
+        "s class coupe", "s-class coupe", "sclasscoupe", "s coupe", "s-coupe",
+        "s 500 coupe", "s500 coupe", "s 450 coupe", "s450 coupe", "s 580 coupe", "s580 coupe",
+        "s 63 coupe", "s63 coupe", "s 65 coupe", "s65 coupe",
+        "w217", "c217",
+    ),
+    "e-class coupe": (
+        "e class coupe", "e-class coupe", "eclasscoupe", "e coupe", "e-coupe",
+        "e 200 coupe", "e200 coupe", "e 220 coupe", "e220 coupe", "e 350 coupe", "e350 coupe",
+        "c207", "c238",
+    ),
     "a-class": ("a 180", "a 200", "a 220", "a 250",
                  "a180", "a200", "a220", "a250", "a35", "a45", "a160", "a150",
                  "a-class", "a class", "a класс", "a-класс",
@@ -1347,7 +1358,7 @@ def _compound_base_matches(hay: str, base: str, body: str) -> bool:
             hay_n,
         ):
             return True
-        if re.search(rf"\b{letter}[\s\-]?(?:class|клас)\b", hay_n):
+        if re.search(rf"\b{letter}[\s\-]?{re.escape(body_n)}\b", hay_n):
             return True
         if re.search(rf"\b{letter}[\s\-]?\d{{2,3}}[a-z]?\b", hay_n):
             return True
@@ -1396,12 +1407,16 @@ def _filter_compound_body_variants(model: str, variants: list[str]) -> list[str]
         if key.endswith(f" {body_key}") and base_key not in key and "class" not in key:
             if len(key.split()) <= 3:
                 continue
-        # c-class без coupe — для C-Class Coupe не використовуємо голі c300/c220
-        if _compound_body_model_parts(model) and re.fullmatch(r"c[\s\-]?\d{2,3}[a-z]?", key):
+        # c-class / s-class без coupe — для *-Class Coupe не використовуємо голі c300/s500
+        if _compound_body_model_parts(model) and re.fullmatch(
+            r"[cse][\s\-]?\d{2,3}[a-z]?", key
+        ):
             if body_key not in key and "coupe" not in key and "купе" not in key:
                 continue
         if _compound_body_model_parts(model) and key in {
             "c-class", "c class", "c клас", "c класс", "c-класс", "c-клас",
+            "s-class", "s class", "s клас", "s класс", "s-класс", "s-клас",
+            "e-class", "e class", "e клас", "e класс", "e-класс", "e-клас",
         }:
             continue
         seen.add(key)

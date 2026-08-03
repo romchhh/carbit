@@ -673,6 +673,12 @@ def build_model_text_tokens(model: str, brand_slug: str = "") -> list[str]:
     return out
 
 
+_OLX_COMPOUND_BODY_SUFFIXES = frozenset({
+    "coupe", "cabrio", "cabriolet", "sportback", "roadster", "convertible",
+    "allroad", "avant", "wagon", "touring", "plus", "купе", "кабріо", "кабрио",
+})
+
+
 def primary_model_text_token(model: str, brand_slug: str = "") -> str:
     """Найкращий токен моделі для primary /q-brand-model/ (не надто короткий)."""
     tokens = build_model_text_tokens(model, brand_slug)
@@ -681,8 +687,22 @@ def primary_model_text_token(model: str, brand_slug: str = "") -> str:
 
     base = model.lower()
     parts = re.split(r"[\s\-/]+", base)
-    if len(parts) >= 3 and parts[-1] in tokens:
-        return parts[-1]
+
+    # «S-Class Coupe» — не скорочувати до «coupe» (інакше /q-mersedes-coupe/ без класу).
+    if len(parts) >= 2 and parts[-1] in _OLX_COMPOUND_BODY_SUFFIXES:
+        phrase = " ".join(parts)
+        phrase_hyphen = "-".join(parts)
+        for prefer in (phrase, phrase_hyphen, slugify(model)):
+            norm = prefer.replace("-", " ")
+            for token in tokens:
+                if token.replace("-", " ") == norm or token == prefer:
+                    return norm
+        for token in tokens:
+            if " " in token or "-" in token:
+                if parts[-1] in token.split("-")[-1].split() or parts[-1] in token:
+                    if len(parts) == 2 or parts[0] in token.replace("-", " "):
+                        return token.replace("-", " ")
+        return phrase
 
     slug = slugify(model)
     if slug in tokens:
