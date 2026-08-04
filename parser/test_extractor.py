@@ -557,6 +557,94 @@ VIN - SALCJ2FX3RH351759.
         self.assertEqual(listing.location_city, "Львів")
         self.assertTrue(is_valid_car_listing(listing))
 
+    def test_hummer_h2_plain_telegram(self):
+        text = """Hummer H2
+2005 рік
+6.0 бензин
+100 тис км
+Повний привід
+
+Перша ціна в Україні!
+19800$
+@Alfredhedgehog
++380 67 135 14 44
+
+5GRGN23U66H105435
+Autoria"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Hummer")
+        self.assertEqual(listing.model, "H2")
+        self.assertEqual(listing.year, 2005)
+        self.assertEqual(listing.price_amount, 19800)
+        self.assertEqual(listing.mileage_km, 100000)
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_land_rover_discovery_dealer_template(self):
+        text = """📉 ЦІНУ ЗНИЖЕНО
+🚗 Land Rover Discovery 2016
+💰 14300 — власник щойно оновив ціну
+
+⚙️ Бензин 2.0 л. · Автомат · Повний
+🛣 150 тис. км · 🎨 Чорний · 💺 5 місць
+
+📍 Житомир, вул. Покровська 271
+☎️ 067 730 08 09"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Land Rover")
+        self.assertEqual(listing.model, "Discovery")
+        self.assertEqual(listing.year, 2016)
+        self.assertEqual(listing.price_amount, 14300)
+        self.assertEqual(listing.mileage_km, 150000)
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_peugeot_2008_numeric_model_year(self):
+        text = """📉 ЦІНУ ЗНИЖЕНО
+🚗 Peugeot 2008 2017
+💰 11800 — власник щойно оновив ціну
+
+⚙️ Бензин 1.2 л. · Автомат · Передній
+🛣 89 тис. км"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Peugeot")
+        self.assertEqual(listing.model, "2008")
+        self.assertEqual(listing.year, 2017)
+        self.assertEqual(listing.price_amount, 11800)
+        self.assertEqual(listing.mileage_km, 89000)
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_ravon_brand_extraction(self):
+        text = "Ravon R2 2018\n8500$\n45 тис км"
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Ravon")
+        self.assertEqual(listing.model, "R2")
+        self.assertEqual(listing.year, 2018)
+
+    def test_price_thousand_shorthand(self):
+        text = "Toyota Camry 2015\n12 тис $\nпробіг 120 тис км"
+        listing = _extract(text)
+        self.assertEqual(listing.price_amount, 12000)
+
+    def test_mileage_thousand_words(self):
+        text = "Skoda Octavia 2018\nпробіг 149 тисяч\n9500$"
+        listing = _extract(text)
+        self.assertEqual(listing.mileage_km, 149000)
+
+    def test_vin_only_with_price_valid(self):
+        text = "W1NWH5AB1SX014976\n26500$"
+        listing = _extract(text)
+        self.assertEqual(listing.price_amount, 26500)
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_sale_with_do_price_not_buyer_request(self):
+        text = "Продам Toyota Camry 2018\nЦіна до 15000$\nпробіг 100 тис км"
+        self.assertFalse(is_car_search_request(text))
+
+    def test_touareg_without_volkswagen_brand(self):
+        text = "Touareg 2019 3.0 TDI\n19500$\n120 тис км"
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Volkswagen")
+        self.assertEqual(listing.model, "Touareg")
+
 
 if __name__ == "__main__":
     unittest.main()

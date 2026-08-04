@@ -11,10 +11,12 @@ from app.core.text import norm_text
 from app.schemas.schemas import SearchFilters
 from app.services.search.brand_model_keywords import (
     TELEGRAM_HISTORY_SCAN_LIMIT,
+    TELEGRAM_KEYWORD_QUERY_PREFIX,
     TELEGRAM_SCAN_QUERY_PREFIX,
     build_search_keyword_queries,
     collect_brand_keyword_variants,
     collect_model_keyword_variants,
+    encode_telegram_keyword_job,
     encode_telegram_scan_job,
     _allows_distinctive_model_without_brand,
 )
@@ -58,7 +60,8 @@ def build_telegram_keyword_queries(
         if len(parts) >= 3 and parts[0].lower() == parts[1].lower():
             return
         seen.add(key)
-        out.append(key)
+        # Telethon search + пост-фільтр brand/model (як history scan).
+        out.append(encode_telegram_keyword_job(brand, model, key))
 
     # 1) Distinctive model без бренду — Telethon часто знаходить саме так.
     if brand and model and _allows_distinctive_model_without_brand(brand, model):
@@ -79,7 +82,7 @@ def build_telegram_keyword_queries(
             if model and norm_text(model).split()[0] not in qn and len(qn) < 4:
                 continue
             add(q)
-            if len([x for x in out if not x.startswith(TELEGRAM_SCAN_QUERY_PREFIX)]) >= (
+            if len([x for x in out if x.startswith(TELEGRAM_KEYWORD_QUERY_PREFIX)]) >= (
                 MAX_LIVE_TELEGRAM_SEARCH_QUERIES
             ):
                 break
@@ -93,8 +96,8 @@ def build_telegram_keyword_queries(
             if len(norm_text(mt)) >= 3:
                 add(mt)
 
-    # Обрізаємо plain search
-    plain = [q for q in out if not q.startswith(TELEGRAM_SCAN_QUERY_PREFIX)]
+    # Обрізаємо plain keyword jobs (__kw__)
+    plain = [q for q in out if q.startswith(TELEGRAM_KEYWORD_QUERY_PREFIX)]
     plain = plain[:MAX_LIVE_TELEGRAM_SEARCH_QUERIES]
     out = list(plain)
 
@@ -118,6 +121,8 @@ def build_telegram_keyword_query(filters: SearchFilters) -> str | None:
 def _job_limit_for_query(query: str) -> int:
     if (query or "").startswith(TELEGRAM_SCAN_QUERY_PREFIX):
         return KEYWORD_LIMIT_PER_CHANNEL
+    if (query or "").startswith(TELEGRAM_KEYWORD_QUERY_PREFIX):
+        return TELEGRAM_SEARCH_LIMIT
     return TELEGRAM_SEARCH_LIMIT
 
 

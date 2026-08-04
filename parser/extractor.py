@@ -120,6 +120,12 @@ _CALENDAR_DATE_YEAR_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Назви моделей, що виглядають як рік (Peugeot 2008, BMW 2002, Mazda 323).
+NUMERIC_MODEL_NAMES = frozenset({
+    "107", "108", "2008", "208", "301", "3008", "4008", "5008", "508", "607", "807",
+    "2002", "323", "626", "929",
+})
+
 # ціна: $12 000, 12000$, 12 000 usd, 350000 грн, 12000 у.е., €9500, MMR: $7,350
 PRICE_RE = re.compile(
     r"(?:"
@@ -231,6 +237,26 @@ MILEAGE_SHORT_K_RE = re.compile(
     r"|"
     r"(?:проб[іi]г|пробег)\s*:?\s*(?P<val2>\d{1,3}(?:[ .,]\d{3})?)\s*[кk]\.?\b"
     r")",
+    re.IGNORECASE,
+)
+
+# «пробіг 149 тисяч», «149 тысяч км»
+MILEAGE_THOUSAND_WORDS_RE = re.compile(
+    r"(?:"
+    r"(?:проб[іi]г|пробег|mileage|🛣(?:️)?)\s*:?\s*"
+    r"(?P<val>\d{1,3}(?:[ .,]\d{3})?)\s*(?:тисяч|тысяч|тис\.?)(?:\s*(?:км|km))?"
+    r"|"
+    r"(?P<val2>\d{1,3}(?:[ .,]\d{3})?)\s*(?:тисяч|тысяч)\s*(?:км|km)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+# «12 тис $», «12 тыс$», «15тис usd»
+PRICE_THOUSAND_RE = re.compile(
+    r"(?<![A-Za-zА-Яа-яЁёІіЇїЄєҐґ0-9/])"
+    r"(?P<amount>\d{1,2}(?:[.,]\d)?)\s*"
+    r"(?:тис\.?|тыс\.?)\.?\s*"
+    r"(?:[\$€]|usd|eur|грн\.?|uah|у\.?\s?е\.?)?",
     re.IGNORECASE,
 )
 
@@ -349,6 +375,10 @@ def is_car_search_request(text: str) -> bool:
     )
     has_sale_intent = any(kw in text_low for kw in _SALE_KEYWORDS)
 
+    # «Продам … до 15000$» — торг, не запит на купівлю.
+    if has_sale_intent:
+        return False
+
     if has_buyer_year and (budget_lines >= 1 or max_budget_hits >= 2 or considers):
         return True
 
@@ -380,6 +410,11 @@ def is_valid_car_listing(listing: CarListing) -> bool:
         return listing.confidence >= MIN_LISTING_CONFIDENCE
 
     if has_price and has_year and (has_mileage or listing.engine_volume_l):
+        return True
+
+    flags = listing.condition_flags if isinstance(listing.condition_flags, dict) else {}
+    vin = flags.get("vin") if isinstance(flags.get("vin"), str) else None
+    if vin and has_price:
         return True
 
     if listing.confidence >= 0.5:
@@ -447,8 +482,6 @@ def _candidate_from_brand_key(
     words = re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ0-9\-]+", tail)
     model_words: list[str] = []
     for w in words[:3]:
-        if YEAR_RE.fullmatch(w) or YEAR_RE.match(w):
-            break
         if re.fullmatch(r"[\-–—/|]+", w):
             continue
         if w.lower() in MODEL_STOP_WORDS:
@@ -457,8 +490,13 @@ def _candidate_from_brand_key(
             break
         if w.lower() in _FAKE_MODEL_TOKENS:
             break
+        if w.lower() in NUMERIC_MODEL_NAMES:
+            model_words.append(w)
+            continue
         # «Kona 40kw» — ємність батареї, не частина моделі
         if re.fullmatch(r"\d+[.,]?\d*(?:kw|kwh|квт)", w, re.IGNORECASE):
+            break
+        if YEAR_RE.fullmatch(w) or YEAR_RE.match(w):
             break
         model_words.append(w)
         if len(model_words) >= 2:
@@ -526,6 +564,9 @@ def _labeled_brand_model(original_text: str) -> tuple[str, str | None, int] | No
         model_words: list[str] = []
         for w in words[:3]:
             wl = w.lower()
+            if wl in NUMERIC_MODEL_NAMES:
+                model_words.append(w)
+                continue
             if YEAR_RE.fullmatch(w) or wl in MODEL_STOP_WORDS or wl in _FAKE_MODEL_TOKENS:
                 break
             model_words.append(w)
@@ -573,13 +614,27 @@ def _calendar_date_year_starts(text: str) -> frozenset[int]:
     return frozenset(m.start("year") for m in _CALENDAR_DATE_YEAR_RE.finditer(text))
 
 
-def _find_year(text: str, brand_pos_hint: Optional[int] = None) -> Optional[int]:
+def _find_year(
+    text: str,
+    brand_pos_hint: Optional[int] = None,
+    model: str | None = None,
+) -> Optional[int]:
     date_year_starts = _calendar_date_year_starts(text)
+    model_year_values: set[int] = set()
+    if model:
+        for token in re.findall(r"\d+", model):
+            if token in NUMERIC_MODEL_NAMES:
+                try:
+                    model_year_values.add(int(token))
+                except ValueError:
+                    pass
     candidates = []
     for m in YEAR_RE.finditer(text):
         if m.start() in date_year_starts:
             continue
         val = int(m.group(1).replace(" ", ""))
+        if val in model_year_values:
+            continue
         if 1950 <= val <= CURRENT_YEAR + 1:
             candidates.append((m.start(), val))
     if not candidates:
@@ -660,6 +715,27 @@ def _find_price(text: str):
     if labeled_hits:
         return labeled_hits[-1]
 
+    thousand = PRICE_THOUSAND_RE.search(text)
+    if thousand:
+        raw_amount = thousand.group("amount")
+        amount = _normalize_amount(raw_amount)
+        if amount is not None and 1 <= amount <= 99:
+            amount *= 1000
+            tail = text[thousand.end() : thousand.end() + 12].lower()
+            currency = None
+            if "$" in tail or "usd" in tail or "у" in tail:
+                currency = "USD"
+            elif "€" in tail or "eur" in tail:
+                currency = "EUR"
+            elif "грн" in tail or "uah" in tail:
+                currency = "UAH"
+            if _price_in_range(amount, currency):
+                if currency is None:
+                    from .currency import infer_currency
+
+                    currency = infer_currency(amount, None, text)
+                return amount, _correct_mislabelled_uah(amount, currency, text)
+
     best = None
     best_score = -1
     for m in PRICE_RE.finditer(text):
@@ -734,6 +810,15 @@ def _find_mileage(text: str) -> Optional[int]:
         val = _normalize_amount(raw) if raw else None
         if val is not None and 1 <= val <= 999:
             return int(val * 1000)
+
+    words = MILEAGE_THOUSAND_WORDS_RE.search(text)
+    if words:
+        raw = words.group("val") or words.group("val2")
+        val = _normalize_amount(raw) if raw else None
+        if val is not None:
+            if val < 1000:
+                return int(val * 1000)
+            return int(val)
 
     # Повні км («96263км») раніше за короткі «N км», щоб не відрізати хвіст
     full_km = MILEAGE_FULL_KM_RE.search(text)
@@ -818,7 +903,7 @@ def extract_car_data(
         listing.brand = brand
         listing.model = model
 
-        listing.year = _find_year(text, brand_pos)
+        listing.year = _find_year(text, brand_pos, model=listing.model)
 
         amount, currency = _find_price(text_low)
         listing.price_amount = amount

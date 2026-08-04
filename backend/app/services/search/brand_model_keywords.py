@@ -27,6 +27,8 @@ from app.services.olx.brand_slugs import (
 MAX_TELEGRAM_KEYWORD_QUERIES = 8
 MAX_SEARCH_KEYWORD_QUERIES = 10
 TELEGRAM_SCAN_QUERY_PREFIX = "__scan__:"
+# Telethon keyword search з brand/model пост-фільтром (не повний scan історії).
+TELEGRAM_KEYWORD_QUERY_PREFIX = "__kw__:"
 # Глибина scan історії каналу при live-пошуку за маркою/моделлю.
 TELEGRAM_HISTORY_SCAN_LIMIT = 2500
 
@@ -1749,6 +1751,36 @@ def decode_telegram_scan_job(query: str) -> dict[str, str] | None:
     if not brand:
         return None
     return {"brand": brand, "model": str(data.get("model") or "").strip()}
+
+
+def encode_telegram_keyword_job(brand: str, model: str, search_query: str) -> str:
+    """Telethon search + пост-фільтр message_matches_search_filters."""
+    payload = {
+        "brand": (brand or "").strip(),
+        "model": (model or "").strip(),
+        "q": (search_query or "").strip(),
+    }
+    return TELEGRAM_KEYWORD_QUERY_PREFIX + json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":")
+    )
+
+
+def decode_telegram_keyword_job(query: str) -> dict[str, str] | None:
+    q = (query or "").strip()
+    if not q.startswith(TELEGRAM_KEYWORD_QUERY_PREFIX):
+        return None
+    try:
+        data = json.loads(q[len(TELEGRAM_KEYWORD_QUERY_PREFIX) :])
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    search_q = str(data.get("q") or "").strip()
+    brand = str(data.get("brand") or "").strip()
+    model = str(data.get("model") or "").strip()
+    if not search_q:
+        return None
+    return {"brand": brand, "model": model, "q": search_q}
 
 
 _SERVICE_BRAND_NOISE_RE = re.compile(

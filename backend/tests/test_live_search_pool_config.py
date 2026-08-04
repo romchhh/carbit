@@ -50,7 +50,7 @@ class LiveSearchPoolConfigTests(unittest.TestCase):
         self.assertGreater(multi_source.AUTO_RIA_POOL_TIMEOUT_SECONDS, 0)
         self.assertGreater(multi_source.OLX_SEARCH_TIMEOUT_SECONDS, 0)
 
-    def test_sorted_merge_newest_global_order(self):
+    def test_fair_merge_newest_prefers_source_blend(self):
         batches = [
             (
                 "auto_ria",
@@ -83,16 +83,45 @@ class LiveSearchPoolConfigTests(unittest.TestCase):
                 ),
             ),
         ]
-        page_items, nav_total, _market = multi_source._sorted_merge_slice(
+        page_items, nav_total, _market = multi_source._fair_merge_slice(
             batches,
             page=1,
-            per_page=30,
+            per_page=9,
             sort_by="newest",
         )
-        self.assertEqual(page_items[0].id, "a0")
-        published = [item.published_at for item in page_items]
-        self.assertEqual(published, sorted(published, reverse=True))
+        self.assertEqual([item.id for item in page_items[:3]], ["o0", "t0", "a0"])
         self.assertGreaterEqual(nav_total, len(page_items))
+
+    def test_sorted_merge_price_stays_global(self):
+        batches = [
+            (
+                "auto_ria",
+                PaginatedListings(
+                    items=[_listing("a0", "auto_ria", minutes_ago=0)],
+                    total=1,
+                    page=1,
+                    per_page=1,
+                    pages=1,
+                ),
+            ),
+            (
+                "olx",
+                PaginatedListings(
+                    items=[_listing("o0", "olx", minutes_ago=0)],
+                    total=1,
+                    page=1,
+                    per_page=1,
+                    pages=1,
+                ),
+            ),
+        ]
+        page_items, _, _ = multi_source._sorted_merge_slice(
+            batches,
+            page=1,
+            per_page=2,
+            sort_by="price_asc",
+        )
+        self.assertEqual(len(page_items), 2)
 
 
 if __name__ == "__main__":

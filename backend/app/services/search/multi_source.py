@@ -28,9 +28,10 @@ AUTO_RIA_PAGE_SIZE = 50
 # Live pool збирає лише IDs — 25 с достатньо; 90 с тримало весь gather.
 AUTO_RIA_POOL_TIMEOUT_SECONDS = 25.0
 # TG keyword wait ~5 с + запас; history scan не блокує.
-TELEGRAM_POOL_TIMEOUT_SECONDS = 12.0
+TELEGRAM_POOL_TIMEOUT_SECONDS = 18.0
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
 _SOURCE_BLEND_ORDER = {"olx": 0, "telegram": 1, "auto_ria": 2}
+_DATE_SORT_KEYS = frozenset({"newest", "published_desc"})
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ def _interleave_by_source(
     if len(batches) == 1:
         return batches[0][1][:limit]
 
+    batches = sorted(batches, key=lambda row: _SOURCE_BLEND_ORDER.get(row[0], 99))
     queues = {source: list(items) for source, items in batches}
     order = [source for source, _ in batches]
     merged: list[ListingOut] = []
@@ -161,6 +163,66 @@ def _sorted_merge_slice(
         if start + per_page >= pool_size:
             nav_total = pool_size
     return page_items, nav_total, source_totals
+
+
+def _fair_merge_slice(
+    batches: list[tuple[str, PaginatedListings]],
+    *,
+    page: int,
+    per_page: int,
+    sort_by: str,
+) -> tuple[list[ListingOut], int, int]:
+    """Зливає джерела round-robin (OLX → TG → AR), усередині кожного — sort_by.
+
+    Для моніторингу / «новіші» не дає AUTO.RIA витіснити OLX/Telegram лише через свіжіші дати.
+    """
+    source_totals = sum(result.total for _, result in batches)
+    per_source: list[tuple[str, list[ListingOut]]] = []
+    for source, result in batches:
+        if not result.items:
+            continue
+        per_source.append((source, sort_listings(list(result.items), sort_by)))
+
+    if not per_source:
+        return [], 0, 0
+
+    pool_cap = max(SOURCE_POOL_CAP, page * per_page * 2)
+    merged = _interleave_by_source(per_source, limit=pool_cap)
+
+    from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
+
+    merged = dedupe_telegram_posts_in_pool(merged)
+    seen_ids: set[str] = set()
+    unique: list[ListingOut] = []
+    for item in merged:
+        if item.id in seen_ids:
+            continue
+        seen_ids.add(item.id)
+        unique.append(item)
+
+    start = (page - 1) * per_page
+    page_items = unique[start : start + per_page]
+    pool_size = len(unique)
+
+    if page_items and len(page_items) < per_page:
+        nav_total = start + len(page_items)
+    else:
+        nav_total = max(source_totals, pool_size)
+        if start + per_page >= pool_size:
+            nav_total = pool_size
+    return page_items, nav_total, source_totals
+
+
+def _merge_multi_source_page(
+    batches: list[tuple[str, PaginatedListings]],
+    *,
+    page: int,
+    per_page: int,
+    sort_by: str,
+) -> tuple[list[ListingOut], int, int]:
+    if sort_by in _DATE_SORT_KEYS:
+        return _fair_merge_slice(batches, page=page, per_page=per_page, sort_by=sort_by)
+    return _sorted_merge_slice(batches, page=page, per_page=per_page, sort_by=sort_by)
 
 
 def _published_max_age(filters: SearchFilters):
@@ -739,7 +801,7 @@ async def search_listings_outcome(
             )
         successful = filtered_batches
 
-    page_items, nav_total, market_total = _sorted_merge_slice(
+    page_items, nav_total, market_total = _merge_multi_source_page(
         successful,
         page=page,
         per_page=per_page,
@@ -925,6 +987,71 @@ def _make_ar_slots(auto_ria_ids: list[str]) -> list[dict]:
     return slots
 
 
+def _slot_id(slot: dict) -> str:
+    sid = slot.get("i") or (slot.get("d") or {}).get("id", "")
+    return str(sid)
+
+
+def _build_fair_blend_slots(
+    *,
+    auto_ria_ids: list[str],
+    olx_items: list[ListingOut],
+    telegram_items: list[ListingOut],
+    limit: int,
+    sort_by: str = "newest",
+) -> list[dict]:
+    """Round-robin OLX → Telegram → AUTO.RIA; усередині кожного — sort_by."""
+    batches: list[tuple[str, list[dict]]] = []
+    if olx_items:
+        batches.append(
+            (
+                "olx",
+                [_listing_to_slot(item) for item in sort_listings(olx_items, sort_by)],
+            )
+        )
+    if telegram_items:
+        batches.append(
+            (
+                "telegram",
+                [_listing_to_slot(item) for item in sort_listings(telegram_items, sort_by)],
+            )
+        )
+    if auto_ria_ids:
+        batches.append(("auto_ria", _make_ar_slots(auto_ria_ids)))
+
+    if not batches:
+        return []
+    if len(batches) == 1:
+        return batches[0][1][:limit]
+
+    batches = sorted(batches, key=lambda row: _SOURCE_BLEND_ORDER.get(row[0], 99))
+    queues = {source: list(slots) for source, slots in batches}
+    order = [source for source, _ in batches]
+    merged: list[dict] = []
+    seen_ids: set[str] = set()
+
+    while len(merged) < limit:
+        added = False
+        for source in order:
+            if len(merged) >= limit:
+                break
+            queue = queues[source]
+            while queue:
+                candidate = queue.pop(0)
+                sid = _slot_id(candidate)
+                if sid and sid in seen_ids:
+                    continue
+                if sid:
+                    seen_ids.add(sid)
+                merged.append(candidate)
+                added = True
+                break
+        if not added:
+            break
+
+    return merged
+
+
 def _build_interleaved_slots(
     *,
     auto_ria_ids: list[str],
@@ -933,46 +1060,14 @@ def _build_interleaved_slots(
     limit: int,
     sort_by: str = "newest",
 ) -> list[dict]:
-    """Fallback: round-robin між джерелами (коли гідрація AR недоступна)."""
-    ar_slots = _make_ar_slots(auto_ria_ids)
-
-    merged_ot = sort_listings(list(olx_items) + list(telegram_items), sort_by)
-    ot_slots: list[dict] = []
-    for item in merged_ot:
-        src = "t" if (item.source or "").lower() == "telegram" else "o"
-        ot_slots.append({"s": src, "d": item.model_dump(mode="json")})
-
-    if not ar_slots:
-        return ot_slots[:limit]
-    if not ot_slots:
-        return ar_slots[:limit]
-
-    seen_ids: set[str] = set()
-    slots: list[dict] = []
-    queues = [list(ot_slots), list(ar_slots)]
-
-    def _add(slot: dict) -> bool:
-        sid = slot.get("i") or (slot.get("d") or {}).get("id", "")
-        if sid and sid in seen_ids:
-            return False
-        if sid:
-            seen_ids.add(sid)
-        slots.append(slot)
-        return True
-
-    while len(slots) < limit and any(queues):
-        progressed = False
-        for q in queues:
-            if len(slots) >= limit:
-                break
-            while q:
-                if _add(q.pop(0)):
-                    progressed = True
-                    break
-        if not progressed:
-            break
-
-    return slots
+    """Fallback: fair round-robin між джерелами (коли гідрація AR недоступна)."""
+    return _build_fair_blend_slots(
+        auto_ria_ids=auto_ria_ids,
+        olx_items=olx_items,
+        telegram_items=telegram_items,
+        limit=limit,
+        sort_by=sort_by,
+    )
 
 
 async def build_live_search_pool(
@@ -1141,16 +1236,24 @@ async def build_live_search_pool(
         filters,
     )
 
-    # Глобальне сортування по даті між джерелами (не round-robin по source).
     if auto_ria_ids and (olx_sorted or telegram_sorted):
-        slots = await _build_globally_sorted_slots(
-            auto_ria_ids=auto_ria_ids,
-            olx_items=olx_sorted,
-            telegram_items=telegram_sorted,
-            limit=POOL_LIMIT,
-            sort_by=sort_by,
-            filters=filters,
-        )
+        if sort_by in _DATE_SORT_KEYS:
+            slots = _build_fair_blend_slots(
+                auto_ria_ids=auto_ria_ids,
+                olx_items=olx_sorted,
+                telegram_items=telegram_sorted,
+                limit=POOL_LIMIT,
+                sort_by=sort_by,
+            )
+        else:
+            slots = await _build_globally_sorted_slots(
+                auto_ria_ids=auto_ria_ids,
+                olx_items=olx_sorted,
+                telegram_items=telegram_sorted,
+                limit=POOL_LIMIT,
+                sort_by=sort_by,
+                filters=filters,
+            )
     elif auto_ria_ids and sort_by in ("newest", "published_desc"):
         # Лише AUTO.RIA + newest: API вже віддав IDs від нових до старих (order_by=7).
         slots = _make_ar_slots(auto_ria_ids)[:POOL_LIMIT]

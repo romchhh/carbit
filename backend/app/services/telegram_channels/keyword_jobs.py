@@ -39,7 +39,10 @@ async def process_photo_queue(service, *, limit: int = 5) -> int:
 async def process_keyword_queue(service, *, limit: int = 16) -> int:
     """Scan / Telethon-search історії каналів з live-пошуку."""
     ensure_parser_path()
-    from app.services.search.brand_model_keywords import decode_telegram_scan_job
+    from app.services.search.brand_model_keywords import (
+        decode_telegram_keyword_job,
+        decode_telegram_scan_job,
+    )
     from parser.channel_media_store import ChannelMediaStore
 
     store = ChannelMediaStore()
@@ -63,11 +66,22 @@ async def process_keyword_queue(service, *, limit: int = 16) -> int:
                     limit=per_channel,
                 )
             else:
-                listings = await service.search_channel_by_keywords(
-                    channel,
-                    query,
-                    limit=min(per_channel, 250),
-                )
+                kw_payload = decode_telegram_keyword_job(query)
+                if kw_payload:
+                    listings = await service.search_channel_by_keywords(
+                        channel,
+                        kw_payload["q"],
+                        limit=min(per_channel, 250),
+                        brand=kw_payload.get("brand", ""),
+                        model=kw_payload.get("model", ""),
+                    )
+                else:
+                    # Зворотна сумісність: голий текстовий запит без пост-фільтра
+                    listings = await service.search_channel_by_keywords(
+                        channel,
+                        query,
+                        limit=min(per_channel, 250),
+                    )
             async with AsyncSessionLocal() as db:
                 from app.services.parser.settings import get_parser_settings
 

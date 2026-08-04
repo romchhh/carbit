@@ -167,11 +167,16 @@ def _build_title(listing: Any) -> str:
         candidate = line.strip()
         if len(candidate) < 4:
             continue
-        # Пропускаємо службові рядки / одну «хвостову» фічу типу Facelift
-        low = candidate.lower()
-        if low in {"facelift", "restyling", "нова", "продаж", "продаю", "продам"}:
+        # Знімаємо emoji-префікси («🚗 Land Rover …»), а не пропускаємо рядок
+        candidate = re.sub(
+            r"^[\s📉📈🔴🟢🚗💰📍✍️👉✅☎️📞⚙️🛣🎨💺]+",
+            "",
+            candidate,
+        ).strip()
+        if len(candidate) < 4:
             continue
-        if candidate.startswith(("💰", "📍", "✍️", "👉", "🚗")):
+        low = candidate.lower()
+        if low in {"facelift", "restyling", "нова", "продаж", "продаю", "продам", "ціну знижено"}:
             continue
         return candidate[:120]
     return "Telegram оголошення"

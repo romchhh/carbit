@@ -374,14 +374,23 @@ class CarParserService:
         query: str,
         *,
         limit: int = 50,
+        brand: str = "",
+        model: str = "",
     ) -> list:
         """Пошук по історії каналу за ключовими словами (Telethon search).
 
         Не чіпає інкрементальний cursor — лише підтягує релевантні пости в індекс.
+        Якщо задано brand/model — пост-фільтр message_matches_search_filters.
         """
         query = (query or "").strip()
         if not query:
             return []
+
+        brand = (brand or "").strip()
+        model = (model or "").strip()
+        use_post_filter = bool(brand or model)
+        if use_post_filter:
+            from app.services.search.brand_model_keywords import message_matches_search_filters
 
         joined = await self._ensure_joined_cached(channel)
         if not joined:
@@ -426,6 +435,10 @@ class CarParserService:
 
         results = []
         for group in all_groups:
+            if use_post_filter:
+                text = self._merge_group_text(group)
+                if not message_matches_search_filters(text, brand, model):
+                    continue
             listing = await self._process_group(
                 channel, group, touch_cursor=False, force_reparse=True
             )

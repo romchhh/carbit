@@ -31,6 +31,10 @@ from app.services.telegram_channels.mapper import (
 
 logger = logging.getLogger(__name__)
 
+# Ширший за generic SQL — Telegram ILIKE по title/description/raw.
+TELEGRAM_SQL_BRAND_TOKEN_LIMIT = 18
+TELEGRAM_SQL_MODEL_TOKEN_LIMIT = 16
+
 
 def telegram_found_after_cutoff(
     searches: list[SearchQuery],
@@ -189,7 +193,10 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
     brand = (filters.brand or "").strip()
     model_str = (filters.model or "").strip()
     if brand:
-        brand_variants = filter_sql_search_tokens(collect_brand_keyword_variants(brand), limit=12)
+        brand_variants = filter_sql_search_tokens(
+            collect_brand_keyword_variants(brand),
+            limit=TELEGRAM_SQL_BRAND_TOKEN_LIMIT,
+        )
         brand_clauses = []
         for variant in brand_variants:
             like = f"%{variant}%"
@@ -209,7 +216,8 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
             )
             if _allows_distinctive_model_without_brand(brand, model_str):
                 model_v = filter_sql_search_tokens(
-                    collect_model_keyword_variants(brand, model_str), limit=6
+                    collect_model_keyword_variants(brand, model_str),
+                    limit=TELEGRAM_SQL_MODEL_TOKEN_LIMIT,
                 )
                 for mv in model_v:
                     like = f"%{mv}%"
@@ -230,7 +238,7 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
     if model:
         model_variants = filter_sql_search_tokens(
             collect_model_keyword_variants(filters.brand or "", model),
-            limit=12,
+            limit=TELEGRAM_SQL_MODEL_TOKEN_LIMIT,
         )
         if not model_variants:
             model_variants = (model,)
