@@ -9,6 +9,7 @@ import time
 from app.core.config import settings as app_settings
 from app.core.text import norm_text
 from app.schemas.schemas import SearchFilters
+from app.services.olx.brand_slugs import compose_olx_text_query
 from app.services.search.brand_model_keywords import (
     TELEGRAM_HISTORY_SCAN_LIMIT,
     TELEGRAM_KEYWORD_QUERY_PREFIX,
@@ -34,7 +35,7 @@ KEYWORD_COOLDOWN_SECONDS = 45
 STALE_JOB_SECONDS = 20 * 60
 # Фоновий deep-refresh, якщо в БД мало матчів (не блокує відповідь).
 THIN_RESULT_RETRY_THRESHOLD = 8
-MAX_LIVE_TELEGRAM_SEARCH_QUERIES = 4
+MAX_LIVE_TELEGRAM_SEARCH_QUERIES = 5
 
 
 def build_telegram_keyword_queries(
@@ -63,22 +64,32 @@ def build_telegram_keyword_queries(
         # Telethon search + пост-фільтр brand/model (як history scan).
         out.append(encode_telegram_keyword_job(brand, model, key))
 
-    # 1) Distinctive model без бренду — Telethon часто знаходить саме так.
+    olx_typo = norm_text(compose_olx_text_query(brand, model)) if brand and model else ""
+
+    # 1) Точна latin-фраза — Telethon не матчить «mersedes» у «Mercedes-Benz».
+    if brand and model:
+        add(f"{brand} {model}")
+        model_core = (model.split()[0] or "").strip()
+        model_core_n = norm_text(model_core)
+        if 2 <= len(model_core_n) <= 4 and model_core_n.isalpha():
+            add(model_core)
+
+    # 2) Distinctive model без бренду — Telethon часто знаходить саме так.
     if brand and model and _allows_distinctive_model_without_brand(brand, model):
         for mt in collect_model_keyword_variants(brand, model):
             mt_k = norm_text(mt)
             if mt_k and len(mt_k) >= 4 and " " not in mt_k.strip():
                 add(mt)
-            if len(out) >= 2:
+            if len(out) >= 3:
                 break
-        # також «міні кантрімен» / «Mini Countryman» як цілі фрази нижче
 
-    # 2) Найкращі brand+model (latin + один cyrillic).
+    # 3) Brand+model варіанти (без OLX-typo «mersedes gls» — для Telethon не працює).
     if brand and model:
-        primary = build_search_keyword_queries(brand, model, max_queries=6)
+        primary = build_search_keyword_queries(brand, model, max_queries=8)
         for q in primary:
             qn = norm_text(q)
-            # лише фрази з моделлю або короткі distinctive
+            if olx_typo and qn == olx_typo:
+                continue
             if model and norm_text(model).split()[0] not in qn and len(qn) < 4:
                 continue
             add(q)

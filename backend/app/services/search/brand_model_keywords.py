@@ -1669,6 +1669,8 @@ def build_search_keyword_queries(
         seen.add(key)
         out.append(q)
 
+    if brand and model:
+        add(f"{brand} {model}")
     if olx_primary:
         add(olx_primary)
     for bt in brand_tokens:
@@ -1709,7 +1711,9 @@ def filter_sql_search_tokens(variants: tuple[str, ...] | list[str], *, limit: in
         if not key or key in seen or key in _SQL_SKIP_TOKENS:
             continue
         if len(key) <= 2 and not any(ch.isdigit() for ch in key):
-            continue
+            # XM, i3 тощо — валідні моделі; «s», «x» — шум (_SQL_SKIP_TOKENS).
+            if not (len(key) == 2 and key.isalpha() and key not in _SQL_SKIP_TOKENS):
+                continue
         seen.add(key)
         out.append(token)
         if len(out) >= limit:

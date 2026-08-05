@@ -236,10 +236,18 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
 
     model = model_str  # використовуємо вже оголошений model_str
     if model:
+        from app.core.text import norm_text as _norm_text
+        from app.services.search.brand_model_keywords import _SQL_SKIP_TOKENS
+
         model_variants = filter_sql_search_tokens(
             collect_model_keyword_variants(filters.brand or "", model),
             limit=TELEGRAM_SQL_MODEL_TOKEN_LIMIT,
         )
+        core = model_str.strip()
+        core_n = _norm_text(core)
+        if core_n and core_n not in {_norm_text(v) for v in model_variants}:
+            if len(core_n) >= 2 and core_n not in _SQL_SKIP_TOKENS:
+                model_variants = (core,) + model_variants
         if not model_variants:
             model_variants = (model,)
         model_clauses = []

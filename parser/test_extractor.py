@@ -337,6 +337,69 @@ SJNFDAJ11U2746847
         self.assertEqual((listing.condition_flags or {}).get("vin"), "SJNFDAJ11U2746847")
         self.assertTrue(is_valid_car_listing(listing))
 
+    def test_salon_bmw_xm_imperiya(self):
+        """Коротка модель XM (2 символи) + ціна для підписників."""
+        text = """🔴 Марка: BMW | Модель: XM |
+Ціна: 157000 $ | Пробіг: 13000 | Рік: 2024
+
+Ціна для підписників: 💸140.000💸
+
+Двигун: 4.4 | Паливо: Гібрид | Коробка: Автомат | Тип авто: Позашляховик / Кросовер |
+Привід: Повний |
+
+Місцезнаходження: Одеса |
+
+XM Label Red 4.4 л V8 Twin-Turbo S68 PHEV, AT, Гібридний, 748 к.с.
+
+📞 Контакти:
+38 0685915289 Михайло
+
+#BMW
+#понад_150000$
+
+📌 ІМПЕРІЯ АВТО | Telegram • Сайт
+📢 Реклама бізнесу"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "BMW")
+        self.assertEqual(listing.model, "XM")
+        self.assertEqual(listing.year, 2024)
+        self.assertEqual(listing.price_amount, 157000)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.mileage_km, 13000)
+        self.assertEqual(listing.location_city, "Одеса")
+        self.assertEqual(listing.fuel_type, "hybrid")
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_salon_mercedes_gls_imperiya(self):
+        """Салон «Імперія Авто»: Mercedes-Benz GLS з футером реклами."""
+        text = """🔴 Марка: Mercedes-Benz | Модель: GLS |
+Ціна: 74900 $ | Пробіг: 110000 | Рік: 2021
+
+Двигун: 4.0 | Паливо: Бензин | Коробка: Автомат | Привід: Повний |
+Тип авто: Позашляховик / Кросовер |
+
+Місцезнаходження:Київ |
+
+📞 Контакти:
+38 0667938881 Дмитро
+
+#Mercedes-Benz
+#від_70000_до_80000$
+
+📌 ІМПЕРІЯ АВТО | Telegram • Сайт
+👉 Продати авто — ТУТ
+📢 Реклама бізнесу
+💰 Авто в лізинг / кредит"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Mercedes-Benz")
+        self.assertEqual(listing.model, "GLS")
+        self.assertEqual(listing.year, 2021)
+        self.assertEqual(listing.price_amount, 74900)
+        self.assertEqual(listing.price_currency, "USD")
+        self.assertEqual(listing.mileage_km, 110000)
+        self.assertEqual(listing.location_city, "Київ")
+        self.assertTrue(is_valid_car_listing(listing))
+
     def test_kia_rio_emoji_card(self):
         text = """🚗: Kia Rio
 📆Рік: 2012

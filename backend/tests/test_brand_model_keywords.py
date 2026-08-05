@@ -267,6 +267,19 @@ class BrandModelKeywordTests(unittest.TestCase):
         self.assertFalse(any(v.lower() == "s" for v in safe))
         self.assertFalse(any(v.lower() == "models" for v in safe))
 
+    def test_sql_tokens_keep_two_letter_models(self):
+        from app.services.search.brand_model_keywords import (
+            collect_model_keyword_variants,
+            filter_sql_search_tokens,
+            message_matches_search_filters,
+        )
+
+        variants = collect_model_keyword_variants("BMW", "XM")
+        safe = filter_sql_search_tokens(variants, limit=8)
+        self.assertIn("XM", safe)
+        text = "🔴 Марка: BMW | Модель: XM |\nXM Label Red 4.4"
+        self.assertTrue(message_matches_search_filters(text, "BMW", "XM"))
+
     def test_telegram_rejects_wrong_model(self):
         item = type("Item", (), {
             "brand": "Tesla",

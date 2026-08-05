@@ -34,6 +34,23 @@ class TelegramKeywordJobTests(unittest.TestCase):
             message_matches_search_filters(text, "Land Rover", "Discovery")
         )
 
+    def test_message_matches_bmw_xm_salon(self):
+        text = """🔴 Марка: BMW | Модель: XM |
+Ціна: 157000 $ | Пробіг: 13000 | Рік: 2024
+XM Label Red 4.4 л V8
+#BMW
+📌 ІМПЕРІЯ АВТО"""
+        self.assertTrue(message_matches_search_filters(text, "BMW", "XM"))
+
+    def test_message_matches_mercedes_gls_salon(self):
+        text = """🔴 Марка: Mercedes-Benz | Модель: GLS |
+Ціна: 74900 $ | Пробіг: 110000 | Рік: 2021
+#Mercedes-Benz
+📌 ІМПЕРІЯ АВТО | Telegram • Сайt"""
+        self.assertTrue(
+            message_matches_search_filters(text, "Mercedes-Benz", "GLS")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
