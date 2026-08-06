@@ -543,6 +543,9 @@ async def search_listings_outcome(
     olx_enrich_details: bool = True,
     telegram_found_after: datetime | None = None,
 ) -> SearchListingsOutcome:
+    from app.services.search.brand_model_keywords import normalize_search_filters
+
+    filters = normalize_search_filters(filters)
     sources = normalize_sources(filters.sources)
     source_statuses: list[SourceSearchStatus] = []
     max_age = _published_max_age(filters)
@@ -1167,6 +1170,9 @@ async def build_live_search_pool(
     OLX/Telegram: fetch full listings as usual.
     Returns (slots, nav_total, market_total, source_statuses).
     """
+    from app.services.search.brand_model_keywords import normalize_search_filters
+
+    filters = normalize_search_filters(filters)
     from app.services.auto_ria.service import collect_auto_ria_ids
     from app.services.search.pool_cache import LIVE_POOL_SIZE as POOL_LIMIT, filter_auto_ria_ids_by_filters
 

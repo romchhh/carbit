@@ -321,6 +321,9 @@ async def search_telegram_listings(
     keyword_refresh: bool = True,
     found_after: datetime | None = None,
 ) -> PaginatedListings:
+    from app.services.search.brand_model_keywords import normalize_search_filters
+
+    filters = normalize_search_filters(filters)
     if keyword_refresh:
         try:
             from app.services.telegram_channels.keyword_refresh import (

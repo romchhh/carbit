@@ -420,6 +420,32 @@ XM Label Red 4.4 л V8 Twin-Turbo S68 PHEV, AT, Гібридний, 748 к.с.
         self.assertEqual(listing.location_city, "Київ")
         self.assertTrue(is_valid_car_listing(listing))
 
+    def test_salon_mercedes_g_class_imperiya(self):
+        """Салон «Імперія Авто»: G-Класс AMG (кирилиця) + VIN."""
+        text = """🔴 Марка: Mercedes-Benz | Модель: G-Класс AMG |
+Ціна: 215000 $ | Пробіг: 59000 | Рік: 2022
+
+Двигун: 4.0 | Паливо: Бензин | Коробка: Автомат | Привід: Повний |
+Тип авто: Позашляховик / Кросовер |
+
+📦 Авто в наявності в салоні
+
+#Київ Автосалон «Імперія Авто»
+
+W1N4632761X424465
+
+#Mercedes-Benz
+#понад_150000$"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Mercedes-Benz")
+        self.assertIn("G", listing.model or "")
+        self.assertIn("Класс", listing.model or "")
+        self.assertEqual(listing.year, 2022)
+        self.assertEqual(listing.price_amount, 215000)
+        self.assertEqual(listing.mileage_km, 59000)
+        self.assertEqual((listing.condition_flags or {}).get("vin"), "W1N4632761X424465")
+        self.assertTrue(is_valid_car_listing(listing))
+
     def test_kia_rio_emoji_card(self):
         text = """🚗: Kia Rio
 📆Рік: 2012

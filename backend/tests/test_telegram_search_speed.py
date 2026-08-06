@@ -52,6 +52,20 @@ class TelegramSearchSpeedTests(unittest.TestCase):
         self.assertIn("GLS", plain_q)
         self.assertNotIn("mersedes gls", [q.lower() for q in plain_q])
 
+    def test_mercedes_g_class_telethon_includes_cyrillic_class(self):
+        queries = build_telegram_keyword_queries(
+            SearchFilters(brand="Mercedes-Benz", model="G-Class"),
+        )
+        plain_q = []
+        for job in queries:
+            if not job.startswith(TELEGRAM_KEYWORD_QUERY_PREFIX):
+                continue
+            payload = decode_telegram_keyword_job(job)
+            assert payload is not None
+            plain_q.append(payload["q"].lower())
+        self.assertIn("g-класс", plain_q)
+        self.assertTrue(any("mercedes-benz g-класс" in q for q in plain_q))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,7 +9,7 @@ import json
 import re
 from functools import lru_cache
 
-from app.core.text import norm_text, bounded_substring
+from app.core.text import norm_text, bounded_substring, unify_class_spelling, letter_class_canonical, letter_class_display, letter_class_search_tokens
 from app.services.search.fe_catalog import (
     _identity_tokens,
     unique_model_token_owner,
@@ -1060,6 +1060,13 @@ def collect_model_keyword_variants(brand: str, model: str) -> tuple[str, ...]:
 
     model_key = norm_text(model)
 
+    # Салони Telegram: «G-Класс AMG» — кирилиця; має бути в SQL/Telethon раніше за «g 500».
+    class_key = _normalize_letter_class_key(model)
+    if class_key:
+        letter = class_key[0]
+        for extra in letter_class_search_tokens(letter):
+            add(extra)
+
     # ПРІОРИТЕТ: spaced-цифрові варіанти ВІДРАЗУ після назви моделі, ще до OLX-токенів.
     # Telethon шукає по словах: запит "mercedes c 300" знайде пост "MERCEDES-BENZ C 300",
     # а запит "mercedes c-class" — НЕ знайде, бо слово «class» відсутнє у пості.
@@ -1345,11 +1352,55 @@ def _hay_has_body_style(hay: str, body: str) -> bool:
 
 
 def _normalize_letter_class_key(model: str) -> str | None:
-    mk = norm_text(model).replace(" ", "-")
-    m = re.fullmatch(r"([a-z])-class", mk)
-    if m:
-        return f"{m.group(1)}-class"
-    return None
+    return letter_class_canonical(model)
+
+
+def canonical_search_model(model: str) -> str:
+    """Latin-канон для FE-каталогу; кириличний фільтр → «G-Class»."""
+    model = (model or "").strip()
+    if not model:
+        return model
+    display = letter_class_display(model)
+    if display:
+        return display
+    return model
+
+
+def normalize_search_filters(filters):
+    """Нормалізує brand/model для пошуку (latin + кирилиця → єдиний ключ)."""
+    brand = (getattr(filters, "brand", None) or "").strip()
+    model = canonical_search_model((getattr(filters, "model", None) or "").strip())
+    if brand == (getattr(filters, "brand", None) or "").strip() and model == (
+        getattr(filters, "model", None) or ""
+    ).strip():
+        return filters
+    if hasattr(filters, "model_copy"):
+        return filters.model_copy(update={"brand": brand or filters.brand, "model": model or filters.model})
+    filters.brand = brand or filters.brand
+    filters.model = model or filters.model
+    return filters
+
+
+def letter_class_telethon_queries(brand: str, model: str) -> tuple[str, ...]:
+    """Telethon: latin + кирилиця для C/E/S/G-Class."""
+    class_key = _normalize_letter_class_key(model)
+    if not class_key:
+        return ()
+    letter = class_key[0]
+    brand = (brand or "").strip()
+    out: list[str] = []
+    for token in letter_class_search_tokens(letter):
+        out.append(token)
+        if brand:
+            out.append(f"{brand} {token}")
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for q in out:
+        key = norm_text(q)
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(q)
+    return tuple(deduped)
 
 
 def _mercedes_compound_conflicts(hay: str, base: str) -> bool:
@@ -1650,7 +1701,8 @@ def _regex_model_patterns(brand: str, model: str) -> tuple[str, ...]:
     if class_m:
         letter = re.escape(class_m.group(1))
         add(rf"\b{letter}[\s\-]?class\b")
-        add(rf"\b{letter}[\s\-]?клас")
+        add(rf"\b{letter}[\s\-]?клас(?:с)?\b")
+        add(rf"\b{letter}[\s\-]?klass\b")
 
     id_m = re.match(r"^id\.?\s*(\d+)$", mk)
     if id_m:
@@ -1868,6 +1920,9 @@ def _haystacks_for_match(text: str) -> tuple[str, ...]:
     cleaned = strip_service_brand_noise(raw)
     base = cleaned if cleaned.strip() else raw
     variants = [base]
+    unified = unify_class_spelling(base)
+    if unified and unified != norm_text(base):
+        variants.append(unified)
     try:
         from app.services.olx.parser import _normalize_title_for_match
 
@@ -1918,6 +1973,10 @@ def _variant_in_haystack(variant: str, hay: str) -> bool:
     if v in hay:
         if not bounded_substring(hay, v):
             return False
+        return True
+    u_hay = unify_class_spelling(hay)
+    u_v = unify_class_spelling(v)
+    if u_v and bounded_substring(u_hay, u_v):
         return True
     # «c300» ↔ «c 300»: однолітерний префікс + цифри — шукаємо обидві форми.
     m = re.fullmatch(r"([a-z])(\d{2,4})", v)

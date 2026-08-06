@@ -19,6 +19,7 @@ from app.services.search.brand_model_keywords import (
     collect_model_keyword_variants,
     encode_telegram_keyword_job,
     encode_telegram_scan_job,
+    letter_class_telethon_queries,
     _allows_distinctive_model_without_brand,
 )
 from app.services.telegram_channels.bootstrap import ensure_parser_path
@@ -69,6 +70,8 @@ def build_telegram_keyword_queries(
     # 1) Точна latin-фраза — Telethon не матчить «mersedes» у «Mercedes-Benz».
     if brand and model:
         add(f"{brand} {model}")
+        for q in letter_class_telethon_queries(brand, model)[:4]:
+            add(q)
         model_core = (model.split()[0] or "").strip()
         model_core_n = norm_text(model_core)
         if 2 <= len(model_core_n) <= 4 and model_core_n.isalpha():

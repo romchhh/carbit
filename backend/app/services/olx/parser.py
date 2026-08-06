@@ -1660,12 +1660,12 @@ def _title_has_model(title: str, model: str, *, brand: str | None = None) -> boo
         for pattern in tesla_patterns:
             if re.search(pattern, title, re.IGNORECASE):
                 return True
-    # E-Class / C-Class → «E 220», «E-Class», «E-клас», «C200»
+    # E-Class / C-Class → «E 220», «E-Class», «E-клас», «G-Класс»
     class_m = re.fullmatch(r"([a-z])-class", model_l)
     if class_m:
         letter = class_m.group(1)
         if re.search(
-            rf"(?<![\w]){letter}(?:[\s\-]?class|[\s\-]?клас[сау]?|[\s\-]?\d{{2,3}})(?![\w])",
+            rf"(?<![\w]){letter}(?:[\s\-]?(?:class|klass|клас(?:с)?)|[\s\-]?\d{{2,3}})(?![\w])",
             title,
             re.IGNORECASE,
         ):

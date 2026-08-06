@@ -531,6 +531,25 @@ class BrandModelKeywordTests(unittest.TestCase):
         variants = collect_model_keyword_variants("Mercedes-Benz", "G-Class")
         self.assertNotIn("class", [norm_text(v) for v in variants])
 
+    def test_g_class_sql_tokens_include_cyrillic(self):
+        from app.services.search.brand_model_keywords import filter_sql_search_tokens
+
+        tokens = filter_sql_search_tokens(
+            collect_model_keyword_variants("Mercedes-Benz", "G-Class"),
+            limit=6,
+        )
+        joined = " | ".join(norm_text(t) for t in tokens)
+        self.assertIn("g-класс", joined)
+
+    def test_imperiya_g_class_salon_post_matches(self):
+        text = """🔴 Марка: Mercedes-Benz | Модель: G-Класс AMG |
+Ціна: 215000 $ | Пробіг: 59000 | Рік: 2022
+W1N4632761X424465
+#Mercedes-Benz"""
+        self.assertTrue(
+            message_matches_search_filters(text, "Mercedes-Benz", "G-Class"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
