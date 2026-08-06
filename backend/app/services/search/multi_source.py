@@ -801,12 +801,21 @@ async def search_listings_outcome(
             )
         successful = filtered_batches
 
+    from app.services.listings.duplicates import (
+        collapse_listings_with_db_mirrors,
+        mark_duplicates_in_pool,
+    )
+
     page_items, nav_total, market_total = _merge_multi_source_page(
         successful,
         page=page,
         per_page=per_page,
         sort_by=sort_by,
     )
+    page_items = mark_duplicates_in_pool(page_items)
+
+    if db is not None and page_items:
+        page_items = await collapse_listings_with_db_mirrors(db, page_items)
 
     if not page_items:
         if errors and not successful:
@@ -876,10 +885,15 @@ def _listing_to_slot(item: ListingOut) -> dict:
     """ListingOut → slot для live-pool (AR — stub, OLX/Telegram — повний об'єкт)."""
     lid = item.id or ""
     src = (item.source or "").strip().lower()
+    payload = item.model_dump(mode="json") if (item.alternate_sources or []) else None
     if src in ("auto_ria", "autoria", "auto.ria") or lid.startswith(("auto_ria_", "new_auto_ria_")):
         if lid.startswith("new_auto_ria_"):
-            return {"s": "n", "i": lid.removeprefix("new_auto_ria_")}
-        return {"s": "r", "i": lid.removeprefix("auto_ria_")}
+            slot: dict = {"s": "n", "i": lid.removeprefix("new_auto_ria_")}
+        else:
+            slot = {"s": "r", "i": lid.removeprefix("auto_ria_")}
+        if payload:
+            slot["d"] = payload
+        return slot
     if src == "telegram" or lid.startswith("telegram_"):
         return {"s": "t", "d": item.model_dump(mode="json")}
     return {"s": "o", "d": item.model_dump(mode="json")}
@@ -973,6 +987,74 @@ async def _build_globally_sorted_slots(
             slots.append({"s": "n", "i": raw})
         else:
             slots.append({"s": "r", "i": raw})
+
+    return slots[:limit]
+
+
+async def _build_vin_aware_slots(
+    *,
+    auto_ria_ids: list[str],
+    ot_items: list[ListingOut],
+    limit: int,
+    sort_by: str,
+) -> list[dict]:
+    """Пул з VIN-dedup між AUTO.RIA та OLX/Telegram (канонічна картка — AUTO.RIA)."""
+    from app.services.listings.duplicates import mark_duplicates_in_pool
+    from app.services.search.pool_cache import (
+        _batch_hydrate_auto_ria,
+        _batch_hydrate_new_auto_ria,
+    )
+
+    hydrate_cap = min(max(limit, 0), 200)
+    used_ids = [aid for aid in auto_ria_ids if not aid.startswith("n:")][:hydrate_cap]
+    new_budget = max(0, hydrate_cap - len(used_ids))
+    new_ids = [aid[2:] for aid in auto_ria_ids if aid.startswith("n:")][:new_budget]
+
+    try:
+        hydrated_used, hydrated_new = await asyncio.wait_for(
+            asyncio.gather(
+                _batch_hydrate_auto_ria(used_ids),
+                _batch_hydrate_new_auto_ria(new_ids),
+            ),
+            timeout=45.0,
+        )
+    except (asyncio.TimeoutError, Exception):
+        logger.warning("VIN-aware pool: AR hydrate failed, falling back to fair blend")
+        olx_only = [i for i in ot_items if (i.source or "").lower() == "olx"]
+        tg_only = [i for i in ot_items if (i.source or "").lower() == "telegram"]
+        return _build_fair_blend_slots(
+            auto_ria_ids=auto_ria_ids,
+            olx_items=olx_only,
+            telegram_items=tg_only,
+            limit=limit,
+            sort_by=sort_by,
+        )
+
+    ar_items = list(hydrated_used.values()) + list(hydrated_new.values())
+    merged = mark_duplicates_in_pool([*ot_items, *ar_items])
+    merged = sort_listings(merged, sort_by)
+
+    slots: list[dict] = []
+    represented_ar: set[str] = set()
+    for item in merged:
+        if len(slots) >= limit:
+            break
+        slots.append(_listing_to_slot(item))
+        lid = item.id or ""
+        if lid.startswith("new_auto_ria_"):
+            represented_ar.add("n:" + lid.removeprefix("new_auto_ria_"))
+        elif lid.startswith("auto_ria_"):
+            represented_ar.add(lid.removeprefix("auto_ria_"))
+
+    for aid in auto_ria_ids:
+        if len(slots) >= limit:
+            break
+        if aid in represented_ar:
+            continue
+        if aid.startswith("n:"):
+            slots.append({"s": "n", "i": aid[2:]})
+        else:
+            slots.append({"s": "r", "i": aid})
 
     return slots[:limit]
 
@@ -1225,35 +1307,23 @@ async def build_live_search_pool(
     olx_filtered = _filter_listings_by_brand_model(list(olx_result.items), filters)
     telegram_filtered = _filter_listings_by_brand_model(list(telegram_result.items), filters)
 
-    olx_sorted = filter_listings_by_advanced(
-        mark_duplicates_in_pool(sort_listings(olx_filtered, sort_by)),
-        filters,
-    )
-    telegram_sorted = filter_listings_by_advanced(
+    # VIN-дублі між OLX і Telegram — в одному пулі, не окремо по джерелах.
+    ot_merged = mark_duplicates_in_pool(
         dedupe_telegram_posts_in_pool(
-            mark_duplicates_in_pool(sort_listings(telegram_filtered, sort_by)),
+            sort_listings(list(olx_filtered) + list(telegram_filtered), sort_by),
         ),
-        filters,
     )
+    ot_merged = filter_listings_by_advanced(ot_merged, filters)
+    olx_sorted = [item for item in ot_merged if (item.source or "").lower() == "olx"]
+    telegram_sorted = [item for item in ot_merged if (item.source or "").lower() == "telegram"]
 
     if auto_ria_ids and (olx_sorted or telegram_sorted):
-        if sort_by in _DATE_SORT_KEYS:
-            slots = _build_fair_blend_slots(
-                auto_ria_ids=auto_ria_ids,
-                olx_items=olx_sorted,
-                telegram_items=telegram_sorted,
-                limit=POOL_LIMIT,
-                sort_by=sort_by,
-            )
-        else:
-            slots = await _build_globally_sorted_slots(
-                auto_ria_ids=auto_ria_ids,
-                olx_items=olx_sorted,
-                telegram_items=telegram_sorted,
-                limit=POOL_LIMIT,
-                sort_by=sort_by,
-                filters=filters,
-            )
+        slots = await _build_vin_aware_slots(
+            auto_ria_ids=auto_ria_ids,
+            ot_items=ot_merged,
+            limit=POOL_LIMIT,
+            sort_by=sort_by,
+        )
     elif auto_ria_ids and sort_by in ("newest", "published_desc"):
         # Лише AUTO.RIA + newest: API вже віддав IDs від нових до старих (order_by=7).
         slots = _make_ar_slots(auto_ria_ids)[:POOL_LIMIT]

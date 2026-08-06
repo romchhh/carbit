@@ -337,6 +337,26 @@ SJNFDAJ11U2746847
         self.assertEqual((listing.condition_flags or {}).get("vin"), "SJNFDAJ11U2746847")
         self.assertTrue(is_valid_car_listing(listing))
 
+    def test_audi_q5_prose_with_vin(self):
+        """Вільний текст (не салонний шаблон) + VIN."""
+        text = """Audi Q5 Quattro
+
+2.0 бензин, автомат
+2019 рік, 87 т.км
+привід: повний
+
+Ціна: 26 900 🤑
+
+VIN: WA1ANAFY6K2094900"""
+        listing = _extract(text)
+        self.assertEqual(listing.brand, "Audi")
+        self.assertIn("Q5", listing.model or "")
+        self.assertEqual(listing.year, 2019)
+        self.assertEqual(listing.price_amount, 26900)
+        self.assertEqual(listing.mileage_km, 87000)
+        self.assertEqual((listing.condition_flags or {}).get("vin"), "WA1ANAFY6K2094900")
+        self.assertTrue(is_valid_car_listing(listing))
+
     def test_salon_bmw_xm_imperiya(self):
         """Коротка модель XM (2 символи) + ціна для підписників."""
         text = """🔴 Марка: BMW | Модель: XM |

@@ -59,7 +59,26 @@ def _normalize_model_key(model: str, *, brand: str = "") -> str:
 def listing_vin_for_dedup(item: ListingOut | Listing) -> str | None:
     """Валідний VIN для злиття дублів — інакше None (не dedup)."""
     vin = _normalize_vin(getattr(item, "vin", None))
-    return vin if is_valid_vin(vin) else None
+    if is_valid_vin(vin):
+        return vin
+    return None
+
+
+def enrich_listing_vin_for_dedup(item: ListingOut) -> ListingOut:
+    """Доповнює VIN з title/description перед крос-джерельним dedup."""
+    if listing_vin_for_dedup(item):
+        return item
+    from app.services.vin import extract_vin
+
+    vin = extract_vin(
+        getattr(item, "description", None),
+        getattr(item, "title", None),
+        getattr(item, "brand", None),
+        getattr(item, "model", None),
+    )
+    if vin:
+        return item.model_copy(update={"vin": vin})
+    return item
 
 
 def _norm_telegram_channel(value: str | None) -> str:
@@ -325,6 +344,9 @@ async def find_duplicate_of(db: AsyncSession, data: ListingOut) -> Listing | Non
     """Шукає oголошення з тим самим VIN (інше джерело / repost)."""
     vin = listing_vin_for_dedup(data)
     if not vin:
+        enriched = enrich_listing_vin_for_dedup(data)
+        vin = listing_vin_for_dedup(enriched)
+    if not vin:
         return None
 
     row = await db.scalar(
@@ -375,6 +397,7 @@ def mark_duplicates_in_pool(
     prefer_id: str | None = None,
 ) -> list[ListingOut]:
     """Згортає дублікати з однаковим VIN в одну картку з alternate_sources."""
+    items = [enrich_listing_vin_for_dedup(item) for item in items]
     groups: list[list[ListingOut]] = []
     for item in items:
         placed = False
@@ -436,6 +459,25 @@ def _pool_item_links_to_any(items: list[ListingOut], candidate: ListingOut) -> b
     return any(listings_look_same(candidate, item) for item in items)
 
 
+def _candidate_belongs_in_mirror_pool(
+    candidate: ListingOut,
+    pool_by_id: dict[str, ListingOut],
+    orig_ids: set[str],
+) -> bool:
+    """Чи додавати запис з БД до пулу дзеркал (VIN, duplicate_of, reverse link)."""
+    if candidate.id in orig_ids:
+        return True
+    dup_of = (candidate.duplicate_of or "").strip()
+    if dup_of and dup_of in orig_ids:
+        return True
+    for item in pool_by_id.values():
+        if (item.duplicate_of or "").strip() == candidate.id:
+            return True
+        if listings_look_same(candidate, item):
+            return True
+    return False
+
+
 async def collapse_listings_with_db_mirrors(
     db: AsyncSession,
     items: list[ListingOut],
@@ -450,6 +492,7 @@ async def collapse_listings_with_db_mirrors(
 
     from app.services.listings.serialize import listing_to_out
 
+    items = [enrich_listing_vin_for_dedup(item) for item in items]
     orig_ids = {item.id for item in items}
     pool_by_id: dict[str, ListingOut] = {item.id: item for item in items}
 
@@ -475,8 +518,8 @@ async def collapse_listings_with_db_mirrors(
         for row in rows:
             if row.id in pool_by_id:
                 continue
-            candidate = listing_to_out(row)
-            if not _pool_item_links_to_any(items, candidate):
+            candidate = enrich_listing_vin_for_dedup(listing_to_out(row))
+            if not _candidate_belongs_in_mirror_pool(candidate, pool_by_id, orig_ids):
                 continue
             pool_by_id[row.id] = candidate
 

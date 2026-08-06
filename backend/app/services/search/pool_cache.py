@@ -256,10 +256,22 @@ async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
     for slot in slots:
         src = slot.get("s")
         if src == "r":
+            if "d" in slot:
+                try:
+                    items.append(ListingOut.model_validate(slot["d"]))
+                    continue
+                except Exception:
+                    pass
             listing = hydrated_used.get(slot.get("i", ""))
             if listing:
                 items.append(listing)
         elif src == "n":
+            if "d" in slot:
+                try:
+                    items.append(ListingOut.model_validate(slot["d"]))
+                    continue
+                except Exception:
+                    pass
             listing = hydrated_new.get(slot.get("i", ""))
             if listing:
                 items.append(listing)
@@ -346,6 +358,24 @@ async def _collect_matching_listings_from_slots(
 # ---------------------------------------------------------------------------
 
 
+async def _apply_vin_mirrors_to_page(items: list[ListingOut]) -> list[ListingOut]:
+    """Зливає VIN-дублі на сторінці + підтягує дзеркала з БД (AUTO.RIA↔OLX↔Telegram)."""
+    if not items:
+        return items
+
+    from app.core.database import AsyncSessionLocal
+    from app.services.listings.duplicates import (
+        collapse_listings_with_db_mirrors,
+        enrich_listing_vin_for_dedup,
+        mark_duplicates_in_pool,
+    )
+
+    enriched = [enrich_listing_vin_for_dedup(item) for item in items]
+    merged = mark_duplicates_in_pool(enriched)
+    async with AsyncSessionLocal() as db:
+        return await collapse_listings_with_db_mirrors(db, merged)
+
+
 async def slice_pool(
     pool: dict[str, Any],
     *,
@@ -379,6 +409,8 @@ async def slice_pool(
             from app.services.telegram_channels.mapper import listing_out_matches_filters
 
             items = [item for item in items if listing_out_matches_filters(item, filters)]
+
+    items = await _apply_vin_mirrors_to_page(items)
 
     pages = (total + per_page - 1) // per_page if total else 0
 

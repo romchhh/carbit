@@ -34,6 +34,13 @@ class TelegramKeywordJobTests(unittest.TestCase):
             message_matches_search_filters(text, "Land Rover", "Discovery")
         )
 
+    def test_message_matches_audi_q5_prose(self):
+        text = """Audi Q5 Quattro
+2019 рік, 87 т.км
+VIN: WA1ANAFY6K2094900
+Ціна: 26 900"""
+        self.assertTrue(message_matches_search_filters(text, "Audi", "Q5"))
+
     def test_message_matches_bmw_xm_salon(self):
         text = """🔴 Марка: BMW | Модель: XM |
 Ціна: 157000 $ | Пробіг: 13000 | Рік: 2024

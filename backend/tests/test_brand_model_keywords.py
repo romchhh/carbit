@@ -500,6 +500,37 @@ class BrandModelKeywordTests(unittest.TestCase):
                 message_matches_search_filters(title, "Zeekr", model), f"{title}/{model}"
             )
 
+    def test_g_class_does_not_match_gla_telegram_posts(self):
+        brand = "Mercedes-Benz"
+        model = "G-Class"
+        gla_posts = (
+            "Mercedes-Benz GLA 200 2020",
+            "Mercedes GLA200 AMG Line",
+            "🔴 Марка: Mercedes-Benz | Модель: GLA |",
+            "Mercedes-Benz GLA-Class 200",
+            "Mercedes GLA class premium",
+        )
+        for text in gla_posts:
+            self.assertFalse(
+                message_matches_search_filters(text, brand, model),
+                text,
+            )
+        g_class_posts = (
+            "Mercedes-Benz G-Class G63 2022",
+            "Mercedes G 63 AMG Gelik",
+            "Mercedes G class 500 w463",
+            "Продам Mercedes G500 гелик",
+        )
+        for text in g_class_posts:
+            self.assertTrue(
+                message_matches_search_filters(text, brand, model),
+                text,
+            )
+
+    def test_g_class_variants_exclude_bare_class_token(self):
+        variants = collect_model_keyword_variants("Mercedes-Benz", "G-Class")
+        self.assertNotIn("class", [norm_text(v) for v in variants])
+
 
 if __name__ == "__main__":
     unittest.main()

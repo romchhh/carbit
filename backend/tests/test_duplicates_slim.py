@@ -346,7 +346,59 @@ class DuplicatesTests(unittest.TestCase):
         out = dedupe_telegram_posts_in_pool([a, b])
         self.assertEqual(len(out), 2)
 
+    def test_mark_pool_links_olx_and_telegram_by_vin(self):
+        items = mark_duplicates_in_pool(
+            [
+                _item(
+                    id="olx_audi",
+                    source="olx",
+                    brand="Audi",
+                    model="Q5",
+                    vin="WA1ANAFY6K2094900",
+                    url="https://olx.example/audi-q5",
+                ),
+                _item(
+                    id="telegram_audi",
+                    source="telegram",
+                    brand="Audi",
+                    model="Q5 Quattro",
+                    vin="WA1ANAFY6K2094900",
+                    url="https://t.me/dealer/123",
+                ),
+            ]
+        )
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].source, "olx")
+        self.assertEqual(len(items[0].alternate_sources), 1)
+        self.assertEqual(items[0].alternate_sources[0].source, "telegram")
+
     def test_mark_pool_prefers_auto_ria_and_links_olx(self):
+        items = mark_duplicates_in_pool(
+            [
+                _item(
+                    id="olx_audi",
+                    source="olx",
+                    brand="Audi",
+                    model="Q5",
+                    vin="WA1ANAFY6K2094900",
+                    url="https://olx.example/audi-q5",
+                ),
+                _item(
+                    id="auto_ria_audi",
+                    source="auto_ria",
+                    brand="Audi",
+                    model="Q5",
+                    vin="WA1ANAFY6K2094900",
+                    url="https://auto.ria.example/audi-q5",
+                ),
+            ]
+        )
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].source, "auto_ria")
+        self.assertEqual(len(items[0].alternate_sources), 1)
+        self.assertEqual(items[0].alternate_sources[0].source, "olx")
+
+    def test_mark_pool_prefers_auto_ria_and_links_olx_legacy(self):
         items = mark_duplicates_in_pool(
             [
                 _item(

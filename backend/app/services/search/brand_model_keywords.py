@@ -1098,7 +1098,8 @@ def collect_model_keyword_variants(brand: str, model: str) -> tuple[str, ...]:
         if key and key not in seen:
             seen.add(key)
             deduped.append(token)
-    return tuple(_filter_compound_body_variants(model, deduped))
+    filtered = _filter_compound_body_variants(model, deduped)
+    return tuple(_filter_letter_class_variants(model, filtered))
 
 
 def _generated_model_ru_variants(model: str) -> list[str]:
@@ -1282,7 +1283,25 @@ _MERCEDES_COMPOUND_CONFLICTS: dict[str, tuple[str, ...]] = {
         r"\bs[\s\-]?(?:class|клас|\d{2,3})",
         r"\bcls\b",
     ),
+    # G-Class (Гелик) ≠ GLA/GLB/GLC/GLE/GLS/GLK — «GLA-Class» містить «class», але це інша модель.
+    "g-class": (
+        r"\bgl[cebsak]\b",
+        r"\bglk\b",
+        r"\bgl[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bc[\s\-]?(?:class|клас|\d{2,3})",
+        r"\be[\s\-]?(?:class|клас|\d{2,3})",
+        r"\bs[\s\-]?(?:class|клас|\d{2,3})",
+        r"\ba[\s\-]?(?:class|клас|\d{2,3})",
+    ),
 }
+
+# Голий «class»/«клас» з «G-Class» матчить «GLA-Class», «E-Class» тощо — не використовуємо окремо.
+_LETTER_CLASS_GENERIC_TOKENS = frozenset({
+    "class",
+    "клас",
+    "класс",
+    "klass",
+})
 
 
 def _compound_body_model_parts(model: str) -> tuple[str, str] | None:
@@ -1325,6 +1344,14 @@ def _hay_has_body_style(hay: str, body: str) -> bool:
     return False
 
 
+def _normalize_letter_class_key(model: str) -> str | None:
+    mk = norm_text(model).replace(" ", "-")
+    m = re.fullmatch(r"([a-z])-class", mk)
+    if m:
+        return f"{m.group(1)}-class"
+    return None
+
+
 def _mercedes_compound_conflicts(hay: str, base: str) -> bool:
     base_key = _normalize_mercedes_class_key(base)
     if base_key.startswith("gl") and len(base_key) <= 4:
@@ -1334,6 +1361,17 @@ def _mercedes_compound_conflicts(hay: str, base: str) -> bool:
         if re.search(pat, hay, re.IGNORECASE):
             return True
     return False
+
+
+def _mercedes_letter_class_conflicts(hay: str, model: str, *, brand: str = "") -> bool:
+    """Інша лінійка Mercedes у тексті (G-Class vs GLA тощо)."""
+    brand_slug = resolve_olx_brand_slug(brand) if brand else ""
+    if brand_slug not in ("mercedes-benz", "mercedes"):
+        return False
+    key = _normalize_letter_class_key(model)
+    if not key:
+        return False
+    return _mercedes_compound_conflicts(norm_text(hay), key)
 
 
 def _compound_base_matches(hay: str, base: str, body: str) -> bool:
@@ -1420,6 +1458,22 @@ def _filter_compound_body_variants(model: str, variants: list[str]) -> list[str]
             "s-class", "s class", "s клас", "s класс", "s-класс", "s-клас",
             "e-class", "e class", "e клас", "e класс", "e-класс", "e-клас",
         }:
+            continue
+        seen.add(key)
+        out.append(token)
+    return out
+
+
+def _filter_letter_class_variants(model: str, variants: list[str]) -> list[str]:
+    """Прибирає голий «class»/«клас» для C/E/S/G-Class — інакше матчить GLA-Class."""
+    if not _normalize_letter_class_key(model):
+        return variants
+    skip = _LETTER_CLASS_GENERIC_TOKENS
+    out: list[str] = []
+    seen: set[str] = set()
+    for token in variants:
+        key = norm_text(token)
+        if not key or key in seen or key in skip:
             continue
         seen.add(key)
         out.append(token)
@@ -1924,6 +1978,13 @@ def text_matches_brand_filter(haystack: str, brand: str, *, model: str = "") -> 
     return False
 
 
+def _letter_class_model_match_ok(hay: str, model: str, *, brand: str = "") -> bool:
+    """Після позитивного матчу — відсікаємо конфліктні Mercedes (G vs GLA)."""
+    if _mercedes_letter_class_conflicts(hay, model, brand=brand):
+        return False
+    return True
+
+
 def text_matches_model_filter(haystack: str, model: str, *, brand: str = "") -> bool:
     if not haystack or not model:
         return True
@@ -1937,15 +1998,25 @@ def text_matches_model_filter(haystack: str, model: str, *, brand: str = "") -> 
         if not hay:
             continue
         for variant in collect_model_keyword_variants(brand, model):
-            if _variant_in_haystack(variant, hay):
+            if _variant_in_haystack(variant, hay) and _letter_class_model_match_ok(
+                hay, model, brand=brand
+            ):
                 return True
         model_norm = norm_text(model)
-        if model_norm and bounded_substring(hay, model_norm):
+        if (
+            model_norm
+            and bounded_substring(hay, model_norm)
+            and _letter_class_model_match_ok(hay, model, brand=brand)
+        ):
             return True
-        if _regex_model_match(hay, brand, model):
+        if _regex_model_match(hay, brand, model) and _letter_class_model_match_ok(
+            hay, model, brand=brand
+        ):
             return True
         from app.services.olx.parser import _title_has_model
 
-        if _title_has_model(hay, model, brand=brand) or _title_has_model(raw, model, brand=brand):
+        if (
+            _title_has_model(hay, model, brand=brand) or _title_has_model(raw, model, brand=brand)
+        ) and _letter_class_model_match_ok(hay, model, brand=brand):
             return True
     return False
