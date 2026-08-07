@@ -10,7 +10,17 @@ from telethon.tl.types import Message
 
 from .config import settings
 
+from .media_compress import compress_jpeg
+
 log = logging.getLogger("carbit_parser.media")
+
+
+def _maybe_compress(path: str) -> None:
+    compress_jpeg(
+        path,
+        max_width=settings.media_max_width,
+        quality=settings.media_jpeg_quality,
+    )
 
 
 def _channel_dir(channel: str) -> str:
@@ -43,7 +53,7 @@ async def download_photos(
     """
     messages - список Telethon Message з одного оголошення (може бути 1 або кілька,
     якщо це альбом). Повертає список локальних шляхів до збережених фото.
-    За замовчуванням — не більше settings.max_photos_per_listing (3).
+    За замовчуванням — не більше settings.max_photos_per_listing (1).
     """
     limit = max_photos if max_photos is not None else settings.max_photos_per_listing
     paths: list[str] = []
@@ -56,11 +66,13 @@ async def download_photos(
         filename = f"{msg.id}.jpg"
         full_path = os.path.join(out_dir, filename)
         if os.path.isfile(full_path) and os.path.getsize(full_path) > 0:
+            _maybe_compress(full_path)
             paths.append(full_path)
             continue
         try:
             saved = await client.download_media(msg, file=full_path)
             if saved:
+                _maybe_compress(str(saved))
                 paths.append(str(saved))
         except Exception as exc:
             log.warning(
@@ -100,8 +112,8 @@ async def download_photos_by_ids(
     by_id = {m.id: m for m in fetched if isinstance(m, Message)}
     ordered = [by_id[mid] for mid in ids if mid in by_id]
 
-    # Якщо прийшов лише primary з альбому — підтягнемо сусідів з тим самим grouped_id
-    if len(ordered) == 1 and ordered[0].grouped_id:
+    # Альбом — лише якщо потрібно >1 фото (для сповіщень достатньо одного)
+    if limit > 1 and len(ordered) == 1 and ordered[0].grouped_id:
         album: list[Message] = []
         primary = ordered[0]
         async for msg in client.iter_messages(

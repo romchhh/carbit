@@ -252,6 +252,25 @@ CLI на VPS:
   docker compose up -d telegram-worker
 
 
+─── 13. Telegram media (диск) ────────────────────────────────────────────────
+
+За замовчуванням: 1 фото на оголошення, JPEG ~1280px, авто-видалення >90 днів.
+
+.env:
+  TELEGRAM_MAX_PHOTOS=1
+  TELEGRAM_MEDIA_MAX_WIDTH=1280
+  TELEGRAM_MEDIA_JPEG_QUALITY=82
+
+Разове очищення / стиснення на VPS (звільнити місце в media/):
+  source .venv/bin/activate
+  pip install pillow
+  cd ~/carbit
+  PYTHONPATH=backend:. python scripts/purge-telegram-media.py --dry-run --purge-old --compress
+  PYTHONPATH=backend:. python scripts/purge-telegram-media.py --purge-old --compress
+
+Автоматично: telegram-worker щогодини purge БД + видалення старих .jpg з media/
+
+
 ─── Один рядок — повний деплой ───────────────────────────────────────────────
 
 cd /path/to/carbit && mkdir -p database media && ./scripts/docker-deploy.sh

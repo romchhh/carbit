@@ -8,6 +8,10 @@ from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, Source
+from app.services.telegram_channels.media_cleanup import (
+    delete_media_for_listing_ids,
+    purge_stale_media_files,
+)
 from app.services.telegram_channels.freshness import (
     TELEGRAM_LISTING_MAX_AGE_DAYS,
     telegram_published_cutoff,
@@ -41,6 +45,8 @@ async def purge_stale_telegram_listings(db: AsyncSession) -> int:
     if not stale_ids:
         return 0
 
+    delete_media_for_listing_ids(stale_ids)
+
     # duplicate_of без ON DELETE — спочатку відв'язуємо посилання.
     await db.execute(
         update(Listing)
@@ -48,6 +54,7 @@ async def purge_stale_telegram_listings(db: AsyncSession) -> int:
         .values(duplicate_of=None)
     )
     await db.execute(delete(Listing).where(Listing.id.in_(stale_ids)))
+    purge_stale_media_files()
     logger.info(
         "Purged %s Telegram listings older than %s days (cutoff=%s)",
         len(stale_ids),
