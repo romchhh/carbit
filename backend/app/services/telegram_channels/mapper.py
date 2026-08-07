@@ -255,6 +255,68 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
     )
 
 
+def _listing_matches_single_brand(
+    item: ListingOut,
+    haystack: str,
+    brand: str,
+    *,
+    model_hint: str = "",
+) -> bool:
+    if not brand:
+        return True
+
+    item_brand_raw = (item.brand or "").strip()
+    if item_brand_raw:
+        from app.services.olx.brand_slugs import resolve_olx_brand_slug
+
+        filter_slug = resolve_olx_brand_slug(brand)
+        item_slug = resolve_olx_brand_slug(item_brand_raw)
+        if filter_slug and item_slug and filter_slug != item_slug:
+            text_confirms_brand = text_matches_brand_filter(
+                haystack, brand, model=model_hint or ""
+            )
+            if not text_confirms_brand:
+                from app.services.search.brand_model_keywords import (
+                    _allows_distinctive_model_without_brand,
+                )
+
+                model_str = (model_hint or "").strip()
+                distinctive = bool(
+                    model_str
+                    and _allows_distinctive_model_without_brand(brand, model_str)
+                    and text_matches_model_filter(
+                        f"{item.model} {item.title} {item.description or ''}",
+                        model_str,
+                        brand=brand,
+                    )
+                )
+                if not distinctive:
+                    return False
+
+    if not text_matches_brand_filter(haystack, brand, model=model_hint or ""):
+        item_brand = norm_text(item.brand)
+        brand_n = norm_text(brand)
+        if not item_brand or (brand_n not in item_brand and item_brand not in brand_n):
+            return False
+    return True
+
+
+def _listing_matches_single_model(
+    item: ListingOut,
+    model: str,
+    *,
+    brand: str = "",
+) -> bool:
+    if not model:
+        return True
+    model_haystack = f"{item.model} {item.title} {item.description or ''}"
+    return text_matches_model_filter(
+        model_haystack,
+        model,
+        brand=brand or "",
+    )
+
+
 def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> bool:
     if item.source == "telegram" and telegram_text_is_search_request(
         item.description or item.title or ""
@@ -272,53 +334,28 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
 
     haystack = f"{item.brand} {item.title} {item.description or ''}"
 
-    if filters.brand:
-        # Жорстка відмова: структурована марка оголошення ≠ фільтр —
-        # але якщо текст (title/description) підтверджує фільтр, не відкидаємо
-        # (типовий баг: «Zolotoy BMW Garage» → brand=BMW замість Mini з заголовка).
-        item_brand_raw = (item.brand or "").strip()
-        if item_brand_raw:
-            from app.services.olx.brand_slugs import resolve_olx_brand_slug
+    from app.services.search.filter_multi import effective_brands, effective_models, effective_regions
 
-            filter_slug = resolve_olx_brand_slug(filters.brand)
-            item_slug = resolve_olx_brand_slug(item_brand_raw)
-            if filter_slug and item_slug and filter_slug != item_slug:
-                text_confirms_brand = text_matches_brand_filter(
-                    haystack, filters.brand, model=filters.model or ""
-                )
-                if not text_confirms_brand:
-                    from app.services.search.brand_model_keywords import (
-                        _allows_distinctive_model_without_brand,
-                    )
+    brands = effective_brands(filters)
+    models = effective_models(filters)
 
-                    model_str = (filters.model or "").strip()
-                    distinctive = bool(
-                        model_str
-                        and _allows_distinctive_model_without_brand(filters.brand, model_str)
-                        and text_matches_model_filter(
-                            f"{item.model} {item.title} {item.description or ''}",
-                            model_str,
-                            brand=filters.brand,
-                        )
-                    )
-                    if not distinctive:
-                        return False
-
-        if not text_matches_brand_filter(
-            haystack, filters.brand, model=filters.model or ""
-        ):
-            item_brand = norm_text(item.brand)
-            brand = norm_text(filters.brand)
-            if not item_brand or (brand not in item_brand and item_brand not in brand):
-                return False
-
-    if filters.model:
-        model_haystack = f"{item.model} {item.title} {item.description or ''}"
-        if not text_matches_model_filter(
-            model_haystack,
-            filters.model,
-            brand=filters.brand or "",
-        ):
+    if brands or models:
+        brand_candidates = brands or [""]
+        model_candidates = models or [""]
+        matched = False
+        for brand in brand_candidates:
+            for model in model_candidates:
+                if not _listing_matches_single_brand(
+                    item, haystack, brand, model_hint=model
+                ):
+                    continue
+                if not _listing_matches_single_model(item, model, brand=brand):
+                    continue
+                matched = True
+                break
+            if matched:
+                break
+        if not matched:
             return False
 
     if filters.year_from or filters.year_to:
@@ -346,15 +383,14 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     if filters.mileage_to and item.mileage and item.mileage > filters.mileage_to:
         return False
 
-    if filters.region and norm_text(filters.region) not in ("вся україна", ""):
+    regions = effective_regions(filters)
+    if regions:
         from app.services.search.region_match import listing_region_matches_filter
 
-        # Telegram: місто часто лише в тексті поста («🌏Місто: Вінниця»),
-        # а поле region може бути порожнім / «Україна».
         region_haystack = item.region or ""
         if (item.source or "").lower() == "telegram":
             region_haystack = f"{region_haystack} {item.title or ''} {item.description or ''}"
-        if not listing_region_matches_filter(region_haystack, filters.region):
+        if not any(listing_region_matches_filter(region_haystack, region) for region in regions):
             return False
 
     blob = norm_text(f"{item.title} {item.fuel} {item.transmission} {item.description}")

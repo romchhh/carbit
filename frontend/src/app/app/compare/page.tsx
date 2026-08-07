@@ -165,13 +165,13 @@ function ComparePageInner() {
       description={`Оберіть до ${MAX_COMPARE} оголошень у пошуку — порівняйте ціну, пробіг, двигун і джерела в одній таблиці.`}
       action={
         count > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
             {count >= 2 && (
               <>
                 <button
                   type="button"
                   onClick={() => void handleShare()}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-[12px] font-semibold text-ink hover:bg-surface"
+                  className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-[12px] font-semibold text-ink hover:bg-surface active:scale-[0.98]"
                 >
                   <IconShare size={14} />
                   Поділитися
@@ -181,9 +181,9 @@ function ComparePageInner() {
                     type="button"
                     onClick={() => void handleSave()}
                     disabled={saving}
-                    className="rounded-xl border border-emerald/40 bg-emerald/5 px-3 py-2 text-[12px] font-semibold text-emerald-dark hover:bg-emerald/10 disabled:opacity-50"
+                    className="inline-flex min-h-10 shrink-0 items-center rounded-xl border border-emerald/40 bg-emerald/5 px-3 py-2 text-[12px] font-semibold text-emerald-dark hover:bg-emerald/10 disabled:opacity-50 active:scale-[0.98]"
                   >
-                    {saving ? "Збереження..." : "Зберегти в акаунті"}
+                    {saving ? "Збереження..." : "Зберегти"}
                   </button>
                 )}
               </>
@@ -191,7 +191,7 @@ function ComparePageInner() {
             <button
               type="button"
               onClick={clear}
-              className="rounded-xl border border-border px-3 py-2 text-[12px] font-semibold text-muted hover:bg-surface hover:text-ink"
+              className="inline-flex min-h-10 shrink-0 items-center rounded-xl border border-border px-3 py-2 text-[12px] font-semibold text-muted hover:bg-surface hover:text-ink active:scale-[0.98]"
             >
               Очистити все
             </button>
@@ -261,7 +261,7 @@ function ComparePageInner() {
           </div>
         </AppSection>
       ) : (
-        <AppSection className="!p-3 sm:!p-4">
+        <AppSection className="!border-0 !bg-transparent !p-0 sm:!rounded-2xl sm:!border sm:!border-border/50 sm:!bg-surface/30 sm:!p-4 md:!p-6">
           <ListingCompareTable listings={items} onRemove={remove} />
         </AppSection>
       )}

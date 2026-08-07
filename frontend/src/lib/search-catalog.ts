@@ -24,6 +24,12 @@ export type SearchFilterState = {
   region: string;
   brand: string;
   model: string;
+  /** Кілька марок (OR). */
+  brands: string[];
+  /** Кілька моделей (OR). */
+  models: string[];
+  /** Кілька регіонів (OR). Порожньо = вся Україна. */
+  regions: string[];
   yearFrom: string;
   yearTo: string;
   priceFrom: string;
@@ -174,6 +180,9 @@ export const DEFAULT_FILTERS: SearchFilterState = {
   region: "м. Київ",
   brand: "",
   model: "",
+  brands: [],
+  models: [],
+  regions: ["м. Київ"],
   yearFrom: "",
   yearTo: "",
   priceFrom: "",
@@ -310,10 +319,19 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
   const mileageFrom = parseThousandsKm(filters.mileageFrom) ?? parseNumberInput(filters.mileageFrom);
   const mileageTo = parseThousandsKm(filters.mileageTo) ?? parseNumberInput(filters.mileageTo);
 
+  const brands = filters.brands.length ? filters.brands : filters.brand ? [filters.brand] : [];
+  const models = filters.models.length ? filters.models : filters.model ? [filters.model] : [];
+  const regions =
+    filters.regions.length > 0
+      ? filters.regions
+      : filters.region && filters.region !== "Вся Україна"
+        ? [filters.region]
+        : [];
+
   return items.filter(item => {
-    if (filters.brand && item.brand !== filters.brand) return false;
-    if (filters.model && item.model !== filters.model) return false;
-    if (!regionMatches(item.region, filters.region)) return false;
+    if (brands.length && !brands.includes(item.brand)) return false;
+    if (models.length && !models.includes(item.model)) return false;
+    if (regions.length && !regions.some(r => regionMatches(item.region, r))) return false;
     if (yearFrom != null && item.year < yearFrom) return false;
     if (yearTo != null && item.year > yearTo) return false;
     const itemUah = toUah(item.price, resolveListingCurrency((item as { currency?: string }).currency));

@@ -4,6 +4,7 @@ import {
   searchFiltersMatchUi,
   toBackendSearchFilters,
 } from "@/lib/search-filters-api";
+import { syncSearchFilterArrays } from "@/lib/search-filter-multi";
 import type { SearchFreshness } from "@/lib/search-preview";
 
 const KEY = "carbit:recent-searches";
@@ -22,7 +23,7 @@ export type RecentSearchEntry = {
 
 function normalizeFilters(raw: unknown): SearchFilterState | null {
   if (!raw || typeof raw !== "object") return null;
-  return { ...DEFAULT_FILTERS, ...(raw as Partial<SearchFilterState>) };
+  return syncSearchFilterArrays({ ...DEFAULT_FILTERS, ...(raw as Partial<SearchFilterState>) });
 }
 
 function normalizeEntry(raw: unknown): RecentSearchEntry | null {

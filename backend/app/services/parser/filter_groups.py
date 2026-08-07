@@ -32,6 +32,12 @@ def filters_to_dict(filters: SearchFilters | dict) -> dict:
         data["drivetrain"] = sorted(drives)
     if colors := data.get("colors"):
         data["colors"] = sorted(colors)
+    if brands := data.get("brands"):
+        data["brands"] = sorted(brands)
+    if models := data.get("models"):
+        data["models"] = sorted(models)
+    if regions := data.get("regions"):
+        data["regions"] = sorted(regions)
     return data
 
 
@@ -145,6 +151,9 @@ def merge_filters_for_fetch(filters_list: list[SearchFilters]) -> SearchFilters:
     merged.doors_to = _merge_max_values([f.doors_to for f in filters_list])
 
     merged.region = _merge_region([f.region for f in filters_list])
+    merged.regions = _merge_list_union([f.regions for f in filters_list])
+    merged.brands = _merge_list_union([f.brands for f in filters_list])
+    merged.models = _merge_list_union([f.models for f in filters_list])
     merged.fuel = _merge_list_union([f.fuel for f in filters_list])
     merged.transmission = _merge_list_union([f.transmission for f in filters_list])
     merged.drivetrain = _merge_list_union([f.drivetrain for f in filters_list])

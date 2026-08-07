@@ -167,6 +167,9 @@ class EmailBindVerifyRequest(BaseModel):
 class SearchFilters(BaseModel):
     brand: Optional[str] = None
     model: Optional[str] = None
+    brands: Optional[list[str]] = None
+    models: Optional[list[str]] = None
+    regions: Optional[list[str]] = None
     year_from: Optional[int] = None
     year_to: Optional[int] = None
     price_from: Optional[int] = None

@@ -10,7 +10,13 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from app.core.config import settings
-from app.services.search.fe_catalog import load_fe_brand_models, fe_brand_slug_to_label, unique_model_token_owner
+from app.services.search.fe_catalog import (
+    load_fe_brand_models,
+    fe_brand_slug_to_label,
+    unique_model_token_owner,
+    slug_to_brand_label,
+    load_brand_model_aliases,
+)
 from app.services.olx.brand_slugs import OLX_TEXT_BRAND_VARIANTS, resolve_olx_brand_slug
 from app.services.search.region_cities import cities_for_region
 from app.core.text import norm_text
@@ -203,7 +209,10 @@ def _resolve_brand_model(brand: str | None, model: str | None) -> tuple[str | No
         b = brand_by_lower.get(b.lower(), b)
         if b not in catalog:
             slug = resolve_olx_brand_slug(b)
-            b = fe_brand_slug_to_label().get(slug, b if b in catalog else "")
+            if slug:
+                b = fe_brand_slug_to_label().get(slug) or slug_to_brand_label(slug) or b
+            elif catalog:
+                b = ""
 
     if m and not b:
         token = norm_text(m)
@@ -268,6 +277,56 @@ def _infer_brand_from_transcript(text: str) -> str | None:
     return best_brand
 
 
+def _infer_brand_from_aliases(text: str) -> str | None:
+    data = load_brand_model_aliases()
+    brand_slugs = data.get("brandSlugs") if isinstance(data.get("brandSlugs"), dict) else {}
+    labels = fe_brand_slug_to_label()
+    haystack = norm_text(text)
+    best_brand: str | None = None
+    best_len = 0
+
+    for slug, aliases in brand_slugs.items():
+        if not isinstance(aliases, list):
+            continue
+        brand = labels.get(str(slug)) or slug_to_brand_label(str(slug))
+        for alias in aliases:
+            token = norm_text(str(alias))
+            if len(token) < 2:
+                continue
+            if _text_contains_token(haystack, token) and len(token) > best_len:
+                best_brand = brand
+                best_len = len(token)
+
+    return best_brand
+
+
+def _infer_model_from_aliases(text: str, brand: str) -> str | None:
+    data = load_brand_model_aliases()
+    models_map = data.get("models") if isinstance(data.get("models"), dict) else {}
+    catalog = load_fe_brand_models()
+    brand_models = list(catalog.get(brand) or ())
+    allowed = {m.lower(): m for m in brand_models}
+    haystack = norm_text(text)
+    best_model: str | None = None
+    best_len = 0
+
+    for canonical, aliases in models_map.items():
+        resolved = allowed.get(str(canonical).lower())
+        if brand_models and not resolved:
+            continue
+        model_label = resolved or str(canonical)
+        tokens = [str(canonical), *(aliases if isinstance(aliases, list) else [])]
+        for alias in tokens:
+            token = norm_text(str(alias))
+            if len(token) < 2:
+                continue
+            if _text_contains_token(haystack, token) and len(token) > best_len:
+                best_model = model_label
+                best_len = len(token)
+
+    return best_model
+
+
 def _infer_model_from_transcript(text: str, brand: str) -> str | None:
     catalog = load_fe_brand_models()
     models = catalog.get(brand) or []
@@ -286,7 +345,10 @@ def _infer_model_from_transcript(text: str, brand: str) -> str | None:
             best_model = model
             best_len = len(token)
 
-    return best_model
+    if best_model:
+        return best_model
+
+    return _infer_model_from_aliases(text, brand)
 
 
 def _detect_currency_in_text(text: str) -> str | None:
@@ -590,7 +652,7 @@ def _enrich_filters_from_transcript(
     raw_model = raw_filters.get("model")
 
     if not enriched.get("brand"):
-        inferred = _infer_brand_from_transcript(query)
+        inferred = _infer_brand_from_transcript(query) or _infer_brand_from_aliases(query)
         if inferred:
             b, m = _resolve_brand_model(inferred, enriched.get("model") or raw_model)
             if b:
@@ -607,6 +669,20 @@ def _enrich_filters_from_transcript(
         inferred_model = _infer_model_from_transcript(query, str(enriched["brand"]))
         if inferred_model:
             enriched["model"] = inferred_model
+
+    raw_brand = raw_filters.get("brand")
+    raw_model = raw_filters.get("model")
+    if raw_brand and not enriched.get("brand"):
+        b, m = _resolve_brand_model(str(raw_brand), raw_model if raw_model else enriched.get("model"))
+        if b:
+            enriched["brand"] = b
+            if m and not enriched.get("model"):
+                enriched["model"] = m
+
+    if raw_model and enriched.get("brand") and not enriched.get("model"):
+        _, m = _resolve_brand_model(str(enriched["brand"]), str(raw_model))
+        if m:
+            enriched["model"] = m
 
     if not enriched.get("region"):
         inferred_region = _infer_region_from_transcript(query)

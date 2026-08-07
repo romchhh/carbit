@@ -6,10 +6,19 @@ import type {
   TriFilterValue,
 } from "@/lib/search-catalog";
 import { DEFAULT_FILTERS } from "@/lib/search-catalog";
+import {
+  effectiveBrands,
+  effectiveModels,
+  effectiveRegions,
+  syncSearchFilterArrays,
+} from "@/lib/search-filter-multi";
 
 export type BackendSearchFilters = {
   brand?: string | null;
   model?: string | null;
+  brands?: string[] | null;
+  models?: string[] | null;
+  regions?: string[] | null;
   year_from?: number | null;
   year_to?: number | null;
   price_from?: number | null;
@@ -99,52 +108,59 @@ function parseOwnersMax(value: OwnersFilterValue): number | null {
 }
 
 export function toBackendSearchFilters(filters: SearchFilterState): BackendSearchFilters {
-  const mileageFrom = filters.zeroMileage ? 0 : parseThousandsKm(filters.mileageFrom);
-  const mileageTo = filters.zeroMileage ? 500 : parseThousandsKm(filters.mileageTo);
+  const synced = syncSearchFilterArrays(filters);
+  const brands = effectiveBrands(synced);
+  const models = effectiveModels(synced);
+  const regions = effectiveRegions(synced);
+  const mileageFrom = synced.zeroMileage ? 0 : parseThousandsKm(synced.mileageFrom);
+  const mileageTo = synced.zeroMileage ? 500 : parseThousandsKm(synced.mileageTo);
 
   return {
-    brand: filters.brand || null,
-    model: filters.model || null,
-    year_from: parseNumber(filters.yearFrom),
-    year_to: parseNumber(filters.yearTo),
-    price_from: parseNumber(filters.priceFrom),
-    price_to: parseNumber(filters.priceTo),
-    currency: filters.currency || "USD",
+    brand: brands[0] || null,
+    model: models[0] || null,
+    brands: brands.length ? brands : null,
+    models: models.length ? models : null,
+    regions: regions.length ? regions : null,
+    year_from: parseNumber(synced.yearFrom),
+    year_to: parseNumber(synced.yearTo),
+    price_from: parseNumber(synced.priceFrom),
+    price_to: parseNumber(synced.priceTo),
+    currency: synced.currency || "USD",
     mileage_from: mileageFrom,
     mileage_to: mileageTo,
-    fuel: filters.fuels.length ? [...filters.fuels] : null,
-    transmission: filters.transmissions.length ? [...filters.transmissions] : null,
-    region: filters.region || null,
-    sources: mapSources(filters.sources),
-    category: filters.category !== "all" ? filters.category : null,
-    engine_volume_from: parseDecimal(filters.engineVolumeFrom),
-    engine_volume_to: parseDecimal(filters.engineVolumeTo),
-    drivetrain: filters.driveTypes.length ? [...filters.driveTypes] : null,
-    colors: filters.colors.length ? [...filters.colors] : null,
-    fuel_consumption_from: parseDecimal(filters.fuelConsumptionFrom),
-    fuel_consumption_to: parseDecimal(filters.fuelConsumptionTo),
-    ev_range_from: parseNumber(filters.rangeFrom),
-    ev_range_to: parseNumber(filters.rangeTo),
-    battery_capacity_from: parseDecimal(filters.batteryCapacityFrom),
-    battery_capacity_to: parseDecimal(filters.batteryCapacityTo),
-    power_from: parseNumber(filters.powerFrom),
-    power_to: parseNumber(filters.powerTo),
-    seats_from: parseNumber(filters.seatsFrom),
-    seats_to: parseNumber(filters.seatsTo),
-    doors_from: parseNumber(filters.doorsFrom),
-    doors_to: parseNumber(filters.doorsTo),
-    body_types: filters.bodyTypes.length ? [...filters.bodyTypes] : null,
-    seller_filter: (filters.sellerFilter || null) as SellerFilterValue | null,
-    accident: (filters.accident || null) as AccidentFilterValue | null,
-    zero_mileage: filters.zeroMileage || null,
-    bargain: filters.bargain || null,
-    vin_verified: filters.vinVerified || null,
-    owners_max: parseOwnersMax(filters.ownersMax),
-    in_credit: mapTri(filters.inCredit),
-    usa_import: mapTri(filters.usaImport),
-    not_customs: mapTri(filters.notCustoms),
-    metallic: filters.metallic || null,
-    power_unit: filters.powerUnit || "hp",
+    fuel: synced.fuels.length ? [...synced.fuels] : null,
+    transmission: synced.transmissions.length ? [...synced.transmissions] : null,
+    region: regions.length === 1 ? regions[0] : regions.length ? null : synced.region || null,
+    sources: mapSources(synced.sources),
+    category: synced.category !== "all" ? synced.category : null,
+    engine_volume_from: parseDecimal(synced.engineVolumeFrom),
+    engine_volume_to: parseDecimal(synced.engineVolumeTo),
+    drivetrain: synced.driveTypes.length ? [...synced.driveTypes] : null,
+    colors: synced.colors.length ? [...synced.colors] : null,
+    fuel_consumption_from: parseDecimal(synced.fuelConsumptionFrom),
+    fuel_consumption_to: parseDecimal(synced.fuelConsumptionTo),
+    ev_range_from: parseNumber(synced.rangeFrom),
+    ev_range_to: parseNumber(synced.rangeTo),
+    battery_capacity_from: parseDecimal(synced.batteryCapacityFrom),
+    battery_capacity_to: parseDecimal(synced.batteryCapacityTo),
+    power_from: parseNumber(synced.powerFrom),
+    power_to: parseNumber(synced.powerTo),
+    seats_from: parseNumber(synced.seatsFrom),
+    seats_to: parseNumber(synced.seatsTo),
+    doors_from: parseNumber(synced.doorsFrom),
+    doors_to: parseNumber(synced.doorsTo),
+    body_types: synced.bodyTypes.length ? [...synced.bodyTypes] : null,
+    seller_filter: (synced.sellerFilter || null) as SellerFilterValue | null,
+    accident: (synced.accident || null) as AccidentFilterValue | null,
+    zero_mileage: synced.zeroMileage || null,
+    bargain: synced.bargain || null,
+    vin_verified: synced.vinVerified || null,
+    owners_max: parseOwnersMax(synced.ownersMax),
+    in_credit: mapTri(synced.inCredit),
+    usa_import: mapTri(synced.usaImport),
+    not_customs: mapTri(synced.notCustoms),
+    metallic: synced.metallic || null,
+    power_unit: synced.powerUnit || "hp",
   };
 }
 
@@ -182,15 +198,32 @@ export function mergeAiSearchFilters(
 
   if (raw.brand != null && String(raw.brand).trim()) {
     next.brand = parsed.brand;
+    next.brands = parsed.brands;
     next.model = raw.model != null && String(raw.model).trim() ? parsed.model : "";
+    next.models = next.model ? parsed.models : [];
+  } else if (Array.isArray(raw.brands) && raw.brands.length) {
+    next.brands = parsed.brands;
+    next.brand = parsed.brand;
+    next.models = parsed.models;
+    next.model = parsed.model;
   } else if (raw.model != null && String(raw.model).trim()) {
+    next.model = parsed.model;
+    next.models = parsed.models;
+  } else if (Array.isArray(raw.models) && raw.models.length) {
+    next.models = parsed.models;
     next.model = parsed.model;
   }
 
   if (raw.category != null && String(raw.category).trim() && raw.category !== "all") {
     next.category = parsed.category;
   }
-  if (raw.region != null && String(raw.region).trim()) next.region = parsed.region;
+  if (raw.region != null && String(raw.region).trim()) {
+    next.region = parsed.region;
+    next.regions = parsed.regions;
+  } else if (Array.isArray(raw.regions) && raw.regions.length) {
+    next.regions = parsed.regions;
+    next.region = parsed.region;
+  }
   if (raw.year_from != null) next.yearFrom = parsed.yearFrom;
   if (raw.year_to != null) next.yearTo = parsed.yearTo;
   if (raw.price_from != null) next.priceFrom = parsed.priceFrom;
@@ -243,14 +276,37 @@ export function fromBackendSearchFilters(
 
   const zeroMileage = Boolean(raw.zero_mileage);
 
+  const brandsRaw = Array.isArray(raw.brands) ? raw.brands.map(String).filter(Boolean) : [];
+  const brand = String(raw.brand || brandsRaw[0] || "");
+  const brands = brandsRaw.length ? brandsRaw : brand ? [brand] : [];
+
+  const modelsRaw = Array.isArray(raw.models) ? raw.models.map(String).filter(Boolean) : [];
+  const model = String(raw.model || modelsRaw[0] || "");
+  const models = modelsRaw.length ? modelsRaw : model ? [model] : [];
+
+  const regionsRaw = Array.isArray(raw.regions) ? raw.regions.map(String).filter(Boolean) : [];
+  const regionLegacy = String(raw.region || "");
+  const regions =
+    regionsRaw.length > 0
+      ? regionsRaw
+      : regionLegacy && regionLegacy !== "Вся Україна"
+        ? [regionLegacy]
+        : [];
+  const region =
+    regions.length === 1 ? regions[0] : regions.length ? "" : regionLegacy || "Вся Україна";
+
   return {
     ...base,
     name: "",
     category: (["all", "used", "new", "import"].includes(category)
       ? category
       : "all") as SearchFilterState["category"],
-    brand: String(raw.brand || ""),
-    model: String(raw.model || ""),
+    brand,
+    model,
+    brands,
+    models,
+    regions,
+    region,
     yearFrom: formatPlainNumber(raw.year_from as number | null),
     yearTo: formatPlainNumber(raw.year_to as number | null),
     priceFrom: formatPlainNumber(raw.price_from as number | null),
@@ -260,7 +316,6 @@ export function fromBackendSearchFilters(
     mileageTo: zeroMileage ? "0" : formatThousandsKm(raw.mileage_to as number | null),
     fuels: Array.isArray(raw.fuel) ? raw.fuel.map(String) : [],
     transmissions: Array.isArray(raw.transmission) ? raw.transmission.map(String) : [],
-    region: String(raw.region || ""),
     sources,
     engineVolumeFrom: formatPlainNumber(raw.engine_volume_from as number | null),
     engineVolumeTo: formatPlainNumber(raw.engine_volume_to as number | null),
@@ -296,6 +351,9 @@ export function fromBackendSearchFilters(
 const COMPARE_KEYS: (keyof BackendSearchFilters)[] = [
   "brand",
   "model",
+  "brands",
+  "models",
+  "regions",
   "year_from",
   "year_to",
   "price_from",
@@ -383,12 +441,21 @@ export function buildSearchName(filters: SearchFilterState): string {
   const custom = filters.name.trim();
   if (custom) return custom;
 
+  const synced = syncSearchFilterArrays(filters);
+  const brands = effectiveBrands(synced);
+  const models = effectiveModels(synced);
+  const regions = effectiveRegions(synced);
+
   const parts: string[] = [];
-  if (filters.brand) parts.push(filters.brand);
-  if (filters.model) parts.push(filters.model);
+  if (brands.length === 1) parts.push(brands[0]);
+  else if (brands.length > 1) parts.push(`${brands.length} марки`);
+  if (models.length === 1) parts.push(models[0]);
+  else if (models.length > 1) parts.push(`${models.length} моделі`);
   if (parts.length === 0) parts.push("Мій пошук");
-  if (filters.region && filters.region !== "Вся Україна") {
-    parts.push(filters.region.replace(/^м\.\s*/i, ""));
+  if (regions.length === 1) {
+    parts.push(regions[0].replace(/^м\.\s*/i, ""));
+  } else if (regions.length > 1) {
+    parts.push(`${regions.length} регіони`);
   }
   return parts.join(" · ");
 }
@@ -403,6 +470,9 @@ export function resetAdvancedFilters(filters: SearchFilterState): SearchFilterSt
     | "region"
     | "brand"
     | "model"
+    | "brands"
+    | "models"
+    | "regions"
     | "yearFrom"
     | "yearTo"
     | "priceFrom"
@@ -418,6 +488,9 @@ export function resetAdvancedFilters(filters: SearchFilterState): SearchFilterSt
     region: filters.region,
     brand: filters.brand,
     model: filters.model,
+    brands: [...filters.brands],
+    models: [...filters.models],
+    regions: [...filters.regions],
     yearFrom: filters.yearFrom,
     yearTo: filters.yearTo,
     priceFrom: filters.priceFrom,

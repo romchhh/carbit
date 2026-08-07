@@ -184,3 +184,42 @@ export function resolveModelQuery(
   const ranked = filterModelOptions(brand, options, query, 2);
   return ranked.length === 1 ? ranked[0] : null;
 }
+
+/** Шукає марку в довгому тексті диктовки (alias ⊆ haystack). */
+export function findBrandInText(text: string, options: readonly string[]): string | null {
+  const haystack = normalizeSearchKey(text);
+  if (!haystack) return null;
+  const allowed = new Set(options);
+  let best: string | null = null;
+  let bestLen = 0;
+  for (const [aliasKey, canonical] of BRAND_ALIAS_TO_CANONICAL) {
+    if (!allowed.has(canonical)) continue;
+    if (haystack.includes(aliasKey) && aliasKey.length > bestLen) {
+      best = canonical;
+      bestLen = aliasKey.length;
+    }
+  }
+  return best;
+}
+
+/** Шукає модель у тексті диктовки для обраної марки. */
+export function findModelInText(
+  brand: string,
+  text: string,
+  options: readonly string[],
+): string | null {
+  const haystack = normalizeSearchKey(text);
+  if (!haystack || !brand) return null;
+  const allowed = new Set(options);
+  const index = modelIndexForBrand(brand);
+  let best: string | null = null;
+  let bestLen = 0;
+  for (const [aliasKey, canonical] of index) {
+    if (!allowed.has(canonical)) continue;
+    if (haystack.includes(aliasKey) && aliasKey.length > bestLen) {
+      best = canonical;
+      bestLen = aliasKey.length;
+    }
+  }
+  return best;
+}

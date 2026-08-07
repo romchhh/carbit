@@ -14,6 +14,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend ./backend
+COPY frontend/src/lib/search-data/brands-models.ts ./frontend/src/lib/search-data/brands-models.ts
+COPY frontend/src/lib/search-data/brand-model-aliases.json ./frontend/src/lib/search-data/brand-model-aliases.json
 COPY bot ./bot
 COPY support_bot ./support_bot
 COPY worker ./worker

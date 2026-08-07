@@ -22,6 +22,10 @@ type Props = {
   filterOptionsFn?: (options: string[], query: string) => string[];
   /** Підстановка канонічної назви при Enter (напр. «хундай» → Hyundai). */
   resolveQueryFn?: (query: string) => string | null;
+  /** Кастомний текст у тригері для multi-select. */
+  formatMultiDisplay?: (values: string[]) => string;
+  /** Очистити всі обрані (multi). */
+  onClearAll?: () => void;
 };
 
 export function FilterOptionsPopover({
@@ -39,6 +43,8 @@ export function FilterOptionsPopover({
   getOptionIcon,
   filterOptionsFn,
   resolveQueryFn,
+  formatMultiDisplay,
+  onClearAll,
 }: Props) {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -64,6 +70,16 @@ export function FilterOptionsPopover({
       ).slice(0, 100)
     : options.slice(0, 100);
 
+  const select = (next: string) => {
+    if (multiple && onToggle) {
+      onToggle(next);
+      return;
+    }
+    onChange(next);
+    setOpen(false);
+    setQuery("");
+  };
+
   const tryCommitQuery = () => {
     const resolved = resolveQueryFn?.(normalizedQuery);
     if (resolved) {
@@ -77,22 +93,16 @@ export function FilterOptionsPopover({
 
   const display = multiple
     ? values.length > 0
-      ? values.join(", ")
+      ? formatMultiDisplay?.(values) ?? (values.length <= 2 ? values.join(", ") : `${values.length} обрано`)
       : ""
     : value;
 
-  const select = (next: string) => {
-    if (multiple && onToggle) {
-      onToggle(next);
-      return;
-    }
-    onChange(next);
-    setOpen(false);
-    setQuery("");
-  };
-
   const selectedIconUrl =
-    !multiple && value && getOptionIcon ? getOptionIcon(value) : null;
+    !multiple && value && getOptionIcon
+      ? getOptionIcon(value)
+      : multiple && values.length === 1 && getOptionIcon
+        ? getOptionIcon(values[0])
+        : null;
 
   return (
     <div ref={rootRef} className={cn("relative", open && "z-[80]", className)}>
@@ -180,7 +190,19 @@ export function FilterOptionsPopover({
             )}
           </ul>
           {multiple && (
-            <div className="border-t border-border/60 p-3">
+            <div className="space-y-2 border-t border-border/60 p-3">
+              {values.length > 0 && onClearAll && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClearAll();
+                    setQuery("");
+                  }}
+                  className="w-full rounded-full border border-border py-2 text-[13px] font-medium text-muted transition-colors hover:border-ink/20 hover:text-ink"
+                >
+                  Очистити ({values.length})
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -13,6 +14,10 @@ from app.services.olx.brand_slugs import resolve_olx_brand_slug
 _FE_CATALOG_PATH = (
     ROOT_DIR / "frontend" / "src" / "lib" / "search-data" / "brands-models.ts"
 )
+_ALIASES_PATH = (
+    ROOT_DIR / "frontend" / "src" / "lib" / "search-data" / "brand-model-aliases.json"
+)
+# У Docker-образі backend (WORKDIR /app) — той самий шлях після COPY у Dockerfile.
 
 
 @lru_cache(maxsize=1)
@@ -40,6 +45,36 @@ def fe_brand_slug_to_label() -> dict[str, str]:
         slug = resolve_olx_brand_slug(brand)
         labels.setdefault(slug, brand)
     return labels
+
+
+@lru_cache(maxsize=1)
+def load_brand_model_aliases() -> dict[str, object]:
+    if not _ALIASES_PATH.is_file():
+        return {"brandSlugs": {}, "models": {}}
+    try:
+        return json.loads(_ALIASES_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"brandSlugs": {}, "models": {}}
+
+
+def slug_to_brand_label(slug: str) -> str:
+    """Канонічна назва марки з slug (коли FE-каталог недоступний)."""
+    slug = (slug or "").strip().lower()
+    if not slug:
+        return ""
+    labels = fe_brand_slug_to_label()
+    if slug in labels:
+        return labels[slug]
+
+    from app.services.olx.brand_slugs import BRAND_TO_SLUG
+
+    candidates = [name for name, value in BRAND_TO_SLUG.items() if value == slug]
+    for name in sorted(candidates, key=lambda item: (not item[:1].isupper(), len(item))):
+        if re.match(r"^[A-Za-z0-9]", name):
+            if name.islower():
+                return name.title()
+            return name
+    return slug.replace("-", " ").title()
 
 
 @lru_cache(maxsize=1)

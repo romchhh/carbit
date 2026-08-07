@@ -359,7 +359,53 @@ async def _fetch_source_pool(
     telegram_found_after: datetime | None = None,
 ) -> PaginatedListings:
     """Тягне пул оголошень з джерела (кілька сторінок AUTO.RIA за потреби)."""
+    from app.services.search.filter_multi import expand_filters_for_api_fetch, needs_api_fanout
+
     need = max(need, 1)
+    if source in ("auto_ria", "olx") and needs_api_fanout(filters):
+        variants = expand_filters_for_api_fetch(filters)
+        per_variant = max(need // len(variants), 20)
+        chunks = await asyncio.gather(
+            *[
+                _fetch_source_pool(
+                    source,
+                    variant,
+                    need=per_variant,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
+                    db=db,
+                    keyword_refresh=keyword_refresh,
+                    olx_enrich_details=olx_enrich_details,
+                    telegram_found_after=telegram_found_after,
+                )
+                for variant in variants
+            ]
+        )
+        seen: set[str] = set()
+        merged: list[ListingOut] = []
+        total = 0
+        for chunk in chunks:
+            total = max(total, chunk.total)
+            for item in chunk.items:
+                if item.id in seen:
+                    continue
+                seen.add(item.id)
+                merged.append(item)
+                if len(merged) >= need:
+                    break
+            if len(merged) >= need:
+                break
+        merged = sort_listings(merged[:need], sort_by)
+        pages = (total + need - 1) // need if total else 0
+        return PaginatedListings(
+            items=merged,
+            total=max(total, len(merged)),
+            page=1,
+            per_page=need,
+            pages=pages,
+        )
+
     if source == "telegram":
         return await _search_single_source(
             source,
@@ -552,6 +598,8 @@ async def search_listings_outcome(
 
     if len(sources) == 1:
         source = sources[0]
+        from app.services.search.filter_multi import needs_api_fanout
+
         try:
             if max_age:
                 raw = await _search_single_source(
@@ -574,6 +622,31 @@ async def search_listings_outcome(
                 start = (page - 1) * per_page
                 page_items = filtered[start : start + per_page]
                 total = len(filtered)
+                pages = (total + per_page - 1) // per_page if total else 0
+                result = PaginatedListings(
+                    items=page_items,
+                    total=total,
+                    page=page,
+                    per_page=per_page,
+                    pages=pages,
+                )
+            elif source in ("auto_ria", "olx") and needs_api_fanout(filters):
+                pool_need = per_page * max(page, 1)
+                pool = await _fetch_source_pool(
+                    source,
+                    filters,
+                    need=pool_need,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
+                    db=db,
+                    keyword_refresh=keyword_refresh,
+                    olx_enrich_details=olx_enrich_details,
+                    telegram_found_after=telegram_found_after,
+                )
+                start = (page - 1) * per_page
+                page_items = pool.items[start : start + per_page]
+                total = max(pool.total, len(pool.items))
                 pages = (total + per_page - 1) // per_page if total else 0
                 result = PaginatedListings(
                     items=page_items,

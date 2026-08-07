@@ -2,12 +2,12 @@
 
 import { useRef, useState } from "react";
 import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
-import { BrandIcon } from "@/components/search/BrandIcon";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
 import { VoiceSearchCabinetOnlyOverlay } from "@/components/search/VoiceSearchCabinetOnlyOverlay";
 import { VoiceSearchOverlay } from "@/components/search/VoiceSearchOverlay";
+import { FilterSelectionChips } from "@/components/search/FilterSelectionChips";
 import { VoiceSearchTrigger } from "@/components/search/VoiceSearchTrigger";
 import {
   SearchRateLimitNotice,
@@ -20,6 +20,8 @@ import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
 import {
   filterBrandOptions,
   filterModelOptions,
+  findBrandInText,
+  findModelInText,
   resolveBrandQuery,
   resolveModelQuery,
 } from "@/lib/search-data/brand-model-resolve";
@@ -42,6 +44,20 @@ import {
 import type { SearchFreshness } from "@/lib/search-preview";
 import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { mergeAiSearchFilters } from "@/lib/search-filters-api";
+import {
+  clearBrands,
+  clearModels,
+  clearRegions,
+  effectiveBrands,
+  effectiveModels,
+  effectiveRegions,
+  formatMultiSelectionLabel,
+  getModelsForBrands,
+  syncSearchFilterArrays,
+  toggleBrand,
+  toggleModel,
+  toggleRegion,
+} from "@/lib/search-filter-multi";
 import { isMarketDiscoveryResult } from "@/lib/voice-search-summary";
 import type { AiParseSearchResult } from "@/lib/api";
 
@@ -80,15 +96,52 @@ function mergeVoiceFilters(
   result: AiParseSearchResult,
 ): SearchFilterState {
   const merged = mergeAiSearchFilters(current, raw);
-  const hasRegion = raw.region != null && String(raw.region).trim();
-  if (!hasRegion) {
-    merged.region = "Вся Україна";
+  const transcript = String(result.transcript || "").trim();
+
+  let brand = merged.brand;
+  let model = merged.model;
+
+  if (raw.brand != null && String(raw.brand).trim()) {
+    brand = resolveBrandQuery(String(raw.brand), BRANDS) ?? String(raw.brand).trim();
+  } else if (transcript) {
+    brand = findBrandInText(transcript, BRANDS) ?? brand;
   }
-  if (isMarketDiscoveryResult(result) && !raw.brand) {
+
+  if (brand) {
+    const brandModels = getModelsForBrand(brand);
+    if (raw.model != null && String(raw.model).trim()) {
+      model =
+        resolveModelQuery(brand, String(raw.model), brandModels) ?? String(raw.model).trim();
+    } else if (transcript) {
+      model = findModelInText(brand, transcript, brandModels) ?? model;
+    }
+    merged.brand = brand;
+    merged.brands = [brand];
+    merged.model = model && brandModels.includes(model) ? model : model;
+    merged.models = merged.model ? [merged.model] : [];
+    if (model && !brandModels.includes(model)) {
+      const resolved = resolveModelQuery(brand, model, brandModels);
+      merged.model = resolved ?? "";
+      merged.models = merged.model ? [merged.model] : [];
+    }
+  }
+
+  const hasRegion = raw.region != null && String(raw.region).trim();
+  if (!hasRegion && !(Array.isArray(raw.regions) && raw.regions.length)) {
+    merged.region = "Вся Україна";
+    merged.regions = [];
+  } else if (merged.regions.length || merged.region) {
+    merged.regions = effectiveRegions(merged);
+    merged.region =
+      merged.regions.length === 1 ? merged.regions[0] : merged.regions.length ? "" : "Вся Україна";
+  }
+  if (isMarketDiscoveryResult(result) && !raw.brand && !brand) {
     merged.brand = "";
     merged.model = "";
+    merged.brands = [];
+    merged.models = [];
   }
-  return merged;
+  return syncSearchFilterArrays(merged);
 }
 
 export function SearchFiltersPanel({
@@ -125,19 +178,15 @@ export function SearchFiltersPanel({
   const [voiceCabinetOnlyOpen, setVoiceCabinetOnlyOpen] = useState(false);
   const [voiceHint, setVoiceHint] = useState<string | null>(null);
   const searchActionsRef = useRef<HTMLDivElement>(null);
-  const models = filters.brand ? getModelsForBrand(filters.brand) : [];
+  const syncedFilters = syncSearchFilterArrays(filters);
+  const selectedBrands = effectiveBrands(syncedFilters);
+  const selectedModels = effectiveModels(syncedFilters);
+  const selectedRegions = effectiveRegions(syncedFilters);
+  const modelOptions = getModelsForBrands(selectedBrands);
   const rateLimited = isSearchRateLimitMessage(searchError);
 
   const update = (patch: Partial<SearchFilterState>) => {
-    onChange({ ...filters, ...patch });
-  };
-
-  const handleBrandChange = (brand: string) => {
-    const nextModels = brand ? getModelsForBrand(brand) : [];
-    update({
-      brand,
-      model: brand && nextModels.includes(filters.model) ? filters.model : "",
-    });
+    onChange(syncSearchFilterArrays({ ...filters, ...patch }));
   };
 
   const scrollToSearch = () => {
@@ -198,12 +247,24 @@ export function SearchFiltersPanel({
     }
   };
 
-  const brandModelLabel =
-    filters.brand && filters.model
-      ? `${filters.brand} ${filters.model}`
-      : filters.brand || "";
-
-  const selectedBrandIcon = filters.brand ? getBrandIconUrl(filters.brand) : null;
+  const selectionChips = [
+    ...selectedBrands.map(brand => ({
+      key: `brand-${brand}`,
+      label: brand,
+      iconBrand: brand,
+      onRemove: () => update(toggleBrand(syncedFilters, brand)),
+    })),
+    ...selectedModels.map(model => ({
+      key: `model-${model}`,
+      label: model,
+      onRemove: () => update(toggleModel(syncedFilters, model)),
+    })),
+    ...selectedRegions.map(region => ({
+      key: `region-${region}`,
+      label: region.replace(/^м\.\s*/i, "м. "),
+      onRemove: () => update(toggleRegion(syncedFilters, region)),
+    })),
+  ];
 
   return (
     <>
@@ -265,41 +326,56 @@ export function SearchFiltersPanel({
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <FilterOptionsPopover
                 label="Марка"
-                value={filters.brand}
+                value=""
+                values={selectedBrands}
                 options={BRANDS}
-                onChange={handleBrandChange}
+                multiple
+                onChange={() => {}}
+                onToggle={brand => update(toggleBrand(syncedFilters, brand))}
+                onClearAll={() => update(clearBrands(syncedFilters))}
                 searchable
                 emptyLabel="Будь-яка марка"
                 getOptionIcon={getBrandIconUrl}
                 filterOptionsFn={(opts, q) => filterBrandOptions(opts, q)}
                 resolveQueryFn={q => resolveBrandQuery(q, BRANDS)}
+                formatMultiDisplay={values =>
+                  formatMultiSelectionLabel(values, "Будь-яка марка", values[0])
+                }
               />
               <FilterOptionsPopover
                 label="Модель"
-                value={filters.model}
-                options={models}
-                onChange={model => update({ model })}
+                value=""
+                values={selectedModels}
+                options={modelOptions}
+                multiple
+                onChange={() => {}}
+                onToggle={model => update(toggleModel(syncedFilters, model))}
+                onClearAll={() => update(clearModels(syncedFilters))}
                 searchable
                 emptyLabel="Будь-яка модель"
-                disabled={!filters.brand}
-                filterOptionsFn={(opts, q) =>
-                  filters.brand ? filterModelOptions(filters.brand, opts, q) : []
-                }
-                resolveQueryFn={q =>
-                  filters.brand ? resolveModelQuery(filters.brand, q, models) : null
+                disabled={selectedBrands.length === 0}
+                filterOptionsFn={(opts, q) => {
+                  if (selectedBrands.length === 1) {
+                    return filterModelOptions(selectedBrands[0], opts, q);
+                  }
+                  const query = q.trim().toLowerCase();
+                  if (!query) return opts;
+                  return opts.filter(o => o.toLowerCase().includes(query));
+                }}
+                resolveQueryFn={q => {
+                  if (selectedBrands.length === 1) {
+                    return resolveModelQuery(selectedBrands[0], q, modelOptions);
+                  }
+                  const match = modelOptions.find(o => o.toLowerCase() === q.trim().toLowerCase());
+                  return match ?? null;
+                }}
+                formatMultiDisplay={values =>
+                  formatMultiSelectionLabel(values, "Будь-яка модель", values[0])
                 }
               />
             </div>
 
-            {(filters.brand || filters.model) && (
-              <p className="flex items-center gap-2 px-1 text-[12px] text-muted">
-                {selectedBrandIcon && <BrandIcon src={selectedBrandIcon} size={18} />}
-                <span>
-                  Обрано:{" "}
-                  <span className="font-medium text-ink">{brandModelLabel || "—"}</span>
-                </span>
-              </p>
-            )}
+            <FilterSelectionChips chips={selectionChips} />
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <FilterRangePopover
@@ -343,20 +419,18 @@ export function SearchFiltersPanel({
 
             <FilterOptionsPopover
               label="Регіон"
-              value={
-                !filters.region || filters.region === "Вся Україна"
-                  ? "Всі регіони"
-                  : filters.region
-              }
+              value=""
+              values={selectedRegions}
               options={[...UKRAINE_REGIONS.filter(r => r !== "Вся Україна")]}
-              onChange={region =>
-                update({
-                  region:
-                    !region || region === "Всі регіони" ? "Вся Україна" : region,
-                })
-              }
+              multiple
+              onChange={() => {}}
+              onToggle={region => update(toggleRegion(syncedFilters, region))}
+              onClearAll={() => update(clearRegions(syncedFilters))}
               searchable
               emptyLabel="Всі регіони"
+              formatMultiDisplay={values =>
+                formatMultiSelectionLabel(values, "Всі регіони", values[0])
+              }
             />
           </div>
 

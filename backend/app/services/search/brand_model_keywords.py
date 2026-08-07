@@ -1368,17 +1368,14 @@ def canonical_search_model(model: str) -> str:
 
 def normalize_search_filters(filters):
     """Нормалізує brand/model для пошуку (latin + кирилиця → єдиний ключ)."""
-    brand = (getattr(filters, "brand", None) or "").strip()
-    model = canonical_search_model((getattr(filters, "model", None) or "").strip())
-    if brand == (getattr(filters, "brand", None) or "").strip() and model == (
-        getattr(filters, "model", None) or ""
-    ).strip():
-        return filters
-    if hasattr(filters, "model_copy"):
-        return filters.model_copy(update={"brand": brand or filters.brand, "model": model or filters.model})
-    filters.brand = brand or filters.brand
-    filters.model = model or filters.model
-    return filters
+    from app.services.search.filter_multi import sync_multi_search_filters
+
+    synced = sync_multi_search_filters(filters)
+    brand = (synced.brand or "").strip()
+    model = canonical_search_model((synced.model or "").strip())
+    if brand == (synced.brand or "").strip() and model == (synced.model or "").strip():
+        return synced
+    return synced.model_copy(update={"brand": brand or synced.brand, "model": model or synced.model})
 
 
 def letter_class_telethon_queries(brand: str, model: str) -> tuple[str, ...]:

@@ -18,6 +18,7 @@ import type { SearchFreshness } from "@/lib/search-preview";
 const HOME_DEFAULT_FILTERS: SearchFilterState = {
   ...DEFAULT_FILTERS,
   region: "Вся Україна",
+  regions: [],
   currency: "USD",
 };
 
