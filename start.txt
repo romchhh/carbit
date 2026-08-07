@@ -261,12 +261,22 @@ CLI на VPS:
   TELEGRAM_MEDIA_MAX_WIDTH=1280
   TELEGRAM_MEDIA_JPEG_QUALITY=82
 
-Разове очищення / стиснення на VPS (звільнити місце в media/):
-  source .venv/bin/activate
-  pip install pillow
-  cd ~/carbit
-  PYTHONPATH=backend:. python scripts/purge-telegram-media.py --dry-run --purge-old --compress
-  PYTHONPATH=backend:. python scripts/purge-telegram-media.py --purge-old --compress
+Разове очищення / стиснення на VPS:
+
+  # 1) Перебілд backend (pillow + новий скрипт у образі)
+  docker compose build backend telegram-worker
+  docker compose up -d backend telegram-worker
+
+  # 2) Dry-run
+  docker compose run --rm --entrypoint python backend \
+    backend/scripts/purge_telegram_media.py --dry-run --purge-old --compress
+
+  # 3) Виконати
+  docker compose run --rm --entrypoint python backend \
+    backend/scripts/purge_telegram_media.py --purge-old --compress
+
+  # Без Docker (якщо є .venv на хості):
+  PYTHONPATH=backend:. python backend/scripts/purge_telegram_media.py --purge-old --compress
 
 Автоматично: telegram-worker щогодини purge БД + видалення старих .jpg з media/
 
