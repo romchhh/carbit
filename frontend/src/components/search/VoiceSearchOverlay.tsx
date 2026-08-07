@@ -7,7 +7,6 @@ import { useVoiceSearch } from "@/hooks/useVoiceSearch";
 import type { AiParseSearchResult } from "@/lib/api";
 import {
   VOICE_SEARCH_EXAMPLES,
-  buildVoiceFilterChips,
   isMarketDiscoveryResult,
 } from "@/lib/voice-search-summary";
 
@@ -101,59 +100,42 @@ function VoiceOrb({
   );
 }
 
-function FilterChips({
-  raw,
-  marketDiscovery,
-}: {
-  raw: Record<string, unknown>;
-  marketDiscovery?: boolean;
-}) {
-  const chips = buildVoiceFilterChips(raw, { marketDiscovery });
-  if (!chips.length) {
-    return (
-      <p className="text-center text-[13px] text-muted">
-        Не вдалося виділити параметри — перевірте фільтри вручну.
-      </p>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap justify-center gap-2">
-      {chips.map(chip => (
-        <span
-          key={chip.key}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald/25 bg-emerald/10 px-3 py-1.5 text-[12px] text-emerald-dark"
-        >
-          <span className="font-semibold text-emerald/80">{chip.label}:</span>
-          <span className="truncate font-medium text-ink">{chip.value}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
 export function VoiceSearchOverlay({ open, onClose, onApplied }: Props) {
   const { phase, transcript, message, result, start, finishRecording, reset, isActive } =
     useVoiceSearch();
   const startedRef = useRef(false);
+  const appliedRef = useRef(false);
 
   useEffect(() => {
     if (!open) {
       startedRef.current = false;
+      appliedRef.current = false;
       reset();
       return;
     }
     if (startedRef.current) return;
     startedRef.current = true;
+    appliedRef.current = false;
     void start();
   }, [open, reset, start]);
+
+  useEffect(() => {
+    if (!open || phase !== "done" || !result?.understood || !result.filters) return;
+    if (appliedRef.current) return;
+    appliedRef.current = true;
+    const searchNow = isMarketDiscoveryResult(result);
+    onApplied(result.filters, result, searchNow);
+    reset();
+    onClose();
+  }, [open, phase, result, onApplied, onClose, reset]);
 
   const handleMicClick = () => {
     if (phase === "listening") {
       void finishRecording();
       return;
     }
-    if (phase === "error" || phase === "done") {
+    if (phase === "error") {
+      appliedRef.current = false;
       void start();
     }
   };
@@ -164,32 +146,19 @@ export function VoiceSearchOverlay({ open, onClose, onApplied }: Props) {
     onClose();
   };
 
-  const handleApply = (searchNow = false) => {
-    if (!result?.understood || !result.filters) return;
-    onApplied(result.filters, result, searchNow);
-    reset();
-    onClose();
-  };
-
   if (!open) return null;
 
   const listening = phase === "listening";
   const processing = phase === "processing";
-  const review = phase === "done";
   const failed = phase === "error";
-  const marketDiscovery = Boolean(result && isMarketDiscoveryResult(result));
 
   const statusLabel = listening
     ? "Слухаю…"
     : processing
       ? "AI розбирає запит"
-      : review
-        ? marketDiscovery
-          ? "Підбираю варіанти по ринку"
-          : "Перевірте, що зрозумів AI"
-        : failed
-          ? "Не зрозумів"
-          : "Готовий до запису";
+      : failed
+        ? "Не зрозумів"
+        : "Готовий до запису";
 
   return (
     <div className="fixed inset-0 z-[120] flex items-end justify-center p-3 sm:items-center sm:p-4">
@@ -237,28 +206,24 @@ export function VoiceSearchOverlay({ open, onClose, onApplied }: Props) {
             </button>
           </div>
 
-          {!review && (
-            <>
-              <div className="relative mt-6 flex justify-center">
-                <VoiceOrb
-                  listening={listening}
-                  processing={processing}
-                  onClick={handleMicClick}
-                  disabled={processing}
-                />
-              </div>
+          <div className="relative mt-6 flex justify-center">
+            <VoiceOrb
+              listening={listening}
+              processing={processing}
+              onClick={handleMicClick}
+              disabled={processing}
+            />
+          </div>
 
-              <p className="relative mt-2 text-center text-[12px] font-medium text-white/60">
-                {listening
-                  ? "«Готово» — одразу до пошуку · або 5 сек тиші"
-                  : failed
-                    ? "Натисніть мікрофон і спробуйте ще раз"
-                    : processing
-                      ? "Розбираю марку, ціну, рік, регіон…"
-                      : "Скажіть бюджет, рік або марку — AI знайде по ринку"}
-              </p>
-            </>
-          )}
+          <p className="relative mt-2 text-center text-[12px] font-medium text-white/60">
+            {listening
+              ? "«Готово» — одразу заповнить фільтри · або 5 сек тиші"
+              : failed
+                ? "Натисніть мікрофон і спробуйте ще раз"
+                : processing
+                  ? "Розбираю марку, ціну, рік, регіон…"
+                  : "Скажіть бюджет, рік або марку — AI заповнить фільтри"}
+          </p>
         </div>
 
         <div className="px-5 py-5">
@@ -268,144 +233,68 @@ export function VoiceSearchOverlay({ open, onClose, onApplied }: Props) {
               onClick={() => void finishRecording()}
               className="mb-4 flex w-full items-center justify-center gap-2 rounded-full bg-emerald py-3.5 text-[15px] font-semibold text-white shadow-lg shadow-emerald/30 transition-transform hover:scale-[1.01] active:scale-[0.99]"
             >
-              Готово — аналізувати
+              Готово — заповнити фільтри
             </button>
           )}
 
-          {review && result?.filters ? (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-border/70 bg-gradient-to-b from-surface to-white px-4 py-4">
-                <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Ви сказали
-                </p>
-                <p className="text-center text-[14px] leading-relaxed text-ink">
-                  «{result.transcript || transcript}»
-                </p>
+          <div className="rounded-2xl border border-border/70 bg-gradient-to-b from-surface to-white px-4 py-4">
+            {processing ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-3">
+                <VoiceWaveform active large />
+                <p className="text-[13px] font-semibold text-ink/70">AI аналізує запит…</p>
               </div>
-
-              <div className="rounded-2xl border border-emerald/20 bg-emerald/5 px-4 py-4">
-                <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-wide text-emerald-dark">
-                  AI зрозумів
-                </p>
-                <FilterChips raw={result.filters} marketDiscovery={marketDiscovery} />
-              </div>
-
-              {message && (
-                <p className="rounded-2xl border border-emerald/20 bg-emerald/10 px-4 py-3 text-[13px] leading-relaxed text-emerald-dark">
-                  {message}
-                </p>
-              )}
-
-              {marketDiscovery ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleApply(true)}
-                    className="flex w-full items-center justify-center rounded-full bg-ink py-3.5 text-[15px] font-semibold text-white shadow-md transition-transform hover:scale-[1.01] active:scale-[0.99]"
-                  >
-                    Шукати по ринку
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApply(false)}
-                    className="w-full py-2 text-[13px] font-medium text-muted transition-colors hover:text-ink"
-                  >
-                    Лише застосувати фільтри
-                  </button>
-                </>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleApply(false)}
-                    className="rounded-full border border-border bg-white py-3 text-[14px] font-semibold text-ink transition-colors hover:bg-surface"
-                  >
-                    Застосувати
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApply(true)}
-                    className="rounded-full bg-ink py-3 text-[14px] font-semibold text-white shadow-md transition-transform hover:scale-[1.01] active:scale-[0.99]"
-                  >
-                    Шукати зараз
-                  </button>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => void start()}
-                className="w-full py-2 text-[13px] font-medium text-muted transition-colors hover:text-ink"
-              >
-                Сказати інакше
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-2xl border border-border/70 bg-gradient-to-b from-surface to-white px-4 py-4">
-                {processing ? (
-                  <div className="flex flex-col items-center justify-center gap-3 py-3">
-                    <VoiceWaveform active large />
-                    <p className="text-[13px] font-semibold text-ink/70">AI аналізує запит…</p>
-                  </div>
-                ) : (
-                  <>
-                    <VoiceWaveform active={listening} large />
-                    <p
-                      className={cn(
-                        "mt-4 min-h-[3.5rem] text-center text-[15px] leading-relaxed",
-                        transcript ? "font-medium text-ink" : "text-muted",
-                      )}
-                    >
-                      {transcript ||
-                        (listening
-                          ? "Говоріть природно — AI розбере марку, ціну, рік і регіон"
-                          : "Тут з’явиться те, що ви скажете")}
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {listening && (
-                <div className="mt-4">
-                  <p className="mb-2 text-center text-[11px] font-medium text-muted">Приклади</p>
-                  <div className="flex flex-col gap-1.5">
-                    {VOICE_SEARCH_EXAMPLES.map(example => (
-                      <p
-                        key={example}
-                        className="rounded-xl bg-surface/80 px-3 py-2 text-center text-[11px] leading-relaxed text-muted"
-                      >
-                        «{example}»
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {message && (
+            ) : (
+              <>
+                <VoiceWaveform active={listening} large />
                 <p
                   className={cn(
-                    "mt-4 rounded-2xl px-4 py-3.5 text-[13px] leading-relaxed",
-                    failed
-                      ? "border border-red-100 bg-red-50 text-red-700"
-                      : "border border-emerald/20 bg-emerald/10 text-emerald-dark",
+                    "mt-4 min-h-[3.5rem] text-center text-[15px] leading-relaxed",
+                    transcript ? "font-medium text-ink" : "text-muted",
                   )}
                 >
-                  {message}
+                  {transcript ||
+                    (listening
+                      ? "Говоріть природно — AI розбере марку, ціну, рік і регіон"
+                      : "Тут з’явиться те, що ви скажете")}
                 </p>
-              )}
+              </>
+            )}
+          </div>
 
-              {failed && (
-                <button
-                  type="button"
-                  onClick={() => void start()}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-border py-3 text-[14px] font-semibold text-ink transition-colors hover:bg-surface"
-                >
-                  <IconMic size={18} />
-                  Спробувати ще
-                </button>
-              )}
-            </>
+          {listening && (
+            <div className="mt-4">
+              <p className="mb-2 text-center text-[11px] font-medium text-muted">Приклади</p>
+              <div className="flex flex-col gap-1.5">
+                {VOICE_SEARCH_EXAMPLES.map(example => (
+                  <p
+                    key={example}
+                    className="rounded-xl bg-surface/80 px-3 py-2 text-center text-[11px] leading-relaxed text-muted"
+                  >
+                    «{example}»
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {message && failed && (
+            <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3.5 text-[13px] leading-relaxed text-red-700">
+              {message}
+            </p>
+          )}
+
+          {failed && (
+            <button
+              type="button"
+              onClick={() => {
+                appliedRef.current = false;
+                void start();
+              }}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-border py-3 text-[14px] font-semibold text-ink transition-colors hover:bg-surface"
+            >
+              <IconMic size={18} />
+              Спробувати ще
+            </button>
           )}
         </div>
       </div>

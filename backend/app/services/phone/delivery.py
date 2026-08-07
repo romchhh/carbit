@@ -28,7 +28,7 @@ async def deliver_phone_auth_code(
 
     if not force_sms and user and user.telegram_connected and user.telegram_id:
         text = (
-            f"🔐 Carbit: ваш код входу <b>{code}</b>.\n"
+            f"🔐 Carbit: ваш код входу <code>{code}</code>.\n"
             "Нікому не повідомляйте його."
         )
         result = await telegram_client.send_message(user.telegram_id, text)

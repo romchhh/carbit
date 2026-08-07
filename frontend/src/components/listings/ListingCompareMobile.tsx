@@ -8,7 +8,6 @@ import { useAuth } from "@/contexts/AuthProvider";
 import {
   buildCompareRows,
   filterDifferentRows,
-  type CompareRow,
 } from "@/lib/listing-compare-rows";
 import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
 import { cn } from "@/lib/utils";
@@ -24,110 +23,72 @@ type Props = {
   className?: string;
 };
 
-function shortListingLabel(listing: Listing): string {
+function shortTitle(listing: Listing): string {
   const brandModel = [listing.brand, listing.model].filter(Boolean).join(" ").trim();
   if (brandModel) return brandModel;
-  const title = listing.title?.trim();
-  if (!title) return "Авто";
-  return title.length > 28 ? `${title.slice(0, 28)}…` : title;
+  const title = listing.title?.trim() || "Авто";
+  return title.length > 26 ? `${title.slice(0, 26)}…` : title;
 }
 
-function highlightBadge(row: CompareRow, index: number): string | null {
-  if (!row.highlightIndexes?.includes(index)) return null;
-  if (row.key === "price") return "Найнижча";
-  if (row.key === "mileage") return "Менший пробіг";
-  return "Краще";
-}
-
-function ParameterValues({
-  row,
-  listings,
+function MobileHeaderCell({
+  listing,
+  onRemove,
+  displayCurrency,
 }: {
-  row: CompareRow;
-  listings: Listing[];
+  listing: Listing;
+  onRemove?: (id: string) => void;
+  displayCurrency: ReturnType<typeof resolveDisplayCurrency>;
 }) {
-  const stacked = listings.length >= 3;
-
-  if (stacked) {
-    return (
-      <div className="divide-y divide-border/40">
-        {row.values.map((value, index) => {
-          const listing = listings[index];
-          const highlighted = row.highlightIndexes?.includes(index);
-          const badge = highlightBadge(row, index);
-
-          return (
-            <div
-              key={`${row.key}-${listing?.id ?? index}`}
-              className={cn("px-3.5 py-3", highlighted && "bg-emerald/8")}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <p className="min-w-0 flex-1 truncate text-[11px] font-semibold text-muted">
-                  {shortListingLabel(listing)}
-                </p>
-                {badge && (
-                  <span className="shrink-0 rounded-full bg-emerald/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-dark">
-                    {badge}
-                  </span>
-                )}
-              </div>
-              <p
-                className={cn(
-                  "mt-1 break-words text-[14px] leading-snug",
-                  row.key === "price" ? "font-black text-ink" : "font-medium text-ink/90",
-                  row.key === "vin" && "font-mono text-[11px]",
-                  highlighted && "text-emerald-dark",
-                )}
-              >
-                {value}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
+  const image = listing.images?.[0];
+  const price = formatListingPrice(
+    Number(listing.price) || 0,
+    listing.currency,
+    displayCurrency,
+    listing.source_data,
+  );
 
   return (
-    <div className={cn("grid gap-px bg-border/40 p-px", gridClassForCount(listings.length))}>
-      {row.values.map((value, index) => {
-        const listing = listings[index];
-        const highlighted = row.highlightIndexes?.includes(index);
-        const badge = highlightBadge(row, index);
-
-        return (
-          <div
-            key={`${row.key}-${listing?.id ?? index}`}
-            className={cn("min-w-0 bg-white px-3 py-3", highlighted && "bg-emerald/8")}
+    <th className="w-[42vw] min-w-[148px] max-w-[180px] border-b border-border/60 bg-white px-2.5 py-3 align-top font-normal">
+      <div className="relative mx-auto aspect-[4/3] w-full overflow-hidden rounded-xl bg-surface">
+        {image ? (
+          <Image
+            src={image}
+            alt={listing.title}
+            fill
+            className="object-cover"
+            sizes="160px"
+            unoptimized
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-[11px] text-muted">Без фото</div>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={() => onRemove(listing.id)}
+            className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-ink/75 text-white active:scale-95"
+            aria-label="Прибрати з порівняння"
           >
-            <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted">
-              {shortListingLabel(listing)}
-            </p>
-            <p
-              className={cn(
-                "mt-1 break-words text-[13px] leading-snug",
-                row.key === "price" ? "font-black text-ink" : "font-medium text-ink/90",
-                row.key === "vin" && "font-mono text-[11px]",
-                highlighted && "text-emerald-dark",
-              )}
-            >
-              {value}
-            </p>
-            {badge && (
-              <span className="mt-1.5 inline-flex rounded-full bg-emerald/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-dark">
-                {badge}
-              </span>
-            )}
-          </div>
-        );
-      })}
-    </div>
+            <IconX size={14} />
+          </button>
+        )}
+      </div>
+      <p className="mt-2 line-clamp-2 text-[12px] font-bold leading-snug text-ink">
+        {shortTitle(listing)}
+      </p>
+      <p className="mt-1 text-[14px] font-black tracking-tight text-ink">{price}</p>
+      {listing.url && (
+        <a
+          href={listing.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1.5 inline-flex min-h-8 items-center text-[11px] font-semibold text-emerald-dark"
+        >
+          Відкрити →
+        </a>
+      )}
+    </th>
   );
-}
-
-function gridClassForCount(count: number): string {
-  if (count <= 1) return "grid-cols-1";
-  return "grid-cols-2";
 }
 
 export function ListingCompareMobile({
@@ -154,7 +115,7 @@ export function ListingCompareMobile({
   if (listings.length === 0) return null;
 
   return (
-    <div className={cn("space-y-4 md:hidden", className)}>
+    <div className={cn("space-y-3 md:hidden", className)}>
       <CompareToolbar
         count={listings.length}
         viewMode={viewMode}
@@ -163,88 +124,81 @@ export function ListingCompareMobile({
         compact
       />
 
-      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory [&::-webkit-scrollbar]:hidden">
-        {listings.map(listing => {
-          const image = listing.images?.[0];
-          const price = formatListingPrice(
-            Number(listing.price) || 0,
-            listing.currency,
-            displayCurrency,
-            listing.source_data,
-          );
+      {listings.length > 2 && (
+        <p className="px-0.5 text-[11px] text-muted">Гортайте таблицю вбік, щоб порівняти всі авто</p>
+      )}
 
-          return (
-            <article
-              key={listing.id}
-              className="w-[min(78vw,280px)] shrink-0 snap-center overflow-hidden rounded-2xl border border-border/70 bg-white shadow-sm"
-            >
-              <div className="relative aspect-[4/3] bg-surface">
-                {image ? (
-                  <Image
-                    src={image}
-                    alt={listing.title}
-                    fill
-                    className="object-cover"
-                    sizes="280px"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-[12px] text-muted">
-                    Без фото
-                  </div>
-                )}
-                {onRemove && (
-                  <button
-                    type="button"
-                    onClick={() => onRemove(listing.id)}
-                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-ink/75 text-white active:scale-95"
-                    aria-label="Прибрати з порівняння"
-                  >
-                    <IconX size={15} />
-                  </button>
-                )}
-              </div>
-              <div className="space-y-2 p-3">
-                <p className="line-clamp-2 text-[13px] font-bold leading-snug text-ink">
-                  {listing.title}
-                </p>
-                <p className="text-[18px] font-black tracking-tight text-ink">{price}</p>
-                {listing.url && (
-                  <a
-                    href={listing.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-10 items-center text-[12px] font-semibold text-emerald-dark"
-                  >
-                    Відкрити оголошення →
-                  </a>
-                )}
-              </div>
-            </article>
-          );
-        })}
-      </div>
-
-      <div className="space-y-2.5">
-        {rows.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border bg-surface/40 px-4 py-8 text-center text-[13px] text-muted">
-            Усі обрані авто мають однакові характеристики в доступних полях.
-          </p>
-        ) : (
-          rows.map(row => (
-            <section
-              key={row.key}
-              className="overflow-hidden rounded-2xl border border-border/60 bg-white"
-            >
-              <div className="border-b border-border/50 bg-surface/60 px-3.5 py-2.5">
-                <h3 className="text-[11px] font-bold uppercase tracking-wide text-muted">
-                  {row.label}
-                </h3>
-              </div>
-              <ParameterValues row={row} listings={listings} />
-            </section>
-          ))
-        )}
+      <div className="-mx-2.5 overflow-x-auto overscroll-x-contain border-y border-border/60 bg-white sm:mx-0 sm:rounded-2xl sm:border">
+        <table className="w-max min-w-full border-collapse text-[13px]">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-[2] w-[88px] min-w-[88px] max-w-[88px] border-b border-r border-border/60 bg-surface px-2 py-3 text-left text-[10px] font-bold uppercase tracking-wide text-muted shadow-[4px_0_12px_-6px_rgba(10,12,14,0.18)]">
+                Параметр
+              </th>
+              {listings.map(listing => (
+                <MobileHeaderCell
+                  key={listing.id}
+                  listing={listing}
+                  onRemove={onRemove}
+                  displayCurrency={displayCurrency}
+                />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={listings.length + 1}
+                  className="px-4 py-10 text-center text-[13px] text-muted"
+                >
+                  Усі обрані авто мають однакові характеристики в доступних полях.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row, rowIndex) => (
+                <tr
+                  key={row.key}
+                  className={cn(
+                    "border-b border-border/40 last:border-0",
+                    rowIndex % 2 === 1 && "bg-surface/25",
+                  )}
+                >
+                  <th className="sticky left-0 z-[1] w-[88px] min-w-[88px] max-w-[88px] border-r border-border/40 bg-surface px-2 py-3 text-left text-[11px] font-semibold leading-snug text-muted shadow-[4px_0_12px_-6px_rgba(10,12,14,0.14)]">
+                    {row.label}
+                  </th>
+                  {row.values.map((value, index) => {
+                    const listing = listings[index];
+                    const highlighted = row.highlightIndexes?.includes(index);
+                    return (
+                      <td
+                        key={`${row.key}-${listing?.id ?? index}`}
+                        className={cn(
+                          "w-[42vw] min-w-[148px] max-w-[180px] px-2.5 py-3 align-top text-[12px] leading-snug",
+                          row.key === "price" ? "font-black text-ink" : "text-ink/90",
+                          row.key === "vin" && "break-all font-mono text-[10px]",
+                          highlighted && "bg-emerald/10 font-semibold text-emerald-dark",
+                        )}
+                      >
+                        {value}
+                        {highlighted && row.key === "price" && (
+                          <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-emerald-dark">
+                            Найнижча
+                          </span>
+                        )}
+                        {highlighted && row.key === "mileage" && (
+                          <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-emerald-dark">
+                            Менший пробіг
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
