@@ -125,11 +125,14 @@ export default function DashboardPage() {
     }
   };
 
-  const handleSearch = () => {
+  const handleSearch = (
+    overrideFilters?: typeof filters,
+    overrideSort?: Parameters<typeof runSearch>[2],
+  ) => {
     clearSaveMessages();
     clearError();
-    trackSearchStart();
-    void runSearch(filters);
+    trackSearchStart(overrideFilters);
+    void runSearch(overrideFilters ?? filters, freshness, overrideSort);
   };
 
   const handleReset = () => {
@@ -173,6 +176,7 @@ export default function DashboardPage() {
             onChange={setFilters}
             onReset={handleReset}
             onSearch={handleSearch}
+            onSortChange={changeSort}
             onSave={handleSave}
             searching={searching}
             searchError={error}

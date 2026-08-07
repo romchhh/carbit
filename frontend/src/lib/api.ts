@@ -447,11 +447,17 @@ export const comparisons = {
   remove: (id: string) => request<void>(`/comparisons/${id}`, { method: "DELETE" }),
 };
 
+export type AiSearchIntent = "market_discovery" | null;
+
 export type AiParseSearchResult = {
   understood: boolean;
   message: string;
   transcript: string;
   filters: Record<string, unknown>;
+  /** Пошук по ринку без марки (бюджет + роки). */
+  search_intent?: AiSearchIntent;
+  /** Рекомендоване сортування результатів. */
+  sort?: SortOption | null;
 };
 
 export const ai = {

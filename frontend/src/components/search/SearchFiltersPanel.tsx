@@ -37,10 +37,12 @@ import {
   normalizeYearRange,
   yearMax,
   type SearchFilterState,
+  type SortOption,
 } from "@/lib/search-catalog";
 import type { SearchFreshness } from "@/lib/search-preview";
 import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { mergeAiSearchFilters } from "@/lib/search-filters-api";
+import { isMarketDiscoveryResult } from "@/lib/voice-search-summary";
 import type { AiParseSearchResult } from "@/lib/api";
 
 type Props = {
@@ -51,7 +53,7 @@ type Props = {
   searchingButtonLabel?: string;
   searchError?: string | null;
   searchErrorRetryAfter?: number | null;
-  onSearch: () => void;
+  onSearch: (overrideFilters?: SearchFilterState, overrideSort?: SortOption) => void;
   onSave?: () => void;
   searching?: boolean;
   saving?: boolean;
@@ -69,13 +71,24 @@ type Props = {
   pricePlaceholderTo?: string;
   /** На лендінгу — кнопка «Голосом» лише показує підказку про кабінет. */
   voiceSearchCabinetOnly?: boolean;
+  onSortChange?: (sort: SortOption) => void;
 };
 
 function mergeVoiceFilters(
   current: SearchFilterState,
   raw: Record<string, unknown>,
+  result: AiParseSearchResult,
 ): SearchFilterState {
-  return mergeAiSearchFilters(current, raw);
+  const merged = mergeAiSearchFilters(current, raw);
+  const hasRegion = raw.region != null && String(raw.region).trim();
+  if (!hasRegion) {
+    merged.region = "Вся Україна";
+  }
+  if (isMarketDiscoveryResult(result) && !raw.brand) {
+    merged.brand = "";
+    merged.model = "";
+  }
+  return merged;
 }
 
 export function SearchFiltersPanel({
@@ -102,6 +115,7 @@ export function SearchFiltersPanel({
   pricePlaceholderFrom,
   pricePlaceholderTo,
   voiceSearchCabinetOnly,
+  onSortChange,
 }: Props) {
   const priceDefaults = DEFAULT_PRICE_BY_CURRENCY[filters.currency];
   const priceFromPlaceholder = pricePlaceholderFrom ?? priceDefaults.from;
@@ -145,20 +159,43 @@ export function SearchFiltersPanel({
     setVoiceOpen(true);
   };
 
-  const handleVoiceApplied = (raw: Record<string, unknown>, result: AiParseSearchResult) => {
-    const merged = mergeVoiceFilters(filters, raw);
+  const handleVoiceApplied = (
+    raw: Record<string, unknown>,
+    result: AiParseSearchResult,
+    searchNow = false,
+  ) => {
+    const merged = mergeVoiceFilters(filters, raw, result);
     const years = normalizeYearRange(merged.yearFrom, merged.yearTo);
     const prices = normalizePriceRange(merged.priceFrom, merged.priceTo);
-    onChange({
+    const marketDiscovery = isMarketDiscoveryResult(result);
+    const nextFilters = {
       ...merged,
       yearFrom: years.from,
       yearTo: years.to,
       priceFrom: prices.from,
       priceTo: prices.to,
-    });
-    setVoiceHint(result.message || "Фільтри заповнено — натисніть «Шукати».");
-    window.setTimeout(() => setVoiceHint(null), 5000);
+    };
+    onChange(nextFilters);
+
+    if (result.sort) {
+      onSortChange?.(result.sort);
+    }
+
+    setVoiceHint(
+      result.message ||
+        (marketDiscovery
+          ? "Шукаю найкращі варіанти по ринку…"
+          : "Фільтри заповнено — натисніть «Шукати»."),
+    );
+    window.setTimeout(() => setVoiceHint(null), 6000);
     scrollToSearch();
+
+    if (searchNow || marketDiscovery) {
+      window.setTimeout(
+        () => onSearch(nextFilters, result.sort ?? undefined),
+        100,
+      );
+    }
   };
 
   const brandModelLabel =

@@ -290,8 +290,10 @@ export function useVoiceSearch() {
       recognitionRef.current = null;
       clearSilenceTimer();
       if (!stopRequestedRef.current) return;
-      const text = `${finalTextRef.current} ${interimTextRef.current}`.trim();
-      void processText(text);
+      window.setTimeout(() => {
+        const text = `${finalTextRef.current} ${interimTextRef.current}`.trim();
+        void processText(text);
+      }, 200);
     };
 
     recognitionRef.current = recognition;
@@ -408,6 +410,10 @@ export function useVoiceSearch() {
       ? `${transcript}${interimTranscript ? (transcript ? " " : "") + interimTranscript : ""}`.trim()
       : transcript;
 
+  const finishRecording = useCallback(async () => {
+    await stopRecording();
+  }, [stopRecording]);
+
   return {
     phase,
     transcript: displayText,
@@ -416,6 +422,7 @@ export function useVoiceSearch() {
     speechSupported,
     start,
     stopRecording,
+    finishRecording,
     reset,
     isActive: phase === "listening" || phase === "processing",
   };

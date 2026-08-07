@@ -444,7 +444,11 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   ]);
 
   const runSearch = useCallback(
-    async (nextFilters: SearchFilterState, nextFreshness: SearchFreshness = freshness) => {
+    async (
+      nextFilters: SearchFilterState,
+      nextFreshness: SearchFreshness = freshness,
+      nextSort: SortOption = sort,
+    ) => {
       const years = normalizeYearRange(nextFilters.yearFrom, nextFilters.yearTo);
       const prices = normalizePriceRange(nextFilters.priceFrom, nextFilters.priceTo);
       const sanitized = {
@@ -455,7 +459,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         priceTo: prices.to,
       };
       setFilters(sanitized);
-      await fetchInitial(sanitized, sort, nextFreshness);
+      setSort(nextSort);
+      await fetchInitial(sanitized, nextSort, nextFreshness);
     },
     [fetchInitial, freshness, sort],
   );
