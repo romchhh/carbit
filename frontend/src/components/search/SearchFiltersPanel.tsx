@@ -190,7 +190,7 @@ export function SearchFiltersPanel({
     window.setTimeout(() => setVoiceHint(null), 6000);
     scrollToSearch();
 
-    if (searchNow || marketDiscovery) {
+    if (searchNow) {
       window.setTimeout(
         () => onSearch(nextFilters, result.sort ?? undefined),
         100,
@@ -394,7 +394,7 @@ export function SearchFiltersPanel({
           ) : null}
           <button
             type="button"
-            onClick={onSearch}
+            onClick={() => onSearch()}
             disabled={searching}
             className={cn(
               "relative w-full overflow-hidden rounded-full bg-emerald py-3.5 text-[16px] font-semibold text-white shadow-md shadow-emerald/25 transition-all duration-300 hover:bg-emerald-dark disabled:cursor-wait",
