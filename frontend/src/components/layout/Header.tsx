@@ -8,6 +8,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useAuth } from "@/contexts/AuthProvider";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { IconBell, IconArrowRight, IconX } from "@/components/icons";
+import { InstagramLink } from "@/components/social/InstagramLink";
 
 const navLinks = [
   { href: "/", label: "Головна" },
@@ -314,6 +315,9 @@ export function Header() {
 
             {!isLoggedIn ? (
               <div className="px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 space-y-2 border-t border-white/10 shrink-0">
+                <div className="flex justify-center pb-1">
+                  <InstagramLink variant="light" />
+                </div>
                 <Link
                   href="/auth/login"
                   onClick={() => setMenuOpen(false)}
@@ -334,6 +338,9 @@ export function Header() {
               </div>
             ) : (
               <div className="px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 space-y-2 border-t border-white/10 shrink-0">
+                <div className="flex justify-center pb-1">
+                  <InstagramLink variant="light" />
+                </div>
                 <div className="text-white/60 text-[12px] px-2 mb-1">{user?.name}</div>
                 <Link
                   href="/app/account"

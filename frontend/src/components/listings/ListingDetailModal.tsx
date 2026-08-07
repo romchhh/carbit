@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { IconGlobe, IconHeart, IconX, IconArrowLeft, IconArrowRight } from "@/components/icons";
+import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
+import { useListingCompare } from "@/hooks/useListingCompare";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks, listingSourceLinks } from "@/components/listings/SourceLinks";
@@ -69,6 +71,7 @@ export function ListingDetailModal({
 
   const listing = liveListing ?? listingProp;
   const isNewCar = listing?.id?.startsWith("new_auto_ria_");
+  const { compareIds, toggle: toggleCompare, isFull } = useListingCompare();
 
   useEffect(() => {
     setLiveListing(listingProp);
@@ -297,6 +300,16 @@ export function ListingDetailModal({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
+              {listing && (
+                <ListingCompareButton
+                  active={compareIds.has(listing.id)}
+                  disabled={isFull && !compareIds.has(listing.id)}
+                  onToggle={() => toggleCompare(listing)}
+                  variant="default"
+                  size="md"
+                  className={MODAL_ACTION_CLASS}
+                />
+              )}
               {onToggleFavorite && (
                 <button
                   type="button"

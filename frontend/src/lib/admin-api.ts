@@ -266,6 +266,20 @@ export const adminApi = {
     );
   },
   listing: (id: string) => request<AdminListingDetail>(`/admin/listings/${id}`),
+  sourceRequests: (page = 1, opts: { status?: string; search?: string } = {}) => {
+    const params = new URLSearchParams({ page: String(page), per_page: "20" });
+    if (opts.status) params.set("status", opts.status);
+    if (opts.search) params.set("search", opts.search ?? "");
+    return request<AdminSourceRequestsPage>(`/admin/source-requests?${params}`);
+  },
+  updateSourceRequest: (
+    id: string,
+    body: { status?: string; admin_note?: string | null },
+  ) =>
+    request<AdminSourceRequest>(`/admin/source-requests/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 };
 
 export interface AdminParserSettings {
@@ -529,3 +543,23 @@ export interface AdminListingRow {
 }
 
 export type AdminListingDetail = import("@/types/api").Listing;
+
+export interface AdminSourceRequest {
+  id: string;
+  url: string;
+  comment?: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  admin_note?: string | null;
+}
+
+export interface AdminSourceRequestsPage {
+  items: AdminSourceRequest[];
+  total: number;
+  page: number;
+  per_page: number;
+}

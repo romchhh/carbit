@@ -6,6 +6,7 @@ from app.models.models import Listing, SearchQuery
 from app.schemas.schemas import PaginatedListings, ListingOut
 from app.services.listings.serialize import listing_to_out
 from app.services.listings.duplicates import listing_out_with_mirrors
+from app.services.comparisons.resolve import resolve_listings_for_ids
 from app.services.parser.results import get_search_results_from_db
 from app.services.telegram_channels.lazy_photos import (
     enqueue_listing_photos,
@@ -36,6 +37,20 @@ async def get_listings_for_search(
         per_page=per_page,
         sort_by=sort_by,
     )
+
+
+@router.get("/batch", response_model=list[ListingOut])
+async def batch_listings(
+    ids: str = Query(..., min_length=1, description="Comma-separated listing ids, max 4"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Публічне завантаження кількох оголошень для порівняння / шарингу."""
+    id_list = [part.strip() for part in ids.split(",") if part.strip()]
+    if not id_list:
+        raise HTTPException(400, "Вкажіть ids")
+    if len(id_list) > 4:
+        raise HTTPException(400, "Максимум 4 оголошення")
+    return await resolve_listings_for_ids(db, id_list)
 
 
 @router.get("/{listing_id}", response_model=ListingOut)

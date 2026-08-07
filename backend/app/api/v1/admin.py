@@ -13,7 +13,13 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_admin_token, get_current_admin, get_current_admin_flexible
 from app.models.models import User, SearchQuery, Notification, Favorite, PlanTier
-from app.schemas.schemas import MessageResponse
+from app.schemas.schemas import (
+    AdminMonitoringSourceRequestOut,
+    AdminSourceRequestUpdate,
+    MessageResponse,
+    PaginatedAdminSourceRequests,
+)
+from app.services.admin.source_requests import list_source_requests, update_source_request
 from app.services.admin.billing_metrics import (
     billing_overview,
     list_user_billing,
@@ -665,3 +671,40 @@ async def admin_finance(
         liqpay=LiqPayFinanceOut(**overview),
         issues=[AdminBillingSubOut(**row) for row in issues],
     )
+
+
+@router.get("/source-requests", response_model=PaginatedAdminSourceRequests)
+async def admin_list_source_requests(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    status: str | None = Query(None),
+    search: str = Query(""),
+    _: str = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    items, total = await list_source_requests(
+        db, page=page, per_page=per_page, status=status, search=search
+    )
+    return PaginatedAdminSourceRequests(
+        items=items, total=total, page=page, per_page=per_page
+    )
+
+
+@router.patch("/source-requests/{request_id}", response_model=AdminMonitoringSourceRequestOut)
+async def admin_update_source_request(
+    request_id: str,
+    body: AdminSourceRequestUpdate,
+    _: str = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if body.status is None and body.admin_note is None:
+        raise HTTPException(400, "Немає полів для оновлення")
+    updated = await update_source_request(
+        db,
+        request_id,
+        status=body.status,
+        admin_note=body.admin_note,
+    )
+    if not updated:
+        raise HTTPException(404, "Заявку не знайдено")
+    return updated

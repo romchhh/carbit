@@ -1,5 +1,5 @@
 import { SVGProps } from "react";
-import { Car, Pencil, Trash2, User, type LucideIcon } from "lucide-react";
+import { Car, Pencil, Scale, Trash2, User, type LucideIcon } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 
@@ -84,6 +84,14 @@ export const IconX = icon(
   </>
 );
 
+export const IconMic = icon(
+  <>
+    <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.6"/>
+    <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+    <path d="M12 18v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  </>
+);
+
 export const IconPlus = icon(
   <>
     <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
@@ -156,6 +164,7 @@ export const IconZap = icon(
 export const IconUser = lucideIcon(User);
 
 export const IconCar = lucideIcon(Car);
+export const IconCompare = lucideIcon(Scale);
 
 export const IconCreditCard = icon(
   <>
@@ -211,6 +220,14 @@ export const IconShare = icon(
   <>
     <path d="M8 12l8-5v10l-8-5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
     <path d="M4 6v12a2 2 0 0 0 2 2h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  </>
+);
+
+export const IconInstagram = icon(
+  <>
+    <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="1.6" />
+    <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
+    <circle cx="17.5" cy="6.5" r="1" fill="currentColor" />
   </>
 );
 

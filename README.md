@@ -43,6 +43,14 @@ autoradar/
 3. **Telegram-канали** — `parser/` (Telethon) → `telegram_channels/ingest.py` → БД; realtime через `telegram_worker/`.
 4. **Бот** — `bot/` → internal API backend → токени в `storage/kv_store.py`.
 
+### Авторизація (phone-first)
+
+- **Реєстрація / вхід у UI** — лише номер телефону (`/auth/login`).
+- **Реєстрація** — SMS-код через TurboSMS (`TURBOSMS_TOKEN`, `TURBOSMS_SENDER=Carbit`).
+- **Вхід** — код у Telegram, якщо акаунт привʼязаний; інакше SMS.
+- **Голосовий пошук** — OpenAI, тільки в кабінеті (не на лендінгу).
+- **Порівняння** — `/app/compare?ids=...` доступне гостям.
+
 ## Перший запуск (локально)
 
 ```bash
@@ -52,7 +60,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env   # TELEGRAM_BOT_TOKEN, TELETHON_API_ID тощо
+cp .env.example .env   # OPENAI_API_KEY, TURBOSMS_*, TELEGRAM_BOT_TOKEN, TELETHON_* …
 
 mkdir -p database media
 cd backend && PYTHONPATH=. alembic upgrade head && cd ..

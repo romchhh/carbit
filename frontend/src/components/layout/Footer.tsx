@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { LiqPayLogo } from "@/components/brand/LiqPayLogo";
+import { InstagramLink } from "@/components/social/InstagramLink";
 import { SUPPORT_EMAIL } from "@/lib/pricing-plans";
 
-const columns = [
+const columns: {
+  title: string;
+  links: { label: string; href: string; external?: boolean }[];
+}[] = [
   {
     title: "Продукт",
     links: [
@@ -25,12 +29,16 @@ const columns = [
     title: "Підтримка",
     links: [{ label: SUPPORT_EMAIL, href: `mailto:${SUPPORT_EMAIL}` }],
   },
+  {
+    title: "Соцмережі",
+    links: [{ label: "Instagram @carbit.info", href: "https://www.instagram.com/carbit.info?igsh=N3ZyMXVvOGVtZjA4", external: true }],
+  },
 ];
 
 export function Footer() {
   return (
     <footer className="bg-ink text-white">
-      <div className="max-w-[1280px] mx-auto px-5 sm:px-6 py-10 sm:py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 text-center sm:text-left">
+      <div className="max-w-[1280px] mx-auto px-5 sm:px-6 py-10 sm:py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 sm:gap-8 text-center sm:text-left">
         <div className="flex flex-col items-center sm:items-start">
           <Link href="/" className="flex items-center w-fit group">
             <CarbitLogo variant="full" height={36} light className="transition-opacity group-hover:opacity-90" />
@@ -43,6 +51,9 @@ export function Footer() {
             <br />
             02055, м. Київ, вул. Урлівська, 20, кв. 79
           </p>
+          <div className="mt-4 flex flex-col items-center gap-2 sm:items-start">
+            <InstagramLink variant="light" size="sm" />
+          </div>
           <div className="mt-4 flex flex-col items-center gap-2 sm:items-start">
             <span className="text-[10px] uppercase tracking-wider text-white/35">Оплата через</span>
             <a
@@ -60,11 +71,22 @@ export function Footer() {
           <div key={title} className="flex flex-col items-center sm:items-start">
             <div className="text-[11px] font-semibold tracking-[0.1em] uppercase text-white/40 mb-3">{title}</div>
             <ul className="space-y-2">
-              {links.map(({ label, href }) => (
+              {links.map(({ label, href, external }) => (
                 <li key={label}>
-                  <Link href={href} className="text-[12px] text-white/65 hover:text-emerald transition-colors">
-                    {label}
-                  </Link>
+                  {external ? (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[12px] text-white/65 hover:text-emerald transition-colors"
+                    >
+                      {label}
+                    </a>
+                  ) : (
+                    <Link href={href} className="text-[12px] text-white/65 hover:text-emerald transition-colors">
+                      {label}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>

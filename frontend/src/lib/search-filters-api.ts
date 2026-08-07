@@ -170,6 +170,58 @@ function ownersToUi(value: number | null | undefined): OwnersFilterValue {
   return String(value) as OwnersFilterValue;
 }
 
+/** Застосовує лише поля, які повернув AI (не скидає решту фільтрів). */
+export function mergeAiSearchFilters(
+  current: SearchFilterState,
+  raw: Record<string, unknown> | null | undefined,
+): SearchFilterState {
+  if (!raw || typeof raw !== "object" || Object.keys(raw).length === 0) return current;
+
+  const parsed = fromBackendSearchFilters(raw);
+  const next = { ...current };
+
+  if (raw.brand != null && String(raw.brand).trim()) {
+    next.brand = parsed.brand;
+    next.model = raw.model != null && String(raw.model).trim() ? parsed.model : "";
+  } else if (raw.model != null && String(raw.model).trim()) {
+    next.model = parsed.model;
+  }
+
+  if (raw.category != null && String(raw.category).trim() && raw.category !== "all") {
+    next.category = parsed.category;
+  }
+  if (raw.region != null && String(raw.region).trim()) next.region = parsed.region;
+  if (raw.year_from != null) next.yearFrom = parsed.yearFrom;
+  if (raw.year_to != null) next.yearTo = parsed.yearTo;
+  if (raw.price_from != null) next.priceFrom = parsed.priceFrom;
+  if (raw.price_to != null) next.priceTo = parsed.priceTo;
+  if (raw.currency != null && String(raw.currency).trim()) next.currency = parsed.currency;
+  if (raw.mileage_from != null) next.mileageFrom = parsed.mileageFrom;
+  if (raw.mileage_to != null) next.mileageTo = parsed.mileageTo;
+  if (Array.isArray(raw.fuel) && raw.fuel.length) next.fuels = parsed.fuels;
+  if (Array.isArray(raw.transmission) && raw.transmission.length) next.transmissions = parsed.transmissions;
+  if (Array.isArray(raw.drivetrain) && raw.drivetrain.length) next.driveTypes = parsed.driveTypes;
+  if (Array.isArray(raw.body_types) && raw.body_types.length) next.bodyTypes = parsed.bodyTypes;
+  if (Array.isArray(raw.colors) && raw.colors.length) next.colors = parsed.colors;
+  if (Array.isArray(raw.sources) && raw.sources.length) next.sources = parsed.sources;
+  if (raw.engine_volume_from != null) next.engineVolumeFrom = parsed.engineVolumeFrom;
+  if (raw.engine_volume_to != null) next.engineVolumeTo = parsed.engineVolumeTo;
+  if (raw.power_from != null) next.powerFrom = parsed.powerFrom;
+  if (raw.power_to != null) next.powerTo = parsed.powerTo;
+  if (raw.seller_filter != null && String(raw.seller_filter).trim()) next.sellerFilter = parsed.sellerFilter;
+  if (raw.accident != null && String(raw.accident).trim()) next.accident = parsed.accident;
+  if (raw.zero_mileage === true) next.zeroMileage = true;
+  if (raw.bargain === true) next.bargain = true;
+  if (raw.vin_verified === true) next.vinVerified = true;
+  if (raw.owners_max != null) next.ownersMax = parsed.ownersMax;
+  if (raw.in_credit != null && String(raw.in_credit).trim()) next.inCredit = parsed.inCredit;
+  if (raw.usa_import != null && String(raw.usa_import).trim()) next.usaImport = parsed.usaImport;
+  if (raw.not_customs != null && String(raw.not_customs).trim()) next.notCustoms = parsed.notCustoms;
+  if (raw.metallic === true) next.metallic = true;
+
+  return next;
+}
+
 /** Відновлює UI-фільтри зі збереженого моніторингу. */
 export function fromBackendSearchFilters(
   raw: Record<string, unknown> | null | undefined,

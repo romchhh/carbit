@@ -166,6 +166,33 @@ class OlxClient:
         _ = last_status
         return []
 
+    async def fetch_offer_by_id(self, offer_id: str) -> OlxListing | None:
+        """GET /api/v1/offers/{id}/ — одне оголошення для шарингу порівняння."""
+        from app.services.olx.parser import _listing_from_embedded, _normalize_api_offer
+
+        oid = str(offer_id or "").strip()
+        if not oid:
+            return None
+        url = f"{BASE_URL}{OFFERS_API_PATH}{oid}/"
+        headers = self._request_headers(accept="application/json")
+        try:
+            response = await self._get(url, headers=headers)
+        except (httpx.TimeoutException, httpx.HTTPError):
+            return None
+        if response.status_code != 200:
+            return None
+        try:
+            payload = response.json()
+        except ValueError:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        data = payload.get("data")
+        if isinstance(data, dict):
+            return _listing_from_embedded(_normalize_api_offer(data))
+        parsed = parse_offers_api_payload(payload)
+        return parsed[0] if parsed else None
+
     async def fetch_listing_details(self, url: str) -> dict:
         html = await self.fetch_html(url)
         return await asyncio.to_thread(parse_listing_details, html)

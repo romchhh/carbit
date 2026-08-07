@@ -44,6 +44,13 @@ class SubscriptionStatus(str, enum.Enum):
     past_due = "past_due"
 
 
+class SourceRequestStatus(str, enum.Enum):
+    pending = "pending"
+    in_review = "in_review"
+    approved = "approved"
+    rejected = "rejected"
+
+
 def new_uuid() -> str:
     return str(uuid.uuid4())
 
@@ -59,6 +66,8 @@ class User(Base):
     telegram_id: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     telegram_username: Mapped[str | None] = mapped_column(String, nullable=True)
     telegram_avatar_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
+    phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     plan: Mapped[PlanTier] = mapped_column(SAEnum(PlanTier), default=PlanTier.free)
     plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -72,6 +81,14 @@ class User(Base):
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     billing_subscriptions: Mapped[list["BillingSubscription"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    source_requests: Mapped[list["MonitoringSourceRequest"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    saved_comparisons: Mapped[list["SavedComparison"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -219,6 +236,51 @@ class TelegramChannel(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
+
+
+class MonitoringSourceRequest(Base):
+    """Заявка користувача на додавання каналу / сайту для моніторингу."""
+
+    __tablename__ = "monitoring_source_requests"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    url: Mapped[str] = mapped_column(String(2048))
+    comment: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    status: Mapped[SourceRequestStatus] = mapped_column(
+        SAEnum(SourceRequestStatus),
+        default=SourceRequestStatus.pending,
+        index=True,
+    )
+    admin_note: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=now_kyiv,
+        onupdate=now_kyiv,
+    )
+
+    user: Mapped["User"] = relationship(back_populates="source_requests")
+
+
+class SavedComparison(Base):
+    """Збережений список порівняння авто."""
+
+    __tablename__ = "saved_comparisons"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    listing_ids: Mapped[list] = mapped_column(JSON, default=list)
+    share_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_kyiv)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=now_kyiv,
+        onupdate=now_kyiv,
+    )
+
+    user: Mapped["User"] = relationship(back_populates="saved_comparisons")
 
 
 class BillingSubscription(Base):

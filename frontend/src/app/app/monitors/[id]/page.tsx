@@ -6,6 +6,7 @@ import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
+import { useCompareOnListingCard } from "@/hooks/useCompareOnListingCard";
 import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
 import { notifyNotificationsChanged } from "@/lib/notifications-events";
 import { formatSearchDesc } from "@/lib/format-search-desc";
@@ -90,6 +91,7 @@ export default function MonitorDetailPage({
     clearError,
     toggleFavorite,
   } = useListingFavorites(results.map(item => item.id));
+  const { cardCompareProps, compareHint } = useCompareOnListingCard();
 
   const openListing = (listing: Listing) => {
     saveRecentListing(listing);
@@ -120,6 +122,10 @@ export default function MonitorDetailPage({
 
       {search && (
         <p className="mb-5 text-[13px] text-muted">{formatSearchDesc(search.filters)}</p>
+      )}
+
+      {compareHint && (
+        <div className="mb-4 rounded-xl bg-surface px-4 py-3 text-[13px] text-muted">{compareHint}</div>
       )}
 
       <SearchResultsToolbar
@@ -168,6 +174,7 @@ export default function MonitorDetailPage({
               isFavorite={favoriteIds.has(item.id)}
               favoriteLoading={loadingIds.has(item.id)}
               onToggleFavorite={() => toggleFavorite(item)}
+              {...cardCompareProps(item)}
             />
           ))}
         </div>

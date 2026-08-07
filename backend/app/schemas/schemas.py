@@ -27,6 +27,7 @@ class ResendCodeRequest(BaseModel):
 class MessageResponse(BaseModel):
     message: str
     expires_in: int | None = None
+    channel: str | None = None
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -42,6 +43,46 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
     remember: bool = True
+
+
+class PhoneSendCodeRequest(BaseModel):
+    phone: str = Field(min_length=9, max_length=32)
+    intent: str = Field(pattern=r"^(login|register)$")
+    name: str | None = Field(default=None, max_length=100)
+    delivery: str = Field(default="auto", pattern=r"^(auto|sms)$")
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
+
+
+class PhoneVerifyRequest(BaseModel):
+    phone: str = Field(min_length=9, max_length=32)
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    intent: str = Field(pattern=r"^(login|register)$")
+    name: str | None = Field(default=None, max_length=100)
+    remember: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
+
+
+class PhoneBindSendRequest(BaseModel):
+    phone: str = Field(min_length=9, max_length=32)
+
+
+class PhoneBindVerifyRequest(BaseModel):
+    phone: str = Field(min_length=9, max_length=32)
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class TelegramLoginRequest(BaseModel):
@@ -97,6 +138,8 @@ class UserOut(BaseModel):
     telegram_username: str | None = None
     avatar_url: str | None = None
     email_verified: bool = False
+    phone: str | None = None
+    phone_verified: bool = False
     trial_ends_at: datetime | None = None
     is_trial_active: bool = False
     onboarding_completed: bool = False
@@ -522,3 +565,64 @@ class VinCheckOut(BaseModel):
     stolen_details: list[VinCheckStolenOut] = Field(default_factory=list)
     source_url: str
     note: Optional[str] = None
+
+
+# Заявки на нові джерела моніторингу
+class MonitoringSourceRequestCreate(BaseModel):
+    url: str = Field(min_length=4, max_length=2048)
+    comment: Optional[str] = Field(None, max_length=2000)
+
+
+class MonitoringSourceRequestOut(BaseModel):
+    id: str
+    url: str
+    comment: Optional[str] = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AdminMonitoringSourceRequestOut(MonitoringSourceRequestOut):
+    user_id: str
+    user_name: str
+    user_email: str
+    admin_note: Optional[str] = None
+
+
+class PaginatedAdminSourceRequests(BaseModel):
+    items: list[AdminMonitoringSourceRequestOut]
+    total: int
+    page: int
+    per_page: int
+
+
+class AdminSourceRequestUpdate(BaseModel):
+    status: Optional[str] = Field(None, pattern=r"^(pending|in_review|approved|rejected)$")
+    admin_note: Optional[str] = Field(None, max_length=2000)
+
+
+class SavedComparisonCreate(BaseModel):
+    name: Optional[str] = Field(None, max_length=120)
+    listing_ids: list[str] = Field(min_length=2, max_length=4)
+
+
+class SavedComparisonOut(BaseModel):
+    id: str
+    name: str
+    listing_ids: list[str]
+    share_id: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SavedComparisonDetailOut(SavedComparisonOut):
+    listings: list["ListingOut"] = Field(default_factory=list)
+
+
+class SavedComparisonShareOut(BaseModel):
+    name: str
+    listing_ids: list[str]
+    share_id: str
+    listings: list["ListingOut"] = Field(default_factory=list)

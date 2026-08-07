@@ -9,6 +9,7 @@ PLANS: dict[str, dict] = {
         "description": "Пробний доступ на 7 днів",
         "searches_limit": 1,
         "accounts_limit": 1,
+        "devices_limit": 1,
         "requests_month": 1_000,
         "requests_hour": 90,
         # Live-пошук у кабінеті: лише нові запити (page=1), не пагінація.
@@ -19,6 +20,7 @@ PLANS: dict[str, dict] = {
             "Пробний період 7 днів",
             "До 1 активного моніторингу",
             "1 акаунт",
+            "1 пристрій",
             "Веб-кабінет і сповіщення",
         ],
     },
@@ -28,6 +30,7 @@ PLANS: dict[str, dict] = {
         "description": "До 10 активних моніторингів, 1 акаунт",
         "searches_limit": 10,
         "accounts_limit": 1,
+        "devices_limit": 2,
         "requests_month": 50_000,
         "requests_hour": 6_000,
         "live_searches_hour": 150,
@@ -37,6 +40,7 @@ PLANS: dict[str, dict] = {
             "30 днів доступу",
             "До 10 активних моніторингів",
             "1 акаунт",
+            "До 2 пристроїв",
             "Telegram-сповіщення",
             "Веб-кабінет",
         ],
@@ -47,6 +51,7 @@ PLANS: dict[str, dict] = {
         "description": "До 30 активних моніторингів, до 3 акаунтів",
         "searches_limit": 30,
         "accounts_limit": 3,
+        "devices_limit": 6,
         "requests_month": 150_000,
         "requests_hour": 15_000,
         "live_searches_hour": 300,
@@ -56,6 +61,7 @@ PLANS: dict[str, dict] = {
             "30 днів доступу",
             "До 30 активних моніторингів",
             "До 3 акаунтів",
+            "До 6 пристроїв",
             "Telegram-сповіщення",
             "Анти-дубль оголошень",
         ],
@@ -66,6 +72,7 @@ PLANS: dict[str, dict] = {
         "description": "До 100 активних моніторингів, до 5 акаунтів",
         "searches_limit": 100,
         "accounts_limit": 5,
+        "devices_limit": 12,
         "requests_month": 500_000,
         "requests_hour": 30_000,
         "live_searches_hour": 600,
@@ -75,6 +82,7 @@ PLANS: dict[str, dict] = {
             "30 днів доступу",
             "До 100 активних моніторингів",
             "До 5 акаунтів",
+            "До 12 пристроїв",
             "Telegram-сповіщення",
             "Пріоритетна обробка пошуків",
         ],
@@ -99,6 +107,15 @@ def effective_searches_limit(user) -> int:
     if getattr(user, "is_trial_active", False) and user.plan.value == "free":
         return get_plan(TRIAL_PLAN_ID)["searches_limit"]
     return get_plan(user.plan.value)["searches_limit"]
+
+
+def effective_devices_limit(user) -> int:
+    """Скільки одночасних сесій (пристроїв) дозволяє план."""
+    if enforce_plan_expiry(user):
+        pass
+    if getattr(user, "is_trial_active", False) and user.plan.value == "free":
+        return get_plan(TRIAL_PLAN_ID)["devices_limit"]
+    return max(1, int(get_plan(user.plan.value).get("devices_limit") or 1))
 
 
 def effective_live_searches_hour(user) -> int:

@@ -5,6 +5,8 @@ import {
   IconCreditCard,
   IconUser,
   IconCar,
+  IconGlobe,
+  IconCompare,
 } from "@/components/icons";
 
 export type NavBadgeKey = "notifications" | "monitors";
@@ -37,6 +39,8 @@ export const primaryNav: DashboardNavItem[] = [
 export const secondaryNav: DashboardNavItem[] = [
   { href: "/app/account", icon: IconUser, label: "Акаунт", tourId: "nav-account" },
   { href: "/app/billing", icon: IconCreditCard, label: "Підписка", tourId: "nav-billing" },
+  { href: "/app/compare", icon: IconCompare, label: "Порівняння", tourId: "nav-compare" },
+  { href: "/app/suggest-source", icon: IconGlobe, label: "Запропонувати джерело", tourId: "nav-suggest-source" },
 ];
 
 /** Bottom bar: без статистики, щоб лишилось місце під «Монітори». */

@@ -11,14 +11,37 @@ from app.core.config import settings
 
 optional_bearer = HTTPBearer(auto_error=False)
 
+SESSION_REVOKED_DETAIL = "Session revoked"
 
-def _decode_user_id(token: str) -> str:
+
+def _decode_user_token(token: str) -> tuple[str, str | None]:
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     if payload.get("role") == "admin":
         raise JWTError()
     user_id: str | None = payload.get("sub")
     if not user_id:
         raise JWTError()
+    jti = payload.get("jti")
+    if jti is not None:
+        jti = str(jti)
+    return user_id, jti
+
+
+def _decode_user_id(token: str) -> str:
+    user_id, _ = _decode_user_token(token)
+    return user_id
+
+
+async def _validate_user_token(token: str) -> str:
+    user_id, jti = _decode_user_token(token)
+    if jti:
+        from app.services.auth.sessions import is_session_active
+
+        if not await is_session_active(user_id, jti):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=SESSION_REVOKED_DETAIL,
+            )
     return user_id
 
 
@@ -39,14 +62,19 @@ async def get_current_user_id(
 ) -> str:
     """Accept Bearer OR HttpOnly cookie — same session for middleware and API."""
     bearer = credentials.credentials if credentials and credentials.credentials else None
-    # Спочатку Bearer, якщо протух/битий — cookie (роз’їзд localStorage vs HttpOnly)
+    last_error: HTTPException | None = None
     for token in (bearer, cookie_token):
         if not token:
             continue
         try:
-            return _decode_user_id(token)
+            return await _validate_user_token(token)
+        except HTTPException as exc:
+            last_error = exc
+            continue
         except JWTError:
             continue
+    if last_error:
+        raise last_error
     if not bearer and not cookie_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
@@ -63,7 +91,9 @@ async def get_current_user_id_flexible(
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
-        return _decode_user_id(token)
+        return await _validate_user_token(token)
+    except HTTPException:
+        raise
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
@@ -76,9 +106,17 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    subject: str,
+    expires_delta: Optional[timedelta] = None,
+    *,
+    jti: str | None = None,
+) -> str:
     expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-    return jwt.encode({"sub": subject, "exp": expire}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    payload: dict = {"sub": subject, "exp": expire}
+    if jti:
+        payload["jti"] = jti
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def create_admin_token(expires_delta: Optional[timedelta] = None) -> str:

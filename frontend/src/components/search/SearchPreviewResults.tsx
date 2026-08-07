@@ -7,6 +7,7 @@ import { SearchProgressBar } from "@/components/search/SearchProgressBar";
 import { SearchResultsSkeleton } from "@/components/search/SearchResultsSkeleton";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
+import { useCompareOnListingCard } from "@/hooks/useCompareOnListingCard";
 import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import { listingsToExportItems } from "@/lib/export-listings";
@@ -105,6 +106,7 @@ export function SearchPreviewResults({
   const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } = useListingFavorites(
     results.map(item => item.id),
   );
+  const { cardCompareProps, compareHint } = useCompareOnListingCard();
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const exportItems = useMemo(() => listingsToExportItems(results), [results]);
   const remaining = Math.max(0, total - results.length);
@@ -152,6 +154,15 @@ export function SearchPreviewResults({
             className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900"
           >
             {partialHint}
+          </div>
+        )}
+
+        {compareHint && (
+          <div
+            role="status"
+            className="mb-4 rounded-2xl border border-border/80 bg-surface/70 px-4 py-3 text-[13px] text-muted"
+          >
+            {compareHint}
           </div>
         )}
 
@@ -216,6 +227,7 @@ export function SearchPreviewResults({
                   isFavorite={favoriteIds.has(item.id)}
                   favoriteLoading={loadingIds.has(item.id)}
                   onToggleFavorite={() => toggleFavorite(item)}
+                  {...cardCompareProps(item)}
                 />
               ))}
             </div>

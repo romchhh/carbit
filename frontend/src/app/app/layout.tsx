@@ -9,7 +9,13 @@ import { PublicListingShell } from "@/components/layout/PublicListingShell";
 import { OnboardingTour } from "@/components/onboarding/OnboardingTour";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 import { PwaLoadingScreen } from "@/components/pwa/PwaLoadingScreen";
+import { CompareBar } from "@/components/listings/CompareBar";
+import { InstagramFollowModal } from "@/components/social/InstagramFollowModal";
 import { useAuth } from "@/contexts/AuthProvider";
+import {
+  markInstagramFollowPromptShown,
+  shouldShowInstagramFollowPrompt,
+} from "@/lib/instagram-follow-prompt";
 import * as api from "@/lib/api";
 import { completeOnboarding, ONBOARDING_TOUR_EVENT, shouldShowOnboarding } from "@/lib/onboarding";
 
@@ -34,19 +40,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, initialized, refreshUser } = useAuth();
   const [searchesUsed, setSearchesUsed] = useState(0);
   const [tourActive, setTourActive] = useState(false);
+  const [instagramPromptOpen, setInstagramPromptOpen] = useState(false);
   const badges = useDashboardBadges();
   const isOnboardingRoute = pathname === "/app/onboarding";
   const isPublicListing = pathname.startsWith("/app/listing/");
+  const isPublicCompare = pathname === "/app/compare" || pathname.startsWith("/app/compare/");
+  const isPublicAppRoute = isPublicListing || isPublicCompare;
   const rootRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isPublicListing) return;
+    if (isPublicAppRoute) return;
     if (!initialized || loading || user) return;
     // Hard redirect — soft replace знову потрапляє під middleware /app і зависає на лоадері
     const redirect = pathname.startsWith("/app") ? pathname : "/app/dashboard";
     window.location.replace(`/auth/login?redirect=${encodeURIComponent(redirect)}`);
-  }, [initialized, loading, user, pathname, isPublicListing]);
+  }, [initialized, loading, user, pathname, isPublicAppRoute]);
 
   useEffect(() => {
     void api.fx.rates().catch(() => {});
@@ -85,6 +94,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(ONBOARDING_TOUR_EVENT, onStartTour);
   }, [user]);
 
+  useEffect(() => {
+    if (!user || tourActive || isPublicListing || isOnboardingRoute) return;
+    if (pathname !== "/app/dashboard") return;
+    if (!shouldShowInstagramFollowPrompt()) return;
+
+    const timer = window.setTimeout(() => {
+      markInstagramFollowPromptShown();
+      setInstagramPromptOpen(true);
+    }, 1800);
+
+    return () => window.clearTimeout(timer);
+  }, [user, pathname, tourActive, isPublicListing, isOnboardingRoute]);
+
   // Сірий canvas / поля навколо острова не в overflow-y — прокидаємо wheel у контент.
   useEffect(() => {
     const root = rootRef.current;
@@ -115,7 +137,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     void refreshUser();
   };
 
-  if (isPublicListing) {
+  if (isPublicAppRoute) {
     if (!initialized || loading) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-white">
@@ -124,7 +146,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       );
     }
     if (!user) {
-      return <PublicListingShell>{children}</PublicListingShell>;
+      return (
+        <>
+          <PublicListingShell>{children}</PublicListingShell>
+          {isPublicCompare && <CompareBar />}
+        </>
+      );
     }
   }
 
@@ -184,6 +211,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <DashboardMobileNav badges={badges} />
+      <CompareBar />
 
       {tourActive && (
         <OnboardingTour
@@ -192,6 +220,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           onSkip={() => void finishOnboarding()}
         />
       )}
+
+      <InstagramFollowModal
+        open={instagramPromptOpen}
+        onClose={() => setInstagramPromptOpen(false)}
+      />
     </div>
   );
 }

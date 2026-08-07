@@ -24,6 +24,10 @@ import type {
   UpgradeQuote,
   User,
   VinCheckResult,
+  MonitoringSourceRequest,
+  SavedComparison,
+  SavedComparisonDetail,
+  SavedComparisonShare,
 } from "@/types/api";
 
 function apiUrl(): string {
@@ -135,6 +139,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const parsed = await parseError(res);
+    if (
+      res.status === 401 &&
+      parsed.message === "Session revoked" &&
+      typeof window !== "undefined"
+    ) {
+      clearToken();
+      sessionStorage.setItem("carbit_session_revoked", "1");
+      if (window.location.pathname.startsWith("/app")) {
+        window.location.assign("/auth/login?session=revoked");
+      }
+    }
     throw new ApiError(res.status, parsed.message, parsed.code, parsed.retryAfter);
   }
   if (res.status === 204) return undefined as T;
@@ -167,6 +182,30 @@ export const auth = {
   telegramLoginUrl: () => request<{ bot_url: string; bot_username: string }>("/auth/telegram/login-url"),
   telegramRegisterUrl: () => request<{ bot_url: string; bot_username: string }>("/auth/telegram/register-url"),
   googleLoginUrl: () => `${apiUrl()}/auth/google`,
+  phoneSendCode: (body: {
+    phone: string;
+    intent: "login" | "register";
+    name?: string;
+    delivery?: "auto" | "sms";
+  }) =>
+    request<{ message: string; expires_in?: number; channel?: "sms" | "telegram" }>(
+      "/auth/phone/send-code",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+  phoneVerify: (body: {
+    phone: string;
+    code: string;
+    intent: "login" | "register";
+    name?: string;
+    remember?: boolean;
+  }) =>
+    request<TokenResponse>("/auth/phone/verify", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   me: () => request<User>("/auth/me"),
   updateProfile: (body: { name?: string; preferred_currency?: string }) =>
     request<User>("/auth/me", { method: "PATCH", body: JSON.stringify(body) }),
@@ -186,6 +225,16 @@ export const users = {
     request<User>("/users/me/email/verify", {
       method: "POST",
       body: JSON.stringify({ email, code }),
+    }),
+  sendPhoneBindCode: (phone: string) =>
+    request<{ message: string; expires_in?: number }>("/users/me/phone/send-code", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    }),
+  verifyPhoneBind: (phone: string, code: string) =>
+    request<User>("/users/me/phone/verify", {
+      method: "POST",
+      body: JSON.stringify({ phone, code }),
     }),
 };
 
@@ -264,6 +313,8 @@ function slimListingForSeed(listing: Listing): Record<string, unknown> {
 // ── Listings ──────────────────────────────────────────
 export const listings = {
   get: (id: string) => request<Listing>(`/listings/${id}`),
+  batch: (ids: string[]) =>
+    request<Listing[]>(`/listings/batch?ids=${encodeURIComponent(ids.join(","))}`),
   ensurePhotos: (id: string) =>
     request<Listing>(`/listings/${id}/ensure-photos`, { method: "POST" }),
 };
@@ -372,4 +423,63 @@ export const telegram = {
 // ── VIN / База ДАІ ────────────────────────────────────
 export const vin = {
   lookup: (vinCode: string) => request<VinCheckResult>(`/vin/${encodeURIComponent(vinCode)}`),
+};
+
+// ── Заявки на джерела ─────────────────────────────────
+export const sourceRequests = {
+  list: () => request<MonitoringSourceRequest[]>("/source-requests"),
+  create: (body: { url: string; comment?: string }) =>
+    request<MonitoringSourceRequest>("/source-requests", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
+export const comparisons = {
+  list: () => request<SavedComparison[]>("/comparisons"),
+  create: (body: { name?: string; listing_ids: string[] }) =>
+    request<SavedComparison>("/comparisons", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  get: (id: string) => request<SavedComparisonDetail>(`/comparisons/${id}`),
+  getShare: (shareId: string) => request<SavedComparisonShare>(`/comparisons/share/${shareId}`),
+  remove: (id: string) => request<void>(`/comparisons/${id}`, { method: "DELETE" }),
+};
+
+export type AiParseSearchResult = {
+  understood: boolean;
+  message: string;
+  transcript: string;
+  filters: Record<string, unknown>;
+};
+
+export const ai = {
+  parseSearch: (text: string) =>
+    request<AiParseSearchResult>("/ai/parse-search", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  transcribeSearch: async (blob: Blob): Promise<AiParseSearchResult> => {
+    const form = new FormData();
+    form.append("audio", blob, blob.type.includes("mp4") ? "voice.m4a" : "voice.webm");
+
+    const headers = new Headers();
+    const token = getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const res = await fetch(`${apiUrl()}/ai/transcribe-search`, {
+      method: "POST",
+      body: form,
+      headers,
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const parsed = await parseError(res);
+      throw new ApiError(res.status, parsed.message, parsed.code, parsed.retryAfter);
+    }
+
+    return res.json() as Promise<AiParseSearchResult>;
+  },
 };

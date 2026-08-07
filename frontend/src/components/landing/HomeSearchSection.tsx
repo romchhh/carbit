@@ -75,6 +75,7 @@ export function HomeSearchSection() {
 
           <SearchFiltersPanel
             wide
+            voiceSearchCabinetOnly
             filters={filters}
             onChange={setFilters}
             onReset={handleReset}

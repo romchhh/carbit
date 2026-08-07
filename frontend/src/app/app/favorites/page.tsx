@@ -7,6 +7,7 @@ import { IconHeart } from "@/components/icons";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { FAVORITES_CHANGED_EVENT, useListingFavorites } from "@/hooks/useListingFavorite";
+import { useCompareOnListingCard } from "@/hooks/useCompareOnListingCard";
 import { favorites as favoritesApi } from "@/lib/api";
 import { saveRecentListing } from "@/lib/recent-listings";
 import { AppEmpty, AppLoading, AppPage } from "@/components/layout/AppPage";
@@ -21,6 +22,7 @@ export default function FavoritesPage() {
   const listingIds = useMemo(() => listings.map(item => item.id), [listings]);
   const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } =
     useListingFavorites(listingIds);
+  const { cardCompareProps, compareHint } = useCompareOnListingCard();
 
   const load = useCallback(async () => {
     try {
@@ -64,6 +66,9 @@ export default function FavoritesPage() {
 
   return (
     <AppPage title="Обране" description="Збережені авто для швидкого доступу" tourId="tour-section-favorites">
+      {compareHint && (
+        <p className="mb-4 rounded-xl bg-surface px-4 py-3 text-[13px] text-muted">{compareHint}</p>
+      )}
       {listings.length === 0 ? (
         <AppEmpty>
           <IconHeart size={32} className="mx-auto mb-4 text-muted/30" />
@@ -84,6 +89,7 @@ export default function FavoritesPage() {
               isFavorite={favoriteIds.has(listing.id)}
               favoriteLoading={loadingIds.has(listing.id)}
               onToggleFavorite={() => void handleToggleFavorite(listing)}
+              {...cardCompareProps(listing)}
             />
           ))}
         </div>

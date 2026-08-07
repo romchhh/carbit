@@ -39,3 +39,8 @@ export function planMonitorLimit(planId: string): number {
   const map: Record<string, number> = { free: 1, lite: 10, standard: 30, pro: 100 };
   return map[planId] ?? 1;
 }
+
+export function planDeviceLimit(planId: string): number {
+  const map: Record<string, number> = { free: 1, lite: 2, standard: 6, pro: 12 };
+  return map[planId] ?? 1;
+}

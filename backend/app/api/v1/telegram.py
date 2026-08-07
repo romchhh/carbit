@@ -7,7 +7,8 @@ from app.core.auth_cookies import attach_auth_cookie
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import get_current_user_id, create_access_token
+from app.core.security import get_current_user_id
+from app.services.auth.sessions import issue_user_access_token
 from app.models.models import User
 from app.schemas.schemas import (
     TelegramConnectLinkOut,
@@ -94,7 +95,7 @@ async def complete_register(
         await sync_telegram_avatar(tg_existing)
         await db.flush()
         await tg_tokens.delete_registration_token(body.token)
-        token = create_access_token(tg_existing.id)
+        token = await issue_user_access_token(tg_existing)
         return _register_complete_response(token, tg_existing)
 
     email = data["email"]
@@ -122,5 +123,5 @@ async def complete_register(
             f"Кабінет → {settings.FRONTEND_URL}/app/dashboard",
         )
 
-    token = create_access_token(user.id)
+    token = await issue_user_access_token(user)
     return _register_complete_response(token, user)

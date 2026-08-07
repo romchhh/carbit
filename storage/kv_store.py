@@ -23,6 +23,10 @@ class KVClient(Protocol):
     async def hincrby(self, key: str, field: str, amount: int = 1) -> int: ...
     async def hgetall(self, key: str) -> dict[str, str]: ...
     async def expire(self, key: str, ttl: int) -> None: ...
+    async def zadd(self, key: str, mapping: dict[str, float]) -> None: ...
+    async def zcard(self, key: str) -> int: ...
+    async def zrange(self, key: str, start: int, end: int) -> list[str]: ...
+    async def zrem(self, key: str, *members: str) -> None: ...
 
 
 def resolve_sqlite_path(url: str, root_dir: Path) -> Path:
@@ -197,6 +201,101 @@ class SQLiteKV:
     async def expire(self, key: str, ttl: int) -> None:
         await to_thread(self._expire_sync, key, ttl)
 
+    def _load_zset_sync(self, conn: sqlite3.Connection, key: str) -> dict[str, float]:
+        row = conn.execute("SELECT value, expires_at FROM kv WHERE key = ?", (key,)).fetchone()
+        if not row:
+            return {}
+        value, expires_at = row
+        if expires_at is not None and expires_at <= time.time():
+            conn.execute("DELETE FROM kv WHERE key = ?", (key,))
+            return {}
+        if not value:
+            return {}
+        try:
+            raw = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, float] = {}
+        for member, score in raw.items():
+            try:
+                out[str(member)] = float(score)
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    def _save_zset_sync(
+        self,
+        conn: sqlite3.Connection,
+        key: str,
+        data: dict[str, float],
+        *,
+        preserve_expiry: bool = True,
+    ) -> None:
+        expires_at: float | None = None
+        if preserve_expiry:
+            row = conn.execute("SELECT expires_at FROM kv WHERE key = ?", (key,)).fetchone()
+            if row:
+                expires_at = row[0]
+        payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        conn.execute(
+            "INSERT INTO kv(key, value, expires_at) VALUES (?, ?, ?)"
+            " ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, payload, expires_at),
+        )
+
+    def _zadd_sync(self, key: str, mapping: dict[str, float]) -> None:
+        with self._connect() as conn:
+            self._purge_expired(conn)
+            data = self._load_zset_sync(conn, key)
+            for member, score in mapping.items():
+                data[str(member)] = float(score)
+            self._save_zset_sync(conn, key, data)
+
+    def _zcard_sync(self, key: str) -> int:
+        with self._connect() as conn:
+            self._purge_expired(conn)
+            return len(self._load_zset_sync(conn, key))
+
+    def _zrange_sync(self, key: str, start: int, end: int) -> list[str]:
+        with self._connect() as conn:
+            self._purge_expired(conn)
+            data = self._load_zset_sync(conn, key)
+            items = sorted(data.items(), key=lambda item: (item[1], item[0]))
+            if end < 0:
+                sliced = items[start:]
+            else:
+                sliced = items[start : end + 1]
+            return [member for member, _ in sliced]
+
+    def _zrem_sync(self, key: str, *members: str) -> None:
+        with self._connect() as conn:
+            self._purge_expired(conn)
+            data = self._load_zset_sync(conn, key)
+            changed = False
+            for member in members:
+                if str(member) in data:
+                    del data[str(member)]
+                    changed = True
+            if changed:
+                if data:
+                    self._save_zset_sync(conn, key, data)
+                else:
+                    conn.execute("DELETE FROM kv WHERE key = ?", (key,))
+
+    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
+        await to_thread(self._zadd_sync, key, mapping)
+
+    async def zcard(self, key: str) -> int:
+        return await to_thread(self._zcard_sync, key)
+
+    async def zrange(self, key: str, start: int, end: int) -> list[str]:
+        return await to_thread(self._zrange_sync, key, start, end)
+
+    async def zrem(self, key: str, *members: str) -> None:
+        await to_thread(self._zrem_sync, key, *members)
+
 
 class RedisKV:
     """Thin async wrapper around redis.asyncio."""
@@ -244,6 +343,20 @@ class RedisKV:
 
     async def expire(self, key: str, ttl: int) -> None:
         await self._client.expire(key, max(int(ttl), 1))
+
+    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
+        await self._client.zadd(key, mapping)
+
+    async def zcard(self, key: str) -> int:
+        return int(await self._client.zcard(key))
+
+    async def zrange(self, key: str, start: int, end: int) -> list[str]:
+        raw = await self._client.zrange(key, start, end)
+        return [str(item) for item in raw]
+
+    async def zrem(self, key: str, *members: str) -> None:
+        if members:
+            await self._client.zrem(key, *members)
 
     async def aclose(self) -> None:
         await self._client.aclose()

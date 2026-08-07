@@ -1,289 +1,257 @@
+══════════════════════════════════════════════════════════════════════════════
+  CARBIT — локальний запуск і деплой
+══════════════════════════════════════════════════════════════════════════════
 
+─── 1. Локально (3 термінали) ───────────────────────────────────────────────
+
+# Термінал 1 — Backend
 source .venv/bin/activate
 cd backend
+PYTHONPATH=. alembic upgrade head   # один раз після git pull, якщо «no such table»
 PYTHONPATH=. python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
+# Термінал 2 — Telegram-бот (привʼязка акаунта, сповіщення)
+source .venv/bin/activate
 cd bot
 python main.py
 
-
+# Термінал 3 — Frontend
 cd frontend
 npm run dev
 
+  Frontend   http://localhost:3000
+  API docs   http://localhost:8000/api/docs
+  Admin      http://localhost:3000/admin  (admin / admin123 за замовч.)
+
+─── 2. Новий функціонал (коротко) ───────────────────────────────────────────
+
+▸ Вхід / реєстрація — ТІЛЬКИ номер телефону
+  • Реєстрація → SMS-код (TurboSMS, відправник Carbit)
+  • Вхід → код у Telegram, якщо акаунт привʼязаний до бота
+  • Якщо Telegram недоступний → SMS (кнопка «Надіслати SMS»)
+  • Повторна відправка коду — не частіше 1 раз на хвилину
+  • Email / Google / вхід через бота на сторінці login — вимкнено в UI
+
+▸ Голосовий пошук (AI)
+  • Тільки в кабінеті: /app/search, /app/dashboard
+  • На лендінгу кнопка «Голосом» показує підказку «доступно в кабінеті»
+  • Потрібен OPENAI_API_KEY у .env
+  • Запис зупиняється після 5 сек тиші → AI заповнює фільтри → «Шукати»
+
+▸ Порівняння без входу
+  • /app/compare?ids=olx_... — працює для гостей
+
+▸ Telegram у кабінеті
+  • Налаштування → привʼязати Telegram (сповіщення + коди входу)
+  • Бот: TELEGRAM_BOT_TOKEN + TELEGRAM_BOT_USERNAME у .env
+
+▸ Публічне порівняння / Instagram / інше
+  • Див. git log і frontend/src/components/social/
+
+─── 3. .env — обовʼязкові змінні для нових фіч ───────────────────────────────
+
+# ── TurboSMS (реєстрація + SMS-fallback при вході) ──
+turbo_sms_token=...          # або TURBOSMS_TOKEN=...
+TURBOSMS_SENDER=Carbit       # має бути АКТИВОВАНИЙ у кабінеті turbosms.ua
+                             # помилка NOT_ALLOWED_MESSAGE_SENDER = sender не схвалений
+
+# ── OpenAI (голосовий пошук у кабінеті) ──
+OPENAI_API_KEY=sk-...
+
+# ── Telegram-бот ──
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=Car_Bit_Bot
+INTERNAL_API_SECRET=...      # однаковий у backend і bot
+
+# ── Загальне ──
+FRONTEND_URL=http://localhost:3000
+NEXT_PUBLIC_API_URL=/api/v1
+DEBUG=true                   # локально; на проді DEBUG=false
+
+# KV / сесії (локально SQLite, без окремого Redis)
+REDIS_URL=sqlite://database/kv.db
+
+─── 4. Git / швидкий деплой локально ────────────────────────────────────────
 
 git pull
-# після змін backend (AUTO.RIA) або frontend (API URL, PWA):
-# без --no-cache — BuildKit використовує кеш; ліміт на сервері: scripts/setup-docker-cache-limits.sh
-docker compose build backend frontend worker
-docker compose up -d backend frontend worker
-# або: ./scripts/docker-deploy.sh backend frontend
-# перевірка: curl -s http://localhost:8000/health
-# у .env для production: NEXT_PUBLIC_API_URL=/api/v1  (НЕ http://backend:8000)
-# якщо кабінет падає до F5 — старий Service Worker; після rebuild один раз hard refresh (Cmd+Shift+R)
-
-
-# 1. Зупинити контейнери
-docker compose down
-
-# 2. Перезібрати frontend
-docker compose build frontend
-
-# 3. Запустити заново
-docker compose up -d
-
-
 git add .
 git commit -m "some updates"
 git push
 
+# Docker (локально або на VPS)
+docker compose build backend frontend worker
+docker compose up -d backend frontend worker
+# або: ./scripts/docker-deploy.sh backend frontend
+# curl -s http://localhost:8000/health
+
+# NEXT_PUBLIC_API_URL змінюється під час BUILD frontend — після зміни потрібен rebuild
+# Старий UI → hard refresh (Cmd+Shift+R) через Service Worker
+
+docker compose down
+docker compose build frontend
+docker compose up -d
 
 
+══════════════════════════════════════════════════════════════════════════════
+  PRODUCTION — оновлення carbit.info (або інший VPS)
+══════════════════════════════════════════════════════════════════════════════
 
+─── 1. Підключення ───────────────────────────────────────────────────────────
 
-
-Ось покрокова інструкція для оновлення **carbit.info** (або будь-якого production-сервера).
-
-## 1. Підключення до сервера
-
-```bash
 ssh user@your-server
-cd /path/to/carbit   # папка з docker-compose.yml
-```
+cd /path/to/carbit
 
----
 
-## 2. Оновити код
+─── 2. Оновити код ───────────────────────────────────────────────────────────
 
-```bash
 git pull
-```
+# локальні зміни на сервері: git stash  або  git checkout .
 
-Якщо є локальні зміни на сервері — спочатку збережи або скинь їх (`git stash` / `git checkout .`).
 
----
+─── 3. .env на production ────────────────────────────────────────────────────
 
-## 3. Перевір `.env` (один раз або після нових фіч)
-
-Мінімум для поточної версії:
-
-```env
 FRONTEND_URL=https://carbit.info
 NEXT_PUBLIC_API_URL=/api/v1
-GOOGLE_REDIRECT_URI=https://carbit.info/api/v1/auth/google/callback
+DEBUG=false
+SECRET_KEY=...               # python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
+# Auth / SMS
+TURBOSMS_TOKEN=...
+TURBOSMS_SENDER=Carbit
+
+# Голосовий пошук
+OPENAI_API_KEY=...
+
+# Telegram
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_BOT_USERNAME=Car_Bit_Bot
 INTERNAL_API_SECRET=...
+
+# OAuth (legacy API, UI вимкнено — можна лишити для старих акаунтів)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=https://carbit.info/api/v1/auth/google/callback
+
+# Email (Resend — привʼязка email у кабінеті, не для login)
+RESEND_API_KEY=...
 
 # Telegram parser
 TELEGRAM_ENABLED=true
 TELETHON_API_ID=...
 TELETHON_API_HASH=...
 TELETHON_NUMBER=+380...
-# Різна назва локально і на VPS → різні файли database/<name>.session
 TELETHON_SESSION_NAME=carbit_parser
-# Канали для парсингу — в адмінці /admin/channels (не в .env)
-```
+# Канали — в адмінці /admin/channels
 
-**Важливо:**
-- `NEXT_PUBLIC_API_URL` підставляється **під час збірки frontend** — після зміни потрібен rebuild frontend.
-- `BACKEND_URL` у `.env` для браузера може бути публічним URL; всередині Docker bot/worker отримують `http://backend:8000/api/v1` автоматично з `docker-compose.yml`.
+Важливо:
+• NEXT_PUBLIC_API_URL — build-time для frontend → після зміни rebuild frontend
+• BACKEND_URL для browser — публічний URL; bot/worker у Docker отримують backend:8000 з compose
+• НЕ використовуй http://backend:8000 у NEXT_PUBLIC_API_URL
 
----
 
-## 4. Підготувати папки на хості
+─── 4. Папки на хості ───────────────────────────────────────────────────────
 
-```bash
 mkdir -p database media
-```
 
-| Папка | Що зберігає |
-|-------|-------------|
-| `database/` | SQLite (`autoradar.db`, `kv.db`), Telethon session, dedupe |
-| `media/` | Фото з Telegram-каналів (volume для worker і telegram-worker) |
+  database/  — autoradar.db, kv.db, Telethon *.session
+  media/     — фото з Telegram-каналів
 
-**Telegram-сесія** (якщо ще немає на сервері):
+Telethon-сесія (один раз):
+  python auth.py  →  database/<TELETHON_SESSION_NAME>.session
+  Локально і VPS — РІЗНІ TELETHON_SESSION_NAME (AuthKeyDuplicatedError)
 
-```bash
-# один раз — локально або на сервері з Python
-python auth.py
-# файл: database/<TELETHON_SESSION_NAME>.session
-# (локально й на VPS — різні TELETHON_SESSION_NAME у .env)
-```
 
-Авторизуйся окремо локально і на VPS (`python auth.py` / адмінка). Не копіюй один `.session` між машинами, якщо обидві мають бути онлайн одночасно.
+─── 5. Rebuild ────────────────────────────────────────────────────────────────
 
----
-
-## 5. Повний rebuild усіх модулів
-
-### Варіант A — скрипт (рекомендовано)
-
-```bash
+# Рекомендовано
 ./scripts/docker-deploy.sh
-```
 
-Це робить: `git pull` → `docker compose build` → `docker compose up -d`.
-
-### Варіант B — вручну (всі 5 сервісів)
-
-```bash
-git pull
-
+# Вручну — усі сервіси
 docker compose build backend bot worker telegram-worker frontend
 docker compose up -d
-```
 
-### Варіант C — тільки певні сервіси
+# Частково
+./scripts/docker-deploy.sh backend bot worker telegram-worker   # Python
+./scripts/docker-deploy.sh frontend                           # UI / PWA
 
-```bash
-# Python (backend + bot + workers + parser)
-./scripts/docker-deploy.sh backend bot worker telegram-worker
+# Не використовуй --no-cache без потреби
 
-# Frontend (адмінка, кнопки парсера, PWA)
-./scripts/docker-deploy.sh frontend
-```
 
-> **Не використовуй `--no-cache`** для звичайного деплою — лише якщо підозра на зіпсований кеш.
+─── 6. Перевірка ─────────────────────────────────────────────────────────────
 
----
-
-## 6. Перевірка після деплою
-
-```bash
 docker compose ps
-```
-
-Мають бути **healthy/running**:
-- `carbit-backend`
-- `carbit-frontend`
-- `carbit-bot`
-- `carbit-worker`
-- `carbit-telegram-worker`
-
-```bash
 curl -s http://localhost:8000/health
 curl -I http://localhost:3000
-```
 
-Логи:
-
-```bash
 docker compose logs -f backend --tail=50
 docker compose logs -f worker --tail=50
 docker compose logs -f telegram-worker --tail=50
 docker compose logs -f bot --tail=30
-```
 
-У backend при старті має бути:
+У backend при старті: migrations → Starting backend...
+Alembic на Docker стартує автоматично.
 
-```
-→ Running database migrations...
-→ Starting backend...
-```
 
-Міграції Alembic запускаються автоматично — окремо `alembic upgrade` не потрібен.
+─── 7. Nginx ──────────────────────────────────────────────────────────────────
 
----
+  /        → http://127.0.0.1:3000
+  /api/    → http://127.0.0.1:8000/api/
+  /api/v1/telegram-media/  → backend (фото в сповіщеннях)
 
-## 7. Nginx (якщо reverse proxy)
-
-Переконайся, що проксуються:
-
-- `/` → `http://127.0.0.1:3000` (frontend)
-- `/api/` → `http://127.0.0.1:8000/api/` (backend)
-
-Для фото в Telegram-сповіщеннях потрібен доступ до:
-
-- `/api/v1/telegram-media/...` → backend
-
-Після змін nginx:
-
-```bash
 sudo nginx -t && sudo systemctl reload nginx
-```
 
----
 
-## 8. Після оновлення frontend
+─── 8. Після оновлення frontend ───────────────────────────────────────────────
 
-У браузері один раз **hard refresh** (Cmd+Shift+R / Ctrl+Shift+R) — через Service Worker може показуватись стара версія.
+Hard refresh у браузері (Cmd+Shift+R / Ctrl+Shift+R)
 
----
 
-## 9. Швидка шпаргалка «що перебілдити»
+─── 9. Що перебілдити ────────────────────────────────────────────────────────
 
-| Що змінилось | Команда |
-|--------------|---------|
-| Усе (повний реліз) | `./scripts/docker-deploy.sh` |
-| Backend, parser, worker, bot | `./scripts/docker-deploy.sh backend bot worker telegram-worker` |
-| Frontend / адмінка | `./scripts/docker-deploy.sh frontend` |
-| Тільки `.env` runtime (без build args) | `docker compose up -d` або `docker compose restart worker telegram-worker` |
-| Змінився `NEXT_PUBLIC_API_URL` | обов’язково `docker compose build frontend && docker compose up -d frontend` |
+| Змінилось                         | Команда                                              |
+|-----------------------------------|------------------------------------------------------|
+| Повний реліз                      | ./scripts/docker-deploy.sh                           |
+| Backend, parser, worker, bot      | ./scripts/docker-deploy.sh backend bot worker telegram-worker |
+| Frontend                          | ./scripts/docker-deploy.sh frontend                  |
+| Тільки runtime .env               | docker compose up -d  або  restart worker           |
+| NEXT_PUBLIC_API_URL               | build frontend + up -d frontend                      |
 
----
 
-## 10. Резервна копія перед великим оновленням
+─── 10. Бекап перед великим оновленням ────────────────────────────────────────
 
-```bash
 docker compose stop backend bot worker telegram-worker
-
 cp database/autoradar.db "database/autoradar.db.bak.$(date +%F)"
 cp database/kv.db "database/kv.db.bak.$(date +%F)"
-
 docker compose start backend bot worker telegram-worker
-```
 
----
 
-## 11. Типові проблеми
+─── 11. Типові проблеми ──────────────────────────────────────────────────────
 
-| Симптом | Що робити |
-|---------|-----------|
-| `telegram-worker` падає | `AuthKeyDuplicated` — один `.session` лише на VPS; `docker compose stop telegram-worker`, адмінка `/admin/channels` → «Скинути сесію» + код, або `python auth.py --reset` |
-| `AuthKeyDuplicatedError` | Зупинити worker + локальний парсер; скинути сесію; увійти знову (див. §12) |
-| 0 оголошень з Telegram | Логи worker; перевір канали в адмінці `/admin/channels`, `TELEGRAM_ENABLED=true` |
-| Сповіщення без фото | Перевір `./media` на хості і nginx для `/api/v1/telegram-media/` |
-| Build «no space left» | `docker builder prune -af --filter "until=168h"` |
-| Старий UI в адмінці | Rebuild frontend + hard refresh |
+| Симптом                              | Рішення                                           |
+|--------------------------------------|---------------------------------------------------|
+| NOT_ALLOWED_MESSAGE_SENDER           | Активуй sender «Carbit» у turbosms.ua             |
+| 401 після реєстрації / входу         | Перезапусти backend; kv.db має підтримку zadd   |
+| SMS не приходить                     | TURBOSMS_TOKEN, баланс TurboSMS, sender активний  |
+| Код входу не в Telegram              | Привʼязати Telegram у кабінеті; fallback — SMS   |
+| Голосовий пошук не працює            | OPENAI_API_KEY; тільки в /app, не на лендінгу     |
+| telegram-worker AuthKeyDuplicated    | Один .session на VPS; /admin/channels → скинути   |
+| 0 оголошень Telegram                 | Канали в /admin/channels, TELEGRAM_ENABLED=true   |
+| Старий UI                            | rebuild frontend + hard refresh                   |
+| no such table                        | alembic upgrade head (локально або в Docker logs) |
 
----
 
-## 12. Telethon-сесія (парсер каналів)
+─── 12. Telethon-сесія ───────────────────────────────────────────────────────
 
-Файл: `database/<TELETHON_SESSION_NAME>.session` (за замовчуванням `carbit_parser.session`; volume `./database` у Docker).
+Файл: database/<TELETHON_SESSION_NAME>.session
 
-Локально й на сервері тримайте **різні** `TELETHON_SESSION_NAME` у `.env`, щоб не ділити один AuthKey.
+Адмінка: /admin/channels → Telethon → скинути → код → up telegram-worker
 
-**Адмінка (рекомендовано):** `/admin/channels` → блок «Telethon-сесія» → зупинити worker → «Скинути сесію» → «Надіслати код» → ввести код (і 2FA за потреби) → `docker compose up -d telegram-worker`.
+CLI на VPS:
+  docker compose stop telegram-worker
+  docker compose run --rm -it -w /app --entrypoint python telegram-worker auth.py --reset
+  docker compose up -d telegram-worker
 
-**CLI на VPS:**
 
-```bash
-docker compose stop telegram-worker
-docker compose run --rm -it -w /app --entrypoint python telegram-worker auth.py --reset
-docker compose up -d telegram-worker
-```
+─── Один рядок — повний деплой ───────────────────────────────────────────────
 
-Локально (без Docker): `python auth.py --reset` з кореня репо, `.env` з `TELETHON_*`.
-
----
-
-**Один рядок для повного оновлення всього:**
-
-```bash
 cd /path/to/carbit && mkdir -p database media && ./scripts/docker-deploy.sh
-```
-
-Якщо потрібно — можу оновити `start.txt` і `DOCKER.md` під worker/telegram-worker/media, щоб це було в репозиторії.
-
-
-
-
-
-
-
-при поошуку прибери цей текст що шукають 20 оголошень і буде показано. заміни на якесь прикольне по типу обходимо всі авторинки, торгуємося на автобазарі і так далі. зроби це креативно і гарно. додай кілька таких варіантів 
-
-зроби всі ці технічні тексти креативнимии і прикольними а не такими скучними 
-

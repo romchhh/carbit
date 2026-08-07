@@ -2,6 +2,7 @@ from app.models.models import User
 from app.schemas.schemas import UserOut
 from app.services.user_avatar import user_avatar_api_path
 from app.services.telegram.links import is_placeholder_email
+from app.services.phone.normalize import format_phone_display, is_phone_placeholder_email
 
 
 def user_out(user: User) -> UserOut:
@@ -15,6 +16,8 @@ def user_out(user: User) -> UserOut:
         "telegram_username": user.telegram_username,
         "avatar_url": None,
         "email_verified": False,
+        "phone": None,
+        "phone_verified": False,
         "trial_ends_at": user.trial_ends_at,
         "is_trial_active": bool(user.is_trial_active),
         "onboarding_completed": bool(user.onboarding_completed),
@@ -24,9 +27,12 @@ def user_out(user: User) -> UserOut:
     }
     out = UserOut.model_validate(data)
     out.avatar_url = user_avatar_api_path(user)
-    if is_placeholder_email(user.email):
+    if is_placeholder_email(user.email) or is_phone_placeholder_email(user.email):
         out.email = ""
         out.email_verified = False
     else:
         out.email_verified = True
+    if getattr(user, "phone_verified_at", None) and user.phone:
+        out.phone = format_phone_display(user.phone)
+        out.phone_verified = True
     return out

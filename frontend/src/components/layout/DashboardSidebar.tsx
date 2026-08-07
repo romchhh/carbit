@@ -9,6 +9,7 @@ import { primaryNav, secondaryNav, type NavBadgeKey } from "@/lib/dashboard-nav"
 import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notifications-events";
 import { notifications as notificationsApi, searches as searchesApi } from "@/lib/api";
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
+import { InstagramLink } from "@/components/social/InstagramLink";
 
 type Props = {
   searchesUsed: number;
@@ -125,7 +126,13 @@ export function DashboardSidebar({ searchesUsed, searchesLimit, planId, isTrial 
           })}
         </nav>
 
-        <div className="border-t border-border/50 p-4">
+        <div className="border-t border-border/50 p-4 space-y-3">
+          <div className="rounded-xl border border-border/60 bg-surface/40 px-3 py-2.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">Ми в соцмережах</div>
+            <div className="mt-2">
+              <InstagramLink size="sm" />
+            </div>
+          </div>
           <SubscriptionPitch
             variant="sidebar"
             planId={planId}

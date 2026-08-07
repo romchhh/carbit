@@ -170,6 +170,81 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
                     )
                 )
                 logger.warning("Created missing billing_payments table")
+
+            if "phone" not in cols:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(20)"))
+                await conn.execute(
+                    text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_phone ON users (phone)")
+                )
+                logger.warning("Added missing users.phone column")
+            if "phone_verified_at" not in cols:
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN phone_verified_at DATETIME")
+                )
+                logger.warning("Added missing users.phone_verified_at column")
+
+            if "monitoring_source_requests" not in tables:
+                await conn.execute(
+                    text(
+                        """
+                        CREATE TABLE monitoring_source_requests (
+                            id VARCHAR NOT NULL PRIMARY KEY,
+                            user_id VARCHAR NOT NULL,
+                            url VARCHAR(2048) NOT NULL,
+                            comment VARCHAR(2000),
+                            status VARCHAR NOT NULL DEFAULT 'pending',
+                            admin_note VARCHAR(2000),
+                            created_at DATETIME NOT NULL,
+                            updated_at DATETIME NOT NULL,
+                            FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+                        )
+                        """
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_monitoring_source_requests_user_id "
+                        "ON monitoring_source_requests (user_id)"
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_monitoring_source_requests_status "
+                        "ON monitoring_source_requests (status)"
+                    )
+                )
+                logger.warning("Created missing monitoring_source_requests table")
+
+            if "saved_comparisons" not in tables:
+                await conn.execute(
+                    text(
+                        """
+                        CREATE TABLE saved_comparisons (
+                            id VARCHAR NOT NULL PRIMARY KEY,
+                            user_id VARCHAR NOT NULL,
+                            name VARCHAR(120) NOT NULL,
+                            listing_ids JSON NOT NULL,
+                            share_id VARCHAR(32) NOT NULL,
+                            created_at DATETIME NOT NULL,
+                            updated_at DATETIME NOT NULL,
+                            FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+                        )
+                        """
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_saved_comparisons_user_id "
+                        "ON saved_comparisons (user_id)"
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_saved_comparisons_share_id "
+                        "ON saved_comparisons (share_id)"
+                    )
+                )
+                logger.warning("Created missing saved_comparisons table")
             return
 
         # Postgres / others

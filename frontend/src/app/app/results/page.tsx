@@ -7,6 +7,7 @@ import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
+import { useCompareOnListingCard } from "@/hooks/useCompareOnListingCard";
 import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
 import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
@@ -87,6 +88,7 @@ function ResultsPageContent() {
   const exportName = (search?.name || "rezultaty").replace(/\s+/g, "-").toLowerCase();
   const hasMore = page < pages;
   const { favoriteIds, loadingIds, error: favoriteError, clearError, toggleFavorite } = useListingFavorites(results.map(item => item.id));
+  const { cardCompareProps, compareHint } = useCompareOnListingCard();
 
   const openListing = (listing: Listing) => {
     saveRecentListing(listing);
@@ -143,6 +145,10 @@ function ResultsPageContent() {
         idleLabel={loading ? "Завантаження..." : "Немає результатів"}
       />
 
+      {compareHint && (
+        <div className="mb-4 rounded-xl bg-surface px-4 py-3 text-[13px] text-muted">{compareHint}</div>
+      )}
+
       {error && (
         <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
           {error}
@@ -170,6 +176,7 @@ function ResultsPageContent() {
               isFavorite={favoriteIds.has(item.id)}
               favoriteLoading={loadingIds.has(item.id)}
               onToggleFavorite={() => toggleFavorite(item)}
+              {...cardCompareProps(item)}
             />
           ))}
         </div>

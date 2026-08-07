@@ -9,6 +9,7 @@ import {
   IconGear,
   IconCreditCard,
   IconTelegram,
+  IconInstagram,
   IconZap,
   IconLogOut,
   IconPlay,
@@ -16,6 +17,7 @@ import {
 import { useAuth } from "@/contexts/AuthProvider";
 import { ApiError, telegram as telegramApi, billing as billingApi, users as usersApi } from "@/lib/api";
 import { CodeInput } from "@/components/auth/CodeInput";
+import { PhoneInput, normalizePhoneForApi } from "@/components/auth/PhoneInput";
 import { PLAN_LABELS, cn } from "@/lib/utils";
 import {
   DISPLAY_CURRENCY_OPTIONS,
@@ -24,6 +26,7 @@ import {
 } from "@/lib/display-currency";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { getTelegramBotMention, getTelegramBotUrl, getTelegramSupportBotMention, getTelegramSupportBotUrl } from "@/lib/telegram";
+import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/lib/social-links";
 import { requestOnboardingTour } from "@/lib/onboarding";
 import {
   AppPage,
@@ -35,7 +38,7 @@ import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 import { CancelRenewalDialog } from "@/components/billing/CancelRenewalDialog";
 import { Alert } from "@/components/ui/Alert";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { getPricingPlan, formatPlanPrice, planMonitorLimit } from "@/lib/plan-catalog";
+import { getPricingPlan, formatPlanPrice, planMonitorLimit, planDeviceLimit } from "@/lib/plan-catalog";
 import type { DashboardStats, Subscription } from "@/types/api";
 
 export default function AccountPage() {
@@ -60,6 +63,12 @@ export default function AccountPage() {
   const [bindLoading, setBindLoading] = useState(false);
   const [bindError, setBindError] = useState("");
   const [bindSuccess, setBindSuccess] = useState("");
+  const [phoneBind, setPhoneBind] = useState("");
+  const [phoneBindCode, setPhoneBindCode] = useState("");
+  const [phoneBindStep, setPhoneBindStep] = useState<"idle" | "code">("idle");
+  const [phoneBindLoading, setPhoneBindLoading] = useState(false);
+  const [phoneBindError, setPhoneBindError] = useState("");
+  const [phoneBindSuccess, setPhoneBindSuccess] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState("");
@@ -185,6 +194,47 @@ export default function AccountPage() {
     }
   };
 
+  const sendPhoneBindCode = async () => {
+    setPhoneBindError("");
+    setPhoneBindSuccess("");
+    const normalized = normalizePhoneForApi(phoneBind);
+    if (normalized.length < 12) {
+      setPhoneBindError("Введіть повний номер телефону");
+      return;
+    }
+    setPhoneBindLoading(true);
+    try {
+      await usersApi.sendPhoneBindCode(normalized);
+      setPhoneBindStep("code");
+      setPhoneBindSuccess("Код надіслано SMS");
+    } catch (err) {
+      setPhoneBindError(err instanceof ApiError ? err.message : "Не вдалося надіслати SMS");
+    } finally {
+      setPhoneBindLoading(false);
+    }
+  };
+
+  const verifyPhoneBindCode = async () => {
+    setPhoneBindError("");
+    setPhoneBindSuccess("");
+    if (phoneBindCode.length !== 6) {
+      setPhoneBindError("Введіть 6-значний код");
+      return;
+    }
+    setPhoneBindLoading(true);
+    try {
+      await usersApi.verifyPhoneBind(normalizePhoneForApi(phoneBind), phoneBindCode);
+      await refreshUser();
+      setPhoneBindStep("idle");
+      setPhoneBindCode("");
+      setPhoneBindSuccess("Телефон підтверджено");
+    } catch (err) {
+      setPhoneBindError(err instanceof ApiError ? err.message : "Невірний код");
+    } finally {
+      setPhoneBindLoading(false);
+    }
+  };
+
   const restartTour = () => {
     requestOnboardingTour();
     router.push("/app/dashboard");
@@ -292,6 +342,12 @@ export default function AccountPage() {
                     <div className="mt-0.5 text-[13px] text-muted">
                       {user.email_verified ? user.email : "Email не вказано"}
                     </div>
+                    <div className="mt-1 text-[13px] text-muted">
+                      Телефон:{" "}
+                      <span className="font-semibold text-ink">
+                        {user.phone_verified && user.phone ? user.phone : "не підтверджено"}
+                      </span>
+                    </div>
                     <div className="mt-1.5 text-[13px] text-muted">
                       Валюта:{" "}
                       <span className="font-semibold text-ink">
@@ -356,6 +412,49 @@ export default function AccountPage() {
               {bindSuccess && <p className="mt-3 text-[12px] text-emerald-dark">{bindSuccess}</p>}
             </div>
           )}
+
+          {!user.phone_verified && (
+            <div className="mt-5 border-t border-border/60 pt-5">
+              <p className="text-[13px] font-semibold text-ink">Підтвердити номер телефону</p>
+              <p className="mt-1 text-[12px] text-muted">
+                SMS-код через TurboSMS — для входу по телефону та безпеки акаунта.
+              </p>
+              {phoneBindStep === "idle" ? (
+                <div className="mt-3 space-y-3">
+                  <PhoneInput value={phoneBind} onChange={setPhoneBind} disabled={phoneBindLoading} />
+                  <Button variant="primary" size="sm" loading={phoneBindLoading} onClick={sendPhoneBindCode}>
+                    Надіслати код SMS
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  <p className="text-[12px] text-muted">
+                    Код надіслано на <strong>+380 {phoneBind}</strong>
+                  </p>
+                  <CodeInput value={phoneBindCode} onChange={setPhoneBindCode} />
+                  <div className="flex gap-2">
+                    <Button variant="primary" size="sm" loading={phoneBindLoading} onClick={verifyPhoneBindCode}>
+                      Підтвердити
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={phoneBindLoading}
+                      onClick={() => {
+                        setPhoneBindStep("idle");
+                        setPhoneBindCode("");
+                        setPhoneBindError("");
+                      }}
+                    >
+                      Змінити номер
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {phoneBindError && <p className="mt-3 text-[12px] text-red-600">{phoneBindError}</p>}
+              {phoneBindSuccess && <p className="mt-3 text-[12px] text-emerald-dark">{phoneBindSuccess}</p>}
+            </div>
+          )}
         </AppSection>
 
         {/* Підписка + статистика + оплата */}
@@ -404,9 +503,10 @@ export default function AccountPage() {
             </div>
           )}
 
-          <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
             {[
               [String(user.searches_limit), "моніторингів"],
+              [String(planDeviceLimit(user.plan)), "пристроїв"],
               ["3", "джерела"],
               [user.telegram_connected ? "✓" : "—", "Telegram"],
             ].map(([v, l]) => (
@@ -665,6 +765,26 @@ export default function AccountPage() {
                 Натисніть <strong>Start</strong> у боті — сторінка оновиться автоматично.
               </p>
             )}
+
+            <a
+              href={INSTAGRAM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-3 px-4 py-4 transition-colors hover:bg-surface/50 sm:px-5"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#f58529]/15 via-[#dd2a7b]/15 to-[#8134af]/15">
+                  <IconInstagram size={18} className="text-[#dd2a7b]" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[14px] font-semibold text-ink">Instagram</div>
+                  <div className="mt-0.5 text-[12px] text-muted">
+                    @{INSTAGRAM_HANDLE} · новини, фото авто, оновлення
+                  </div>
+                </div>
+              </div>
+              <span className="shrink-0 text-[12px] font-semibold text-[#dd2a7b]">Підписатися</span>
+            </a>
 
             <a
               href={getTelegramSupportBotUrl()}

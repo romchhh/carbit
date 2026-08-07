@@ -8,6 +8,8 @@ export interface User {
   telegram_username?: string | null;
   avatar_url?: string | null;
   email_verified?: boolean;
+  phone?: string | null;
+  phone_verified?: boolean;
   trial_ends_at?: string | null;
   is_trial_active?: boolean;
   onboarding_completed?: boolean;
@@ -19,6 +21,35 @@ export interface User {
 export interface TokenResponse {
   access_token: string;
   token_type: string;
+}
+
+export interface MonitoringSourceRequest {
+  id: string;
+  url: string;
+  comment?: string | null;
+  status: "pending" | "in_review" | "approved" | "rejected";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedComparison {
+  id: string;
+  name: string;
+  listing_ids: string[];
+  share_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedComparisonDetail extends SavedComparison {
+  listings: Listing[];
+}
+
+export interface SavedComparisonShare {
+  name: string;
+  listing_ids: string[];
+  share_id: string;
+  listings: Listing[];
 }
 
 export interface SearchQuery {

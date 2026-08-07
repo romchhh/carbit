@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
+import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
@@ -29,6 +30,9 @@ type Props = {
   isFavorite?: boolean;
   favoriteLoading?: boolean;
   onToggleFavorite?: () => void;
+  isCompared?: boolean;
+  compareDisabled?: boolean;
+  onToggleCompare?: () => void;
   /** Валюта відображення ($ за замовчуванням). */
   displayCurrency?: DisplayCurrency;
 };
@@ -45,6 +49,9 @@ export function ListingCard({
   isFavorite = false,
   favoriteLoading = false,
   onToggleFavorite,
+  isCompared = false,
+  compareDisabled = false,
+  onToggleCompare,
   displayCurrency: displayCurrencyProp,
 }: Props) {
   const { user } = useAuth();
@@ -157,7 +164,15 @@ export function ListingCard({
               <SourceBadge source={listing.source} />
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {onToggleCompare && (
+              <ListingCompareButton
+                active={isCompared}
+                disabled={compareDisabled}
+                onToggle={onToggleCompare}
+                variant="overlay"
+              />
+            )}
             {onToggleFavorite && (
               <ListingFavoriteButton
                 active={isFavorite}
@@ -226,7 +241,15 @@ export function ListingCard({
           </div>
         )}
         {onToggleFavorite && (
-          <div className="absolute right-2 top-2 z-[1]">
+          <div className="absolute right-2 top-2 z-[1] flex items-center gap-1.5">
+            {onToggleCompare && (
+              <ListingCompareButton
+                active={isCompared}
+                disabled={compareDisabled}
+                onToggle={onToggleCompare}
+                variant="overlay"
+              />
+            )}
             <ListingFavoriteButton
               active={isFavorite}
               loading={favoriteLoading}

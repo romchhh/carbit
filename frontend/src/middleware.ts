@@ -21,7 +21,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/app")) {
-    if (pathname.startsWith("/app/listing/")) {
+    if (pathname.startsWith("/app/listing/") || pathname.startsWith("/app/compare")) {
       return NextResponse.next();
     }
     if (!token) {

@@ -22,6 +22,19 @@ interface AuthContextValue {
   loginWithToken: (token: string, remember?: boolean) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
+  sendPhoneCode: (
+    phone: string,
+    intent: "login" | "register",
+    name?: string,
+    delivery?: "auto" | "sms",
+  ) => Promise<{ message: string; channel?: "sms" | "telegram" }>;
+  verifyPhoneCode: (
+    phone: string,
+    code: string,
+    intent: "login" | "register",
+    name?: string,
+    remember?: boolean,
+  ) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -46,9 +59,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(await api.auth.me());
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
+        const revoked =
+          typeof err.message === "string" &&
+          (err.message.includes("Session revoked") || err.message.includes("Session revoked".toLowerCase()));
         await clearServerSession();
         clearToken();
         setUser(null);
+        if (revoked && typeof window !== "undefined") {
+          sessionStorage.setItem("carbit_session_revoked", "1");
+          if (window.location.pathname.startsWith("/app")) {
+            window.location.assign("/auth/login?session=revoked");
+            return;
+          }
+        }
       }
     }
   }, []);
@@ -114,11 +137,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(await api.auth.me());
   };
 
+  const sendPhoneCode = async (
+    phone: string,
+    intent: "login" | "register",
+    name?: string,
+    delivery: "auto" | "sms" = "auto",
+  ) => {
+    return api.auth.phoneSendCode({
+      phone,
+      intent,
+      name: name?.trim() || undefined,
+      delivery,
+    });
+  };
+
+  const verifyPhoneCode = async (
+    phone: string,
+    code: string,
+    intent: "login" | "register",
+    name?: string,
+    remember = true,
+  ) => {
+    const { access_token } = await api.auth.phoneVerify({
+      phone,
+      code,
+      intent,
+      name: name?.trim() || undefined,
+      remember,
+    });
+    setToken(access_token, remember);
+    if (intent === "register") {
+      markOnboardingPending();
+    }
+    setUser(await api.auth.me());
+  };
+
   return (
     <AuthContext.Provider value={{
       user, loading, initialized, login, sendRegisterCode, verifyRegisterCode,
       resendRegisterCode, logout, refreshUser, updateProfile,
-      loginWithToken, forgotPassword, resetPassword,
+      loginWithToken, forgotPassword, resetPassword, sendPhoneCode, verifyPhoneCode,
     }}>
       {children}
     </AuthContext.Provider>

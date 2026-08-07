@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_URL: str = ""
     TELEGRAM_ADMIN_CHAT_ID: str = "585621771"
 
+    # OpenAI (голосовий пошук)
+    OPENAI_API_KEY: str = ""
+
+    # TurboSMS (підтвердження телефону)
+    TURBOSMS_TOKEN: str = ""
+    TURBOSMS_SENDER: str = "Carbit"
+
     # External APIs (reserved for future scrapers)
     AUTO_RIA_API_KEY: str = ""
     OLX_CLIENT_ID: str = ""
@@ -108,6 +115,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def resolve_paths(self) -> "Settings":
+        if not self.TURBOSMS_TOKEN:
+            legacy = os.getenv("turbo_sms_token", "").strip()
+            if legacy:
+                self.TURBOSMS_TOKEN = legacy
         self.DATABASE_URL = resolve_database_url(self.DATABASE_URL)
         media_path = Path(self.TELEGRAM_MEDIA_DIR)
         if not media_path.is_absolute():
