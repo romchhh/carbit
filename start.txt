@@ -238,6 +238,28 @@ docker compose start backend bot worker telegram-worker
 | 0 оголошень Telegram                 | Канали в /admin/channels, TELEGRAM_ENABLED=true   |
 | Старий UI                            | rebuild frontend + hard refresh                   |
 | no such table                        | alembic upgrade head (локально або в Docker logs) |
+| backend unhealthy / dependency failed | docker logs carbit-backend --tail 80; див. §14   |
+
+
+─── 14. backend unhealthy (docker compose up) ─────────────────────────────────
+
+Діагностика:
+  docker ps -a | grep backend
+  docker logs carbit-backend --tail 100
+
+Типові причини:
+  • Порт 8000 зайнятий → lsof -i :8000 або змінити BACKEND_PORT у .env
+  • Диск заповнений (media/) → df -h
+  • KV_URL=redis://... але Redis недоступний → у .env:
+      KV_URL=sqlite://database/kv.db
+      REDIS_URL=sqlite://database/kv.db
+    (або docker compose --profile cache up -d)
+  • SQLite locked → docker compose stop; sleep 2; docker compose up -d backend
+  • Помилка міграції → docker compose run --rm --entrypoint alembic backend upgrade head
+
+Після git pull з /health/live:
+  docker compose build backend && docker compose up -d backend
+  curl -s http://localhost:8000/health/live
 
 
 ─── 12. Telethon-сесія ───────────────────────────────────────────────────────

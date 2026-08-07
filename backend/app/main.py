@@ -54,7 +54,7 @@ async def lifespan(_app: FastAPI):
     except RuntimeError as exc:
         logger.error("%s", exc)
         print(f"FATAL: {exc}", file=sys.stderr)
-        raise SystemExit(1) from exc
+        raise RuntimeError(str(exc)) from exc
 
     try:
         from app.core.database import engine
@@ -115,6 +115,12 @@ async def response_validation_exception_handler(
             "detail": "Пошук тимчасово недоступний через помилку даних. Спробуйте ще раз.",
         },
     )
+
+
+@app.get("/health/live")
+async def health_live():
+    """Liveness для Docker — процес відповідає, без перевірки DB/KV."""
+    return {"status": "ok"}
 
 
 @app.get("/health")
