@@ -1,9 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { IconCreditCard, IconHelp, IconZap } from "@/components/icons";
-import { SupportModal } from "@/components/support/SupportModal";
 import { SocialIconRow } from "@/components/social/SocialIconRow";
 import {
   formatPlanPrice,
@@ -37,7 +35,6 @@ export function SubscriptionPitch({
   className,
   force = false,
 }: Props) {
-  const [supportOpen, setSupportOpen] = useState(false);
   const isFree = planId === "free";
   const nextId = nextPaidPlanId(planId, searchesLimit);
   // Бізнес (pro) — верхній тариф: без апселу, але плашку з лімітом лишаємо.
@@ -49,70 +46,66 @@ export function SubscriptionPitch({
 
   if (variant === "sidebar") {
     return (
-      <>
-        <div className={cn("rounded-2xl bg-surface p-4", className)}>
-          <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
-            Тариф
-          </div>
-          <div className="text-[14px] font-black text-ink">
-            {planDisplayName(planId)}
-            {isTrial ? (
-              <span className="ml-1 text-[11px] font-semibold text-emerald-dark">Trial</span>
-            ) : null}
-          </div>
-          <div className="mt-2 mb-2 flex justify-between text-[12px]">
-            <span className="text-muted">Моніторинги</span>
-            <span className="font-semibold text-ink">
-              {searchesUsed}/{searchesLimit}
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-border">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all",
-                nearLimit ? "bg-amber-500" : "bg-emerald",
-              )}
-              style={{
-                width: `${searchesLimit > 0 ? Math.min(100, Math.round((searchesUsed / searchesLimit) * 100)) : 0}%`,
-              }}
-            />
-          </div>
-          {isFree || isTrial ? (
-            <p className="mt-3 text-[11px] leading-snug text-muted">
-              {isTrial
-                ? "Trial — 1 моніторинг. Старт — "
-                : "1 моніторинг. Старт — "}
-              {formatPlanPrice("lite")} · до 10. Про — {formatPlanPrice("standard")} · до 30.
-            </p>
-          ) : next ? (
-            <p className="mt-3 text-[11px] leading-snug text-muted">
-              Більше слотів: «{next.name}» — {formatPlanPrice(next.id)} / 30 днів · до{" "}
-              {planMonitorLimit(next.id)} моніторингів.
-            </p>
-          ) : null}
-          <Link
-            href="/app/billing"
-            className={cn(
-              "mt-3 flex w-full items-center justify-center rounded-full px-3 py-2 text-[12px] font-bold transition-colors",
-              isFree || nearLimit
-                ? "bg-emerald text-white hover:bg-emerald-dark"
-                : "bg-ink text-white hover:bg-emerald",
-            )}
-          >
-            {isFree ? "Оформити підписку" : nearLimit ? "Збільшити ліміт" : "Тарифи та оплата"}
-          </Link>
-          <button
-            type="button"
-            onClick={() => setSupportOpen(true)}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-full border border-border bg-white px-3 py-2 text-[12px] font-semibold text-ink transition-colors hover:bg-surface"
-          >
-            <IconHelp size={14} />
-            Підтримка · FAQ
-          </button>
-          <SocialIconRow className="mt-3 pt-3 border-t border-border/60" />
+      <div className={cn("rounded-2xl bg-surface p-4", className)}>
+        <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
+          Тариф
         </div>
-        <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
-      </>
+        <div className="text-[14px] font-black text-ink">
+          {planDisplayName(planId)}
+          {isTrial ? (
+            <span className="ml-1 text-[11px] font-semibold text-emerald-dark">Trial</span>
+          ) : null}
+        </div>
+        <div className="mt-2 mb-2 flex justify-between text-[12px]">
+          <span className="text-muted">Моніторинги</span>
+          <span className="font-semibold text-ink">
+            {searchesUsed}/{searchesLimit}
+          </span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-border">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all",
+              nearLimit ? "bg-amber-500" : "bg-emerald",
+            )}
+            style={{
+              width: `${searchesLimit > 0 ? Math.min(100, Math.round((searchesUsed / searchesLimit) * 100)) : 0}%`,
+            }}
+          />
+        </div>
+        {isFree || isTrial ? (
+          <p className="mt-3 text-[11px] leading-snug text-muted">
+            {isTrial
+              ? "Trial — 1 моніторинг. Старт — "
+              : "1 моніторинг. Старт — "}
+            {formatPlanPrice("lite")} · до 10. Про — {formatPlanPrice("standard")} · до 30.
+          </p>
+        ) : next ? (
+          <p className="mt-3 text-[11px] leading-snug text-muted">
+            Більше слотів: «{next.name}» — {formatPlanPrice(next.id)} / 30 днів · до{" "}
+            {planMonitorLimit(next.id)} моніторингів.
+          </p>
+        ) : null}
+        <Link
+          href="/app/billing"
+          className={cn(
+            "mt-3 flex w-full items-center justify-center rounded-full px-3 py-2 text-[12px] font-bold transition-colors",
+            isFree || nearLimit
+              ? "bg-emerald text-white hover:bg-emerald-dark"
+              : "bg-ink text-white hover:bg-emerald",
+          )}
+        >
+          {isFree ? "Оформити підписку" : nearLimit ? "Збільшити ліміт" : "Тарифи та оплата"}
+        </Link>
+        <Link
+          href="/app/support"
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-full border border-border bg-white px-3 py-2 text-[12px] font-semibold text-ink transition-colors hover:bg-surface"
+        >
+          <IconHelp size={14} />
+          Підтримка · FAQ
+        </Link>
+        <SocialIconRow className="mt-3 border-t border-border/60 pt-3" />
+      </div>
     );
   }
 
