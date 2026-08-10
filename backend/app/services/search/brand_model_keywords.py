@@ -329,7 +329,7 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
     "rav4": ("rav4", "рав4", "rav-4", "rav 4"),
     "camry": ("camry", "камрі", "камри", "кемрі", "кемри", "кемре", "cemri", "kemri"),
     "corolla": ("corolla", "королла", "корола", "corolla cross", "корола кросс"),
-    "highlander": ("highlander", "хайландер"),
+    "highlander": ("highlander", "хайландер", "kluger", "клюгер"),
     "4runner": ("4runner", "4 runner", "4-runner"),
     "c-hr": ("c-hr", "chr", "c hr"),
     "yaris": ("yaris", "яріс", "ярис"),
@@ -351,7 +351,6 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
     "venza": ("venza", "венза"),
     "sienna": ("sienna", "сієнна"),
     "previa": ("previa", "превіа"),
-    "kluger": ("kluger", "клюгер"),
 
     # ══ HYUNDAI ═════════════════════════════════════════════════
     "tucson": ("tucson", "тусон", "туксон"),
@@ -511,8 +510,8 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
     "cx-7": ("cx-7", "cx7", "cx 7"),
     "cx-9": ("cx-9", "cx9", "cx 9"),
     "cx-90": ("cx-90", "cx90", "cx 90"),
-    "mazda 3": ("mazda 3", "мазда 3", "323", "axela"),
-    "mazda 6": ("mazda 6", "мазда 6", "atenza"),
+    "3": ("3", "mazda 3", "мазда 3", "323", "axela"),
+    "6": ("6", "mazda 6", "мазда 6", "atenza"),
     "mx-5": ("mx-5", "mx5", "miata", "roadster"),
     "mx-30": ("mx-30", "mx30"),
     "bt-50": ("bt-50", "bt50"),
@@ -638,7 +637,7 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
     "c6": ("c6", "с6"),
     "berlingo": ("berlingo", "берлінго"),
     "xsara": ("xsara", "ксара", "xsara picasso"),
-    "jumpy": ("jumpy", "джампі"),
+    "jumpy": ("jumpy", "джампі", "dispatch", "диспетч"),
     "jumper": ("jumper", "джампер"),
     "ds3": ("ds3", "ds 3"),
     "ds4": ("ds4", "ds 4"),
@@ -991,8 +990,21 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
 
     # ══ LAMBORGHINI ═════════════════════════════════════════════
     "urus": ("urus", "урус"),
-    "huracan": ("huracan", "гурaкан", "huracán"),
+    "huracán": ("huracan", "huracán", "гурaкан"),
     "aventador": ("aventador", "авентадор"),
+    "gallardo": ("gallardo", "галardo"),
+    "revuelto": ("revuelto", "ревuelto"),
+
+    # ══ MCLAREN ══════════════════════════════════════════════════
+    "720s": ("720s", "720 s"),
+    "570s": ("570s", "570 s"),
+    "600lt": ("600lt", "600 lt"),
+    "650s": ("650s", "650 s"),
+    "540c": ("540c", "540 c"),
+    "765lt": ("765lt", "765 lt"),
+    "artura": ("artura", "артура"),
+    "mp4-12c": ("mp4-12c", "mp4 12c", "12c"),
+    "senna": ("senna", "сenna"),
 
     # ══ BENTLEY ═════════════════════════════════════════════════
     "bentayga": ("bentayga", "бентайга"),

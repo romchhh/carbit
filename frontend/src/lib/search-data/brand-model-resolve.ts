@@ -70,19 +70,47 @@ for (const brand of BRANDS) {
   SLUG_TO_BRAND.set(brandNameToIconSlug(brand), brand);
 }
 
+function slugToBrandLabel(slug: string): string {
+  const mapped = SLUG_TO_BRAND.get(slug);
+  if (mapped) return mapped;
+  return slug
+    .split("-")
+    .map(part => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+    .join(" ");
+}
+
 const BRAND_ALIAS_TO_CANONICAL = new Map<string, string>();
 for (const brand of BRANDS) {
   BRAND_ALIAS_TO_CANONICAL.set(normalizeSearchKey(brand), brand);
 }
 for (const [slug, aliases] of Object.entries(aliasData.brandSlugs)) {
-  const canonical = SLUG_TO_BRAND.get(slug);
+  const canonical = SLUG_TO_BRAND.get(slug) ?? slugToBrandLabel(slug);
   if (!canonical) continue;
+  BRAND_ALIAS_TO_CANONICAL.set(normalizeSearchKey(canonical), canonical);
   for (const alias of aliases) {
     BRAND_ALIAS_TO_CANONICAL.set(normalizeSearchKey(alias), canonical);
   }
 }
 
 const MODEL_ALIAS_TO_CANONICAL_BY_BRAND = new Map<string, Map<string, string>>();
+
+function resolveModelAliasKey(brand: string, modelKey: string, models: string[]): string | null {
+  const byNorm = new Map<string, string>();
+  for (const model of models) {
+    byNorm.set(normalizeSearchKey(model), model);
+  }
+  const normalizedKey = normalizeSearchKey(modelKey);
+  const direct = byNorm.get(normalizedKey);
+  if (direct) return direct;
+
+  const brandPrefix = `${normalizeSearchKey(brand)} `;
+  if (normalizedKey.startsWith(brandPrefix)) {
+    const rest = normalizedKey.slice(brandPrefix.length);
+    const fromPrefix = byNorm.get(rest);
+    if (fromPrefix) return fromPrefix;
+  }
+  return null;
+}
 
 function modelIndexForBrand(brand: string): Map<string, string> {
   const cached = MODEL_ALIAS_TO_CANONICAL_BY_BRAND.get(brand);
@@ -99,7 +127,7 @@ function modelIndexForBrand(brand: string): Map<string, string> {
   }
 
   for (const [modelKey, aliases] of Object.entries(aliasData.models)) {
-    const canonical = byNorm.get(normalizeSearchKey(modelKey));
+    const canonical = resolveModelAliasKey(brand, modelKey, models);
     if (!canonical) continue;
     index.set(normalizeSearchKey(modelKey), canonical);
     for (const alias of aliases) {

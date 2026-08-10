@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal/LegalPage";
 import { OperatorRequisites } from "@/components/legal/OperatorRequisites";
+import { pageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: "Політика конфіденційності — Carbit",
-  description: "Як Carbit збирає, використовує та захищає персональні дані користувачів.",
-};
+export const metadata: Metadata = pageMetadata(
+  "Політика конфіденційності — Carbit",
+  "Як Carbit збирає, використовує та захищає персональні дані користувачів.",
+);
 
 const sections = [
   {

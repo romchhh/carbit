@@ -179,7 +179,7 @@ function BillingPageInner() {
           <div>
             <div className="text-[14px] font-semibold text-ink">Trial активний</div>
             <div className="text-[12px] text-muted">
-              Після trial оберіть платний тариф — ліміт пошуків зросте, сповіщення лишаться в Telegram
+              Trial — 1 активний моніторинг. Після trial оберіть платний тариф — ліміт зросте до 10+
             </div>
           </div>
         </AppSection>

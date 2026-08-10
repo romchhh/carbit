@@ -4,12 +4,12 @@ import { LegalPage } from "@/components/legal/LegalPage";
 import { OperatorRequisites } from "@/components/legal/OperatorRequisites";
 import { LiqPayLogo } from "@/components/brand/LiqPayLogo";
 import { PRICING_PLANS, SUPPORT_EMAIL } from "@/lib/pricing-plans";
+import { pageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: "Оплата і повернення — Carbit",
-  description:
-    "Умови оплати, надання цифрової послуги та повернення коштів у сервісі Carbit. Оплата через LiqPay.",
-};
+export const metadata: Metadata = pageMetadata(
+  "Оплата і повернення — Carbit",
+  "Умови оплати, надання цифрової послуги та повернення коштів у сервісі Carbit. Оплата через LiqPay.",
+);
 
 const paidPlans = PRICING_PLANS.filter(p => p.id !== "free");
 

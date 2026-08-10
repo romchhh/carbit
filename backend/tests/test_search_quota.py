@@ -62,5 +62,17 @@ class EnforceActiveSearchesQuotaTests(unittest.IsolatedAsyncioTestCase):
         db.flush.assert_not_awaited()
 
 
+class TrialLimitTests(unittest.TestCase):
+    def test_active_trial_uses_free_monitor_limit(self):
+        from app.services.billing.plans import effective_searches_limit
+
+        user = SimpleNamespace(
+            plan=SimpleNamespace(value="free"),
+            is_trial_active=True,
+            plan_expires_at=None,
+        )
+        self.assertEqual(effective_searches_limit(user), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

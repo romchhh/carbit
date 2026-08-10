@@ -72,10 +72,12 @@ export function SubscriptionPitch({
             }}
           />
         </div>
-        {isFree ? (
+        {isFree || isTrial ? (
           <p className="mt-3 text-[11px] leading-snug text-muted">
-            Старт — {formatPlanPrice("lite")} · до 10 пошуків. Про —{" "}
-            {formatPlanPrice("standard")} · до 30.
+            {isTrial
+              ? "Trial — 1 моніторинг. Старт — "
+              : "1 моніторинг. Старт — "}
+            {formatPlanPrice("lite")} · до 10. Про — {formatPlanPrice("standard")} · до 30.
           </p>
         ) : next ? (
           <p className="mt-3 text-[11px] leading-snug text-muted">

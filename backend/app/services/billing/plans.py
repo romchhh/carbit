@@ -89,7 +89,7 @@ PLANS: dict[str, dict] = {
     },
 }
 
-TRIAL_PLAN_ID = "lite"
+TRIAL_PLAN_ID = "free"
 
 
 def get_plan(plan_id: str) -> dict:

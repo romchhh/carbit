@@ -3,6 +3,7 @@ import { Montserrat } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthProvider";
 import { PwaSplash } from "@/components/pwa/PwaSplash";
 import { PwaServiceWorker } from "@/components/pwa/PwaServiceWorker";
+import { DEFAULT_SITE_METADATA } from "@/lib/site-metadata";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -12,23 +13,7 @@ const montserrat = Montserrat({
   variable: "--font-montserrat",
 });
 
-export const metadata: Metadata = {
-  title: "Carbit — Агрегатор авторинку",
-  description: "AUTO.RIA, OLX і Telegram в одному пошуку. Знаходь авто раніше за конкурентів.",
-  manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    title: "Carbit",
-    statusBarStyle: "black-translucent",
-  },
-  icons: {
-    icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
-  },
-};
+export const metadata: Metadata = DEFAULT_SITE_METADATA;
 export const viewport: Viewport = {
   themeColor: "#00C896",
   width: "device-width",

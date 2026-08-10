@@ -427,9 +427,9 @@ export function SearchFiltersPanel({
               onToggle={region => update(toggleRegion(syncedFilters, region))}
               onClearAll={() => update(clearRegions(syncedFilters))}
               searchable
-              emptyLabel="Всі регіони"
+              emptyLabel="Вся Україна"
               formatMultiDisplay={values =>
-                formatMultiSelectionLabel(values, "Всі регіони", values[0])
+                formatMultiSelectionLabel(values, "Вся Україна", values[0])
               }
             />
           </div>

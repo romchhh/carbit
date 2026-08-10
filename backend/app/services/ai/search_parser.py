@@ -210,7 +210,11 @@ def _resolve_brand_model(brand: str | None, model: str | None) -> tuple[str | No
         if b not in catalog:
             slug = resolve_olx_brand_slug(b)
             if slug:
-                b = fe_brand_slug_to_label().get(slug) or slug_to_brand_label(slug) or b
+                resolved = fe_brand_slug_to_label().get(slug) or slug_to_brand_label(slug)
+                if resolved:
+                    b = resolved
+                elif catalog:
+                    b = ""
             elif catalog:
                 b = ""
 

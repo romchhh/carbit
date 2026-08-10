@@ -94,7 +94,7 @@ export function FilterOptionsPopover({
   const display = multiple
     ? values.length > 0
       ? formatMultiDisplay?.(values) ?? (values.length <= 2 ? values.join(", ") : `${values.length} обрано`)
-      : ""
+      : emptyLabel
     : value;
 
   const selectedIconUrl =
@@ -148,6 +148,25 @@ export function FilterOptionsPopover({
                   className={cn(
                     "block w-full px-4 py-2.5 text-left text-[14px] transition-colors hover:bg-surface",
                     !value || value === emptyLabel
+                      ? "font-semibold text-emerald-dark"
+                      : "text-muted",
+                  )}
+                >
+                  {emptyLabel}
+                </button>
+              </li>
+            )}
+            {multiple && onClearAll && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClearAll();
+                    setQuery("");
+                  }}
+                  className={cn(
+                    "block w-full px-4 py-2.5 text-left text-[14px] transition-colors hover:bg-surface",
+                    values.length === 0
                       ? "font-semibold text-emerald-dark"
                       : "text-muted",
                   )}

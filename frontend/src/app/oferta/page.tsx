@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/legal/LegalPage";
 import { OperatorRequisites } from "@/components/legal/OperatorRequisites";
+import { pageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: "Договір публічної оферти — Carbit",
-  description:
-    "Публічна оферта про надання інформаційних онлайн-послуг платформою Carbit (ФОП Білоус О. В.).",
-};
+export const metadata: Metadata = pageMetadata(
+  "Договір публічної оферти — Carbit",
+  "Публічна оферта про надання інформаційних онлайн-послуг платформою Carbit (ФОП Білоус О. В.).",
+);
 
 const Bullet = ({ items }: { items: string[] }) => (
   <ul>

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { PricingPlans } from "@/components/pricing/PricingPlans";
@@ -6,6 +7,12 @@ import { FaqAccordion } from "@/components/ui/FaqAccordion";
 import { cn } from "@/lib/utils";
 import { PRICING_COMPARE, PRICING_PLAN_HEADERS } from "@/lib/pricing-plans";
 import { IconCheck, IconX } from "@/components/icons";
+import { pageMetadata } from "@/lib/site-metadata";
+
+export const metadata: Metadata = pageMetadata(
+  "Тарифи — Carbit",
+  "Плани підписки Carbit: Free, Старт, Про та Бізнес. Моніторинг AUTO.RIA, OLX і Telegram.",
+);
 
 const PRICING_FAQ = [
   {

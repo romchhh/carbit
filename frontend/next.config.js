@@ -26,6 +26,12 @@ const apiUrl = (() => {
   return "http://localhost:8000/api/v1";
 })();
 
+const siteUrl = (
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+  process.env.FRONTEND_URL?.trim() ||
+  "https://carbit.info"
+).replace(/\/$/, "");
+
 const defaultCache = require("next-pwa/cache");
 
 // Без кешування HTML/RSC — інакше на телефоні «через раз» кнопки та падіння Next.js.
@@ -79,6 +85,7 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: apiUrl,
     NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: telegramBotUsername,
     NEXT_PUBLIC_TELEGRAM_BOT_URL: telegramBotUrl,
+    NEXT_PUBLIC_SITE_URL: siteUrl,
   },
   // Cookie-aware proxy: src/app/api/v1/[...path]/route.ts
   images: {

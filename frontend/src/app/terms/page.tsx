@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal/LegalPage";
 import { OperatorRequisites } from "@/components/legal/OperatorRequisites";
+import { pageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: "Умови використання — Carbit",
-  description: "Умови надання послуг сервісу Carbit — агрегатора оголошень авторинку України.",
-};
+export const metadata: Metadata = pageMetadata(
+  "Умови використання — Carbit",
+  "Умови надання послуг сервісу Carbit — агрегатора оголошень авторинку України.",
+);
 
 const sections = [
   {
