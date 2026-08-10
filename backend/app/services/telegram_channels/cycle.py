@@ -104,6 +104,7 @@ async def run_telegram_channels_cycle(
                         listing,
                         notify=False,
                         link_searches=False,
+                        parser_service=service,
                     )
                 total += len(listings)
                 log.append(

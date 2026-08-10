@@ -10,12 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, Source
 from app.services.telegram_channels.bootstrap import ensure_parser_path
+from app.services.telegram_channels.channel_paths import telegram_channel_media_slug
 from app.services.telegram_channels.mapper import telegram_media_url
 
 if TYPE_CHECKING:
     from parser.service import CarParserService
 
 logger = logging.getLogger(__name__)
+
+PHOTO_WAIT_INTERVAL = 0.35
+PHOTO_PAGE_WAIT_SECONDS = 18.0
 
 
 def _media_store():
@@ -29,7 +33,7 @@ def _urls_from_existing_files(channel: str, message_ids: list[int], *, limit: in
     """Якщо jpg уже лежать у media/ — підставляємо URL без Telethon."""
     from app.core.config import settings
 
-    safe = channel.strip("@").replace("/", "_").replace(" ", "_")
+    safe = telegram_channel_media_slug(channel)
     root = Path(settings.TELEGRAM_MEDIA_DIR) / safe
     urls: list[str] = []
     for msg_id in message_ids:
@@ -178,6 +182,37 @@ async def sync_telegram_photos_from_disk(
     return urls
 
 
+async def refresh_listing_photo_urls(
+    db: AsyncSession,
+    listing_id: str,
+    *,
+    max_photos: int = 1,
+) -> list[str]:
+    db.expire_all()
+    listing = await db.get(Listing, listing_id)
+    if not listing:
+        return []
+    if listing.images:
+        return list(listing.images)
+    return await sync_telegram_photos_from_disk(db, listing, max_photos=max_photos)
+
+
+async def wait_for_listing_photos(
+    db: AsyncSession,
+    listing_id: str,
+    *,
+    timeout: float = PHOTO_PAGE_WAIT_SECONDS,
+) -> list[str]:
+    """Чекає поки worker/API запишуть images у БД (poll disk + DB)."""
+    deadline = asyncio.get_running_loop().time() + max(0.5, timeout)
+    while asyncio.get_running_loop().time() < deadline:
+        urls = await refresh_listing_photo_urls(db, listing_id)
+        if urls:
+            return urls
+        await asyncio.sleep(PHOTO_WAIT_INTERVAL)
+    return await refresh_listing_photo_urls(db, listing_id)
+
+
 async def ensure_telegram_listing_photos(
     db: AsyncSession,
     listing: Listing,
@@ -199,8 +234,12 @@ async def ensure_telegram_listing_photos(
         return list(listing.images or [])
 
     worker_up = await telegram_worker_online()
+    enqueue_listing_photos(listing.id, priority=1)
+
     if worker_up:
-        enqueue_listing_photos(listing.id, priority=1)
+        urls = await wait_for_listing_photos(db, listing.id, timeout=min(telethon_timeout, 14.0))
+        if urls:
+            return urls
         return list(listing.images or [])
 
     if try_telethon:
@@ -230,17 +269,18 @@ async def ensure_telegram_listing_photos(
             logger.exception("Inline Telegram photo download failed for %s", listing.id)
 
     enqueue_listing_photos(listing.id, priority=1)
-    return list(listing.images or [])
+    return await wait_for_listing_photos(db, listing.id, timeout=min(telethon_timeout, 10.0))
 
 
 async def hydrate_telegram_page_photos(
     db: AsyncSession,
     items: list,
     *,
-    max_downloads: int = 10,
+    max_downloads: int = 20,
     telethon_timeout: float = 25.0,
+    wait_seconds: float = PHOTO_PAGE_WAIT_SECONDS,
 ) -> list:
-    """Для поточної сторінки каталогу: диск → worker/черга (пріоритет) або Telethon."""
+    """Сторінка каталогу: диск → worker (пріоритет) + очікування до wait_seconds."""
     from app.schemas.schemas import ListingOut
 
     if not items:
@@ -263,12 +303,27 @@ async def hydrate_telegram_page_photos(
         elif listing_needs_photos(listing):
             need_download.append(listing)
 
-    worker_up = await telegram_worker_online()
+    if not need_download:
+        return _apply_photo_updates(items, updated)
 
-    if need_download and worker_up:
-        for listing in need_download:
-            enqueue_listing_photos(listing.id, priority=1)
-    elif need_download:
+    worker_up = await telegram_worker_online()
+    targets = need_download[: max(1, max_downloads)]
+
+    for listing in targets:
+        enqueue_listing_photos(listing.id, priority=1)
+
+    if worker_up and wait_seconds > 0:
+        pending_ids = {listing.id for listing in targets}
+        deadline = asyncio.get_running_loop().time() + max(2.0, wait_seconds)
+        while pending_ids and asyncio.get_running_loop().time() < deadline:
+            for listing_id in list(pending_ids):
+                urls = await refresh_listing_photo_urls(db, listing_id)
+                if urls:
+                    updated[listing_id] = urls
+                    pending_ids.discard(listing_id)
+            if pending_ids:
+                await asyncio.sleep(PHOTO_WAIT_INTERVAL)
+    elif not worker_up:
         service = None
         try:
             from app.services.telegram_channels.service_loader import get_parser_service
@@ -278,7 +333,7 @@ async def hydrate_telegram_page_photos(
             async def _batch() -> None:
                 assert service is not None
                 await service.start()
-                for listing in need_download[: max(1, max_downloads)]:
+                for listing in targets:
                     urls = await attach_photos_to_listing(
                         db,
                         service,
@@ -300,13 +355,24 @@ async def hydrate_telegram_page_photos(
                 except Exception:
                     logger.exception("Telegram service stop after page photos")
 
-        for listing in need_download:
-            if listing.id not in updated:
-                enqueue_listing_photos(listing.id, priority=1)
+        if wait_seconds > 0:
+            for listing in targets:
+                if listing.id in updated:
+                    continue
+                urls = await wait_for_listing_photos(
+                    db,
+                    listing.id,
+                    timeout=min(8.0, wait_seconds),
+                )
+                if urls:
+                    updated[listing.id] = urls
 
+    return _apply_photo_updates(items, updated)
+
+
+def _apply_photo_updates(items: list, updated: dict[str, list[str]]) -> list:
     if not updated:
         return items
-
     out: list = []
     for item in items:
         urls = updated.get(getattr(item, "id", ""))

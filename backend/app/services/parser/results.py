@@ -156,6 +156,13 @@ async def get_search_results_from_db(
     page_items = items[start : start + per_page]
     pages = (total + per_page - 1) // per_page if total else 0
 
+    from app.core.database import AsyncSessionLocal
+    from app.services.telegram_channels.lazy_photos import hydrate_telegram_page_photos
+
+    async with AsyncSessionLocal() as photo_db:
+        page_items = await hydrate_telegram_page_photos(photo_db, page_items)
+        await photo_db.commit()
+
     return PaginatedListings(
         items=page_items,
         total=total,

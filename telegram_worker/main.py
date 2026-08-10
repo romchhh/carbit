@@ -25,8 +25,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [telegram-worker] %(
 logger = logging.getLogger("carbit.telegram_worker")
 
 
-def _poll_sleep_seconds(settings: dict, *, busy: bool) -> float:
+def _poll_sleep_seconds(settings: dict, *, busy: bool, photo_backlog: int = 0) -> float:
     poll = max(1, int(settings.get("telegram_worker_poll_seconds") or 3))
+    if photo_backlog > 0:
+        return 0.25 if busy else 0.6
     return 0.5 if busy else float(poll)
 
 
@@ -216,7 +218,9 @@ async def main() -> None:
                     logger.exception("Telegram stale purge failed")
 
             await beat("telegram_worker")
-            await asyncio.sleep(_poll_sleep_seconds(settings, busy=busy))
+            await asyncio.sleep(
+                _poll_sleep_seconds(settings, busy=busy, photo_backlog=photo_pending)
+            )
 
     asyncio.create_task(heartbeat_loop())
     asyncio.create_task(

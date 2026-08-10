@@ -24,7 +24,7 @@ def _maybe_compress(path: str) -> None:
 
 
 def _channel_dir(channel: str) -> str:
-    safe = channel.strip("@").replace("/", "_")
+    safe = channel.strip("@").replace("/", "_").replace(" ", "_")
     path = os.path.join(settings.media_dir, safe)
     os.makedirs(path, exist_ok=True)
     return path
@@ -134,4 +134,34 @@ async def download_photos_by_ids(
                 if album:
                     ordered = album
 
-    return await download_photos(client, channel, ordered, max_photos=limit)
+    paths = await download_photos(client, channel, ordered, max_photos=limit)
+    if paths:
+        return paths
+
+    # Reply-ланцюг: текст у пості, фото в reply (без grouped_id).
+    primary_id = ids[0]
+    for msg in fetched:
+        if not isinstance(msg, Message) or not _has_photo(msg):
+            continue
+        reply_to = getattr(getattr(msg, "reply_to", None), "reply_to_msg_id", None)
+        if reply_to in ids or msg.id in ids:
+            extra = await download_photos(client, channel, [msg], max_photos=limit)
+            if extra:
+                return extra
+
+    neighbor_ids = [mid for mid in range(primary_id - 4, primary_id + 5) if mid > 0 and mid not in by_id]
+    if neighbor_ids:
+        extra_msgs = await client.get_messages(entity, ids=neighbor_ids[:12])
+        if not isinstance(extra_msgs, list):
+            extra_msgs = [extra_msgs] if extra_msgs else []
+        for msg in sorted(
+            (m for m in extra_msgs if isinstance(m, Message) and _has_photo(m)),
+            key=lambda m: abs(m.id - primary_id),
+        ):
+            reply_to = getattr(getattr(msg, "reply_to", None), "reply_to_msg_id", None)
+            if reply_to == primary_id or abs(msg.id - primary_id) <= 1:
+                extra = await download_photos(client, channel, [msg], max_photos=limit)
+                if extra:
+                    return extra
+
+    return []

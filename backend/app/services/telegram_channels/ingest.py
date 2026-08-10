@@ -125,6 +125,11 @@ async def ingest_telegram_listing(
         if urls:
             item = listing_to_out(listing)
 
+    if not (listing.images or []):
+        from app.services.telegram_channels.lazy_photos import enqueue_listing_photos
+
+        enqueue_listing_photos(listing.id, priority=0)
+
     if not link_searches:
         return item, 0, 0, False
 
@@ -166,14 +171,6 @@ async def ingest_telegram_listing(
             new_total += 1
         if sent:
             notifications += 1
-
-    if matched_any:
-        from app.services.telegram_channels.bootstrap import ensure_parser_path
-
-        ensure_parser_path()
-        from parser.channel_media_store import ChannelMediaStore
-
-        ChannelMediaStore().enqueue_photo_download(item.id)
 
     return item, new_total, notifications, matched_any
 

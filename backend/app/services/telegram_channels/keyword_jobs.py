@@ -13,11 +13,11 @@ from app.services.telegram_channels.lazy_photos import attach_photos_to_listing
 
 logger = logging.getLogger(__name__)
 
-PHOTO_QUEUE_MAX_ATTEMPTS = 4
+PHOTO_QUEUE_MAX_ATTEMPTS = 5
 
 
 def _photo_batch_limit(pending: int) -> int:
-    return min(30, max(8, pending))
+    return min(40, max(12, pending))
 
 
 async def process_photo_queue(service, *, limit: int | None = None) -> int:

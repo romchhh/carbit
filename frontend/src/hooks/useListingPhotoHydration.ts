@@ -82,7 +82,7 @@ export function useListingPhotoHydration(listing: Listing) {
       }
 
       attempts += 1;
-      if (!cancelled && attempts < 15) {
+      if (!cancelled && attempts < 40) {
         timer = window.setTimeout(poll, 2000);
       }
     };

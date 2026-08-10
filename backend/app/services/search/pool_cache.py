@@ -412,6 +412,13 @@ async def slice_pool(
 
     items = await _apply_vin_mirrors_to_page(items)
 
+    from app.core.database import AsyncSessionLocal
+    from app.services.telegram_channels.lazy_photos import hydrate_telegram_page_photos
+
+    async with AsyncSessionLocal() as photo_db:
+        items = await hydrate_telegram_page_photos(photo_db, items, max_downloads=per_page)
+        await photo_db.commit()
+
     pages = (total + per_page - 1) // per_page if total else 0
 
     sources_raw = pool.get("sources") or []
