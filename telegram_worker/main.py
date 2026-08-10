@@ -19,6 +19,7 @@ from app.services.telegram_channels.keyword_jobs import (  # noqa: E402
     process_keyword_queue,
     process_photo_queue,
 )
+from app.services.telegram_channels.lazy_photos import backfill_telegram_photos  # noqa: E402
 from app.services.telegram_channels.service_loader import get_parser_channels, get_parser_service  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [telegram-worker] %(message)s")
@@ -197,6 +198,16 @@ async def main() -> None:
                     busy = True
             except Exception:
                 logger.exception("Keyword queue tick failed")
+
+            try:
+                async with AsyncSessionLocal() as db:
+                    filled = await backfill_telegram_photos(db, service, limit=12)
+                    if filled:
+                        await db.commit()
+                        busy = True
+                        logger.info("Telegram photo backfill: %s listings", filled)
+            except Exception:
+                logger.exception("Telegram photo backfill tick failed")
 
             # Раз на годину — видаляємо TG-лоти старші за 3 місяці.
             now_mono = asyncio.get_event_loop().time()

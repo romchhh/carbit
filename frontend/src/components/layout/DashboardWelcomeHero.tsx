@@ -112,6 +112,16 @@ export function DashboardWelcomeHero({
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-ink shadow-sm">
               <Image
+                src={SOURCE_LOGOS.imperiya}
+                alt=""
+                width={28}
+                height={14}
+                className="h-[14px] w-auto object-contain"
+              />
+              Імперія
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-ink shadow-sm">
+              <Image
                 src={SOURCE_LOGOS.telegram}
                 alt=""
                 width={18}

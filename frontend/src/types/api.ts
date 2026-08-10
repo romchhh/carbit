@@ -10,6 +10,7 @@ export interface User {
   email_verified?: boolean;
   phone?: string | null;
   phone_verified?: boolean;
+  has_password?: boolean;
   trial_ends_at?: string | null;
   is_trial_active?: boolean;
   onboarding_completed?: boolean;

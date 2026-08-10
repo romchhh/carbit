@@ -21,7 +21,7 @@ class TelegramSearchSpeedTests(unittest.TestCase):
         self.assertLessEqual(KEYWORD_WAIT_SECONDS, 6.0)
 
     def test_pool_timeouts_are_bounded_for_live(self):
-        self.assertLessEqual(multi_source.TELEGRAM_POOL_TIMEOUT_SECONDS, 30.0)
+        self.assertLessEqual(multi_source.TELEGRAM_POOL_TIMEOUT_SECONDS, 15.0)
         self.assertLessEqual(multi_source.AUTO_RIA_POOL_TIMEOUT_SECONDS, 30.0)
         self.assertLessEqual(multi_source.OLX_SEARCH_TIMEOUT_SECONDS, 25.0)
 

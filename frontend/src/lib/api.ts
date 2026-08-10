@@ -206,6 +206,10 @@ export const auth = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  phoneLogin: (body: { phone: string; password: string; remember?: boolean }) =>
+    request<TokenResponse>("/auth/phone/login", { method: "POST", body: JSON.stringify(body) }),
+  setPassword: (body: { password: string; current_password?: string }) =>
+    request<User>("/auth/password/set", { method: "POST", body: JSON.stringify(body) }),
   me: () => request<User>("/auth/me"),
   updateProfile: (body: { name?: string; preferred_currency?: string }) =>
     request<User>("/auth/me", { method: "PATCH", body: JSON.stringify(body) }),

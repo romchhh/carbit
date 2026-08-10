@@ -124,8 +124,7 @@ async def ingest_telegram_listing(
         )
         if urls:
             item = listing_to_out(listing)
-
-    if not (listing.images or []):
+    elif not (listing.images or []):
         from app.services.telegram_channels.lazy_photos import enqueue_listing_photos
 
         enqueue_listing_photos(listing.id, priority=0)
@@ -312,9 +311,10 @@ async def search_telegram_listings(
     per_page: int = 20,
     sort_by: str = "newest",
     max_scan: int = 3000,
-    keyword_refresh: bool = True,
+    keyword_refresh: bool = False,
     found_after: datetime | None = None,
 ) -> PaginatedListings:
+    """Telegram з БД. keyword_refresh=False для live-пошуку (без Telethon)."""
     from app.services.search.brand_model_keywords import normalize_search_filters
 
     filters = normalize_search_filters(filters)
@@ -325,7 +325,6 @@ async def search_telegram_listings(
                 refresh_telegram_by_keywords,
             )
 
-            # History scan у чергу, але не чекаємо його — інакше live search = 30–60+ с.
             await refresh_telegram_by_keywords(
                 filters,
                 wait_seconds=KEYWORD_WAIT_SECONDS,
@@ -346,30 +345,23 @@ async def search_telegram_listings(
         scan_limit=scan_limit,
     )
 
-    # Мало матчів — deep refresh у фон (не блокує відповідь користувачу).
-    from app.services.telegram_channels.keyword_refresh import (
-        THIN_RESULT_RETRY_THRESHOLD,
-        enqueue_telegram_deep_refresh,
-    )
+    if keyword_refresh:
+        from app.services.telegram_channels.keyword_refresh import (
+            THIN_RESULT_RETRY_THRESHOLD,
+            enqueue_telegram_deep_refresh,
+        )
 
-    thin = len(matched) < THIN_RESULT_RETRY_THRESHOLD
-    if keyword_refresh and thin and ((filters.brand or "").strip() or (filters.model or "").strip()):
-        try:
-            asyncio.create_task(enqueue_telegram_deep_refresh(filters))
-        except Exception:
-            logger.exception("Failed to schedule Telegram deep refresh")
+        thin = len(matched) < THIN_RESULT_RETRY_THRESHOLD
+        if thin and ((filters.brand or "").strip() or (filters.model or "").strip()):
+            try:
+                asyncio.create_task(enqueue_telegram_deep_refresh(filters))
+            except Exception:
+                logger.exception("Failed to schedule Telegram deep refresh")
 
     matched = sort_listings(matched, sort_by)
     total = len(matched)
     start = (page - 1) * per_page
     page_items = matched[start : start + per_page]
-    from app.services.telegram_channels.lazy_photos import hydrate_telegram_page_photos
-
-    page_items = await hydrate_telegram_page_photos(
-        db,
-        page_items,
-        wait_seconds=0,
-    )
     pages = (total + per_page - 1) // per_page if total else 0
 
     return PaginatedListings(

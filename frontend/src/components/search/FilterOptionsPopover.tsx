@@ -91,6 +91,7 @@ export function FilterOptionsPopover({
     }
   };
 
+  const hasSelection = multiple ? values.length > 0 : Boolean(value?.trim());
   const display = multiple
     ? values.length > 0
       ? formatMultiDisplay?.(values) ?? (values.length <= 2 ? values.join(", ") : `${values.length} обрано`)
@@ -108,7 +109,7 @@ export function FilterOptionsPopover({
     <div ref={rootRef} className={cn("relative", open && "z-[80]", className)}>
       <FilterRow
         label={label}
-        value={display}
+        value={hasSelection ? display : undefined}
         onClick={() => !disabled && setOpen(v => !v)}
         disabled={disabled}
         leading={
@@ -163,6 +164,7 @@ export function FilterOptionsPopover({
                   onClick={() => {
                     onClearAll();
                     setQuery("");
+                    setOpen(false);
                   }}
                   className={cn(
                     "block w-full px-4 py-2.5 text-left text-[14px] transition-colors hover:bg-surface",
@@ -216,6 +218,7 @@ export function FilterOptionsPopover({
                   onClick={() => {
                     onClearAll();
                     setQuery("");
+                    setOpen(false);
                   }}
                   className="w-full rounded-full border border-border py-2 text-[13px] font-medium text-muted transition-colors hover:border-ink/20 hover:text-ink"
                 >

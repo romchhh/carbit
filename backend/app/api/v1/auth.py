@@ -32,6 +32,8 @@ from app.schemas.schemas import (
     ResetPasswordRequest,
     PhoneSendCodeRequest,
     PhoneVerifyRequest,
+    PhonePasswordLoginRequest,
+    SetPasswordRequest,
     TelegramLoginRequest,
     TelegramLoginUrlOut,
     TokenResponse,
@@ -275,6 +277,54 @@ async def phone_verify(
     max_age = AUTH_COOKIE_MAX_AGE if body.remember else None
     status_code = status.HTTP_201_CREATED if intent == "register" else status.HTTP_200_OK
     return token_json_response(await issue_user_access_token(user), max_age=max_age, status_code=status_code)
+
+
+@router.post("/phone/login", response_model=TokenResponse)
+async def phone_password_login(
+    body: PhonePasswordLoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        phone = normalize_ua_phone(body.phone)
+    except PhoneValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await enforce_rate_limit(
+        key=f"phone_login:{client_ip(request)}:{phone}",
+        limit=20,
+        window_seconds=900,
+        detail="Занадто багато спроб входу. Спробуйте через 15 хвилин.",
+    )
+
+    user = await get_verified_phone_user(db, phone)
+    if not user or not user.hashed_password or not verify_password(body.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Невірний номер або пароль")
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is deactivated")
+
+    max_age = AUTH_COOKIE_MAX_AGE if body.remember else None
+    return token_json_response(await issue_user_access_token(user), max_age=max_age)
+
+
+@router.post("/password/set", response_model=UserOut)
+async def set_password(
+    body: SetPasswordRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.hashed_password:
+        if not body.current_password or not verify_password(body.current_password, user.hashed_password):
+            raise HTTPException(status_code=400, detail="Невірний поточний пароль")
+
+    user.hashed_password = hash_password(body.password)
+    await db.flush()
+    return user_out(user)
 
 
 @router.post("/logout", response_model=MessageResponse)

@@ -61,6 +61,7 @@ class Settings(BaseSettings):
 
     # External APIs (reserved for future scrapers)
     AUTO_RIA_API_KEY: str = ""
+    IMPERIYA_API_KEY: str = ""
     OLX_CLIENT_ID: str = ""
     OLX_CLIENT_SECRET: str = ""
 

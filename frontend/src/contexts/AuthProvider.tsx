@@ -35,6 +35,8 @@ interface AuthContextValue {
     name?: string,
     remember?: boolean,
   ) => Promise<void>;
+  phoneLogin: (phone: string, password: string, remember?: boolean) => Promise<void>;
+  setPassword: (password: string, currentPassword?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -172,11 +174,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(await api.auth.me());
   };
 
+  const phoneLogin = async (phone: string, password: string, remember = true) => {
+    const { access_token } = await api.auth.phoneLogin({ phone, password, remember });
+    setToken(access_token, remember);
+    setUser(await api.auth.me());
+  };
+
+  const setPassword = async (password: string, currentPassword?: string) => {
+    setUser(
+      await api.auth.setPassword({
+        password,
+        current_password: currentPassword,
+      }),
+    );
+  };
+
   return (
     <AuthContext.Provider value={{
       user, loading, initialized, login, sendRegisterCode, verifyRegisterCode,
       resendRegisterCode, logout, refreshUser, updateProfile,
       loginWithToken, forgotPassword, resetPassword, sendPhoneCode, verifyPhoneCode,
+      phoneLogin, setPassword,
     }}>
       {children}
     </AuthContext.Provider>

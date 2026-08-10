@@ -18,6 +18,7 @@ def user_out(user: User) -> UserOut:
         "email_verified": False,
         "phone": None,
         "phone_verified": False,
+        "has_password": bool(user.hashed_password),
         "trial_ends_at": user.trial_ends_at,
         "is_trial_active": bool(user.is_trial_active),
         "onboarding_completed": bool(user.onboarding_completed),

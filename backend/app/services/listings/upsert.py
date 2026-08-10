@@ -18,7 +18,7 @@ def _parse_source(value: str) -> Source:
 
 
 def _external_id(listing_id: str) -> str:
-    for prefix in ("auto_ria_", "olx_", "telegram_"):
+    for prefix in ("auto_ria_", "olx_", "telegram_", "imperiya_"):
         if listing_id.startswith(prefix):
             return listing_id.removeprefix(prefix)
     return listing_id

@@ -131,8 +131,12 @@ export function SearchFiltersPanel({
   const modelOptions = getModelsForBrands(selectedBrands);
   const rateLimited = isSearchRateLimitMessage(searchError);
 
+  const applyFilters = (next: SearchFilterState) => {
+    onChange(syncSearchFilterArrays(next));
+  };
+
   const update = (patch: Partial<SearchFilterState>) => {
-    onChange(syncSearchFilterArrays({ ...filters, ...patch }));
+    applyFilters({ ...syncSearchFilterArrays(filters), ...patch });
   };
 
   const scrollToSearch = () => {
@@ -287,7 +291,7 @@ export function SearchFiltersPanel({
                 multiple
                 onChange={() => {}}
                 onToggle={brand => update(toggleBrand(syncedFilters, brand))}
-                onClearAll={() => update(clearBrands(syncedFilters))}
+                onClearAll={() => applyFilters(clearBrands(syncedFilters))}
                 searchable
                 emptyLabel="Будь-яка марка"
                 getOptionIcon={getBrandIconUrl}
@@ -305,7 +309,7 @@ export function SearchFiltersPanel({
                 multiple
                 onChange={() => {}}
                 onToggle={model => update(toggleModel(syncedFilters, model))}
-                onClearAll={() => update(clearModels(syncedFilters))}
+                onClearAll={() => applyFilters(clearModels(syncedFilters))}
                 searchable
                 emptyLabel="Будь-яка модель"
                 disabled={selectedBrands.length === 0}
@@ -380,7 +384,7 @@ export function SearchFiltersPanel({
               multiple
               onChange={() => {}}
               onToggle={region => update(toggleRegion(syncedFilters, region))}
-              onClearAll={() => update(clearRegions(syncedFilters))}
+              onClearAll={() => applyFilters(clearRegions(syncedFilters))}
               searchable
               emptyLabel="Вся Україна"
               formatMultiDisplay={values =>

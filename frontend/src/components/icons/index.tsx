@@ -209,6 +209,19 @@ export const IconMail = icon(
   </>
 );
 
+export const IconHelp = icon(
+  <>
+    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+    <path
+      d="M9.5 9.5a2.7 2.7 0 0 1 4.8 1.5c0 1.8-2.3 2.2-2.3 3.5"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <circle cx="12" cy="16.5" r="0.9" fill="currentColor" />
+  </>
+);
+
 export const IconDownload = icon(
   <>
     <path d="M12 3v12M8 11l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
@@ -228,6 +241,15 @@ export const IconInstagram = icon(
     <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="1.6" />
     <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
     <circle cx="17.5" cy="6.5" r="1" fill="currentColor" />
+  </>
+);
+
+export const IconTikTok = icon(
+  <>
+    <path
+      d="M15.5 4.5c.8 1.6 2.2 2.8 4 3.2v3.1c-1.4 0-2.7-.4-3.8-1.1v5.8c0 3.2-2.6 5.8-5.8 5.8S4.1 19.7 4.1 16.5s2.6-5.8 5.8-5.8c.3 0 .7 0 1 .1v3.3c-.3-.1-.6-.1-.9-.1-1.4 0-2.5 1.1-2.5 2.5s1.1 2.5 2.5 2.5 2.5-1.1 2.5-2.5V4.5h2.8z"
+      fill="currentColor"
+    />
   </>
 );
 

@@ -11,13 +11,15 @@ from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
 from app.services.auto_ria.client import AutoRiaError
 from app.services.auto_ria.mapper import sort_listings
 from app.services.auto_ria.service import search_auto_ria
+from app.services.imperiya.errors import ImperiyaError
+from app.services.imperiya.service import search_imperiya
 from app.services.olx.errors import OlxError
 from app.services.olx.service import _search_olx_body
 from app.services.search.concurrency import acquire_olx_slot
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 from app.services.telegram_channels.ingest import search_telegram_listings
 
-IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram"}
+IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram", "imperiya"}
 # Бюджет лише на HTTP-сканування після acquire_olx_slot (черга не входить у wait_for).
 OLX_SEARCH_TIMEOUT_SECONDS = 22.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
@@ -27,10 +29,12 @@ TELEGRAM_MAX_SCAN = 4000
 AUTO_RIA_PAGE_SIZE = 50
 # Live pool збирає лише IDs — 25 с достатньо; 90 с тримало весь gather.
 AUTO_RIA_POOL_TIMEOUT_SECONDS = 25.0
-# TG keyword wait ~5 с + SQL scan; фото не блокують (wait_seconds=0).
-TELEGRAM_POOL_TIMEOUT_SECONDS = 28.0
+IMPERIYA_POOL_TIMEOUT_SECONDS = 25.0
+IMPERIYA_PAGE_SIZE = 50
+# TG — лише БД (без keyword refresh на live-пошуку).
+TELEGRAM_POOL_TIMEOUT_SECONDS = 12.0
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
-_SOURCE_BLEND_ORDER = {"olx": 0, "telegram": 1, "auto_ria": 2}
+_SOURCE_BLEND_ORDER = {"olx": 0, "imperiya": 1, "telegram": 2, "auto_ria": 3}
 _DATE_SORT_KEYS = frozenset({"newest", "published_desc"})
 
 logger = logging.getLogger(__name__)
@@ -50,7 +54,7 @@ class SearchListingsOutcome:
 
 
 def normalize_sources(sources: list[str] | None) -> list[str]:
-    default = ["auto_ria", "olx"]
+    default = ["auto_ria", "olx", "imperiya"]
     if app_settings.TELEGRAM_ENABLED:
         default.append("telegram")
 
@@ -64,6 +68,8 @@ def normalize_sources(sources: list[str] | None) -> list[str]:
             normalized.append("auto_ria")
         elif key == "olx":
             normalized.append("olx")
+        elif key in ("imperiya", "imperiya_auto", "imperiya-auto", "iautos"):
+            normalized.append("imperiya")
         elif key == "telegram":
             normalized.append("telegram")
 
@@ -335,6 +341,15 @@ async def _search_single_source(
                 use_cache=use_cache,
                 cache_ttl_seconds=cache_ttl_seconds,
             )
+    if source == "imperiya":
+        return await search_imperiya(
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            use_cache=use_cache,
+            cache_ttl_seconds=cache_ttl_seconds,
+        )
     return await search_auto_ria(
         filters,
         page=page,
@@ -362,7 +377,7 @@ async def _fetch_source_pool(
     from app.services.search.filter_multi import expand_filters_for_api_fetch, needs_api_fanout
 
     need = max(need, 1)
-    if source in ("auto_ria", "olx") and needs_api_fanout(filters):
+    if source in ("auto_ria", "olx", "imperiya") and needs_api_fanout(filters):
         variants = expand_filters_for_api_fetch(filters)
         per_variant = max(need // len(variants), 20)
         chunks = await asyncio.gather(
@@ -433,6 +448,44 @@ async def _fetch_source_pool(
             db=db,
             keyword_refresh=keyword_refresh,
             olx_enrich_details=olx_enrich_details,
+        )
+
+    if source == "imperiya":
+        collected: list[ListingOut] = []
+        seen: set[str] = set()
+        total = 0
+        page = 1
+        max_pages = max((need + IMPERIYA_PAGE_SIZE - 1) // IMPERIYA_PAGE_SIZE, 1)
+        while len(collected) < need and page <= max_pages:
+            chunk = await _search_single_source(
+                source,
+                filters,
+                page=page,
+                per_page=min(IMPERIYA_PAGE_SIZE, need - len(collected)),
+                sort_by=sort_by,
+                use_cache=use_cache,
+                cache_ttl_seconds=cache_ttl_seconds,
+            )
+            total = max(total, chunk.total)
+            for item in chunk.items:
+                if item.id in seen:
+                    continue
+                seen.add(item.id)
+                collected.append(item)
+                if len(collected) >= need:
+                    break
+            if len(chunk.items) < IMPERIYA_PAGE_SIZE:
+                break
+            page += 1
+        collected = sort_listings(collected[:need], sort_by)
+        pages = (total + need - 1) // need if total else 0
+        return PaginatedListings(
+            items=collected,
+            total=max(total, len(collected)),
+            page=1,
+            per_page=need,
+            pages=pages,
+            market_total=total,
         )
 
     # AUTO.RIA: countpage ≤ 50 — збираємо кілька сторінок
@@ -525,6 +578,8 @@ def _pick_primary_error(errors: list[Exception]) -> Exception:
 def _source_label(source: str) -> str:
     if source == "auto_ria":
         return "AUTO.RIA"
+    if source == "imperiya":
+        return "Імперія Авто"
     if source == "telegram":
         return "Telegram"
     return source.upper()
@@ -630,7 +685,7 @@ async def search_listings_outcome(
                     per_page=per_page,
                     pages=pages,
                 )
-            elif source in ("auto_ria", "olx") and needs_api_fanout(filters):
+            elif source in ("auto_ria", "olx", "imperiya") and needs_api_fanout(filters):
                 pool_need = per_page * max(page, 1)
                 pool = await _fetch_source_pool(
                     source,
@@ -730,6 +785,26 @@ async def search_listings_outcome(
         except Exception as exc:
             return _empty_page(1, pool_need), str(exc)
 
+    async def run_imperiya() -> PaginatedListings | Exception:
+        try:
+            return await asyncio.wait_for(
+                _fetch_source_pool(
+                    "imperiya",
+                    filters,
+                    need=pool_need,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
+                    keyword_refresh=keyword_refresh,
+                    olx_enrich_details=olx_enrich_details,
+                ),
+                timeout=IMPERIYA_POOL_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return TimeoutError(f"Імперія Авто: таймаут {IMPERIYA_POOL_TIMEOUT_SECONDS:.0f}s")
+        except Exception as exc:
+            return exc
+
     async def run_telegram() -> PaginatedListings | Exception:
         try:
             # Окрема сесія: AsyncSession не можна ділити між asyncio.gather
@@ -758,6 +833,8 @@ async def search_listings_outcome(
         tasks.append(asyncio.create_task(run_auto_ria()))
     if "olx" in sources:
         tasks.append(asyncio.create_task(run_olx()))
+    if "imperiya" in sources:
+        tasks.append(asyncio.create_task(run_imperiya()))
     if "telegram" in sources:
         tasks.append(asyncio.create_task(run_telegram()))
 
@@ -793,6 +870,24 @@ async def search_listings_outcome(
                 error=olx_error,
             )
         )
+
+    if "imperiya" in sources:
+        imperiya_out = raw_results[result_index]
+        result_index += 1
+        if isinstance(imperiya_out, Exception):
+            errors.append(imperiya_out)
+            source_statuses.append(
+                SourceSearchStatus(
+                    source="Імперія Авто",
+                    item_count=0,
+                    error=str(imperiya_out),
+                )
+            )
+        else:
+            successful.append(("imperiya", imperiya_out))
+            source_statuses.append(
+                SourceSearchStatus(source="Імперія Авто", item_count=len(imperiya_out.items))
+            )
 
     if "telegram" in sources:
         telegram_out = raw_results[result_index]
@@ -972,6 +1067,8 @@ def _listing_to_slot(item: ListingOut) -> dict:
         return slot
     if src == "telegram" or lid.startswith("telegram_"):
         return {"s": "t", "d": item.model_dump(mode="json")}
+    if src == "imperiya" or lid.startswith("imperiya_"):
+        return {"s": "i", "d": item.model_dump(mode="json")}
     return {"s": "o", "d": item.model_dump(mode="json")}
 
 
@@ -1155,16 +1252,25 @@ def _build_fair_blend_slots(
     auto_ria_ids: list[str],
     olx_items: list[ListingOut],
     telegram_items: list[ListingOut],
+    imperiya_items: list[ListingOut] | None = None,
     limit: int,
     sort_by: str = "newest",
 ) -> list[dict]:
-    """Round-robin OLX → Telegram → AUTO.RIA; усередині кожного — sort_by."""
+    """Round-robin OLX → Імперія → Telegram → AUTO.RIA; усередині кожного — sort_by."""
+    imperiya_items = imperiya_items or []
     batches: list[tuple[str, list[dict]]] = []
     if olx_items:
         batches.append(
             (
                 "olx",
                 [_listing_to_slot(item) for item in sort_listings(olx_items, sort_by)],
+            )
+        )
+    if imperiya_items:
+        batches.append(
+            (
+                "imperiya",
+                [_listing_to_slot(item) for item in sort_listings(imperiya_items, sort_by)],
             )
         )
     if telegram_items:
@@ -1217,12 +1323,14 @@ def _build_interleaved_slots(
     telegram_items: list[ListingOut],
     limit: int,
     sort_by: str = "newest",
+    imperiya_items: list[ListingOut] | None = None,
 ) -> list[dict]:
     """Fallback: fair round-robin між джерелами (коли гідрація AR недоступна)."""
     return _build_fair_blend_slots(
         auto_ria_ids=auto_ria_ids,
         olx_items=olx_items,
         telegram_items=telegram_items,
+        imperiya_items=imperiya_items,
         limit=limit,
         sort_by=sort_by,
     )
@@ -1256,6 +1364,7 @@ async def build_live_search_pool(
     auto_ria_ids: list[str] = []
     auto_ria_market_total = 0
     olx_result = _empty_page(1, max_ids)
+    imperiya_result = _empty_page(1, max_ids)
     telegram_result = _empty_page(1, max_ids)
     olx_error: str | None = None
 
@@ -1296,6 +1405,24 @@ async def build_live_search_pool(
         except Exception as exc:
             return _empty_page(1, max_ids), str(exc)
 
+    async def run_imperiya():
+        try:
+            return await asyncio.wait_for(
+                _fetch_source_pool(
+                    "imperiya",
+                    filters,
+                    need=max_ids,
+                    sort_by=sort_by,
+                    keyword_refresh=keyword_refresh,
+                ),
+                timeout=IMPERIYA_POOL_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return _empty_page(1, max_ids)
+        except Exception as exc:
+            logger.warning("Імперія Авто pool fetch failed: %s", exc)
+            return _empty_page(1, max_ids)
+
     async def run_telegram():
         try:
             return await asyncio.wait_for(
@@ -1323,6 +1450,9 @@ async def build_live_search_pool(
     if "olx" in sources:
         tasks.append(asyncio.create_task(run_olx()))
         task_order.append("olx")
+    if "imperiya" in sources:
+        tasks.append(asyncio.create_task(run_imperiya()))
+        task_order.append("imperiya")
     if "telegram" in sources:
         tasks.append(asyncio.create_task(run_telegram()))
         task_order.append("telegram")
@@ -1351,6 +1481,20 @@ async def build_live_search_pool(
         source_statuses.append(
             SourceSearchStatus(source="OLX", item_count=len(olx_result.items), error=olx_error)
         )
+
+    if "imperiya" in task_order:
+        res = raw_results[result_index]
+        result_index += 1
+        if isinstance(res, BaseException):
+            imperiya_result = _empty_page(1, max_ids)
+            source_statuses.append(
+                SourceSearchStatus(source="Імперія Авто", item_count=0, error=str(res))
+            )
+        else:
+            imperiya_result = res
+            source_statuses.append(
+                SourceSearchStatus(source="Імперія Авто", item_count=len(imperiya_result.items))
+            )
 
     if "telegram" in task_order:
         res = raw_results[result_index]
@@ -1384,19 +1528,24 @@ async def build_live_search_pool(
         auto_ria_ids = await filter_auto_ria_ids_by_filters(auto_ria_ids, filters)
 
     olx_filtered = _filter_listings_by_brand_model(list(olx_result.items), filters)
+    imperiya_filtered = _filter_listings_by_brand_model(list(imperiya_result.items), filters)
     telegram_filtered = _filter_listings_by_brand_model(list(telegram_result.items), filters)
 
-    # VIN-дублі між OLX і Telegram — в одному пулі, не окремо по джерелах.
+    # VIN-дублі між OLX / Імперія / Telegram — в одному пулі.
     ot_merged = mark_duplicates_in_pool(
         dedupe_telegram_posts_in_pool(
-            sort_listings(list(olx_filtered) + list(telegram_filtered), sort_by),
+            sort_listings(
+                list(olx_filtered) + list(imperiya_filtered) + list(telegram_filtered),
+                sort_by,
+            ),
         ),
     )
     ot_merged = filter_listings_by_advanced(ot_merged, filters)
     olx_sorted = [item for item in ot_merged if (item.source or "").lower() == "olx"]
+    imperiya_sorted = [item for item in ot_merged if (item.source or "").lower() == "imperiya"]
     telegram_sorted = [item for item in ot_merged if (item.source or "").lower() == "telegram"]
 
-    if auto_ria_ids and (olx_sorted or telegram_sorted):
+    if auto_ria_ids and (olx_sorted or imperiya_sorted or telegram_sorted):
         slots = await _build_vin_aware_slots(
             auto_ria_ids=auto_ria_ids,
             ot_items=ot_merged,
@@ -1420,6 +1569,7 @@ async def build_live_search_pool(
             auto_ria_ids=[],
             olx_items=olx_sorted,
             telegram_items=telegram_sorted,
+            imperiya_items=imperiya_sorted,
             limit=POOL_LIMIT,
             sort_by=sort_by,
         )
@@ -1428,7 +1578,12 @@ async def build_live_search_pool(
     if brand_model_filter:
         market_total = nav_total
     else:
-        market_total = auto_ria_market_total + olx_result.total + telegram_result.total
+        market_total = (
+            auto_ria_market_total
+            + olx_result.total
+            + imperiya_result.total
+            + telegram_result.total
+        )
 
     if brand_model_filter:
         source_statuses = [
@@ -1437,6 +1592,8 @@ async def build_live_search_pool(
                 item_count=(
                     len(olx_sorted)
                     if row.source == "OLX"
+                    else len(imperiya_sorted)
+                    if row.source == "Імперія Авто"
                     else len(telegram_sorted)
                     if row.source == "Telegram"
                     else len(auto_ria_ids)

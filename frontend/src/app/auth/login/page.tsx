@@ -19,14 +19,16 @@ const TESTIMONIAL_AVATAR =
 
 type Tab = "login" | "register";
 type PhoneStep = "form" | "verify";
+type LoginMethod = "code" | "password";
 type CodeChannel = "sms" | "telegram";
 
 function AuthForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { sendPhoneCode, verifyPhoneCode, user, loading: authLoading, initialized } = useAuth();
+  const { sendPhoneCode, verifyPhoneCode, phoneLogin, user, loading: authLoading, initialized } = useAuth();
 
   const [tab, setTab] = useState<Tab>("login");
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>("code");
   const [phoneStep, setPhoneStep] = useState<PhoneStep>("form");
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -35,6 +37,7 @@ function AuthForm() {
   const [phone, setPhone] = useState("");
   const [phoneCode, setPhoneCode] = useState("");
   const [phoneName, setPhoneName] = useState("");
+  const [password, setPassword] = useState("");
   const [codeChannel, setCodeChannel] = useState<CodeChannel>("sms");
 
   const redirect = searchParams.get("redirect");
@@ -60,7 +63,9 @@ function AuthForm() {
   const handleTabChange = (next: Tab) => {
     setTab(next);
     setPhoneStep("form");
+    setLoginMethod("code");
     setPhoneCode("");
+    setPassword("");
     setError("");
     setSuccess("");
     setCodeChannel("sms");
@@ -133,9 +138,36 @@ function AuthForm() {
         tab === "register" ? phoneName.trim() : undefined,
         true,
       );
-      router.replace(resolvePostAuthRedirect(redirect));
+      router.replace(
+        tab === "register"
+          ? "/app/account?setPassword=1"
+          : resolvePostAuthRedirect(redirect),
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Помилка підтвердження");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhonePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalized = normalizePhoneForApi(phone);
+    if (normalized.length < 12) {
+      setError("Введіть повний номер телефону");
+      return;
+    }
+    if (!password) {
+      setError("Введіть пароль");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      await phoneLogin(normalized, password, true);
+      router.replace(resolvePostAuthRedirect(redirect));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Невірний номер або пароль");
     } finally {
       setLoading(false);
     }
@@ -273,10 +305,75 @@ function AuthForm() {
 
         <p className="mt-5 text-[14px] text-muted leading-relaxed">
           {tab === "login"
-            ? "Введіть номер телефону. Код надішлемо в Telegram, якщо він привʼязаний, інакше — SMS."
+            ? loginMethod === "password"
+              ? "Вхід за номером телефону та паролем — без SMS-коду."
+              : "Введіть номер телефону. Код надішлемо в Telegram, якщо він привʼязаний, інакше — SMS."
             : "Введіть імʼя та номер. Код підтвердження надішлемо SMS."}
         </p>
 
+        {tab === "login" && (
+          <div className="mt-4 flex rounded-full border border-border/60 bg-surface p-0.5 text-[12px] font-semibold">
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMethod("code");
+                setError("");
+              }}
+              className={cn(
+                "flex-1 rounded-full py-2 transition-colors",
+                loginMethod === "code" ? "bg-white text-ink shadow-sm" : "text-muted",
+              )}
+            >
+              Код SMS / Telegram
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMethod("password");
+                setError("");
+              }}
+              className={cn(
+                "flex-1 rounded-full py-2 transition-colors",
+                loginMethod === "password" ? "bg-white text-ink shadow-sm" : "text-muted",
+              )}
+            >
+              Пароль
+            </button>
+          </div>
+        )}
+
+        {tab === "login" && loginMethod === "password" ? (
+          <form onSubmit={handlePhonePasswordLogin} className="mt-4 space-y-3">
+            <PhoneInput value={phone} onChange={setPhone} disabled={loading} />
+            <input
+              type="password"
+              placeholder="Пароль"
+              className="auth-input w-full"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+            {error && (
+              <p className="text-[13px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+            <Button type="submit" loading={loading} size="md" variant="emerald" showArrow className="w-full">
+              Увійти
+            </Button>
+            <p className="text-[11px] text-center text-muted">
+              Немає пароля?{" "}
+              <button
+                type="button"
+                className="font-semibold text-emerald-dark hover:underline"
+                onClick={() => setLoginMethod("code")}
+              >
+                Увійти за кодом
+              </button>
+            </p>
+          </form>
+        ) : (
         <form onSubmit={handlePhoneSendCode} className="mt-4 space-y-3">
           {tab === "register" && (
             <input
@@ -303,7 +400,20 @@ function AuthForm() {
           <Button type="submit" loading={loading} size="md" variant="emerald" showArrow className="w-full">
             {tab === "login" ? "Отримати код" : "Надіслати код SMS"}
           </Button>
+          {tab === "login" && (
+            <p className="text-[11px] text-center text-muted">
+              Є пароль?{" "}
+              <button
+                type="button"
+                className="font-semibold text-emerald-dark hover:underline"
+                onClick={() => setLoginMethod("password")}
+              >
+                Увійти з паролем
+              </button>
+            </p>
+          )}
         </form>
+        )}
       </div>
 
       <p className="mt-4 text-center text-[11px] text-muted">
@@ -359,7 +469,7 @@ export default function AuthPage() {
               </div>
             </div>
             <div className="mt-8 grid grid-cols-3 gap-4 pt-8 border-t border-white/10">
-              {[["1 200+", "оголошень/день"], ["< 5 хв", "до сповіщення"], ["72%", "платять"]].map(([v, l]) => (
+              {[["1 500+", "оголошень"], ["< 5 хв", "до сповіщення"], ["7 днів", "безкоштовно"]].map(([v, l]) => (
                 <div key={l}>
                   <div className="text-[24px] font-black text-emerald">{v}</div>
                   <div className="text-[12px] text-white/45 mt-1 leading-tight">{l}</div>

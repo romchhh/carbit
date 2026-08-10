@@ -17,7 +17,7 @@ from app.services.telegram.media_urls import (
 
 logger = logging.getLogger(__name__)
 
-SOURCE_LABELS = {"auto_ria": "AUTO.RIA", "olx": "OLX", "telegram": "Telegram"}
+SOURCE_LABELS = {"auto_ria": "AUTO.RIA", "olx": "OLX", "telegram": "Telegram", "imperiya": "Імперія Авто"}
 
 
 def _published_caption_line(listing: dict) -> str | None:

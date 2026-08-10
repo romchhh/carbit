@@ -6,6 +6,7 @@ Slot-based pool format (Redis):
       {"s": "r", "i": "12345"},          # AUTO.RIA вживані — тільки ID, гідратується через /auto/info
       {"s": "n", "i": "1928969"},         # AUTO.RIA нові   — тільки ID, гідратується через /auto/new/auto
       {"s": "o", "d": {...listing}},      # OLX      — повний об'єкт
+      {"s": "i", "d": {...listing}},      # Імперія  — повний об'єкт
       {"s": "t", "d": {...listing}},      # Telegram — повний об'єкт
       ...
     ],
@@ -411,18 +412,6 @@ async def slice_pool(
             items = [item for item in items if listing_out_matches_filters(item, filters)]
 
     items = await _apply_vin_mirrors_to_page(items)
-
-    from app.core.database import AsyncSessionLocal
-    from app.services.telegram_channels.lazy_photos import hydrate_telegram_page_photos
-
-    async with AsyncSessionLocal() as photo_db:
-        items = await hydrate_telegram_page_photos(
-            photo_db,
-            items,
-            max_downloads=per_page,
-            wait_seconds=0,
-        )
-        await photo_db.commit()
 
     pages = (total + per_page - 1) // per_page if total else 0
 

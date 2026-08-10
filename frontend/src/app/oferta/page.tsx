@@ -152,22 +152,22 @@ const sections = [
               <tr className="border-t border-border/50">
                 <td className="px-3 py-2.5 text-ink">Безкоштовний</td>
                 <td className="px-3 py-2.5">7 днів</td>
-                <td className="px-3 py-2.5">1 моніторинг, 1 акаунт, 1 пристрій</td>
+                <td className="px-3 py-2.5">1 моніторинг, 1 пристрій</td>
               </tr>
               <tr className="border-t border-border/50">
                 <td className="px-3 py-2.5 text-ink">Старт</td>
                 <td className="px-3 py-2.5">30 днів</td>
-                <td className="px-3 py-2.5">До 10 моніторингів, 1 акаунт, 2 пристрої</td>
+                <td className="px-3 py-2.5">До 10 моніторингів, 2 пристрої</td>
               </tr>
               <tr className="border-t border-border/50">
                 <td className="px-3 py-2.5 text-ink">Про</td>
                 <td className="px-3 py-2.5">30 днів</td>
-                <td className="px-3 py-2.5">До 30 моніторингів, до 3 акаунтів, 6 пристроїв</td>
+                <td className="px-3 py-2.5">До 30 моніторингів, 6 пристроїв</td>
               </tr>
               <tr className="border-t border-border/50">
                 <td className="px-3 py-2.5 text-ink">Бізнес</td>
                 <td className="px-3 py-2.5">30 днів</td>
-                <td className="px-3 py-2.5">До 100 моніторингів, до 5 акаунтів, 12 пристроїв</td>
+                <td className="px-3 py-2.5">До 100 моніторингів, 12 пристроїв</td>
               </tr>
             </tbody>
           </table>

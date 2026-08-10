@@ -8,7 +8,6 @@ PLANS: dict[str, dict] = {
         "name": "Безкоштовно",
         "description": "Пробний доступ на 7 днів",
         "searches_limit": 1,
-        "accounts_limit": 1,
         "devices_limit": 1,
         "requests_month": 1_000,
         "requests_hour": 90,
@@ -19,7 +18,6 @@ PLANS: dict[str, dict] = {
         "features": [
             "Пробний період 7 днів",
             "До 1 активного моніторингу",
-            "1 акаунт",
             "1 пристрій",
             "Веб-кабінет і сповіщення",
         ],
@@ -27,9 +25,8 @@ PLANS: dict[str, dict] = {
     "lite": {
         "id": "lite",
         "name": "Старт",
-        "description": "До 10 активних моніторингів, 1 акаунт",
+        "description": "До 10 активних моніторингів, до 2 пристроїв",
         "searches_limit": 10,
-        "accounts_limit": 1,
         "devices_limit": 2,
         "requests_month": 50_000,
         "requests_hour": 6_000,
@@ -39,7 +36,6 @@ PLANS: dict[str, dict] = {
         "features": [
             "30 днів доступу",
             "До 10 активних моніторингів",
-            "1 акаунт",
             "До 2 пристроїв",
             "Telegram-сповіщення",
             "Веб-кабінет",
@@ -48,9 +44,8 @@ PLANS: dict[str, dict] = {
     "standard": {
         "id": "standard",
         "name": "Про",
-        "description": "До 30 активних моніторингів, до 3 акаунтів",
+        "description": "До 30 активних моніторингів, до 6 пристроїв",
         "searches_limit": 30,
-        "accounts_limit": 3,
         "devices_limit": 6,
         "requests_month": 150_000,
         "requests_hour": 15_000,
@@ -60,7 +55,6 @@ PLANS: dict[str, dict] = {
         "features": [
             "30 днів доступу",
             "До 30 активних моніторингів",
-            "До 3 акаунтів",
             "До 6 пристроїв",
             "Telegram-сповіщення",
             "Анти-дубль оголошень",
@@ -69,9 +63,8 @@ PLANS: dict[str, dict] = {
     "pro": {
         "id": "pro",
         "name": "Бізнес",
-        "description": "До 100 активних моніторингів, до 5 акаунтів",
+        "description": "До 100 активних моніторингів, до 12 пристроїв",
         "searches_limit": 100,
-        "accounts_limit": 5,
         "devices_limit": 12,
         "requests_month": 500_000,
         "requests_hour": 30_000,
@@ -81,7 +74,6 @@ PLANS: dict[str, dict] = {
         "features": [
             "30 днів доступу",
             "До 100 активних моніторингів",
-            "До 5 акаунтів",
             "До 12 пристроїв",
             "Telegram-сповіщення",
             "Пріоритетна обробка пошуків",

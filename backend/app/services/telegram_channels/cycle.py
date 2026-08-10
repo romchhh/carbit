@@ -113,6 +113,16 @@ async def run_telegram_channels_cycle(
             except Exception as exc:
                 log.append(f"  ⚠ Telegram {channel}: {exc}")
                 logger.exception("Telegram channel parse failed: %s", channel)
+
+        from app.services.telegram_channels.lazy_photos import backfill_telegram_photos
+
+        try:
+            photos_done = await backfill_telegram_photos(db, service, limit=80)
+            if photos_done:
+                log.append(f"Telegram: догружено фото для {photos_done} оголошень")
+        except Exception as exc:
+            log.append(f"Telegram photo backfill: {exc}")
+            logger.exception("Telegram photo backfill failed")
     finally:
         await service.stop()
 

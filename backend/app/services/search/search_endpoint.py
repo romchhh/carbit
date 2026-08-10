@@ -157,7 +157,7 @@ async def run_live_search(
                 filters,
                 sort_by=sort_by,
                 max_ids=LIVE_POOL_SIZE,
-                keyword_refresh=True,
+                keyword_refresh=False,
                 olx_enrich_details=False,
             )
         except AutoRiaError as exc:

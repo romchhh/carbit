@@ -15,6 +15,7 @@ import { LANDING_IMAGES, SOURCE_LOGOS } from "@/lib/brand-assets";
 const HERO_SOURCE_LOGOS = [
   { src: SOURCE_LOGOS.autoRia, alt: "AUTO.RIA" },
   { src: SOURCE_LOGOS.olx, alt: "OLX" },
+  { src: SOURCE_LOGOS.imperiya, alt: "Імперія Авто" },
   { src: SOURCE_LOGOS.telegram, alt: "Telegram" },
 ] as const;
 
@@ -91,10 +92,10 @@ export default function HomePage() {
               <div className="mt-auto border-t border-white/10 pt-5 pb-2 sm:mt-12 sm:pt-7 sm:pb-0">
                 <div className="grid grid-cols-4 gap-1.5 sm:gap-4">
                   {[
-                    { value: "3", label: "джерела" },
-                    { value: "1 200+", label: "оголошень/день" },
+                    { value: "100+", label: "джерел" },
+                    { value: "1 500+", label: "оголошень" },
                     { value: "< 5 хв", label: "до сповіщення" },
-                    { value: "72%", label: "готові платити" },
+                    { value: "7 днів", label: "безкоштовно" },
                   ].map(({ value, label }) => (
                     <div key={label} className="min-w-0 text-center">
                       <div className="text-[13px] font-semibold leading-none text-white/60 sm:text-xl sm:text-white/80">

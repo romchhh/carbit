@@ -45,6 +45,17 @@ class LoginRequest(BaseModel):
     remember: bool = True
 
 
+class PhonePasswordLoginRequest(BaseModel):
+    phone: str = Field(min_length=9, max_length=32)
+    password: str = Field(min_length=1)
+    remember: bool = True
+
+
+class SetPasswordRequest(BaseModel):
+    password: str = Field(min_length=8)
+    current_password: str | None = None
+
+
 class PhoneSendCodeRequest(BaseModel):
     phone: str = Field(min_length=9, max_length=32)
     intent: str = Field(pattern=r"^(login|register)$")
@@ -140,6 +151,7 @@ class UserOut(BaseModel):
     email_verified: bool = False
     phone: str | None = None
     phone_verified: bool = False
+    has_password: bool = False
     trial_ends_at: datetime | None = None
     is_trial_active: bool = False
     onboarding_completed: bool = False

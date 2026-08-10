@@ -65,6 +65,7 @@ export type BackendSearchFilters = {
 const SOURCE_TO_BACKEND: Record<string, string> = {
   "AUTO.RIA": "auto_ria",
   OLX: "olx",
+  "Імперія Авто": "imperiya",
   Telegram: "telegram",
 };
 
@@ -177,6 +178,7 @@ function formatPlainNumber(value: number | null | undefined): string {
 const BACKEND_SOURCE_TO_UI: Record<string, string> = {
   auto_ria: "AUTO.RIA",
   olx: "OLX",
+  imperiya: "Імперія Авто",
   telegram: "Telegram",
 };
 

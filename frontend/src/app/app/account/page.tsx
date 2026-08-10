@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -38,12 +38,15 @@ import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 import { CancelRenewalDialog } from "@/components/billing/CancelRenewalDialog";
 import { Alert } from "@/components/ui/Alert";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SetPasswordPanel } from "@/components/auth/SetPasswordPanel";
 import { getPricingPlan, formatPlanPrice, planMonitorLimit, planDeviceLimit } from "@/lib/plan-catalog";
 import type { DashboardStats, Subscription } from "@/types/api";
 
 export default function AccountPage() {
   const router = useRouter();
-  const { user, updateProfile, logout, refreshUser } = useAuth();
+  const searchParams = useSearchParams();
+  const { user, updateProfile, logout, refreshUser, setPassword } = useAuth();
+  const openPasswordForm = searchParams.get("setPassword") === "1";
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [currency, setCurrency] = useState<DisplayCurrency>("USD");
@@ -364,6 +367,21 @@ export default function AccountPage() {
             </div>
           </div>
 
+          {user.phone_verified && (
+            <div className="mt-5 border-t border-border/60 pt-5">
+              <SetPasswordPanel
+                hasPassword={Boolean(user.has_password)}
+                onSave={setPassword}
+                defaultOpen={openPasswordForm}
+                hint={
+                  user.has_password
+                    ? undefined
+                    : `Після SMS-реєстрації — пароль для команди без коду. Ліміт тарифу: ${planDeviceLimit(user.plan)} пристроїв.`
+                }
+              />
+            </div>
+          )}
+
           {!user.email_verified && (
             <div className="mt-5 border-t border-border/60 pt-5">
               <p className="text-[13px] font-semibold text-ink">Додати email для входу</p>
@@ -507,7 +525,7 @@ export default function AccountPage() {
             {[
               [String(user.searches_limit), "моніторингів"],
               [String(planDeviceLimit(user.plan)), "пристроїв"],
-              ["3", "джерела"],
+              ["100+", "джерел"],
               [user.telegram_connected ? "✓" : "—", "Telegram"],
             ].map(([v, l]) => (
               <div key={l} className="rounded-xl bg-surface px-2.5 py-3 text-center sm:px-3">

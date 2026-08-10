@@ -183,6 +183,42 @@ async def sync_telegram_photos_from_disk(
     return urls
 
 
+async def backfill_telegram_photos(
+    db: AsyncSession,
+    service: "CarParserService",
+    *,
+    limit: int = 40,
+) -> int:
+    """Догружає фото для TG-оголошень без images (cron / worker)."""
+    from sqlalchemy import select
+
+    from app.services.telegram_channels.freshness import telegram_published_cutoff
+
+    rows = await db.scalars(
+        select(Listing)
+        .where(Listing.source == Source.telegram)
+        .where(Listing.published_at >= telegram_published_cutoff())
+        .order_by(Listing.published_at.desc())
+        .limit(max(limit * 4, limit))
+    )
+    done = 0
+    for listing in rows.all():
+        if done >= limit:
+            break
+        if listing.images:
+            continue
+        urls = await sync_telegram_photos_from_disk(db, listing, max_photos=1)
+        if urls:
+            done += 1
+            continue
+        if not listing_needs_photos(listing):
+            continue
+        urls = await attach_photos_to_listing(db, service, listing.id, max_photos=1)
+        if urls:
+            done += 1
+    return done
+
+
 async def refresh_listing_photo_urls(
     db: AsyncSession,
     listing_id: str,
@@ -204,7 +240,7 @@ async def wait_for_listing_photos(
     *,
     timeout: float = PHOTO_PAGE_WAIT_SECONDS,
 ) -> list[str]:
-    """Чекає поки worker/API запишуть images у БД (poll disk + DB)."""
+    """Чекає поки worker запише images у БД (для ensure-photos)."""
     deadline = asyncio.get_running_loop().time() + max(0.5, timeout)
     while asyncio.get_running_loop().time() < deadline:
         urls = await refresh_listing_photo_urls(db, listing_id)

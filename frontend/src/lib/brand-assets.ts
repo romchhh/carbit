@@ -8,6 +8,7 @@ export const SOURCE_LOGOS = {
   autoRia: "/icons/source-auto-ria.png",
   olx: "/icons/source-olx.png",
   telegram: "/icons/source-telegram.png",
+  imperiya: "/icons/source-imperiya.png",
 } as const;
 
 export const LANDING_IMAGES = {
