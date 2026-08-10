@@ -25,6 +25,15 @@ def _is_safe_image_url(url: Any) -> bool:
     return value.startswith("/api/v1/telegram-media/")
 
 
+def _filter_images_for_response(images: Any) -> list[str]:
+    from app.services.telegram.media_urls import filter_existing_image_urls
+
+    if not isinstance(images, list):
+        return []
+    safe = [url for url in images if _is_safe_image_url(url)]
+    return filter_existing_image_urls(safe)[:30]
+
+
 def json_safe(value: Any, *, depth: int = 0) -> Any:
     """Приводить вкладені значення до JSON-сумісних (інакше FastAPI дає 500 на response_model)."""
     if depth > 14:
@@ -83,9 +92,18 @@ def sanitize_listing_out(item: ListingOut) -> ListingOut | None:
         data["is_duplicate"] = bool(data.get("is_duplicate"))
 
         images = data.get("images") or []
-        data["images"] = [url for url in images if _is_safe_image_url(url)][:30]
+        data["images"] = _filter_images_for_response(images)
 
         history = data.get("price_history") or []
+        if data.get("source") == "telegram" and not data["images"]:
+            sd = dict(data.get("source_data") or {})
+            sd["photos_pending"] = True
+            data["source_data"] = sd
+        elif isinstance(data.get("source_data"), dict) and data["images"]:
+            sd = dict(data["source_data"])
+            sd.pop("photos_pending", None)
+            data["source_data"] = sd or None
+
         data["price_history"] = [row for row in history if isinstance(row, dict)][:50]
 
         if data.get("source_data") is not None:

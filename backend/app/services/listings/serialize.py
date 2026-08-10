@@ -8,10 +8,12 @@ from app.services.telegram_channels.mapper import fix_telegram_listing_url
 def listing_to_out(listing: Listing) -> ListingOut:
     from app.core.timezone import as_kyiv, now_kyiv
     from app.services.currency import normalize_currency
+    from app.services.telegram.media_urls import filter_existing_image_urls
     from app.services.vin import extract_vin
 
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
-    images = list(listing.images or [])
+    # БД може тримати URL після purge media/ — показуємо лише існуючі файли
+    images = filter_existing_image_urls(listing.images)
     if source == "telegram" and not images:
         from app.services.telegram_channels.lazy_photos import load_existing_telegram_photo_urls
 

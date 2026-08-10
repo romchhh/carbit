@@ -10,6 +10,7 @@ import { getTelegramSupportBotMention, getTelegramSupportBotUrl } from "@/lib/te
 export default function SupportPage() {
   return (
     <AppPage
+      wide
       title="Підтримка"
       description="Часті питання про пошук, тарифи та оплату. Якщо відповіді немає — напишіть боту."
     >
@@ -35,7 +36,7 @@ export default function SupportPage() {
         </a>
 
         <h2 className="mb-4 text-[15px] font-semibold text-ink">Часті питання</h2>
-        <FaqAccordion items={CARBIT_FAQ_ITEMS} className="max-w-none" />
+        <FaqAccordion items={CARBIT_FAQ_ITEMS} columns={2} />
 
         <div className="mt-8 border-t border-border/60 pt-5">
           <p className="mb-3 text-center text-[12px] text-muted">Ми в соцмережах</p>

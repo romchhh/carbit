@@ -44,6 +44,9 @@ class LazyPhotosEnqueueTests(unittest.TestCase):
             self.assertTrue(lazy_photos.listing_needs_photos(listing))
             listing.images = ["https://example.com/a.jpg"]
             self.assertFalse(lazy_photos.listing_needs_photos(listing))
+            # URL в БД є, файлу на диску немає — треба качати знову
+            listing.images = ["/api/v1/telegram-media/missing/1.jpg"]
+            self.assertTrue(lazy_photos.listing_needs_photos(listing))
 
     def test_load_existing_photo_urls_from_disk(self) -> None:
         from app.core.config import settings

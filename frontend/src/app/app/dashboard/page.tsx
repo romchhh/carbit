@@ -146,15 +146,7 @@ export default function DashboardPage() {
 
   return (
     <AppPage wide>
-      <DashboardWelcomeHero
-        firstName={firstName}
-        activeSearches={activeCount}
-        searchesLimit={limit}
-        planId={user.plan}
-        isTrial={Boolean(user.is_trial_active)}
-        telegramConnected={user.telegram_connected}
-        unreadNotifications={stats?.unread_notifications ?? 0}
-      />
+      <DashboardWelcomeHero firstName={firstName} />
 
       {(user.plan === "free" || (remaining <= 2 && remaining > 0)) && (
         <SubscriptionPitch

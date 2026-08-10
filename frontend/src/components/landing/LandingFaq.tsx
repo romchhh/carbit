@@ -14,7 +14,7 @@ export function LandingFaq() {
           </p>
         </div>
 
-        <FaqAccordion items={CARBIT_FAQ_ITEMS} />
+        <FaqAccordion items={CARBIT_FAQ_ITEMS} columns={2} />
       </div>
     </section>
   );

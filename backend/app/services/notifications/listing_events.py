@@ -17,15 +17,17 @@ logger = logging.getLogger(__name__)
 
 
 def _listing_card_data(listing: Listing) -> dict:
+    from app.services.telegram.media_urls import filter_existing_image_urls
+
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
     display_currency = "USD"
+    images = filter_existing_image_urls(listing.images)[:1]
     listing_url = (
-        fix_telegram_listing_url(listing.id, listing.url, images=listing.images)
+        fix_telegram_listing_url(listing.id, listing.url, images=images)
         if source == "telegram"
         else listing.url
     )
     price_label = format_display_price(listing.price, listing.currency, display_currency)
-    images = list(listing.images or [])[:1]
     if source == "telegram" and not images:
         from app.services.telegram_channels.lazy_photos import (
             load_existing_telegram_photo_urls,

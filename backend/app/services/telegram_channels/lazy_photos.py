@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, Source
+from app.services.telegram.media_urls import filter_existing_image_urls
 from app.services.telegram_channels.bootstrap import ensure_parser_path
 from app.services.telegram_channels.channel_paths import telegram_channel_media_slug
 from app.services.telegram_channels.mapper import telegram_media_url
@@ -83,9 +84,17 @@ async def attach_photos_to_listing(
     if source != Source.telegram.value and source != "telegram":
         return list(listing.images or [])
 
-    if listing.images:
+    kept = filter_existing_image_urls(listing.images)
+    if kept:
+        if kept != list(listing.images or []):
+            listing.images = kept
+            await db.flush()
         _media_store().mark_photos_done(listing_id)
-        return list(listing.images)
+        return kept
+    if listing.images:
+        # URL в БД, файлів уже немає — скидаємо і качаємо знову
+        listing.images = []
+        await db.flush()
 
     refs = _media_store().get_photo_refs(listing_id)
     if not refs:
@@ -158,7 +167,7 @@ def listing_needs_photos(listing: Listing) -> bool:
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
     if source not in ("telegram", Source.telegram.value):
         return False
-    if listing.images:
+    if filter_existing_image_urls(listing.images):
         return False
     if load_existing_telegram_photo_urls(listing.id, limit=1):
         return False
@@ -172,8 +181,15 @@ async def sync_telegram_photos_from_disk(
     max_photos: int = 1,
 ) -> list[str]:
     """Якщо jpg уже на диску — пише URL у Listing.images без Telethon."""
+    kept = filter_existing_image_urls(listing.images)
+    if kept:
+        if kept != list(listing.images or []):
+            listing.images = kept
+            await db.flush()
+        return kept
     if listing.images:
-        return list(listing.images)
+        listing.images = []
+        await db.flush()
     urls = load_existing_telegram_photo_urls(listing.id, limit=max(1, max_photos))
     if not urls:
         return []
@@ -205,7 +221,7 @@ async def backfill_telegram_photos(
     for listing in rows.all():
         if done >= limit:
             break
-        if listing.images:
+        if filter_existing_image_urls(listing.images):
             continue
         urls = await sync_telegram_photos_from_disk(db, listing, max_photos=1)
         if urls:
@@ -229,8 +245,12 @@ async def refresh_listing_photo_urls(
     listing = await db.get(Listing, listing_id)
     if not listing:
         return []
-    if listing.images:
-        return list(listing.images)
+    kept = filter_existing_image_urls(listing.images)
+    if kept:
+        if kept != list(listing.images or []):
+            listing.images = kept
+            await db.flush()
+        return kept
     return await sync_telegram_photos_from_disk(db, listing, max_photos=max_photos)
 
 
@@ -329,7 +349,9 @@ async def hydrate_telegram_page_photos(
     for item in items:
         if not isinstance(item, ListingOut):
             continue
-        if (item.source or "").lower() != "telegram" or (item.images or []):
+        if (item.source or "").lower() != "telegram":
+            continue
+        if filter_existing_image_urls(item.images):
             continue
         listing = await db.get(Listing, item.id)
         if not listing:

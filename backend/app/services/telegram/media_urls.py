@@ -35,6 +35,24 @@ def telegram_media_local_path(api_path: str | None) -> Path | None:
     return path if path.is_file() and path.stat().st_size > 0 else None
 
 
+def filter_existing_image_urls(urls: list[str] | None) -> list[str]:
+    """Залишає remote URL; telegram-media — лише якщо файл ще є на диску."""
+    out: list[str] = []
+    for raw in urls or []:
+        if not isinstance(raw, str):
+            continue
+        value = raw.strip()
+        if not value:
+            continue
+        if value.startswith(TELEGRAM_MEDIA_API_PREFIX):
+            if telegram_media_local_path(value) is not None:
+                out.append(value)
+            continue
+        if value.startswith(("http://", "https://")):
+            out.append(value)
+    return out
+
+
 def is_public_http_url(url: str) -> bool:
     lowered = url.lower()
     if lowered.startswith("https://"):

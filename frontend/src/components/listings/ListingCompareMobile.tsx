@@ -25,10 +25,16 @@ type Props = {
 
 function shortTitle(listing: Listing): string {
   const brandModel = [listing.brand, listing.model].filter(Boolean).join(" ").trim();
-  if (brandModel) return brandModel;
+  if (brandModel) return brandModel.length > 18 ? `${brandModel.slice(0, 18)}…` : brandModel;
   const title = listing.title?.trim() || "Авто";
-  return title.length > 26 ? `${title.slice(0, 26)}…` : title;
+  return title.length > 18 ? `${title.slice(0, 18)}…` : title;
 }
+
+/** Ширина колонки авто: ~3 штуки + «Параметр» на типовому телефоні */
+const MOBILE_COL =
+  "w-[calc((100vw-4.5rem)/3)] min-w-[96px] max-w-[118px]";
+const MOBILE_STICKY_BASE =
+  "sticky left-0 w-14 min-w-[3.5rem] max-w-[3.5rem]";
 
 function MobileHeaderCell({
   listing,
@@ -48,41 +54,41 @@ function MobileHeaderCell({
   );
 
   return (
-    <th className="w-[42vw] min-w-[148px] max-w-[180px] border-b border-border/60 bg-white px-2.5 py-3 align-top font-normal">
-      <div className="relative mx-auto aspect-[4/3] w-full overflow-hidden rounded-xl bg-surface">
+    <th className={cn(MOBILE_COL, "border-b border-border/60 bg-white px-1.5 py-2.5 align-top font-normal")}>
+      <div className="relative mx-auto aspect-[4/3] w-full overflow-hidden rounded-lg bg-surface">
         {image ? (
           <Image
             src={image}
             alt={listing.title}
             fill
             className="object-cover"
-            sizes="160px"
+            sizes="110px"
             unoptimized
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-[11px] text-muted">Без фото</div>
+          <div className="flex h-full items-center justify-center text-[10px] text-muted">Без фото</div>
         )}
         {onRemove && (
           <button
             type="button"
             onClick={() => onRemove(listing.id)}
-            className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-ink/75 text-white active:scale-95"
+            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-ink/75 text-white active:scale-95"
             aria-label="Прибрати з порівняння"
           >
-            <IconX size={14} />
+            <IconX size={12} />
           </button>
         )}
       </div>
-      <p className="mt-2 line-clamp-2 text-[12px] font-bold leading-snug text-ink">
+      <p className="mt-1.5 line-clamp-2 text-[11px] font-bold leading-snug text-ink">
         {shortTitle(listing)}
       </p>
-      <p className="mt-1 text-[14px] font-black tracking-tight text-ink">{price}</p>
+      <p className="mt-0.5 text-[12px] font-black tracking-tight text-ink">{price}</p>
       {listing.url && (
         <a
           href={listing.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-1.5 inline-flex min-h-8 items-center text-[11px] font-semibold text-emerald-dark"
+          className="mt-1 inline-flex min-h-7 items-center text-[10px] font-semibold text-emerald-dark"
         >
           Відкрити →
         </a>
@@ -124,15 +130,20 @@ export function ListingCompareMobile({
         compact
       />
 
-      {listings.length > 2 && (
-        <p className="px-0.5 text-[11px] text-muted">Гортайте таблицю вбік, щоб порівняти всі авто</p>
+      {listings.length > 3 && (
+        <p className="px-0.5 text-[11px] text-muted">Гортайте вбік — ще {listings.length - 3} авто</p>
       )}
 
       <div className="-mx-2.5 overflow-x-auto overscroll-x-contain border-y border-border/60 bg-white sm:mx-0 sm:rounded-2xl sm:border">
-        <table className="w-max min-w-full border-collapse text-[13px]">
+        <table className="w-max min-w-full border-collapse text-[12px]">
           <thead>
             <tr>
-              <th className="sticky left-0 z-[2] w-[88px] min-w-[88px] max-w-[88px] border-b border-r border-border/60 bg-surface px-2 py-3 text-left text-[10px] font-bold uppercase tracking-wide text-muted shadow-[4px_0_12px_-6px_rgba(10,12,14,0.18)]">
+              <th
+                className={cn(
+                  MOBILE_STICKY_BASE,
+                  "z-[2] border-b border-r border-border/60 bg-surface px-1 py-2.5 text-left text-[9px] font-bold uppercase leading-tight tracking-wide text-muted shadow-[3px_0_10px_-5px_rgba(10,12,14,0.18)]",
+                )}
+              >
                 Параметр
               </th>
               {listings.map(listing => (
@@ -164,7 +175,12 @@ export function ListingCompareMobile({
                     rowIndex % 2 === 1 && "bg-surface/25",
                   )}
                 >
-                  <th className="sticky left-0 z-[1] w-[88px] min-w-[88px] max-w-[88px] border-r border-border/40 bg-surface px-2 py-3 text-left text-[11px] font-semibold leading-snug text-muted shadow-[4px_0_12px_-6px_rgba(10,12,14,0.14)]">
+                  <th
+                    className={cn(
+                      MOBILE_STICKY_BASE,
+                      "z-[1] border-r border-border/40 bg-surface px-1 py-2.5 text-left text-[10px] font-semibold leading-snug text-muted shadow-[3px_0_10px_-5px_rgba(10,12,14,0.14)]",
+                    )}
+                  >
                     {row.label}
                   </th>
                   {row.values.map((value, index) => {
@@ -174,20 +190,21 @@ export function ListingCompareMobile({
                       <td
                         key={`${row.key}-${listing?.id ?? index}`}
                         className={cn(
-                          "w-[42vw] min-w-[148px] max-w-[180px] px-2.5 py-3 align-top text-[12px] leading-snug",
+                          MOBILE_COL,
+                          "px-1.5 py-2.5 align-top text-[11px] leading-snug",
                           row.key === "price" ? "font-black text-ink" : "text-ink/90",
-                          row.key === "vin" && "break-all font-mono text-[10px]",
+                          row.key === "vin" && "break-all font-mono text-[9px]",
                           highlighted && "bg-emerald/10 font-semibold text-emerald-dark",
                         )}
                       >
                         {value}
                         {highlighted && row.key === "price" && (
-                          <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-emerald-dark">
+                          <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-wide text-emerald-dark">
                             Найнижча
                           </span>
                         )}
                         {highlighted && row.key === "mileage" && (
-                          <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-emerald-dark">
+                          <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-wide text-emerald-dark">
                             Менший пробіг
                           </span>
                         )}

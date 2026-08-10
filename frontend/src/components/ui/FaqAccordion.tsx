@@ -13,15 +13,24 @@ type Props = {
   items: readonly FaqItem[];
   /** Індекс відкритого пункту за замовчуванням; null — усі закриті */
   defaultOpen?: number | null;
+  /** 2 — сітка на всю ширину (по 3 в колонці при 6 пунктах) */
+  columns?: 1 | 2;
   className?: string;
 };
 
-export function FaqAccordion({ items, defaultOpen = null, className }: Props) {
+export function FaqAccordion({ items, defaultOpen = null, columns = 1, className }: Props) {
   const [openIndex, setOpenIndex] = useState<number | null>(defaultOpen);
 
   return (
-    <ul className={cn("mx-auto flex max-w-[760px] list-none flex-col gap-3 sm:gap-3.5", className)}>
-      {items.map(({ q, a }, index) => {
+    <ul
+      className={cn(
+        "list-none gap-3 sm:gap-3.5",
+        columns === 2
+          ? "mx-auto grid w-full max-w-none grid-cols-1 md:grid-cols-2"
+          : "mx-auto flex max-w-[760px] flex-col",
+        className,
+      )}
+    >      {items.map(({ q, a }, index) => {
         const open = openIndex === index;
         const panelId = `faq-panel-${index}`;
         const buttonId = `faq-trigger-${index}`;
