@@ -550,6 +550,46 @@ W1N4632761X424465
             message_matches_search_filters(text, "Mercedes-Benz", "G-Class"),
         )
 
+    def test_audi_q5_does_not_match_infiniti_q50(self):
+        from app.schemas.schemas import ListingOut, SearchFilters
+
+        self.assertFalse(
+            text_matches_model_filter("Infiniti Q50 3 2020", "Q5", brand="Audi")
+        )
+        self.assertFalse(
+            message_matches_search_filters("Infiniti Q50 3 2020", "Audi", "Q5")
+        )
+        item = ListingOut(
+            id="telegram_test_1",
+            source="telegram",
+            title="Infiniti Q50 3 2020",
+            brand="Infiniti",
+            model="Q50",
+            year=2020,
+            price=13999,
+            currency="USD",
+            mileage=91000,
+            fuel="Бензин",
+            transmission="",
+            region="Дніпро",
+            description="",
+            images=[],
+            url="https://t.me/test/1",
+            seller_type="private",
+            published_at="2026-01-01T00:00:00+02:00",
+            found_at="2026-01-01T00:00:00+02:00",
+        )
+        filters = SearchFilters(brand="Audi", model="Q5", sources=["telegram"])
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
+    def test_audi_q5_still_matches_real_q5(self):
+        self.assertTrue(
+            text_matches_model_filter("Audi Q5 Premium 2015", "Q5", brand="Audi")
+        )
+        self.assertTrue(
+            message_matches_search_filters("Audi Q5 Premium 2015", "Audi", "Q5")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

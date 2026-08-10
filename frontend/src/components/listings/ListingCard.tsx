@@ -17,6 +17,7 @@ import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks, listingSourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { useVinCheckCache } from "@/hooks/useVinCheckCache";
+import { useListingPhotoHydration } from "@/hooks/useListingPhotoHydration";
 import { hasVinCheck, resolveListingVin } from "@/lib/vin-check";
 import { cn, formatMileage, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
 import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
@@ -58,7 +59,7 @@ export function ListingCard({
   const displayCurrency = resolveDisplayCurrency(
     displayCurrencyProp ?? user?.preferred_currency,
   );
-  const images = Array.isArray(listing.images) ? listing.images : [];
+  const images = useListingPhotoHydration(listing);
   const price = Number(listing.price) || 0;
   const priceLabel = formatListingPrice(
     price,

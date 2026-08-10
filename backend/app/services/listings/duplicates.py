@@ -538,7 +538,9 @@ async def collapse_listings_with_db_mirrors(
 
 async def listing_out_with_mirrors(db: AsyncSession, listing: Listing) -> ListingOut:
     from app.services.listings.serialize import listing_to_out
+    from app.services.telegram_channels.lazy_photos import sync_telegram_photos_from_disk
 
+    await sync_telegram_photos_from_disk(db, listing)
     out = listing_to_out(listing)
     collapsed = await collapse_listings_with_db_mirrors(db, [out], prefer_id=listing.id)
     return collapsed[0] if collapsed else out

@@ -10,7 +10,9 @@ from app.services.comparisons.resolve import resolve_listings_for_ids
 from app.services.parser.results import get_search_results_from_db
 from app.services.telegram_channels.lazy_photos import (
     enqueue_listing_photos,
+    ensure_telegram_listing_photos,
     listing_needs_photos,
+    sync_telegram_photos_from_disk,
 )
 from app.services.auto_ria.lazy_photos import attach_auto_ria_gallery, auto_ria_needs_gallery
 
@@ -63,7 +65,9 @@ async def get_listing(
     if not listing:
         raise HTTPException(404, "Listing not found")
     if listing_needs_photos(listing):
-        enqueue_listing_photos(listing.id)
+        await sync_telegram_photos_from_disk(db, listing)
+        if listing_needs_photos(listing):
+            enqueue_listing_photos(listing.id)
     elif auto_ria_needs_gallery(listing):
         await attach_auto_ria_gallery(db, listing)
     return await listing_out_with_mirrors(db, listing)
@@ -74,12 +78,12 @@ async def ensure_listing_photos(
     listing_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Ставить lazy-download у чергу Telegram worker і повертає поточний стан."""
+    """Завантажує фото Telegram (мін. 1) або ставить у чергу worker."""
     listing = await db.get(Listing, listing_id)
     if not listing:
         raise HTTPException(404, "Listing not found")
     if listing_needs_photos(listing):
-        enqueue_listing_photos(listing.id)
+        await ensure_telegram_listing_photos(db, listing, max_photos=1)
     elif auto_ria_needs_gallery(listing):
         await attach_auto_ria_gallery(db, listing)
     out = await listing_out_with_mirrors(db, listing)

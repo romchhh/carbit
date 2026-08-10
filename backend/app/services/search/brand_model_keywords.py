@@ -2046,9 +2046,25 @@ def text_matches_brand_filter(haystack: str, brand: str, *, model: str = "") -> 
     return False
 
 
+def _shorter_model_digit_conflicts(hay: str, model: str) -> bool:
+    """Q5 ≠ Q50: у тексті є довший числовий варіант тієї ж літерної моделі."""
+    m = re.fullmatch(r"([a-z]+)(\d+)", norm_text(model))
+    if not m:
+        return False
+    letter, digits = m.group(1), m.group(2)
+    return bool(
+        re.search(
+            rf"(?<![a-zа-яёіїє0-9]){re.escape(letter)}{re.escape(digits)}\d",
+            norm_text(hay),
+        )
+    )
+
+
 def _letter_class_model_match_ok(hay: str, model: str, *, brand: str = "") -> bool:
-    """Після позитивного матчу — відсікаємо конфліктні Mercedes (G vs GLA)."""
+    """Після позитивного матчу — відсікаємо конфліктні Mercedes (G vs GLA) та Q5 vs Q50."""
     if _mercedes_letter_class_conflicts(hay, model, brand=brand):
+        return False
+    if _shorter_model_digit_conflicts(hay, model):
         return False
     return True
 

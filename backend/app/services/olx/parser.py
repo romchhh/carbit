@@ -1630,14 +1630,18 @@ def _title_has_brand(title: str, brand: str) -> bool:
 
 
 def _title_has_model(title: str, model: str, *, brand: str | None = None) -> bool:
+    from app.core.text import bounded_substring, norm_text
+
     model_l = model.strip().lower()
     if not model_l:
         return True
-    if re.fullmatch(r"\d+[a-z]?", model_l):
+    title_n = norm_text(title)
+    model_n = norm_text(model_l)
+    if re.fullmatch(r"\d+[a-z]?", model_n):
         return bool(
-            re.search(rf"(?<![\w]){re.escape(model_l)}(?![\w])", title, re.IGNORECASE)
+            re.search(rf"(?<![\w]){re.escape(model_n)}(?![\w])", title_n)
         )
-    if model_l in title:
+    if model_n and bounded_substring(title_n, model_n):
         return True
     brand_l = (brand or "").strip().lower()
     brand_slug = ""

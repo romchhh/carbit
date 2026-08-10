@@ -1,6 +1,7 @@
 """Lazy download Telegram photos and attach to Listing.images."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -93,8 +94,8 @@ async def attach_photos_to_listing(
         message_ids = [int(msg_part)]
     else:
         channel, message_ids, status = refs
-        if status == "done":
-            return list(listing.images or [])
+        if status == "done" and listing.images:
+            return list(listing.images)
 
     # Хоча б 1 фото для картки; більше — якщо TELEGRAM_MAX_PHOTOS дозволяє
     limit = max(1, max_photos if max_photos is not None else settings.TELEGRAM_MAX_PHOTOS)
@@ -149,7 +150,162 @@ def listing_needs_photos(listing: Listing) -> bool:
         return False
     if listing.images:
         return False
-    refs = _media_store().get_photo_refs(listing.id)
-    if refs and refs[2] == "done":
+    if load_existing_telegram_photo_urls(listing.id, limit=1):
         return False
     return True
+
+
+async def sync_telegram_photos_from_disk(
+    db: AsyncSession,
+    listing: Listing,
+    *,
+    max_photos: int = 1,
+) -> list[str]:
+    """Якщо jpg уже на диску — пише URL у Listing.images без Telethon."""
+    if listing.images:
+        return list(listing.images)
+    urls = load_existing_telegram_photo_urls(listing.id, limit=max(1, max_photos))
+    if not urls:
+        return []
+    listing.images = urls
+    await db.flush()
+    _media_store().mark_photos_done(listing.id)
+    return urls
+
+
+async def ensure_telegram_listing_photos(
+    db: AsyncSession,
+    listing: Listing,
+    *,
+    max_photos: int = 1,
+    try_telethon: bool = True,
+    telethon_timeout: float = 18.0,
+) -> list[str]:
+    """Підставляє фото з диску або завантажує через Telethon (мінімум 1 для картки)."""
+    source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
+    if source not in ("telegram", Source.telegram.value):
+        return list(listing.images or [])
+
+    urls = await sync_telegram_photos_from_disk(db, listing, max_photos=max_photos)
+    if urls:
+        return urls
+
+    if not listing_needs_photos(listing):
+        return list(listing.images or [])
+
+    if try_telethon:
+        from app.services.telegram_channels.service_loader import get_parser_service
+
+        service = get_parser_service(skip_dedupe=True)
+
+        async def _download() -> list[str]:
+            await service.start()
+            try:
+                return await attach_photos_to_listing(
+                    db,
+                    service,
+                    listing.id,
+                    max_photos=max_photos,
+                )
+            finally:
+                await service.stop()
+
+        try:
+            urls = await asyncio.wait_for(_download(), timeout=max(3.0, telethon_timeout))
+            if urls:
+                return urls
+        except asyncio.TimeoutError:
+            logger.warning("Telegram photo download timed out for %s", listing.id)
+        except Exception:
+            logger.exception("Inline Telegram photo download failed for %s", listing.id)
+
+    enqueue_listing_photos(listing.id)
+    return list(listing.images or [])
+
+
+async def hydrate_telegram_page_photos(
+    db: AsyncSession,
+    items: list,
+    *,
+    max_downloads: int = 10,
+    telethon_timeout: float = 25.0,
+) -> list:
+    """Для поточної сторінки каталогу: диск → один Telethon-прохід → черга."""
+    from app.schemas.schemas import ListingOut
+
+    if not items:
+        return items
+
+    updated: dict[str, list[str]] = {}
+    need_download: list[Listing] = []
+
+    for item in items:
+        if not isinstance(item, ListingOut):
+            continue
+        if (item.source or "").lower() != "telegram" or (item.images or []):
+            continue
+        listing = await db.get(Listing, item.id)
+        if not listing:
+            continue
+        urls = await sync_telegram_photos_from_disk(db, listing, max_photos=1)
+        if urls:
+            updated[item.id] = urls
+        elif listing_needs_photos(listing):
+            need_download.append(listing)
+
+    if need_download:
+        service = None
+        try:
+            from app.services.telegram_channels.service_loader import get_parser_service
+
+            service = get_parser_service(skip_dedupe=True)
+
+            async def _batch() -> None:
+                assert service is not None
+                await service.start()
+                for listing in need_download[: max(1, max_downloads)]:
+                    urls = await attach_photos_to_listing(
+                        db,
+                        service,
+                        listing.id,
+                        max_photos=1,
+                    )
+                    if urls:
+                        updated[listing.id] = urls
+
+            await asyncio.wait_for(_batch(), timeout=max(5.0, telethon_timeout))
+        except asyncio.TimeoutError:
+            logger.warning("Telegram page photo batch timed out")
+        except Exception:
+            logger.exception("Telegram page photo batch failed")
+        finally:
+            if service is not None:
+                try:
+                    await service.stop()
+                except Exception:
+                    logger.exception("Telegram service stop after page photos")
+
+        for listing in need_download:
+            if listing.id not in updated:
+                enqueue_listing_photos(listing.id)
+
+    if not updated:
+        return items
+
+    out: list = []
+    for item in items:
+        urls = updated.get(getattr(item, "id", ""))
+        if not urls:
+            out.append(item)
+            continue
+        sd = dict(getattr(item, "source_data", None) or {})
+        sd.pop("photos_pending", None)
+        out.append(
+            item.model_copy(
+                update={
+                    "images": urls,
+                    "source_data": sd or None,
+                }
+            )
+        )
+    return out

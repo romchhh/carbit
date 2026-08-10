@@ -11,9 +11,15 @@ def listing_to_out(listing: Listing) -> ListingOut:
     from app.services.vin import extract_vin
 
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
+    images = list(listing.images or [])
+    if source == "telegram" and not images:
+        from app.services.telegram_channels.lazy_photos import load_existing_telegram_photo_urls
+
+        images = load_existing_telegram_photo_urls(listing.id, limit=1)
+
     url = listing.url
     if source == "telegram":
-        url = fix_telegram_listing_url(listing.id, url, images=listing.images)
+        url = fix_telegram_listing_url(listing.id, url, images=images)
     published_at = as_kyiv(listing.published_at) if listing.published_at else now_kyiv()
     found_at = as_kyiv(listing.found_at) if listing.found_at else now_kyiv()
     # Старі записи в БД — грн; нові — оригінальна валюта з джерела.
@@ -25,7 +31,7 @@ def listing_to_out(listing: Listing) -> ListingOut:
     vin = extract_vin(listing.description, listing.title) or getattr(listing, "vin", None)
 
     source_data = None
-    if source == "telegram" and not (listing.images or []):
+    if source == "telegram" and not images:
         source_data = {"photos_pending": True}
 
     out = ListingOut(
@@ -42,7 +48,7 @@ def listing_to_out(listing: Listing) -> ListingOut:
         transmission=listing.transmission or "",
         region=listing.region or "",
         description=listing.description,
-        images=listing.images or [],
+        images=images,
         url=url or "",
         seller_type=listing.seller_type or "private",
         vin=(vin or None),
