@@ -255,6 +255,76 @@ export function mergeAiSearchFilters(
   return next;
 }
 
+/** Повна заміна фільтрів голосовим запитом — попередній запит не зливається. */
+export function applyVoiceSearchFilters(
+  current: SearchFilterState,
+  raw: Record<string, unknown>,
+  options: {
+    transcript?: string;
+    marketDiscovery?: boolean;
+    resolveBrand?: (query: string) => string | null;
+    resolveModel?: (brand: string, query: string) => string | null;
+    findBrandInText?: (text: string) => string | null;
+    findModelInText?: (brand: string, text: string) => string | null;
+  } = {},
+): SearchFilterState {
+  const parsed = fromBackendSearchFilters(raw);
+  let merged = syncSearchFilterArrays({
+    ...parsed,
+    vehicleType: current.vehicleType,
+  });
+
+  const transcript = String(options.transcript || "").trim();
+  let brand = merged.brand;
+  let model = merged.model;
+
+  if (raw.brand != null && String(raw.brand).trim() && options.resolveBrand) {
+    brand = options.resolveBrand(String(raw.brand)) ?? String(raw.brand).trim();
+  } else if (transcript && options.findBrandInText) {
+    brand = options.findBrandInText(transcript) ?? "";
+  } else if (!(raw.brand != null && String(raw.brand).trim())) {
+    brand = "";
+  }
+
+  if (brand) {
+    if (raw.model != null && String(raw.model).trim() && options.resolveModel) {
+      model = options.resolveModel(brand, String(raw.model)) ?? String(raw.model).trim();
+    } else if (transcript && options.findModelInText) {
+      model = options.findModelInText(brand, transcript) ?? "";
+    } else if (!(raw.model != null && String(raw.model).trim())) {
+      model = "";
+    }
+    merged.brand = brand;
+    merged.brands = [brand];
+    merged.model = model;
+    merged.models = model ? [model] : [];
+  } else {
+    merged.brand = "";
+    merged.brands = [];
+    merged.model = "";
+    merged.models = [];
+  }
+
+  const hasRegion =
+    (raw.region != null && String(raw.region).trim()) ||
+    (Array.isArray(raw.regions) && raw.regions.length > 0);
+  if (!hasRegion) {
+    merged.region = "Вся Україна";
+    merged.regions = [];
+  } else {
+    merged = syncSearchFilterArrays(merged);
+  }
+
+  if (options.marketDiscovery && !(raw.brand != null && String(raw.brand).trim()) && !brand) {
+    merged.brand = "";
+    merged.model = "";
+    merged.brands = [];
+    merged.models = [];
+  }
+
+  return syncSearchFilterArrays(merged);
+}
+
 /** Відновлює UI-фільтри зі збереженого моніторингу. */
 export function fromBackendSearchFilters(
   raw: Record<string, unknown> | null | undefined,
@@ -270,11 +340,28 @@ export function fromBackendSearchFilters(
       : "USD";
 
   const sourcesRaw = Array.isArray(raw.sources) ? raw.sources.map(String) : [];
-  const sources = sourcesRaw
+  const sourcesMapped = sourcesRaw
     .map(s => BACKEND_SOURCE_TO_UI[s] || s)
     .filter(Boolean);
+  const sources = sourcesMapped.length ? sourcesMapped : [...base.sources];
 
   const zeroMileage = Boolean(raw.zero_mileage);
+
+  const fuelsRaw = Array.isArray(raw.fuel)
+    ? raw.fuel
+    : Array.isArray(raw.fuels)
+      ? raw.fuels
+      : null;
+  const transmissionsRaw = Array.isArray(raw.transmission)
+    ? raw.transmission
+    : Array.isArray(raw.transmissions)
+      ? raw.transmissions
+      : null;
+  const drivetrainRaw = Array.isArray(raw.drivetrain)
+    ? raw.drivetrain
+    : Array.isArray(raw.drive_types)
+      ? raw.drive_types
+      : null;
 
   const brandsRaw = Array.isArray(raw.brands) ? raw.brands.map(String).filter(Boolean) : [];
   const brand = String(raw.brand || brandsRaw[0] || "");
@@ -314,12 +401,12 @@ export function fromBackendSearchFilters(
     currency,
     mileageFrom: zeroMileage ? "0" : formatThousandsKm(raw.mileage_from as number | null),
     mileageTo: zeroMileage ? "0" : formatThousandsKm(raw.mileage_to as number | null),
-    fuels: Array.isArray(raw.fuel) ? raw.fuel.map(String) : [],
-    transmissions: Array.isArray(raw.transmission) ? raw.transmission.map(String) : [],
+    fuels: fuelsRaw ? fuelsRaw.map(String) : [],
+    transmissions: transmissionsRaw ? transmissionsRaw.map(String) : [],
     sources,
     engineVolumeFrom: formatPlainNumber(raw.engine_volume_from as number | null),
     engineVolumeTo: formatPlainNumber(raw.engine_volume_to as number | null),
-    driveTypes: Array.isArray(raw.drivetrain) ? raw.drivetrain.map(String) : [],
+    driveTypes: drivetrainRaw ? drivetrainRaw.map(String) : [],
     colors: Array.isArray(raw.colors) ? raw.colors.map(String) : [],
     fuelConsumptionFrom: formatPlainNumber(raw.fuel_consumption_from as number | null),
     fuelConsumptionTo: formatPlainNumber(raw.fuel_consumption_to as number | null),

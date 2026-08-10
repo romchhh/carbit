@@ -777,9 +777,9 @@ export default function AccountPage() {
                   <IconInstagram size={18} className="text-[#dd2a7b]" />
                 </span>
                 <div className="min-w-0">
-                  <div className="text-[14px] font-semibold text-ink">Instagram</div>
+                  <div className="text-[14px] font-semibold text-ink">Ми в соцмережах</div>
                   <div className="mt-0.5 text-[12px] text-muted">
-                    @{INSTAGRAM_HANDLE} · новини, фото авто, оновлення
+                    Instagram @{INSTAGRAM_HANDLE} · новини та оновлення
                   </div>
                 </div>
               </div>

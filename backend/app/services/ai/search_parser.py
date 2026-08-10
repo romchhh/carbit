@@ -18,10 +18,17 @@ from app.services.search.fe_catalog import (
     load_brand_model_aliases,
 )
 from app.services.olx.brand_slugs import OLX_TEXT_BRAND_VARIANTS, resolve_olx_brand_slug
-from app.services.search.region_cities import cities_for_region
+from app.services.search.region_voice import (
+    CANONICAL_UA_REGIONS,
+    infer_region_from_text,
+    normalize_region_label,
+    region_mentioned_in_text,
+)
 from app.core.text import norm_text
 
 logger = logging.getLogger(__name__)
+
+REGION_OPTIONS = list(CANONICAL_UA_REGIONS)
 
 FUEL_OPTIONS = [
     "Бензин",
@@ -65,34 +72,6 @@ COLOR_OPTIONS = [
     "Коричневий",
     "Бежевий",
     "Фіолетовий",
-]
-REGION_OPTIONS = [
-    "Вся Україна",
-    "м. Київ",
-    "Київська область",
-    "Вінницька область",
-    "Волинська область",
-    "Дніпропетровська область",
-    "Донецька область",
-    "Житомирська область",
-    "Закарпатська область",
-    "Запорізька область",
-    "Івано-Франківська область",
-    "Кіровоградська область",
-    "Луганська область",
-    "Львівська область",
-    "Миколаївська область",
-    "Одеська область",
-    "Полтавська область",
-    "Рівненська область",
-    "Сумська область",
-    "Тернопільська область",
-    "Харківська область",
-    "Херсонська область",
-    "Хмельницька область",
-    "Черкаська область",
-    "Чернівецька область",
-    "Чернігівська область",
 ]
 SOURCE_OPTIONS = ["AUTO.RIA", "OLX", "Telegram"]
 SORT_OPTIONS = ["newest", "price_asc", "price_desc", "year_desc", "mileage_asc"]
@@ -542,24 +521,7 @@ def _build_market_discovery_message(filters: dict[str, Any]) -> str:
 
 
 def _infer_region_from_transcript(text: str) -> str | None:
-    haystack = norm_text(text)
-    if not haystack:
-        return None
-
-    best_region: str | None = None
-    best_score = 0
-
-    for region in REGION_OPTIONS:
-        if region == "Вся Україна":
-            continue
-        if not _region_mentioned_in_transcript(text, region):
-            continue
-        score = len(norm_text(region))
-        if score > best_score:
-            best_region = region
-            best_score = score
-
-    return best_region
+    return infer_region_from_text(text)
 
 
 _FUEL_KEYWORDS: dict[str, str] = {
@@ -720,81 +682,28 @@ def _enrich_filters_from_transcript(
     return enriched
 
 
-_REGION_ALIASES: dict[str, str] = {
-    "київ": "м. Київ",
-    "киев": "м. Київ",
-    "kyiv": "м. Київ",
-    "kiev": "м. Київ",
-    "львів": "Львівська область",
-    "lviv": "Львівська область",
-    "одеса": "Одеська область",
-    "odesa": "Одеська область",
-    "харків": "Харківська область",
-    "dnipro": "Дніпропетровська область",
-    "дніпро": "Дніпропетровська область",
-    "вся україна": "Вся Україна",
-    "україна": "Вся Україна",
-}
-
-
-def _normalize_region(region: str | None) -> str | None:
-    text = str(region or "").strip()
-    if not text:
-        return None
-    if text in REGION_OPTIONS:
-        return text
-    lower = text.lower()
-    for key, value in _REGION_ALIASES.items():
-        if key in lower:
-            return value
-    for option in REGION_OPTIONS:
-        if option.lower() == lower:
-            return option
-    return text if text in REGION_OPTIONS else None
+def _normalize_region(region: str | None, *, transcript: str | None = None) -> str | None:
+    return normalize_region_label(region, transcript=transcript)
 
 
 def _region_mentioned_in_transcript(text: str, region: str) -> bool:
-    haystack = norm_text(text)
-    if not haystack or not region:
-        return False
-
-    region_key = norm_text(region)
-    if region_key == "вся україна":
-        return any(
-            token in haystack
-            for token in ("вся україна", "по україні", "по всій україні", "ukraine")
-        )
-
-    if _text_contains_token(haystack, region_key):
-        return True
-
-    oblast_short = region_key.replace(" область", " обл")
-    if oblast_short != region_key and _text_contains_token(haystack, oblast_short):
-        return True
-
-    stem = region_key.replace("м. ", "").replace(" область", "").strip()
-    if len(stem) >= 4 and _text_contains_token(haystack, stem):
-        return True
-
-    for alias, mapped in _REGION_ALIASES.items():
-        if mapped == region and _text_contains_token(haystack, alias):
-            return True
-
-    keywords = cities_for_region(region) or ()
-    for keyword in keywords:
-        token = norm_text(keyword)
-        if len(token) >= 2 and _text_contains_token(haystack, token):
-            return True
-
-    return False
+    return region_mentioned_in_text(text, region)
 
 
 def _sanitize_region_from_transcript(query: str, filters: dict[str, Any]) -> dict[str, Any]:
-    """Прибирає регіон, якщо GPT «додав» його, але в диктовці регіон не звучав."""
+    """Нормалізує регіон з диктовки та прибирає «галюцинації» GPT."""
     sanitized = dict(filters)
     region = sanitized.get("region")
-    if region and not _region_mentioned_in_transcript(query, str(region)):
-        sanitized.pop("region", None)
+    if region:
+        normalized = normalize_region_label(str(region), transcript=query)
+        if normalized and region_mentioned_in_text(query, normalized):
+            sanitized["region"] = normalized
+        else:
+            sanitized.pop("region", None)
+    if not sanitized.get("region"):
+        inferred = infer_region_from_text(query)
+        if inferred and inferred != "Вся Україна":
+            sanitized["region"] = inferred
     return sanitized
 
 
@@ -810,6 +719,14 @@ def _has_meaningful_filters(filters: dict[str, Any]) -> bool:
             continue
         return True
     return False
+
+
+def _raw_list(raw: dict[str, Any], *keys: str) -> list | None:
+    for key in keys:
+        value = raw.get(key)
+        if isinstance(value, list):
+            return value
+    return None
 
 
 def _clean_filters(raw: dict[str, Any]) -> dict[str, Any]:
@@ -857,12 +774,29 @@ def _clean_filters(raw: dict[str, Any]) -> dict[str, Any]:
     if currency in ("USD", "UAH", "EUR"):
         out["currency"] = currency
 
-    out["fuel"] = _pick_allowed(raw.get("fuels"), FUEL_OPTIONS)
-    out["transmission"] = _pick_allowed(raw.get("transmissions"), TRANSMISSION_OPTIONS)
-    out["drivetrain"] = _pick_allowed(raw.get("drive_types"), DRIVE_OPTIONS)
-    out["body_types"] = _pick_allowed(raw.get("body_types"), BODY_TYPE_OPTIONS)
-    out["colors"] = _pick_allowed(raw.get("colors"), COLOR_OPTIONS)
-    out["sources"] = _pick_allowed(raw.get("sources"), SOURCE_OPTIONS)
+    fuels = _pick_allowed(_raw_list(raw, "fuels", "fuel"), FUEL_OPTIONS)
+    if fuels:
+        out["fuel"] = fuels
+
+    transmissions = _pick_allowed(_raw_list(raw, "transmissions", "transmission"), TRANSMISSION_OPTIONS)
+    if transmissions:
+        out["transmission"] = transmissions
+
+    drivetrain = _pick_allowed(_raw_list(raw, "drive_types", "drivetrain"), DRIVE_OPTIONS)
+    if drivetrain:
+        out["drivetrain"] = drivetrain
+
+    body_types = _pick_allowed(_raw_list(raw, "body_types"), BODY_TYPE_OPTIONS)
+    if body_types:
+        out["body_types"] = body_types
+
+    colors = _pick_allowed(_raw_list(raw, "colors"), COLOR_OPTIONS)
+    if colors:
+        out["colors"] = colors
+
+    sources = _pick_allowed(_raw_list(raw, "sources"), SOURCE_OPTIONS)
+    if sources:
+        out["sources"] = sources
 
     seller = str(raw.get("seller_filter") or "").strip()
     if seller in ("private", "dealer"):

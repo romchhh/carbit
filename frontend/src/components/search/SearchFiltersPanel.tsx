@@ -43,7 +43,7 @@ import {
 } from "@/lib/search-catalog";
 import type { SearchFreshness } from "@/lib/search-preview";
 import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
-import { mergeAiSearchFilters } from "@/lib/search-filters-api";
+import { applyVoiceSearchFilters } from "@/lib/search-filters-api";
 import {
   clearBrands,
   clearModels,
@@ -89,60 +89,6 @@ type Props = {
   voiceSearchCabinetOnly?: boolean;
   onSortChange?: (sort: SortOption) => void;
 };
-
-function mergeVoiceFilters(
-  current: SearchFilterState,
-  raw: Record<string, unknown>,
-  result: AiParseSearchResult,
-): SearchFilterState {
-  const merged = mergeAiSearchFilters(current, raw);
-  const transcript = String(result.transcript || "").trim();
-
-  let brand = merged.brand;
-  let model = merged.model;
-
-  if (raw.brand != null && String(raw.brand).trim()) {
-    brand = resolveBrandQuery(String(raw.brand), BRANDS) ?? String(raw.brand).trim();
-  } else if (transcript) {
-    brand = findBrandInText(transcript, BRANDS) ?? brand;
-  }
-
-  if (brand) {
-    const brandModels = getModelsForBrand(brand);
-    if (raw.model != null && String(raw.model).trim()) {
-      model =
-        resolveModelQuery(brand, String(raw.model), brandModels) ?? String(raw.model).trim();
-    } else if (transcript) {
-      model = findModelInText(brand, transcript, brandModels) ?? model;
-    }
-    merged.brand = brand;
-    merged.brands = [brand];
-    merged.model = model && brandModels.includes(model) ? model : model;
-    merged.models = merged.model ? [merged.model] : [];
-    if (model && !brandModels.includes(model)) {
-      const resolved = resolveModelQuery(brand, model, brandModels);
-      merged.model = resolved ?? "";
-      merged.models = merged.model ? [merged.model] : [];
-    }
-  }
-
-  const hasRegion = raw.region != null && String(raw.region).trim();
-  if (!hasRegion && !(Array.isArray(raw.regions) && raw.regions.length)) {
-    merged.region = "Вся Україна";
-    merged.regions = [];
-  } else if (merged.regions.length || merged.region) {
-    merged.regions = effectiveRegions(merged);
-    merged.region =
-      merged.regions.length === 1 ? merged.regions[0] : merged.regions.length ? "" : "Вся Україна";
-  }
-  if (isMarketDiscoveryResult(result) && !raw.brand && !brand) {
-    merged.brand = "";
-    merged.model = "";
-    merged.brands = [];
-    merged.models = [];
-  }
-  return syncSearchFilterArrays(merged);
-}
 
 export function SearchFiltersPanel({
   filters,
@@ -213,7 +159,16 @@ export function SearchFiltersPanel({
     result: AiParseSearchResult,
     searchNow = false,
   ) => {
-    const merged = mergeVoiceFilters(filters, raw, result);
+    const merged = applyVoiceSearchFilters(filters, raw, {
+      transcript: result.transcript,
+      marketDiscovery: isMarketDiscoveryResult(result),
+      resolveBrand: query => resolveBrandQuery(query, BRANDS),
+      resolveModel: (brand, query) =>
+        resolveModelQuery(brand, query, getModelsForBrand(brand)),
+      findBrandInText: text => findBrandInText(text, BRANDS),
+      findModelInText: (brand, text) =>
+        findModelInText(brand, text, getModelsForBrand(brand)),
+    });
     const years = normalizeYearRange(merged.yearFrom, merged.yearTo);
     const prices = normalizePriceRange(merged.priceFrom, merged.priceTo);
     const marketDiscovery = isMarketDiscoveryResult(result);
