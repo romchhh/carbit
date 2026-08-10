@@ -111,7 +111,6 @@ async def attach_photos_to_listing(
             )
         except Exception:
             logger.exception("Photo download failed for %s", listing_id)
-            _media_store().mark_photos_failed(listing_id)
             return []
         urls = [telegram_media_url(p) for p in paths[:limit]]
         urls = [u for u in urls if u]
@@ -121,7 +120,7 @@ async def attach_photos_to_listing(
         await db.flush()
         _media_store().mark_photos_done(listing_id)
     else:
-        _media_store().mark_photos_failed(listing_id)
+        logger.warning("Telegram photos not ready yet for %s", listing_id)
     return urls
 
 
@@ -138,10 +137,16 @@ def _ensure_photo_refs(listing_id: str) -> bool:
     return True
 
 
-def enqueue_listing_photos(listing_id: str) -> bool:
+def enqueue_listing_photos(listing_id: str, *, priority: int = 0) -> bool:
     if not _ensure_photo_refs(listing_id):
         return False
-    return _media_store().enqueue_photo_download(listing_id)
+    return _media_store().enqueue_photo_download(listing_id, priority=priority)
+
+
+async def telegram_worker_online() -> bool:
+    from app.services.telegram_channels.telethon_auth import _worker_online
+
+    return await _worker_online()
 
 
 def listing_needs_photos(listing: Listing) -> bool:
@@ -193,6 +198,11 @@ async def ensure_telegram_listing_photos(
     if not listing_needs_photos(listing):
         return list(listing.images or [])
 
+    worker_up = await telegram_worker_online()
+    if worker_up:
+        enqueue_listing_photos(listing.id, priority=1)
+        return list(listing.images or [])
+
     if try_telethon:
         from app.services.telegram_channels.service_loader import get_parser_service
 
@@ -219,7 +229,7 @@ async def ensure_telegram_listing_photos(
         except Exception:
             logger.exception("Inline Telegram photo download failed for %s", listing.id)
 
-    enqueue_listing_photos(listing.id)
+    enqueue_listing_photos(listing.id, priority=1)
     return list(listing.images or [])
 
 
@@ -230,7 +240,7 @@ async def hydrate_telegram_page_photos(
     max_downloads: int = 10,
     telethon_timeout: float = 25.0,
 ) -> list:
-    """Для поточної сторінки каталогу: диск → один Telethon-прохід → черга."""
+    """Для поточної сторінки каталогу: диск → worker/черга (пріоритет) або Telethon."""
     from app.schemas.schemas import ListingOut
 
     if not items:
@@ -253,7 +263,12 @@ async def hydrate_telegram_page_photos(
         elif listing_needs_photos(listing):
             need_download.append(listing)
 
-    if need_download:
+    worker_up = await telegram_worker_online()
+
+    if need_download and worker_up:
+        for listing in need_download:
+            enqueue_listing_photos(listing.id, priority=1)
+    elif need_download:
         service = None
         try:
             from app.services.telegram_channels.service_loader import get_parser_service
@@ -287,7 +302,7 @@ async def hydrate_telegram_page_photos(
 
         for listing in need_download:
             if listing.id not in updated:
-                enqueue_listing_photos(listing.id)
+                enqueue_listing_photos(listing.id, priority=1)
 
     if not updated:
         return items

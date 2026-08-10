@@ -112,10 +112,8 @@ async def download_photos_by_ids(
     by_id = {m.id: m for m in fetched if isinstance(m, Message)}
     ordered = [by_id[mid] for mid in ids if mid in by_id]
 
-    # Альбом — лише якщо потрібно >1 фото (для сповіщень достатньо одного)
-    if limit > 1 and len(ordered) == 1 and ordered[0].grouped_id:
+    async def _expand_album(primary: Message) -> list[Message]:
         album: list[Message] = []
-        primary = ordered[0]
         async for msg in client.iter_messages(
             entity,
             min_id=max(primary.id - 40, 0),
@@ -124,7 +122,16 @@ async def download_photos_by_ids(
             if msg.grouped_id == primary.grouped_id and _has_photo(msg):
                 album.append(msg)
         album.sort(key=lambda m: m.id)
-        if album:
-            ordered = album
+        return album
+
+    # Альбом: текст часто на окремому msg без фото — розгортаємо групу навіть для 1 фото.
+    if ordered:
+        primary = ordered[0]
+        if primary.grouped_id:
+            has_photo = any(_has_photo(m) for m in ordered)
+            if not has_photo or (limit > 1 and len(ordered) == 1):
+                album = await _expand_album(primary)
+                if album:
+                    ordered = album
 
     return await download_photos(client, channel, ordered, max_photos=limit)

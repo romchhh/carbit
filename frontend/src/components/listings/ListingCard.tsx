@@ -59,7 +59,7 @@ export function ListingCard({
   const displayCurrency = resolveDisplayCurrency(
     displayCurrencyProp ?? user?.preferred_currency,
   );
-  const images = useListingPhotoHydration(listing);
+  const { images, rootRef } = useListingPhotoHydration(listing);
   const price = Number(listing.price) || 0;
   const priceLabel = formatListingPrice(
     price,
@@ -106,6 +106,7 @@ export function ListingCard({
 
   return (
     <article
+      ref={rootRef as React.RefObject<HTMLElement>}
       role="button"
       tabIndex={0}
       onClick={onClick}

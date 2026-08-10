@@ -297,18 +297,13 @@ async def _telegram_listings_matching_filters(
         .limit(scan_limit)
     )
     matched: list[ListingOut] = []
-    from app.services.telegram_channels.lazy_photos import (
-        enqueue_listing_photos,
-        sync_telegram_photos_from_disk,
-    )
+    from app.services.telegram_channels.lazy_photos import sync_telegram_photos_from_disk
 
     for listing in rows.all():
         await sync_telegram_photos_from_disk(db, listing)
         item = listing_to_out(listing)
         if listing_out_matches_filters(item, filters):
             matched.append(item)
-            if not (item.images or []):
-                enqueue_listing_photos(item.id)
     from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
 
     return dedupe_telegram_posts_in_pool(matched)

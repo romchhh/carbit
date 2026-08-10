@@ -43,7 +43,8 @@ class ChannelMediaStore:
                 CREATE TABLE IF NOT EXISTS photo_download_queue (
                     listing_id TEXT PRIMARY KEY,
                     enqueued_at TEXT NOT NULL,
-                    attempts INTEGER NOT NULL DEFAULT 0
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    priority INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS keyword_search_queue (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +62,23 @@ class ChannelMediaStore:
                 """
             )
             conn.commit()
+        self._migrate_photo_queue_priority()
+
+    def _migrate_photo_queue_priority(self) -> None:
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            cols = {
+                str(row[1])
+                for row in conn.execute("PRAGMA table_info(photo_download_queue)").fetchall()
+            }
+            if "priority" not in cols:
+                try:
+                    conn.execute(
+                        "ALTER TABLE photo_download_queue "
+                        "ADD COLUMN priority INTEGER NOT NULL DEFAULT 0"
+                    )
+                    conn.commit()
+                except sqlite3.OperationalError:
+                    pass
 
     def get_cursor(self, channel: str) -> int:
         with _lock, sqlite3.connect(self.db_path) as conn:
@@ -163,7 +181,7 @@ class ChannelMediaStore:
             )
             conn.commit()
 
-    def enqueue_photo_download(self, listing_id: str) -> bool:
+    def enqueue_photo_download(self, listing_id: str, *, priority: int = 0) -> bool:
         """Повертає True, якщо реально поставили в чергу (ще не done)."""
         refs = self.get_photo_refs(listing_id)
         if not refs:
@@ -171,24 +189,51 @@ class ChannelMediaStore:
         _, _, status = refs
         if status == "done":
             return False
+        prio = max(0, min(int(priority), 9))
         with _lock, sqlite3.connect(self.db_path) as conn:
+            if status == "failed":
+                conn.execute(
+                    """
+                    UPDATE listing_photo_refs
+                    SET status='pending', updated_at=?
+                    WHERE listing_id=?
+                    """,
+                    (_utcnow(), listing_id),
+                )
             conn.execute(
                 """
-                INSERT INTO photo_download_queue (listing_id, enqueued_at, attempts)
-                VALUES (?, ?, 0)
-                ON CONFLICT(listing_id) DO NOTHING
+                INSERT INTO photo_download_queue (listing_id, enqueued_at, attempts, priority)
+                VALUES (?, ?, 0, ?)
+                ON CONFLICT(listing_id) DO UPDATE SET
+                    priority = MAX(photo_download_queue.priority, excluded.priority),
+                    enqueued_at = excluded.enqueued_at
                 """,
-                (listing_id, _utcnow()),
+                (listing_id, _utcnow(), prio),
             )
             conn.commit()
         return True
+
+    def photo_queue_pending_count(self) -> int:
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute("SELECT COUNT(*) FROM photo_download_queue")
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
+
+    def get_photo_attempts(self, listing_id: str) -> int:
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute(
+                "SELECT attempts FROM photo_download_queue WHERE listing_id=?",
+                (listing_id,),
+            )
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
 
     def claim_photo_jobs(self, *, limit: int = 5) -> list[str]:
         with _lock, sqlite3.connect(self.db_path) as conn:
             cur = conn.execute(
                 """
                 SELECT listing_id FROM photo_download_queue
-                ORDER BY enqueued_at ASC
+                ORDER BY priority DESC, enqueued_at ASC
                 LIMIT ?
                 """,
                 (limit,),

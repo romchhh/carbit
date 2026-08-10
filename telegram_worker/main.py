@@ -182,16 +182,25 @@ async def main() -> None:
             except Exception:
                 pass
             busy = False
+            photo_pending = store.photo_queue_pending_count()
             try:
-                if await process_keyword_queue(service, limit=16):
-                    busy = True
-            except Exception:
-                logger.exception("Keyword queue tick failed")
-            try:
-                if await process_photo_queue(service, limit=5):
-                    busy = True
+                if photo_pending > 0:
+                    if await process_photo_queue(service):
+                        busy = True
             except Exception:
                 logger.exception("Photo queue tick failed")
+            try:
+                keyword_limit = 4 if photo_pending > 25 else 16
+                if photo_pending < 80:
+                    if await process_keyword_queue(service, limit=keyword_limit):
+                        busy = True
+                elif photo_pending > 0:
+                    logger.info(
+                        "Photo backlog=%s — keyword queue paused this tick",
+                        photo_pending,
+                    )
+            except Exception:
+                logger.exception("Keyword queue tick failed")
 
             # Раз на годину — видаляємо TG-лоти старші за 3 місяці.
             now_mono = asyncio.get_event_loop().time()

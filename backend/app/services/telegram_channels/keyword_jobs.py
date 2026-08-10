@@ -13,12 +13,23 @@ from app.services.telegram_channels.lazy_photos import attach_photos_to_listing
 
 logger = logging.getLogger(__name__)
 
+PHOTO_QUEUE_MAX_ATTEMPTS = 4
 
-async def process_photo_queue(service, *, limit: int = 5) -> int:
+
+def _photo_batch_limit(pending: int) -> int:
+    return min(30, max(8, pending))
+
+
+async def process_photo_queue(service, *, limit: int | None = None) -> int:
     ensure_parser_path()
     from parser.channel_media_store import ChannelMediaStore
 
-    jobs = ChannelMediaStore().claim_photo_jobs(limit=limit)
+    store = ChannelMediaStore()
+    pending = store.photo_queue_pending_count()
+    if pending <= 0:
+        return 0
+    batch = limit if limit is not None else _photo_batch_limit(pending)
+    jobs = store.claim_photo_jobs(limit=batch)
     if not jobs:
         return 0
 
@@ -30,8 +41,20 @@ async def process_photo_queue(service, *, limit: int = 5) -> int:
                 if urls:
                     done += 1
                     logger.info("Lazy photos %s: %s files", listing_id, len(urls))
+                    continue
+                attempts = store.get_photo_attempts(listing_id)
+                if attempts >= PHOTO_QUEUE_MAX_ATTEMPTS:
+                    store.mark_photos_failed(listing_id)
+                    logger.warning(
+                        "Telegram photos failed after %s attempts: %s",
+                        attempts,
+                        listing_id,
+                    )
             except Exception:
                 logger.exception("Lazy photo job failed for %s", listing_id)
+                attempts = store.get_photo_attempts(listing_id)
+                if attempts >= PHOTO_QUEUE_MAX_ATTEMPTS:
+                    store.mark_photos_failed(listing_id)
         await db.commit()
     return done
 

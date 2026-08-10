@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listings as listingsApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
 
@@ -22,8 +22,10 @@ function listingNeedsPhotoHydration(listing: Listing): boolean {
   return !(listing.images?.length ?? 0);
 }
 
-/** Підвантажує мінімум 1 фото для Telegram-карток у каталозі. */
+/** Підвантажує мінімум 1 фото для Telegram-карток у каталозі (лише видимі). */
 export function useListingPhotoHydration(listing: Listing) {
+  const rootRef = useRef<HTMLElement | null>(null);
+  const [visible, setVisible] = useState(false);
   const [images, setImages] = useState<string[]>(
     Array.isArray(listing.images) ? listing.images : [],
   );
@@ -39,7 +41,26 @@ export function useListingPhotoHydration(listing: Listing) {
   }, [listing.id, listing.images]);
 
   useEffect(() => {
-    if (!listingNeedsPhotoHydration(listing)) return;
+    const node = rootRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "120px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [listing.id]);
+
+  useEffect(() => {
+    if (!visible || !listingNeedsPhotoHydration(listing)) return;
 
     let cancelled = false;
     let attempts = 0;
@@ -57,12 +78,12 @@ export function useListingPhotoHydration(listing: Listing) {
           return;
         }
       } catch {
-        /* worker / Telethon може бути зайнятий */
+        /* worker обробляє чергу фото */
       }
 
       attempts += 1;
-      if (!cancelled && attempts < 8) {
-        timer = window.setTimeout(poll, 1500);
+      if (!cancelled && attempts < 15) {
+        timer = window.setTimeout(poll, 2000);
       }
     };
 
@@ -71,7 +92,7 @@ export function useListingPhotoHydration(listing: Listing) {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [listing.id, listing.source, listing.images?.length]);
+  }, [listing.id, listing.source, listing.images?.length, visible]);
 
-  return images;
+  return { images, rootRef };
 }
