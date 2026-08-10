@@ -160,7 +160,11 @@ async def get_search_results_from_db(
     from app.services.telegram_channels.lazy_photos import hydrate_telegram_page_photos
 
     async with AsyncSessionLocal() as photo_db:
-        page_items = await hydrate_telegram_page_photos(photo_db, page_items)
+        page_items = await hydrate_telegram_page_photos(
+            photo_db,
+            page_items,
+            wait_seconds=0,
+        )
         await photo_db.commit()
 
     return PaginatedListings(

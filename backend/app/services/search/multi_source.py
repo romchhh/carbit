@@ -27,8 +27,8 @@ TELEGRAM_MAX_SCAN = 4000
 AUTO_RIA_PAGE_SIZE = 50
 # Live pool збирає лише IDs — 25 с достатньо; 90 с тримало весь gather.
 AUTO_RIA_POOL_TIMEOUT_SECONDS = 25.0
-# TG keyword wait ~5 с + запас; history scan не блокує.
-TELEGRAM_POOL_TIMEOUT_SECONDS = 18.0
+# TG keyword wait ~5 с + SQL scan; фото не блокують (wait_seconds=0).
+TELEGRAM_POOL_TIMEOUT_SECONDS = 28.0
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
 _SOURCE_BLEND_ORDER = {"olx": 0, "telegram": 1, "auto_ria": 2}
 _DATE_SORT_KEYS = frozenset({"newest", "published_desc"})

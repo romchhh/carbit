@@ -192,15 +192,9 @@ async def main() -> None:
             except Exception:
                 logger.exception("Photo queue tick failed")
             try:
-                keyword_limit = 4 if photo_pending > 25 else 16
-                if photo_pending < 80:
-                    if await process_keyword_queue(service, limit=keyword_limit):
-                        busy = True
-                elif photo_pending > 0:
-                    logger.info(
-                        "Photo backlog=%s — keyword queue paused this tick",
-                        photo_pending,
-                    )
+                keyword_limit = 8 if photo_pending > 40 else 16
+                if await process_keyword_queue(service, limit=keyword_limit):
+                    busy = True
             except Exception:
                 logger.exception("Keyword queue tick failed")
 

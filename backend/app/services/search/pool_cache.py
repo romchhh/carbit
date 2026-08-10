@@ -416,7 +416,12 @@ async def slice_pool(
     from app.services.telegram_channels.lazy_photos import hydrate_telegram_page_photos
 
     async with AsyncSessionLocal() as photo_db:
-        items = await hydrate_telegram_page_photos(photo_db, items, max_downloads=per_page)
+        items = await hydrate_telegram_page_photos(
+            photo_db,
+            items,
+            max_downloads=per_page,
+            wait_seconds=0,
+        )
         await photo_db.commit()
 
     pages = (total + per_page - 1) // per_page if total else 0

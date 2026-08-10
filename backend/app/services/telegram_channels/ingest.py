@@ -294,10 +294,8 @@ async def _telegram_listings_matching_filters(
         .limit(scan_limit)
     )
     matched: list[ListingOut] = []
-    from app.services.telegram_channels.lazy_photos import sync_telegram_photos_from_disk
 
     for listing in rows.all():
-        await sync_telegram_photos_from_disk(db, listing)
         item = listing_to_out(listing)
         if listing_out_matches_filters(item, filters):
             matched.append(item)
@@ -367,7 +365,11 @@ async def search_telegram_listings(
     page_items = matched[start : start + per_page]
     from app.services.telegram_channels.lazy_photos import hydrate_telegram_page_photos
 
-    page_items = await hydrate_telegram_page_photos(db, page_items)
+    page_items = await hydrate_telegram_page_photos(
+        db,
+        page_items,
+        wait_seconds=0,
+    )
     pages = (total + per_page - 1) // per_page if total else 0
 
     return PaginatedListings(

@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 PHOTO_WAIT_INTERVAL = 0.35
 PHOTO_PAGE_WAIT_SECONDS = 18.0
+PHOTO_SEARCH_WAIT_SECONDS = 0.0
 
 
 def _media_store():
@@ -278,9 +279,9 @@ async def hydrate_telegram_page_photos(
     *,
     max_downloads: int = 20,
     telethon_timeout: float = 25.0,
-    wait_seconds: float = PHOTO_PAGE_WAIT_SECONDS,
+    wait_seconds: float = 0.0,
 ) -> list:
-    """Сторінка каталогу: диск → worker (пріоритет) + очікування до wait_seconds."""
+    """Сторінка каталогу: диск → enqueue; wait_seconds>0 лише для ensure-photos."""
     from app.schemas.schemas import ListingOut
 
     if not items:
