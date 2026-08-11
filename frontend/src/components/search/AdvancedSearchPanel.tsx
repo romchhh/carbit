@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { ColorSwatchPicker } from "@/components/search/ColorSwatchPicker";
 import { FilterAccordionSection } from "@/components/search/FilterAccordionSection";
 import { FilterChipGroup } from "@/components/search/FilterChipGroup";
@@ -26,6 +27,7 @@ import {
   type SearchFilterState,
 } from "@/lib/search-catalog";
 import { resetAdvancedFilters } from "@/lib/search-filters-api";
+import { sourceFilterIcon } from "@/lib/listing-source";
 
 type Props = {
   filters: SearchFilterState;
@@ -491,18 +493,36 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
             <div className="flex flex-wrap gap-2">
               {SOURCE_OPTIONS.map(source => {
                 const active = filters.sources.includes(source);
+                const icon = sourceFilterIcon(source);
                 return (
                   <button
                     key={source}
                     type="button"
                     onClick={() => update({ sources: toggleValue(filters.sources, source) })}
                     className={cn(
-                      "rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
+                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[12px] font-medium transition-colors sm:px-3",
                       active
                         ? "border-emerald bg-emerald text-white"
                         : "border-border bg-white text-muted hover:border-emerald/40",
                     )}
                   >
+                    {icon ? (
+                      <span
+                        className={cn(
+                          "relative inline-flex h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white ring-1",
+                          active ? "ring-white/30" : "ring-black/5",
+                        )}
+                      >
+                        <Image
+                          src={icon}
+                          alt=""
+                          width={20}
+                          height={20}
+                          className="h-full w-full object-cover"
+                          unoptimized
+                        />
+                      </span>
+                    ) : null}
                     {source}
                   </button>
                 );

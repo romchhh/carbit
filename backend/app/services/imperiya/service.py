@@ -6,6 +6,7 @@ from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.mapper import sort_listings
 from app.services.imperiya.client import ImperiyaClient, ImperiyaError
+from app.services.imperiya.errors import ImperiyaBrandNotFound
 from app.services.imperiya.mapper import ad_to_listing, filters_to_search_params
 from app.services.telegram_channels.mapper import listing_out_matches_filters
 
@@ -38,6 +39,15 @@ async def _search_imperiya_body(
             sort_by=sort_by,
         )
         data = await client.search_cars(params)
+    except ImperiyaBrandNotFound:
+        return PaginatedListings(
+            items=[],
+            total=0,
+            page=page,
+            per_page=per_page,
+            pages=0,
+            market_total=0,
+        )
     except ValueError as exc:
         raise ImperiyaError(str(exc)) from exc
 

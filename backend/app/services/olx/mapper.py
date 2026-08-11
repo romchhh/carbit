@@ -34,6 +34,7 @@ from app.services.olx.brand_slugs import (
     resolve_olx_model_slug,
 )
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
+from app.services.search.subbrand_split import split_huawei_subbrand
 
 
 def brand_slug(brand: str) -> str:
@@ -52,6 +53,7 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
 
     brand_raw = (filters.brand or "").strip()
     model_raw = (filters.model or "").strip()
+    brand_raw, model_raw = split_huawei_subbrand(brand_raw, model_raw)
 
     if brand_raw:
         params.brand_label = brand_raw

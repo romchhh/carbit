@@ -12,7 +12,7 @@ import { IconCheck } from "@/components/icons";
 
 import { LANDING_IMAGES, SOURCE_LOGOS } from "@/lib/brand-assets";
 
-const HERO_SOURCE_LOGOS = [
+const PARTNER_LOGOS = [
   { src: SOURCE_LOGOS.autoRia, alt: "AUTO.RIA" },
   { src: SOURCE_LOGOS.olx, alt: "OLX" },
   { src: SOURCE_LOGOS.imperiya, alt: "Імперія Авто" },
@@ -49,32 +49,8 @@ export default function HomePage() {
               </h1>
 
               <div className="mt-7 w-full animate-fade-up-delay sm:mt-8">
-                <p className="flex flex-wrap items-center gap-x-2 gap-y-2.5 text-[18px] leading-relaxed text-white/90 sm:text-[21px]">
-                  <span>Усі джерела авто</span>
-                  <span className="inline-flex items-center mx-0.5 sm:mx-1">
-                    {HERO_SOURCE_LOGOS.map(({ src, alt }, index) => (
-                      <span
-                        key={alt}
-                        className={cn(
-                          "relative inline-flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 overflow-hidden rounded-full bg-white shadow-sm ring-2 ring-ink/30",
-                          index > 0 && "-ml-2.5 sm:-ml-3",
-                        )}
-                        style={{ zIndex: index + 1 }}
-                      >
-                        <Image
-                          src={src}
-                          alt={alt}
-                          width={36}
-                          height={36}
-                          className="h-full w-full object-cover"
-                        />
-                      </span>
-                    ))}
-                  </span>
-                  <span>в одному пошуку</span>
-                </p>
-                <p className="mt-3.5 text-[19px] font-bold leading-relaxed text-white sm:mt-4 sm:text-[23px] sm:leading-snug">
-                  — тільки актуальні авто, миттєві сповіщення
+                <p className="text-[18px] leading-relaxed text-white/90 sm:text-[21px] sm:leading-snug">
+                  Миттєві сповіщення та моніторинг потрібної моделі
                 </p>
               </div>
 
@@ -89,8 +65,34 @@ export default function HomePage() {
                 </CtaLink>
               </div>
 
-              <div className="mt-auto border-t border-white/10 pt-5 pb-2 sm:mt-12 sm:pt-7 sm:pb-0">
-                <div className="grid grid-cols-4 gap-1.5 sm:gap-4">
+              <div className="mt-auto pt-8 pb-2 sm:mt-12 sm:pt-10 sm:pb-0">
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
+                  Партнери
+                </p>
+                <div className="mt-4 inline-flex items-center sm:mt-5">
+                  {PARTNER_LOGOS.map(({ src, alt }, index) => (
+                    <span
+                      key={alt}
+                      className={cn(
+                        "relative inline-flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-full bg-white shadow-md ring-2 ring-white/20",
+                        index > 0 && "-ml-3.5 sm:-ml-4",
+                      )}
+                      style={{ zIndex: index + 1 }}
+                      title={alt}
+                    >
+                      <Image
+                        src={src}
+                        alt={alt}
+                        width={56}
+                        height={56}
+                        className="h-full w-full object-cover"
+                      />
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-6 border-t border-white/10 pt-5 sm:mt-7 sm:pt-7">
+                  <div className="grid grid-cols-4 gap-1.5 sm:gap-4">
                   {[
                     { value: "100+", label: "джерел" },
                     { value: "1 500+", label: "оголошень" },
@@ -106,6 +108,7 @@ export default function HomePage() {
                       </div>
                     </div>
                   ))}
+                </div>
                 </div>
               </div>
             </div>

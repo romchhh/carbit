@@ -47,14 +47,25 @@ _STRUCTURED_KEYS = (
 )
 
 
-def normalize_engine_litres(raw: float) -> float | None:
+def normalize_engine_litres(raw: object) -> float | None:
     """2.0 л, 1995 см³ або 2000 (куб. см) → літри."""
-    if raw <= 0:
+    if raw is None:
         return None
-    if raw >= 100:
-        return round(raw / 1000.0, 2)
-    if raw <= 20:
-        return round(raw, 2)
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return None
+        return _parse_structured_value(text)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    if value >= 100:
+        return round(value / 1000.0, 2)
+    if value <= 20:
+        return round(value, 2)
     return None
 
 

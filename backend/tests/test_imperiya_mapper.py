@@ -44,3 +44,29 @@ def test_ad_to_listing_maps_core_fields():
     assert listing.seller_name == "Стиль-Авто"
     assert listing.seller_url == "https://imperiya-auto.com.ua/dealer/styl-avto"
     assert listing.images == ["https://cdn.example/medium.avif"]
+
+
+def test_ad_to_listing_empty_engine_volume_electric():
+    """Zeekr / електро: engineVolume='' не має ламати мапінг."""
+    listing = ad_to_listing(
+        {
+            "id": 50185,
+            "url": "https://imperiya-auto.com.ua/listing/zeekr-001-50185",
+            "title": "Zeekr 001",
+            "productionYear": 2025,
+            "make": "Zeekr",
+            "model": "001",
+            "mileage": 2,
+            "engineType": "Електро",
+            "engineVolume": "",
+            "price": {"usd": 45000, "uah": 1800000},
+            "images": [],
+            "city": "Київ",
+            "region": "Київська",
+            "createdAt": "2026-08-10T15:24:16.713Z",
+        },
+        currency="USD",
+    )
+    assert listing.brand == "Zeekr"
+    assert listing.model == "001"
+    assert listing.engine_volume_l is None

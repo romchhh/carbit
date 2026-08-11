@@ -14,6 +14,8 @@ from app.services.imperiya.catalog import (
 )
 from app.services.imperiya.client import ImperiyaClient
 from app.services.imperiya.constants import IMPERIYA_MAX_LIMIT, SORT_TO_IMPERIYA
+from app.services.imperiya.errors import ImperiyaBrandNotFound
+from app.services.search.subbrand_split import split_huawei_subbrand
 from app.services.listings.seller_contact import apply_seller_contact_fields, seller_contact_from_imperiya
 from app.services.listings.engine_volume import normalize_engine_litres, parse_engine_volume_from_text
 
@@ -138,16 +140,17 @@ async def filters_to_search_params(
 
     brand = (filters.brand or "").strip()
     model = (filters.model or "").strip()
+    brand, model = split_huawei_subbrand(brand, model)
     if brand:
         make_id = await resolve_make_id(client, brand)
         if make_id is None:
-            raise ValueError(f"Марку «{brand}» не знайдено в Імперія Авто")
+            raise ImperiyaBrandNotFound(f"Марку «{brand}» не знайдено в Імперія Авто")
         params["makeId"] = make_id
         if model:
-            model_id = await resolve_model_id(client, make_id, model)
-            if model_id is None:
-                raise ValueError(f"Модель «{model}» не знайдено в Імперія Авто")
-            params["modelId"] = model_id
+            model_id = await resolve_model_id(client, make_id, model, brand=brand)
+            if model_id is not None:
+                params["modelId"] = model_id
+            # Якщо modelId не знайдено — лишаємо пошук лише по makeId + пост-фільтр у Python.
 
     if filters.year_from:
         params["yearFrom"] = filters.year_from
