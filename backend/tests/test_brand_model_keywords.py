@@ -591,5 +591,107 @@ W1N4632761X424465
         )
 
 
+class TestBrandMismatchRejection(unittest.TestCase):
+    """Перевіряє що бренд у description не дає хибний матч коли item.brand — інший."""
+
+    def _make_item(self, brand, title, description=""):
+        return type("Item", (), {
+            "brand": brand,
+            "model": "",
+            "title": title,
+            "year": 2022,
+            "price": 30000,
+            "currency": "USD",
+            "mileage": 50000,
+            "region": "Київ",
+            "source": "telegram",
+            "fuel": "",
+            "transmission": "",
+            "description": description,
+        })()
+
+    def test_zeekr_search_rejects_tesla_with_zeekr_in_description(self):
+        """Tesla-пост де в описі є слово Zeekr — НЕ повинен проходити фільтр Zeekr."""
+        item = self._make_item(
+            "Tesla",
+            "Tesla Model Y Long Range 2023",
+            "Порівняння: Zeekr 001 vs Tesla Model Y. Продаємо Tesla.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Zeekr", "sources": ["telegram"]})
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
+    def test_audi_search_rejects_vw_with_audi_in_description(self):
+        """VW-пост де в описі є слово Audi — НЕ повинен проходити фільтр Audi."""
+        item = self._make_item(
+            "Volkswagen",
+            "Volkswagen Passat B8 2019",
+            "Стан як новий, краще за Audi A6. Торг.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Audi", "sources": ["telegram"]})
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
+    def test_audi_search_rejects_vw_with_audi_model_in_description(self):
+        """VW-пост де в описі є «Audi A4» — НЕ повинен проходити фільтр Audi A4."""
+        item = self._make_item(
+            "Volkswagen",
+            "Volkswagen Passat 2.0 TDI 2018",
+            "Ціна нижча ніж Audi A4. Торг.",
+        )
+        filters = SearchFilters.model_validate({
+            "brand": "Audi", "model": "A4", "sources": ["telegram"],
+        })
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
+    def test_zeekr_search_rejects_byd_with_zeekr_in_description(self):
+        """BYD-пост де в описі є Zeekr — НЕ повинен проходити фільтр Zeekr."""
+        item = self._make_item(
+            "BYD",
+            "BYD Atto 3 2023",
+            "Альтернатива до Zeekr 001, але дешевше.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Zeekr", "sources": ["telegram"]})
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
+    def test_real_audi_listing_still_matches(self):
+        """Справжній Audi-пост проходить фільтр Audi."""
+        item = self._make_item(
+            "Audi",
+            "Audi A6 3.0 TDI 2017",
+            "Продаю ауді а6, стан відмінний.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Audi", "sources": ["telegram"]})
+        self.assertTrue(listing_out_matches_filters(item, filters))
+
+    def test_real_zeekr_listing_still_matches(self):
+        """Справжній Zeekr-пост проходить фільтр Zeekr."""
+        item = self._make_item(
+            "Zeekr",
+            "Zeekr 001 2023 електро",
+            "Продаю Zeekr 001 у відмінному стані.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Zeekr", "sources": ["telegram"]})
+        self.assertTrue(listing_out_matches_filters(item, filters))
+
+    def test_empty_brand_listing_matches_via_text(self):
+        """Лістинг без brand (brand='') матчиться по тексту заголовка."""
+        item = self._make_item(
+            "",
+            "Zeekr 001 2023",
+            "Продаю зікр 001, пробіг 15000 км.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Zeekr", "sources": ["telegram"]})
+        self.assertTrue(listing_out_matches_filters(item, filters))
+
+    def test_vw_listing_still_matches_vw_filter(self):
+        """VW-пост проходить фільтр Volkswagen."""
+        item = self._make_item(
+            "Volkswagen",
+            "Volkswagen Golf 7 2015",
+            "Продаю фольксваген гольф у чудовому стані.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Volkswagen", "sources": ["telegram"]})
+        self.assertTrue(listing_out_matches_filters(item, filters))
+
+
 if __name__ == "__main__":
     unittest.main()

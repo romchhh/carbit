@@ -294,13 +294,29 @@ async def _telegram_listings_matching_filters(
     )
     matched: list[ListingOut] = []
 
+    to_enqueue: list[str] = []
     for listing in rows.all():
         item = listing_to_out(listing)
         if listing_out_matches_filters(item, filters):
             matched.append(item)
+            if not item.images:
+                to_enqueue.append(listing.id)
+
     from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
 
-    return dedupe_telegram_posts_in_pool(matched)
+    deduped = dedupe_telegram_posts_in_pool(matched)
+
+    # Proactively enqueue photo downloads so they are ready by the time user sees results
+    if to_enqueue:
+        try:
+            from app.services.telegram_channels.lazy_photos import enqueue_listing_photos
+
+            for lid in to_enqueue[:60]:
+                enqueue_listing_photos(lid, priority=1)
+        except Exception:
+            logger.exception("Failed to enqueue TG photos during search")
+
+    return deduped
 
 
 async def search_telegram_listings(
@@ -359,6 +375,8 @@ async def search_telegram_listings(
                 logger.exception("Failed to schedule Telegram deep refresh")
 
     matched = sort_listings(matched, sort_by)
+    # Лістинги з фото — вище (не порушуючи основне сортування)
+    matched = [m for m in matched if m.images] + [m for m in matched if not m.images]
     total = len(matched)
     start = (page - 1) * per_page
     page_items = matched[start : start + per_page]

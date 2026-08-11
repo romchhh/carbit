@@ -36,6 +36,9 @@ TELEGRAM_POOL_TIMEOUT_SECONDS = 12.0
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
 _SOURCE_BLEND_ORDER = {"olx": 0, "imperiya": 1, "telegram": 2, "auto_ria": 3}
 _DATE_SORT_KEYS = frozenset({"newest", "published_desc"})
+# Максимум AR IDs для model_post_filter гідрації (захист від 500 API-запитів).
+# AR IDs вже відсортовані від нових до старих, тому перші N найрелевантніші.
+AR_MODEL_POST_FILTER_CAP = 150
 
 logger = logging.getLogger(__name__)
 
@@ -1041,6 +1044,13 @@ async def search_listings(
 # ---------------------------------------------------------------------------
 
 
+def _sort_telegram_photos_first(items: list[ListingOut]) -> list[ListingOut]:
+    """Переміщує TG-оголошення з фото вище (в межах тих самих результатів сортування)."""
+    with_photo = [item for item in items if item.images]
+    without_photo = [item for item in items if not item.images]
+    return with_photo + without_photo
+
+
 def _filter_listings_by_brand_model(
     items: list[ListingOut],
     filters: SearchFilters,
@@ -1194,11 +1204,13 @@ async def _build_vin_aware_slots(
     except (asyncio.TimeoutError, Exception):
         logger.warning("VIN-aware pool: AR hydrate failed, falling back to fair blend")
         olx_only = [i for i in ot_items if (i.source or "").lower() == "olx"]
+        imperiya_only = [i for i in ot_items if (i.source or "").lower() == "imperiya"]
         tg_only = [i for i in ot_items if (i.source or "").lower() == "telegram"]
         return _build_fair_blend_slots(
             auto_ria_ids=auto_ria_ids,
             olx_items=olx_only,
             telegram_items=tg_only,
+            imperiya_items=imperiya_only,
             limit=limit,
             sort_by=sort_by,
         )
@@ -1274,12 +1286,8 @@ def _build_fair_blend_slots(
             )
         )
     if telegram_items:
-        batches.append(
-            (
-                "telegram",
-                [_listing_to_slot(item) for item in sort_listings(telegram_items, sort_by)],
-            )
-        )
+        sorted_tg = _sort_telegram_photos_first(sort_listings(telegram_items, sort_by))
+        batches.append(("telegram", [_listing_to_slot(item) for item in sorted_tg]))
     if auto_ria_ids:
         batches.append(("auto_ria", _make_ar_slots(auto_ria_ids)))
 
@@ -1525,11 +1533,16 @@ async def build_live_search_pool(
             logger.exception("model_post_filter check failed in pool build")
 
     if model_post_filter and auto_ria_ids:
-        auto_ria_ids = await filter_auto_ria_ids_by_filters(auto_ria_ids, filters)
+        # Обмежуємо кількість IDs що гідратуються — AR API вже сортує від нових до старих,
+        # тому перші AR_MODEL_POST_FILTER_CAP найрелевантніші.
+        capped = auto_ria_ids[:AR_MODEL_POST_FILTER_CAP]
+        auto_ria_ids = await filter_auto_ria_ids_by_filters(capped, filters)
 
     olx_filtered = _filter_listings_by_brand_model(list(olx_result.items), filters)
     imperiya_filtered = _filter_listings_by_brand_model(list(imperiya_result.items), filters)
-    telegram_filtered = _filter_listings_by_brand_model(list(telegram_result.items), filters)
+    telegram_filtered = _sort_telegram_photos_first(
+        _filter_listings_by_brand_model(list(telegram_result.items), filters)
+    )
 
     # VIN-дублі між OLX / Імперія / Telegram — в одному пулі.
     ot_merged = mark_duplicates_in_pool(
@@ -1545,10 +1558,23 @@ async def build_live_search_pool(
     imperiya_sorted = [item for item in ot_merged if (item.source or "").lower() == "imperiya"]
     telegram_sorted = [item for item in ot_merged if (item.source or "").lower() == "telegram"]
 
-    if auto_ria_ids and (olx_sorted or imperiya_sorted or telegram_sorted):
+    if auto_ria_ids and (olx_sorted or imperiya_sorted or telegram_sorted) and sort_by not in _DATE_SORT_KEYS:
+        # VIN-aware гідрація потрібна лише для сортувань за ціною/пробігом,
+        # де треба знати точні значення AR-оголошень для глобального rank.
+        # Для «newest»/«published_desc» — AR API вже повертає IDs у порядку дати;
+        # fair blend зберігає цей порядок і уникає 200 AR API-запитів на кожен пошук.
         slots = await _build_vin_aware_slots(
             auto_ria_ids=auto_ria_ids,
             ot_items=ot_merged,
+            limit=POOL_LIMIT,
+            sort_by=sort_by,
+        )
+    elif auto_ria_ids and (olx_sorted or imperiya_sorted or telegram_sorted) and sort_by in _DATE_SORT_KEYS:
+        slots = _build_fair_blend_slots(
+            auto_ria_ids=auto_ria_ids,
+            olx_items=olx_sorted,
+            telegram_items=telegram_sorted,
+            imperiya_items=imperiya_sorted,
             limit=POOL_LIMIT,
             sort_by=sort_by,
         )

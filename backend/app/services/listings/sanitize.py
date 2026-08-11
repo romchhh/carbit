@@ -151,6 +151,7 @@ _LIST_SOURCE_KEEP = frozenset(
         "price_currency",
         "channel",
         "phone",
+        "contact_username",
     }
 )
 

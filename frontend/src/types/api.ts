@@ -90,6 +90,10 @@ export interface Listing {
   images: string[];
   url: string;
   seller_type: string;
+  seller_name?: string | null;
+  seller_phone?: string | null;
+  seller_telegram?: string | null;
+  seller_url?: string | null;
   vin?: string | null;
   vin_checked?: boolean | null;
   vin_check_url?: string | null;

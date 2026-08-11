@@ -36,63 +36,27 @@ def effective_regions(filters: SearchFilters) -> list[str]:
 
 
 def sync_multi_search_filters(filters: SearchFilters) -> SearchFilters:
-    """Normalize singular + plural brand/model/region fields."""
-    brands = effective_brands(filters)
-    models = effective_models(filters)
-    regions = effective_regions(filters)
+    """Normalize singular + plural brand/model/region fields (single value only)."""
+    brand = (effective_brands(filters)[:1] or [None])[0]
+    model = (effective_models(filters)[:1] or [None])[0]
+    region = (effective_regions(filters)[:1] or [None])[0]
 
-    update: dict = {
-        "brands": brands or None,
-        "models": models or None,
-        "regions": regions or None,
-        "brand": brands[0] if brands else None,
-        "model": models[0] if models else None,
-    }
-    if len(regions) == 1:
-        update["region"] = regions[0]
-    elif regions:
-        update["region"] = None
-    else:
-        update["region"] = filters.region if filters.region else None
-
-    return filters.model_copy(update=update)
+    return filters.model_copy(
+        update={
+            "brands": [brand] if brand else None,
+            "models": [model] if model else None,
+            "regions": [region] if region else None,
+            "brand": brand,
+            "model": model,
+            "region": region,
+        }
+    )
 
 
 def expand_filters_for_api_fetch(filters: SearchFilters) -> list[SearchFilters]:
-    """
-    Fan-out by brand for live API calls (AUTO.RIA / OLX).
-    Multiple models/regions are handled via post-filtering.
-    """
-    synced = sync_multi_search_filters(filters)
-    brands = effective_brands(synced)
-    models = effective_models(synced)
-    regions = effective_regions(synced)
-
-    if len(brands) <= 1:
-        variants = [synced.model_copy(deep=True)]
-    else:
-        variants = []
-        for brand in brands[:MAX_BRAND_FANOUT]:
-            v = synced.model_copy(deep=True)
-            v.brand = brand
-            v.brands = [brand]
-            variants.append(v)
-
-    out: list[SearchFilters] = []
-    for variant in variants:
-        v = variant.model_copy(deep=True)
-        if len(models) > 1:
-            v.model = None
-            v.models = models
-        elif len(models) == 1:
-            v.model = models[0]
-            v.models = models
-        if len(regions) > 1:
-            v.region = None
-            v.regions = regions
-        out.append(v)
-    return out
+    """One variant per search — multi-brand fan-out disabled."""
+    return [sync_multi_search_filters(filters).model_copy(deep=True)]
 
 
 def needs_api_fanout(filters: SearchFilters) -> bool:
-    return len(effective_brands(filters)) > 1
+    return False

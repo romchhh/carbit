@@ -30,7 +30,8 @@ _TG_TEXT_NOISE_RE = re.compile(
 _SOURCE_RANK = {
     "auto_ria": 0,
     "olx": 1,
-    "telegram": 2,
+    "imperiya": 2,
+    "telegram": 3,
 }
 
 

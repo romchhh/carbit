@@ -22,6 +22,16 @@ function listingNeedsPhotoHydration(listing: Listing): boolean {
   return !(listing.images?.length ?? 0);
 }
 
+/**
+ * Retry schedule: 300ms → 800ms → 1.5s → 3s → 5s (× remaining attempts).
+ * Fast on the first few tries (photo downloads quickly), slow after.
+ */
+const RETRY_INTERVALS = [300, 800, 1500, 3000, 5000];
+
+function retryDelayMs(attempt: number): number {
+  return RETRY_INTERVALS[Math.min(attempt, RETRY_INTERVALS.length - 1)];
+}
+
 /** Підвантажує мінімум 1 фото для Telegram-карток у каталозі (лише видимі). */
 export function useListingPhotoHydration(listing: Listing) {
   const rootRef = useRef<HTMLElement | null>(null);
@@ -29,6 +39,7 @@ export function useListingPhotoHydration(listing: Listing) {
   const [images, setImages] = useState<string[]>(
     Array.isArray(listing.images) ? listing.images : [],
   );
+  const [photosPending, setPhotosPending] = useState(false);
 
   useEffect(() => {
     setImages(Array.isArray(listing.images) ? listing.images : []);
@@ -37,6 +48,7 @@ export function useListingPhotoHydration(listing: Listing) {
   useEffect(() => {
     if (listing.images?.length) {
       setImages(listing.images);
+      setPhotosPending(false);
     }
   }, [listing.id, listing.images]);
 
@@ -53,7 +65,7 @@ export function useListingPhotoHydration(listing: Listing) {
           observer.disconnect();
         }
       },
-      { rootMargin: "120px" },
+      { rootMargin: "200px" },
     );
     observer.observe(node);
     return () => observer.disconnect();
@@ -66,6 +78,8 @@ export function useListingPhotoHydration(listing: Listing) {
     let attempts = 0;
     let timer: number | undefined;
 
+    setPhotosPending(true);
+
     const poll = async () => {
       try {
         const fresh =
@@ -75,6 +89,7 @@ export function useListingPhotoHydration(listing: Listing) {
         if (cancelled) return;
         if (fresh.images?.length) {
           setImages(fresh.images);
+          setPhotosPending(false);
           return;
         }
       } catch {
@@ -82,8 +97,10 @@ export function useListingPhotoHydration(listing: Listing) {
       }
 
       attempts += 1;
-      if (!cancelled && attempts < 40) {
-        timer = window.setTimeout(poll, 2000);
+      if (!cancelled && attempts < 25) {
+        timer = window.setTimeout(poll, retryDelayMs(attempts));
+      } else if (!cancelled) {
+        setPhotosPending(false);
       }
     };
 
@@ -94,5 +111,5 @@ export function useListingPhotoHydration(listing: Listing) {
     };
   }, [listing.id, listing.source, listing.images?.length, visible]);
 
-  return { images, rootRef };
+  return { images, rootRef, photosPending };
 }

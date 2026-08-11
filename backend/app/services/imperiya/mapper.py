@@ -14,6 +14,7 @@ from app.services.imperiya.catalog import (
 )
 from app.services.imperiya.client import ImperiyaClient
 from app.services.imperiya.constants import IMPERIYA_MAX_LIMIT, SORT_TO_IMPERIYA
+from app.services.listings.seller_contact import apply_seller_contact_fields, seller_contact_from_imperiya
 from app.services.listings.engine_volume import normalize_engine_litres, parse_engine_volume_from_text
 
 
@@ -91,7 +92,8 @@ def ad_to_listing(ad: dict[str, Any], *, currency: str = "USD") -> ListingOut:
     dealer = ad.get("dealer") if isinstance(ad.get("dealer"), dict) else None
     seller_type = "dealer" if dealer and dealer.get("name") else "private"
 
-    return ListingOut(
+    return apply_seller_contact_fields(
+        ListingOut(
         id=f"imperiya_{ad_id}",
         source="imperiya",
         title=title,
@@ -115,6 +117,8 @@ def ad_to_listing(ad: dict[str, Any], *, currency: str = "USD") -> ListingOut:
         is_duplicate=False,
         published_at=_parse_datetime(ad.get("createdAt")),
         found_at=now_kyiv(),
+        ),
+        seller_contact_from_imperiya(ad),
     )
 
 

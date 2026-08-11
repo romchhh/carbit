@@ -53,6 +53,10 @@ def listing_to_out(listing: Listing) -> ListingOut:
         images=images,
         url=url or "",
         seller_type=listing.seller_type or "private",
+        seller_name=getattr(listing, "seller_name", None),
+        seller_phone=getattr(listing, "seller_phone", None),
+        seller_telegram=getattr(listing, "seller_telegram", None),
+        seller_url=getattr(listing, "seller_url", None),
         vin=(vin or None),
         vin_checked=None,
         vin_check_url=None,
@@ -66,6 +70,9 @@ def listing_to_out(listing: Listing) -> ListingOut:
     )
     from app.services.listings.engine_volume import extract_listing_engine_volume
 
+    from app.services.listings.seller_contact import enrich_listing_seller_contact
+
+    out = enrich_listing_seller_contact(out)
     volume = extract_listing_engine_volume(out)
     if volume is not None:
         return out.model_copy(update={"engine_volume_l": volume})

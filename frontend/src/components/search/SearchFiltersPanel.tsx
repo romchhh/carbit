@@ -7,7 +7,6 @@ import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
 import { VoiceSearchCabinetOnlyOverlay } from "@/components/search/VoiceSearchCabinetOnlyOverlay";
 import { VoiceSearchOverlay } from "@/components/search/VoiceSearchOverlay";
-import { FilterSelectionChips } from "@/components/search/FilterSelectionChips";
 import { VoiceSearchTrigger } from "@/components/search/VoiceSearchTrigger";
 import {
   SearchRateLimitNotice,
@@ -44,20 +43,7 @@ import {
 import type { SearchFreshness } from "@/lib/search-preview";
 import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { applyVoiceSearchFilters } from "@/lib/search-filters-api";
-import {
-  clearBrands,
-  clearModels,
-  clearRegions,
-  effectiveBrands,
-  effectiveModels,
-  effectiveRegions,
-  formatMultiSelectionLabel,
-  getModelsForBrands,
-  syncSearchFilterArrays,
-  toggleBrand,
-  toggleModel,
-  toggleRegion,
-} from "@/lib/search-filter-multi";
+import { syncSearchFilterArrays } from "@/lib/search-filter-multi";
 import { isMarketDiscoveryResult } from "@/lib/voice-search-summary";
 import type { AiParseSearchResult } from "@/lib/api";
 
@@ -125,10 +111,6 @@ export function SearchFiltersPanel({
   const [voiceHint, setVoiceHint] = useState<string | null>(null);
   const searchActionsRef = useRef<HTMLDivElement>(null);
   const syncedFilters = syncSearchFilterArrays(filters);
-  const selectedBrands = effectiveBrands(syncedFilters);
-  const selectedModels = effectiveModels(syncedFilters);
-  const selectedRegions = effectiveRegions(syncedFilters);
-  const modelOptions = getModelsForBrands(selectedBrands);
   const rateLimited = isSearchRateLimitMessage(searchError);
 
   const applyFilters = (next: SearchFilterState) => {
@@ -183,7 +165,7 @@ export function SearchFiltersPanel({
       priceFrom: prices.from,
       priceTo: prices.to,
     };
-    onChange(nextFilters);
+    onChange(syncSearchFilterArrays(nextFilters));
 
     if (result.sort) {
       onSortChange?.(result.sort);
@@ -205,25 +187,6 @@ export function SearchFiltersPanel({
       );
     }
   };
-
-  const selectionChips = [
-    ...selectedBrands.map(brand => ({
-      key: `brand-${brand}`,
-      label: brand,
-      iconBrand: brand,
-      onRemove: () => update(toggleBrand(syncedFilters, brand)),
-    })),
-    ...selectedModels.map(model => ({
-      key: `model-${model}`,
-      label: model,
-      onRemove: () => update(toggleModel(syncedFilters, model)),
-    })),
-    ...selectedRegions.map(region => ({
-      key: `region-${region}`,
-      label: region.replace(/^м\.\s*/i, "м. "),
-      onRemove: () => update(toggleRegion(syncedFilters, region)),
-    })),
-  ];
 
   return (
     <>
@@ -285,56 +248,45 @@ export function SearchFiltersPanel({
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <FilterOptionsPopover
                 label="Марка"
-                value=""
-                values={selectedBrands}
+                value={syncedFilters.brand}
                 options={BRANDS}
-                multiple
-                onChange={() => {}}
-                onToggle={brand => update(toggleBrand(syncedFilters, brand))}
-                onClearAll={() => applyFilters(clearBrands(syncedFilters))}
+                onChange={brand =>
+                  applyFilters({
+                    ...syncedFilters,
+                    brand,
+                    model: "",
+                    brands: brand ? [brand] : [],
+                    models: [],
+                  })
+                }
                 searchable
                 emptyLabel="Будь-яка марка"
                 getOptionIcon={getBrandIconUrl}
                 filterOptionsFn={(opts, q) => filterBrandOptions(opts, q)}
                 resolveQueryFn={q => resolveBrandQuery(q, BRANDS)}
-                formatMultiDisplay={values =>
-                  formatMultiSelectionLabel(values, "Будь-яка марка", values[0])
-                }
               />
               <FilterOptionsPopover
                 label="Модель"
-                value=""
-                values={selectedModels}
-                options={modelOptions}
-                multiple
-                onChange={() => {}}
-                onToggle={model => update(toggleModel(syncedFilters, model))}
-                onClearAll={() => applyFilters(clearModels(syncedFilters))}
+                value={syncedFilters.model}
+                options={syncedFilters.brand ? getModelsForBrand(syncedFilters.brand) : []}
+                onChange={model =>
+                  applyFilters({
+                    ...syncedFilters,
+                    model,
+                    models: model ? [model] : [],
+                  })
+                }
                 searchable
                 emptyLabel="Будь-яка модель"
-                disabled={selectedBrands.length === 0}
-                filterOptionsFn={(opts, q) => {
-                  if (selectedBrands.length === 1) {
-                    return filterModelOptions(selectedBrands[0], opts, q);
-                  }
-                  const query = q.trim().toLowerCase();
-                  if (!query) return opts;
-                  return opts.filter(o => o.toLowerCase().includes(query));
-                }}
-                resolveQueryFn={q => {
-                  if (selectedBrands.length === 1) {
-                    return resolveModelQuery(selectedBrands[0], q, modelOptions);
-                  }
-                  const match = modelOptions.find(o => o.toLowerCase() === q.trim().toLowerCase());
-                  return match ?? null;
-                }}
-                formatMultiDisplay={values =>
-                  formatMultiSelectionLabel(values, "Будь-яка модель", values[0])
+                disabled={!syncedFilters.brand}
+                filterOptionsFn={(opts, q) =>
+                  filterModelOptions(syncedFilters.brand, opts, q)
+                }
+                resolveQueryFn={q =>
+                  resolveModelQuery(syncedFilters.brand, q, getModelsForBrand(syncedFilters.brand))
                 }
               />
             </div>
-
-            <FilterSelectionChips chips={selectionChips} />
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <FilterRangePopover
@@ -378,18 +330,17 @@ export function SearchFiltersPanel({
 
             <FilterOptionsPopover
               label="Регіон"
-              value=""
-              values={selectedRegions}
+              value={syncedFilters.region === "Вся Україна" ? "" : syncedFilters.region}
               options={[...UKRAINE_REGIONS.filter(r => r !== "Вся Україна")]}
-              multiple
-              onChange={() => {}}
-              onToggle={region => update(toggleRegion(syncedFilters, region))}
-              onClearAll={() => applyFilters(clearRegions(syncedFilters))}
+              onChange={region =>
+                applyFilters({
+                  ...syncedFilters,
+                  region: region || "Вся Україна",
+                  regions: region ? [region] : [],
+                })
+              }
               searchable
               emptyLabel="Вся Україна"
-              formatMultiDisplay={values =>
-                formatMultiSelectionLabel(values, "Вся Україна", values[0])
-              }
             />
           </div>
 

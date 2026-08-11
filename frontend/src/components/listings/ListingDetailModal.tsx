@@ -9,6 +9,7 @@ import { IconGlobe, IconHeart, IconX, IconArrowLeft, IconArrowRight } from "@/co
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
+import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks, listingSourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
@@ -21,6 +22,7 @@ import {
   listingSourceSiteName,
 } from "@/lib/listing-source";
 import { hasVinCheck } from "@/lib/vin-check";
+import { hasSellerContact } from "@/lib/seller-contact";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import {
   formatEngineVolume,
@@ -624,6 +626,8 @@ export function ListingDetailModal({
                 ))}
               </div>
             )}
+
+            {hasSellerContact(listing) && <SellerContactBlock listing={listing} compact />}
 
             {highlights.length > 0 && (
               <div className="flex flex-wrap gap-1.5 sm:hidden">

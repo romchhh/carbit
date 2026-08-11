@@ -293,6 +293,10 @@ function slimListingForSeed(listing: Listing): Record<string, unknown> {
     images: Array.isArray(listing.images) ? listing.images.slice(0, 8) : [],
     url: listing.url,
     seller_type: listing.seller_type || "private",
+    seller_name: listing.seller_name ?? null,
+    seller_phone: listing.seller_phone ?? null,
+    seller_telegram: listing.seller_telegram ?? null,
+    seller_url: listing.seller_url ?? null,
     vin: listing.vin ?? null,
     source_data: null,
     price_history: [],
@@ -331,14 +335,16 @@ export const listingSearch = {
     perPage = 20,
     sortBy: SortOption = "newest",
     mode: AutoRiaSearchMode = "preview",
+    signal?: AbortSignal,
   ) =>
     cachedAutoRiaSearch(
       { filters, page, perPage, sortBy, mode },
       () =>
         request<PaginatedListings>(
           `/searches/live?page=${page}&per_page=${perPage}&sort_by=${sortBy}&mode=${mode}`,
-          { method: "POST", body: JSON.stringify(filters) },
+          { method: "POST", body: JSON.stringify(filters), signal },
         ),
+      signal,
     ),
 };
 

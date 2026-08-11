@@ -9,6 +9,10 @@ from app.core.config import settings
 from app.core.text import norm_text
 from app.core.timezone import as_kyiv, now_kyiv
 from app.schemas.schemas import ListingOut, SearchFilters
+from app.services.listings.seller_contact import (
+    apply_seller_contact_fields,
+    seller_contact_from_telegram,
+)
 from app.services.search.brand_model_keywords import (
     text_matches_brand_filter,
     text_matches_model_filter,
@@ -206,7 +210,8 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
     message_ids = list(listing.group_message_ids or []) or [listing.message_id]
     photos_pending = not bool(images)
 
-    return ListingOut(
+    return apply_seller_contact_fields(
+        ListingOut(
         id=telegram_listing_id(listing.channel, listing.message_id),
         source="telegram",
         title=_build_title(listing),
@@ -252,6 +257,12 @@ def car_listing_to_listing_out(listing: Any) -> ListingOut:
         is_duplicate=False,
         published_at=posted_at,
         found_at=now_kyiv(),
+        ),
+        seller_contact_from_telegram(
+            phone=listing.phone,
+            contact_username=listing.contact_username,
+            description=listing.raw_text,
+        ),
     )
 
 
@@ -271,28 +282,42 @@ def _listing_matches_single_brand(
 
         filter_slug = resolve_olx_brand_slug(brand)
         item_slug = resolve_olx_brand_slug(item_brand_raw)
+        if filter_slug and item_slug and filter_slug == item_slug:
+            # Бренди збігаються за slug — ок.
+            return True
+
         if filter_slug and item_slug and filter_slug != item_slug:
-            text_confirms_brand = text_matches_brand_filter(
-                haystack, brand, model=model_hint or ""
+            # Обидва бренди розпізнані і різні.
+            # Перевіряємо лише ЗАГОЛОВОК (не опис) — щоб уникнути хибних матчів:
+            # «Zeekr» в описі Tesla або «Audi» в описі VW не є підставою для матчу.
+            from app.services.search.brand_model_keywords import (
+                _allows_distinctive_model_without_brand,
+                _brand_distinctive_model_in_text,
             )
-            if not text_confirms_brand:
-                from app.services.search.brand_model_keywords import (
-                    _allows_distinctive_model_without_brand,
-                )
 
-                model_str = (model_hint or "").strip()
-                distinctive = bool(
-                    model_str
-                    and _allows_distinctive_model_without_brand(brand, model_str)
-                    and text_matches_model_filter(
-                        f"{item.model} {item.title} {item.description or ''}",
-                        model_str,
-                        brand=brand,
-                    )
-                )
-                if not distinctive:
-                    return False
+            title_only = f"{item.brand} {item.title}"
 
+            # Бренд прямо вказаний у заголовку (напр. «MINI COUNTRYMAN» у Tesla-пості — нема).
+            if text_matches_brand_filter(title_only, brand):
+                return True
+
+            # Заголовок містить унікальну модель цього бренду
+            # (напр. «Countryman» → Mini, навіть якщо brand="BMW").
+            if _brand_distinctive_model_in_text(item.title, brand):
+                return True
+
+            # Зазначена модель унікально ідентифікує бренд і знайдена у ЗАГОЛОВКУ.
+            # Спеціально НЕ перевіряємо description, щоб уникнути хибного матчу:
+            # «Audi A4» в описі VW-оголошення — порівняння, а не сама машина.
+            model_str = (model_hint or "").strip()
+            if model_str and _allows_distinctive_model_without_brand(brand, model_str):
+                title_text = f"{item.model} {item.title}"
+                if text_matches_model_filter(title_text, model_str, brand=brand):
+                    return True
+
+            return False
+
+    # item.brand порожній або бренд не в каталозі — перевіряємо повний текст.
     if not text_matches_brand_filter(haystack, brand, model=model_hint or ""):
         item_brand = norm_text(item.brand)
         brand_n = norm_text(brand)

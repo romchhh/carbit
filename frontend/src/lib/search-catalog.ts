@@ -24,11 +24,11 @@ export type SearchFilterState = {
   region: string;
   brand: string;
   model: string;
-  /** Кілька марок (OR). */
+  /** @deprecated лише для сумісності API — завжди 0–1 значення */
   brands: string[];
-  /** Кілька моделей (OR). */
+  /** @deprecated лише для сумісності API — завжди 0–1 значення */
   models: string[];
-  /** Кілька регіонів (OR). Порожньо = вся Україна. */
+  /** @deprecated лише для сумісності API — завжди 0–1 значення */
   regions: string[];
   yearFrom: string;
   yearTo: string;

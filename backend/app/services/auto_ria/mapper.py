@@ -10,6 +10,11 @@ from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.auto_ria.catalog import resolve_mark_id, resolve_model_id
 from app.services.auto_ria.client import AutoRiaClient
 from app.services.auto_ria.details import extract_image_urls, sanitize_source_data
+from app.services.listings.seller_contact import (
+    apply_seller_contact_fields,
+    seller_contact_from_auto_ria,
+    seller_contact_from_auto_ria_salon,
+)
 from app.services.auto_ria.constants import (
     AUTO_RIA_SITE_URL,
     CURRENCY_UAH,
@@ -401,7 +406,8 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
 
     description = str(auto_data.get("description") or info.get("infoBarText") or "").strip() or None
 
-    return ListingOut(
+    return apply_seller_contact_fields(
+        ListingOut(
         id=f"auto_ria_{auto_id}",
         source="auto_ria",
         title=title,
@@ -427,6 +433,8 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
         is_duplicate=False,
         published_at=_parse_datetime(info.get("addDate")),
         found_at=now_kyiv(),
+        ),
+        seller_contact_from_auto_ria(info),
     )
 
 
@@ -462,7 +470,8 @@ def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
     url = str(info.get("linkAuto") or f"https://auto.ria.com/newauto/auto-{auto_id}.html")
     description = str(info.get("note") or "").strip() or None
 
-    return ListingOut(
+    return apply_seller_contact_fields(
+        ListingOut(
         id=f"new_auto_ria_{auto_id}",
         source="auto_ria",
         title=title,
@@ -487,6 +496,8 @@ def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
         is_duplicate=False,
         published_at=_parse_datetime(info.get("updatedDate")),
         found_at=now_kyiv(),
+        ),
+        seller_contact_from_auto_ria_salon(salon if isinstance(salon, dict) else {}),
     )
 
 

@@ -29,7 +29,7 @@ def test_ad_to_listing_maps_core_fields():
             "city": "Одеса",
             "region": "Одеська",
             "createdAt": "2026-08-10T15:24:16.713Z",
-            "dealer": {"name": "Стиль-Авто"},
+            "dealer": {"name": "Стиль-Авто", "slug": "styl-avto"},
         },
         currency="USD",
     )
@@ -41,4 +41,6 @@ def test_ad_to_listing_maps_core_fields():
     assert listing.price == 13800
     assert listing.currency == "USD"
     assert listing.seller_type == "dealer"
+    assert listing.seller_name == "Стиль-Авто"
+    assert listing.seller_url == "https://imperiya-auto.com.ua/dealer/styl-avto"
     assert listing.images == ["https://cdn.example/medium.avif"]

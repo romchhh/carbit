@@ -101,6 +101,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
    */
   const lastApiPageRef = useRef(0);
   const lastSyncedPreferredCurrency = useRef<string | null>(null);
+  // AbortController для поточного active-пошуку. При новому запиті старий скасовується,
+  // щоб звільнити з'єднання і backend-слоти (не чекати відповідь, яка вже не потрібна).
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -141,6 +144,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       apiSort: SortOption,
       nextFreshness: SearchFreshness,
       apiPage: number,
+      signal?: AbortSignal,
     ): Promise<PageResult> => {
       const data = await listingSearch.search(
         buildRequestFilters(nextFilters, nextFreshness),
@@ -148,6 +152,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         SEARCH_FIRST_BATCH,
         apiSort,
         "preview",
+        signal,
       );
       return {
         items: data.items,
@@ -281,6 +286,12 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       nextSort: SortOption,
       nextFreshness: SearchFreshness,
     ) => {
+      // Скасовуємо попередній пошук, щоб звільнити backend-слоти і з'єднання.
+      searchAbortRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+      const signal = controller.signal;
+
       const gen = ++searchGen.current;
       setSearching(true);
       setError(null);
@@ -294,7 +305,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
 
       try {
         void fx.rates();
-        const first = await searchSlice(nextFilters, nextSort, nextFreshness, 1);
+        const first = await searchSlice(nextFilters, nextSort, nextFreshness, 1, signal);
         if (gen !== searchGen.current) return;
         lastApiPageRef.current = 1;
 
@@ -315,7 +326,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         });
 
         if (first.total > first.items.length) {
-          const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2);
+          const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2, signal);
           if (gen !== searchGen.current) return;
           lastApiPageRef.current = 2;
           // Дописуємо стор. 2 у пул — без розширення display (лише preload).
@@ -327,6 +338,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
 
         void hydrateFullPool(gen, nextFilters, nextFreshness, first.total);
       } catch (err) {
+        // AbortError — новий пошук вже запущений; мовчки ігноруємо.
+        if (err instanceof DOMException && err.name === "AbortError") return;
         if (gen !== searchGen.current) return;
         fullPoolRef.current = [];
         displayPoolRef.current = [];

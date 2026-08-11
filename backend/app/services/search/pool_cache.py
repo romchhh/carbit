@@ -118,11 +118,12 @@ async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
     result: dict[str, ListingOut] = {}
     to_fetch: list[str] = []
 
-    # Перевіряємо Redis per-item cache
+    # Читаємо весь батч за один MGET замість N окремих GET
     try:
         redis = await get_redis()
-        for aid in ids:
-            raw = await redis.get(f"{_AR_INFO_PREFIX}{aid}")
+        keys = [f"{_AR_INFO_PREFIX}{aid}" for aid in ids]
+        raws = await redis.mget(*keys)
+        for aid, raw in zip(ids, raws):
             if raw:
                 try:
                     result[aid] = ListingOut.model_validate(json.loads(raw))
@@ -152,24 +153,19 @@ async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
 
     fetched = await asyncio.gather(*(fetch_one(aid) for aid in to_fetch))
 
-    # Зберігаємо в кеш
+    # Зберігаємо в кеш через pipeline — один round-trip замість N
+    for aid, listing in fetched:
+        if listing:
+            result[aid] = listing
     try:
         redis = await get_redis()
+        pipe = redis.pipeline(transaction=False)
         for aid, listing in fetched:
             if listing:
-                result[aid] = listing
-                try:
-                    await redis.setex(
-                        f"{_AR_INFO_PREFIX}{aid}",
-                        _AR_INFO_TTL_SECONDS,
-                        listing.model_dump_json(),
-                    )
-                except Exception:
-                    pass
+                pipe.setex(f"{_AR_INFO_PREFIX}{aid}", _AR_INFO_TTL_SECONDS, listing.model_dump_json())
+        await pipe.execute()
     except Exception:
-        for aid, listing in fetched:
-            if listing:
-                result[aid] = listing
+        pass
 
     return result
 
@@ -185,10 +181,12 @@ async def _batch_hydrate_new_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
     result: dict[str, ListingOut] = {}
     to_fetch: list[str] = []
 
+    # Читаємо весь батч за один MGET замість N окремих GET
     try:
         redis = await get_redis()
-        for aid in ids:
-            raw = await redis.get(f"{_AR_NEW_INFO_PREFIX}{aid}")
+        keys = [f"{_AR_NEW_INFO_PREFIX}{aid}" for aid in ids]
+        raws = await redis.mget(*keys)
+        for aid, raw in zip(ids, raws):
             if raw:
                 try:
                     result[aid] = ListingOut.model_validate(json.loads(raw))
@@ -217,23 +215,19 @@ async def _batch_hydrate_new_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
 
     fetched = await asyncio.gather(*(fetch_one(aid) for aid in to_fetch))
 
+    # Зберігаємо в кеш через pipeline
+    for aid, listing in fetched:
+        if listing:
+            result[aid] = listing
     try:
         redis = await get_redis()
+        pipe = redis.pipeline(transaction=False)
         for aid, listing in fetched:
             if listing:
-                result[aid] = listing
-                try:
-                    await redis.setex(
-                        f"{_AR_NEW_INFO_PREFIX}{aid}",
-                        _AR_INFO_TTL_SECONDS,
-                        listing.model_dump_json(),
-                    )
-                except Exception:
-                    pass
+                pipe.setex(f"{_AR_NEW_INFO_PREFIX}{aid}", _AR_INFO_TTL_SECONDS, listing.model_dump_json())
+        await pipe.execute()
     except Exception:
-        for aid, listing in fetched:
-            if listing:
-                result[aid] = listing
+        pass
 
     return result
 

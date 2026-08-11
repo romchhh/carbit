@@ -31,7 +31,8 @@ import {
   listingSourceSiteName,
 } from "@/lib/listing-source";
 import { hasVinCheck } from "@/lib/vin-check";
-import { normalizeListingForFavorite } from "@/lib/listing-favorite-payload";
+import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
+import { hasSellerContact } from "@/lib/seller-contact";
 
 export default function ListingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -336,6 +337,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </section>
           )}
 
+          {hasSellerContact(listing) && <SellerContactBlock listing={listing} />}
+
           {!hasAutoRiaDetails && listing.description && (
             <section className="rounded-2xl border border-border/80 bg-white p-4 sm:p-6">
               <h2 className="mb-3 text-[15px] font-bold text-ink">Опис</h2>
@@ -422,6 +425,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               ))}
               {hasVinCheck(listing) && <VinCheckButton listing={listing} size="md" className="w-full" />}
             </div>
+            {hasSellerContact(listing) && <SellerContactBlock listing={listing} compact className="mt-4 shadow-sm" />}
           </div>
         </aside>
       </div>

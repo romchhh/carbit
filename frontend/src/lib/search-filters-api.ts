@@ -131,7 +131,7 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
     mileage_to: mileageTo,
     fuel: synced.fuels.length ? [...synced.fuels] : null,
     transmission: synced.transmissions.length ? [...synced.transmissions] : null,
-    region: regions.length === 1 ? regions[0] : regions.length ? null : synced.region || null,
+    region: synced.region === "Вся Україна" ? null : synced.region || null,
     sources: mapSources(synced.sources),
     category: synced.category !== "all" ? synced.category : null,
     engine_volume_from: parseDecimal(synced.engineVolumeFrom),
@@ -367,22 +367,21 @@ export function fromBackendSearchFilters(
 
   const brandsRaw = Array.isArray(raw.brands) ? raw.brands.map(String).filter(Boolean) : [];
   const brand = String(raw.brand || brandsRaw[0] || "");
-  const brands = brandsRaw.length ? brandsRaw : brand ? [brand] : [];
+  const brands = brand ? [brand] : [];
 
   const modelsRaw = Array.isArray(raw.models) ? raw.models.map(String).filter(Boolean) : [];
   const model = String(raw.model || modelsRaw[0] || "");
-  const models = modelsRaw.length ? modelsRaw : model ? [model] : [];
+  const models = model ? [model] : [];
 
   const regionsRaw = Array.isArray(raw.regions) ? raw.regions.map(String).filter(Boolean) : [];
   const regionLegacy = String(raw.region || "");
-  const regions =
-    regionsRaw.length > 0
-      ? regionsRaw
-      : regionLegacy && regionLegacy !== "Вся Україна"
-        ? [regionLegacy]
-        : [];
   const region =
-    regions.length === 1 ? regions[0] : regions.length ? "" : regionLegacy || "Вся Україна";
+    regionLegacy && regionLegacy !== "Вся Україна"
+      ? regionLegacy
+      : regionsRaw[0] && regionsRaw[0] !== "Вся Україна"
+        ? regionsRaw[0]
+        : "Вся Україна";
+  const regions = region !== "Вся Україна" ? [region] : [];
 
   return {
     ...base,
@@ -537,14 +536,10 @@ export function buildSearchName(filters: SearchFilterState): string {
 
   const parts: string[] = [];
   if (brands.length === 1) parts.push(brands[0]);
-  else if (brands.length > 1) parts.push(`${brands.length} марки`);
   if (models.length === 1) parts.push(models[0]);
-  else if (models.length > 1) parts.push(`${models.length} моделі`);
   if (parts.length === 0) parts.push("Мій пошук");
   if (regions.length === 1) {
     parts.push(regions[0].replace(/^м\.\s*/i, ""));
-  } else if (regions.length > 1) {
-    parts.push(`${regions.length} регіони`);
   }
   return parts.join(" · ");
 }

@@ -28,9 +28,14 @@ function isRetryableSearchError(err: unknown): boolean {
   return err instanceof TypeError;
 }
 
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
 export async function cachedAutoRiaSearch(
   params: SearchParams,
   fetcher: () => Promise<PaginatedListings>,
+  signal?: AbortSignal,
 ): Promise<PaginatedListings> {
   const key = cacheKey(params);
   const now = Date.now();
@@ -38,6 +43,33 @@ export async function cachedAutoRiaSearch(
   const cached = memoryCache.get(key);
   if (cached && now < cached.expires) {
     return cached.data;
+  }
+
+  // Якщо signal вказаний — не входимо в inflight Map, щоб abort одного пошуку
+  // не скасовував паралельний (напр. hydrate попередньої сторінки).
+  if (signal) {
+    signal.throwIfAborted?.();
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const data = await fetcher();
+        // Кешуємо тільки якщо запит не скасований
+        if (!signal.aborted) {
+          memoryCache.set(key, { expires: Date.now() + CACHE_TTL_MS, data });
+        }
+        return data;
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        lastError = err;
+        if (attempt === 0 && isRetryableSearchError(err)) {
+          await new Promise(resolve => setTimeout(resolve, 600));
+          if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError;
   }
 
   const pending = inflight.get(key);

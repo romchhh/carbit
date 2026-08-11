@@ -59,7 +59,7 @@ export function ListingCard({
   const displayCurrency = resolveDisplayCurrency(
     displayCurrencyProp ?? user?.preferred_currency,
   );
-  const { images, rootRef } = useListingPhotoHydration(listing);
+  const { images, rootRef, photosPending } = useListingPhotoHydration(listing);
   const price = Number(listing.price) || 0;
   const priceLabel = formatListingPrice(
     price,
@@ -138,6 +138,11 @@ export function ListingCard({
             decoding="async"
             unoptimized
           />
+        ) : photosPending ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-surface to-border/40">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-muted/50" />
+            <span className="text-[11px] text-muted/70">Завантаження фото…</span>
+          </div>
         ) : (
           <div className="flex h-full items-center justify-center text-[13px] text-muted">
             Без фото
@@ -237,6 +242,11 @@ export function ListingCard({
             decoding="async"
             unoptimized
           />
+        ) : photosPending ? (
+          <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-surface to-border/40">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-muted/50" />
+            <span className="text-[10px] text-muted/60">фото…</span>
+          </div>
         ) : (
           <div className="flex h-full items-center justify-center text-[13px] text-muted">
             Без фото

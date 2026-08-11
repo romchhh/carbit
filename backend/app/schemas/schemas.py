@@ -299,6 +299,10 @@ class ListingOut(BaseModel):
     images: list[str]
     url: str
     seller_type: str
+    seller_name: Optional[str] = None
+    seller_phone: Optional[str] = None
+    seller_telegram: Optional[str] = None
+    seller_url: Optional[str] = None
     engine_volume_l: Optional[float] = None
     vin: Optional[str] = None
     vin_checked: Optional[bool] = None

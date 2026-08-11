@@ -24,16 +24,21 @@ async def enforce_rate_limit(
     detail: str = "Занадто багато спроб. Спробуйте пізніше.",
     code: str | None = None,
 ) -> None:
-    """Increment counter for key; raise 429 when over limit within window."""
+    """Increment counter for key; raise 429 when over limit within window.
+
+    Атомна реалізація: INCR повертає новий лічильник і гарантує відсутність
+    race condition між get+set (кілька конкурентних запитів не можуть обходити ліміт).
+    EXPIRE встановлюється лише при першому INCR (count == 1), щоб вікно не «плавало».
+    """
     redis = await get_redis()
     full_key = f"rate:{key}"
-    raw = await redis.get(full_key)
-    try:
-        count = int(raw) if raw is not None else 0
-    except (TypeError, ValueError):
-        count = 0
 
-    if count >= limit:
+    count = await redis.incr(full_key)
+    if count == 1:
+        # Перший запит у вікні — встановлюємо TTL
+        await redis.expire(full_key, window_seconds)
+
+    if count > limit:
         retry_after = window_seconds
         try:
             ttl = await redis.ttl(full_key)
@@ -55,12 +60,3 @@ async def enforce_rate_limit(
             detail=payload,
             headers={"Retry-After": str(retry_after)},
         )
-
-    count += 1
-    # Не скидаємо вікно на кожному запиті — інакше ліміт «плаває» і ніколи не оновлюється.
-    try:
-        ttl = await redis.ttl(full_key)
-        ttl_seconds = int(ttl) if isinstance(ttl, (int, float)) and int(ttl) > 0 else window_seconds
-    except Exception:
-        ttl_seconds = window_seconds
-    await redis.setex(full_key, ttl_seconds, str(count))
