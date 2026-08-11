@@ -19,6 +19,7 @@ class KVClient(Protocol):
     async def delete(self, key: str) -> None: ...
     async def exists(self, key: str) -> int: ...
     async def ttl(self, key: str) -> int: ...
+    async def incr(self, key: str) -> int: ...
     async def ping(self) -> bool: ...
     async def hincrby(self, key: str, field: str, amount: int = 1) -> int: ...
     async def hgetall(self, key: str) -> dict[str, str]: ...
@@ -103,6 +104,35 @@ class SQLiteKV:
             remaining = int(row[0] - time.time())
             return remaining if remaining > 0 else -2
 
+    def _incr_sync(self, key: str) -> int:
+        with self._connect() as conn:
+            self._purge_expired(conn)
+            row = conn.execute("SELECT value, expires_at FROM kv WHERE key = ?", (key,)).fetchone()
+            now = time.time()
+            if not row:
+                new_value = 1
+                conn.execute(
+                    "INSERT INTO kv(key, value, expires_at) VALUES (?, ?, NULL)",
+                    (key, str(new_value)),
+                )
+                return new_value
+
+            value, expires_at = row
+            if expires_at is not None and expires_at <= now:
+                new_value = 1
+                conn.execute(
+                    "UPDATE kv SET value = ?, expires_at = NULL WHERE key = ?",
+                    (str(new_value), key),
+                )
+                return new_value
+
+            try:
+                new_value = int(value) + 1
+            except (TypeError, ValueError):
+                new_value = 1
+            conn.execute("UPDATE kv SET value = ? WHERE key = ?", (str(new_value), key))
+            return new_value
+
     async def setex(self, key: str, ttl: int, value: str) -> None:
         await to_thread(self._setex_sync, key, ttl, value)
 
@@ -117,6 +147,9 @@ class SQLiteKV:
 
     async def ttl(self, key: str) -> int:
         return await to_thread(self._ttl_sync, key)
+
+    async def incr(self, key: str) -> int:
+        return await to_thread(self._incr_sync, key)
 
     async def ping(self) -> bool:
         try:
@@ -325,6 +358,9 @@ class RedisKV:
 
     async def ttl(self, key: str) -> int:
         return int(await self._client.ttl(key))
+
+    async def incr(self, key: str) -> int:
+        return int(await self._client.incr(key))
 
     async def ping(self) -> bool:
         try:
