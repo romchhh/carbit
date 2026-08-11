@@ -68,5 +68,72 @@ class LazyPhotosEnqueueTests(unittest.TestCase):
         photo.unlink(missing_ok=True)
 
 
+class EnsureTelegramPhotosTests(unittest.IsolatedAsyncioTestCase):
+    async def test_worker_online_skips_inline_telethon(self) -> None:
+        from app.models.models import Listing, Source
+        from app.services.telegram_channels import lazy_photos
+
+        listing = Listing(
+            id="telegram_ua_autobazar_999",
+            source=Source.telegram,
+            title="Test",
+            images=[],
+        )
+        db = unittest.mock.AsyncMock()
+
+        with (
+            patch.object(lazy_photos, "sync_telegram_photos_from_disk", return_value=[]),
+            patch.object(lazy_photos, "listing_needs_photos", return_value=True),
+            patch.object(lazy_photos, "enqueue_listing_photos", return_value=True) as enqueue,
+            patch.object(lazy_photos, "telegram_worker_online", return_value=True),
+            patch.object(lazy_photos, "wait_for_listing_photos", return_value=[]),
+            patch.object(lazy_photos, "attach_photos_to_listing") as attach,
+        ):
+            urls = await lazy_photos.ensure_telegram_listing_photos(db, listing)
+
+        self.assertEqual(urls, [])
+        attach.assert_not_called()
+        self.assertGreaterEqual(enqueue.call_count, 2)
+
+    async def test_worker_offline_uses_inline_telethon(self) -> None:
+        from app.models.models import Listing, Source
+        from app.services.telegram_channels import lazy_photos
+
+        listing = Listing(
+            id="telegram_ua_autobazar_1001",
+            source=Source.telegram,
+            title="Test",
+            images=[],
+        )
+        db = unittest.mock.AsyncMock()
+        expected = ["/api/v1/telegram-media/ua_autobazar/1001.jpg"]
+
+        async def _download(*_args, **_kwargs):
+            return expected
+
+        class FakeService:
+            async def start(self) -> None:
+                return None
+
+            async def stop(self) -> None:
+                return None
+
+        with (
+            patch.object(lazy_photos, "sync_telegram_photos_from_disk", return_value=[]),
+            patch.object(lazy_photos, "listing_needs_photos", return_value=True),
+            patch.object(lazy_photos, "enqueue_listing_photos", return_value=True),
+            patch.object(lazy_photos, "telegram_worker_online", return_value=False),
+            patch(
+                "app.services.telegram_channels.service_loader.get_parser_service",
+                return_value=FakeService(),
+            ),
+            patch.object(lazy_photos, "attach_photos_to_listing", side_effect=_download) as attach,
+        ):
+            urls = await lazy_photos.ensure_telegram_listing_photos(db, listing)
+
+        attach.assert_called_once()
+        self.assertEqual(urls, expected)
+
+
 if __name__ == "__main__":
     unittest.main()

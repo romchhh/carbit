@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { listings as listingsApi } from "@/lib/api";
+import { resolveListingImages } from "@/lib/listing-image-url";
 import type { Listing } from "@/types/api";
 
 const inflight = new Map<string, Promise<Listing>>();
@@ -22,32 +23,32 @@ function listingNeedsPhotoHydration(listing: Listing): boolean {
   return !(listing.images?.length ?? 0);
 }
 
-/**
- * Retry schedule: 300ms → 800ms → 1.5s → 3s → 5s (× remaining attempts).
- * Fast on the first few tries (photo downloads quickly), slow after.
- */
-const RETRY_INTERVALS = [300, 800, 1500, 3000, 5000];
+/** Retry: швидко на старті, потім рідше (ensure-photos може чекати worker до ~30s). */
+const RETRY_INTERVALS = [400, 800, 1500, 2500, 4000, 6000];
+const MAX_ATTEMPTS = 18;
 
 function retryDelayMs(attempt: number): number {
   return RETRY_INTERVALS[Math.min(attempt, RETRY_INTERVALS.length - 1)];
+}
+
+function applyImages(raw: string[] | null | undefined): string[] {
+  return resolveListingImages(raw);
 }
 
 /** Підвантажує мінімум 1 фото для Telegram-карток у каталозі (лише видимі). */
 export function useListingPhotoHydration(listing: Listing) {
   const rootRef = useRef<HTMLElement | null>(null);
   const [visible, setVisible] = useState(false);
-  const [images, setImages] = useState<string[]>(
-    Array.isArray(listing.images) ? listing.images : [],
-  );
+  const [images, setImages] = useState<string[]>(applyImages(listing.images));
   const [photosPending, setPhotosPending] = useState(false);
 
   useEffect(() => {
-    setImages(Array.isArray(listing.images) ? listing.images : []);
+    setImages(applyImages(listing.images));
   }, [listing.id]);
 
   useEffect(() => {
     if (listing.images?.length) {
-      setImages(listing.images);
+      setImages(applyImages(listing.images));
       setPhotosPending(false);
     }
   }, [listing.id, listing.images]);
@@ -82,22 +83,31 @@ export function useListingPhotoHydration(listing: Listing) {
 
     const poll = async () => {
       try {
-        const fresh =
-          attempts === 0
-            ? await ensurePhotosDeduped(listing.id)
-            : await listingsApi.get(listing.id);
+        const useEnsure = attempts === 0 || attempts % 3 === 0;
+        const fresh = useEnsure
+          ? await ensurePhotosDeduped(listing.id)
+          : await listingsApi.get(listing.id);
+
         if (cancelled) return;
-        if (fresh.images?.length) {
-          setImages(fresh.images);
+
+        const nextImages = applyImages(fresh.images);
+        if (nextImages.length) {
+          setImages(nextImages);
+          setPhotosPending(false);
+          return;
+        }
+
+        const stillPending = Boolean(fresh.source_data?.photos_pending);
+        if (!stillPending && attempts >= 2) {
           setPhotosPending(false);
           return;
         }
       } catch {
-        /* worker обробляє чергу фото */
+        /* worker / Telethon обробляє чергу */
       }
 
       attempts += 1;
-      if (!cancelled && attempts < 25) {
+      if (!cancelled && attempts < MAX_ATTEMPTS) {
         timer = window.setTimeout(poll, retryDelayMs(attempts));
       } else if (!cancelled) {
         setPhotosPending(false);

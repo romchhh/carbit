@@ -67,7 +67,12 @@ async def get_listing(
     if listing_needs_photos(listing):
         await sync_telegram_photos_from_disk(db, listing)
         if listing_needs_photos(listing):
-            enqueue_listing_photos(listing.id)
+            await ensure_telegram_listing_photos(
+                db,
+                listing,
+                max_photos=1,
+                telethon_timeout=12.0,
+            )
     elif auto_ria_needs_gallery(listing):
         await attach_auto_ria_gallery(db, listing)
     return await listing_out_with_mirrors(db, listing)
@@ -83,7 +88,12 @@ async def ensure_listing_photos(
     if not listing:
         raise HTTPException(404, "Listing not found")
     if listing_needs_photos(listing):
-        await ensure_telegram_listing_photos(db, listing, max_photos=1)
+        await ensure_telegram_listing_photos(
+            db,
+            listing,
+            max_photos=1,
+            telethon_timeout=25.0,
+        )
     elif auto_ria_needs_gallery(listing):
         await attach_auto_ria_gallery(db, listing)
     out = await listing_out_with_mirrors(db, listing)

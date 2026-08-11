@@ -276,7 +276,7 @@ async def ensure_telegram_listing_photos(
     *,
     max_photos: int = 1,
     try_telethon: bool = True,
-    telethon_timeout: float = 18.0,
+    telethon_timeout: float = 25.0,
 ) -> list[str]:
     """Підставляє фото з диску або завантажує через Telethon (мінімум 1 для картки)."""
     source = listing.source.value if hasattr(listing.source, "value") else str(listing.source)
@@ -290,11 +290,23 @@ async def ensure_telegram_listing_photos(
     if not listing_needs_photos(listing):
         return list(listing.images or [])
 
+    enqueue_listing_photos(listing.id, priority=2)
     worker_up = await telegram_worker_online()
-    enqueue_listing_photos(listing.id, priority=1)
 
     if worker_up:
-        urls = await wait_for_listing_photos(db, listing.id, timeout=min(telethon_timeout, 14.0))
+        urls = await wait_for_listing_photos(
+            db,
+            listing.id,
+            timeout=min(telethon_timeout, 28.0),
+        )
+        if urls:
+            return urls
+        enqueue_listing_photos(listing.id, priority=3)
+        urls = await wait_for_listing_photos(
+            db,
+            listing.id,
+            timeout=min(12.0, max(4.0, telethon_timeout * 0.45)),
+        )
         if urls:
             return urls
         return list(listing.images or [])
@@ -303,6 +315,7 @@ async def ensure_telegram_listing_photos(
         from app.services.telegram_channels.service_loader import get_parser_service
 
         service = get_parser_service(skip_dedupe=True)
+        inline_timeout = max(4.0, min(telethon_timeout, 22.0))
 
         async def _download() -> list[str]:
             await service.start()
@@ -317,7 +330,7 @@ async def ensure_telegram_listing_photos(
                 await service.stop()
 
         try:
-            urls = await asyncio.wait_for(_download(), timeout=max(3.0, telethon_timeout))
+            urls = await asyncio.wait_for(_download(), timeout=inline_timeout)
             if urls:
                 return urls
         except asyncio.TimeoutError:
@@ -325,8 +338,12 @@ async def ensure_telegram_listing_photos(
         except Exception:
             logger.exception("Inline Telegram photo download failed for %s", listing.id)
 
-    enqueue_listing_photos(listing.id, priority=1)
-    return await wait_for_listing_photos(db, listing.id, timeout=min(telethon_timeout, 10.0))
+        enqueue_listing_photos(listing.id, priority=2)
+        urls = await wait_for_listing_photos(db, listing.id, timeout=min(8.0, telethon_timeout))
+        if urls:
+            return urls
+
+    return list(listing.images or [])
 
 
 async def hydrate_telegram_page_photos(

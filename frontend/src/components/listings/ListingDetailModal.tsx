@@ -31,6 +31,7 @@ import {
 } from "@/lib/listing-specs";
 import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
 import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
+import { resolveListingImages } from "@/lib/listing-image-url";
 import { listings as listingsApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
 
@@ -100,24 +101,32 @@ export function ListingDetailModal({
 
     const poll = async () => {
       try {
-        if (attempts === 0) {
-          await listingsApi.ensurePhotos(listingProp.id);
-        } else {
-          const fresh = await listingsApi.get(listingProp.id);
-          if (cancelled) return;
-          if (fresh.images?.length) {
-            setLiveListing(fresh);
-            onListingUpdate?.(fresh);
-            setPhotosLoading(false);
-            return;
-          }
+        const useEnsure = attempts === 0 || attempts % 3 === 0;
+        const fresh = useEnsure
+          ? await listingsApi.ensurePhotos(listingProp.id)
+          : await listingsApi.get(listingProp.id);
+
+        if (cancelled) return;
+
+        const nextImages = resolveListingImages(fresh.images);
+        if (nextImages.length) {
+          setLiveListing({ ...fresh, images: nextImages });
+          onListingUpdate?.({ ...fresh, images: nextImages });
+          setPhotosLoading(false);
+          return;
+        }
+
+        const stillPending = Boolean(fresh.source_data?.photos_pending);
+        if (!stillPending && attempts >= 2) {
+          setPhotosLoading(false);
+          return;
         }
       } catch {
         /* worker може ще не підхопити */
       }
       attempts += 1;
-      if (!cancelled && attempts < 12) {
-        timer = window.setTimeout(poll, 1500);
+      if (!cancelled && attempts < 18) {
+        timer = window.setTimeout(poll, attempts < 4 ? 800 : 2000);
       } else if (!cancelled) {
         setPhotosLoading(false);
       }
@@ -215,7 +224,7 @@ export function ListingDetailModal({
 
   if (!listing) return null;
 
-  const photos = listing.images.length ? listing.images : [];
+  const photos = resolveListingImages(listing.images);
   const hasAutoRiaDetails =
     listing.source === "auto_ria" &&
     listing.source_data &&
