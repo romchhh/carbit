@@ -7,11 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && python -c "from curl_cffi.requests import AsyncSession; print('curl_cffi OK')"
 
 COPY backend ./backend
 COPY frontend/src/lib/search-data/brands-models.ts ./frontend/src/lib/search-data/brands-models.ts

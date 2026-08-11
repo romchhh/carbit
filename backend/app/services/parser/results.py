@@ -100,9 +100,11 @@ def _sort_items(
         ordered = sorted(items, key=lambda row: (new_rank(row[0]), row[0].mileage))
         return [item for item, _ in ordered]
     if sort_by in ("newest", "published_desc"):
+        from app.services.listings.sort_dates import listing_sort_date
+
         ordered = sorted(
             items,
-            key=lambda row: (new_rank(row[0]), -as_kyiv(row[0].published_at).timestamp()),
+            key=lambda row: (new_rank(row[0]), -listing_sort_date(row[0]).timestamp()),
         )
         return [item for item, _ in ordered]
     ordered = sorted(items, key=lambda row: (new_rank(row[0]), -row[1].timestamp()))

@@ -501,18 +501,12 @@ def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
     )
 
 
-def _listing_published_key(item: ListingOut) -> datetime:
-    try:
-        return as_kyiv(item.published_at)
-    except Exception:
-        return datetime(1970, 1, 1, tzinfo=KYIV_TZ)
-
-
 def sort_listings(items: list[ListingOut], sort_by: str) -> list[ListingOut]:
     from app.services.currency import listing_price_uah
+    from app.services.listings.sort_dates import listing_sort_date
 
     if sort_by in ("published_desc", "newest"):
-        return sorted(items, key=_listing_published_key, reverse=True)
+        return sorted(items, key=listing_sort_date, reverse=True)
     if sort_by == "price_desc":
         return sorted(
             items,

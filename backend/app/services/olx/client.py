@@ -55,7 +55,7 @@ class OlxClient:
         self._httpx: httpx.AsyncClient | None = None
         self._warmed = False
         self._last_referer = f"{BASE_URL}/"
-        self._impersonate = (settings.OLX_IMPERSONATE or "chrome131").strip() or "chrome131"
+        self._impersonate = (settings.OLX_IMPERSONATE or "chrome136").strip() or "chrome136"
         self._proxy = (settings.OLX_PROXY_URL or "").strip() or None
         self._transport_label = "unknown"
 
@@ -64,8 +64,9 @@ class OlxClient:
             self._curl = CurlAsyncSession()
             self._transport_label = "curl_cffi"
         else:
-            logger.warning(
-                "curl_cffi не встановлено (%s) — OLX через system curl / httpx",
+            logger.error(
+                "curl_cffi не встановлено — OLX майже напевно отримає 403. "
+                "Перезберіть backend: docker compose build backend. %s",
                 transport_summary(impersonate=self._impersonate, proxy=self._proxy),
             )
             self._transport_label = "system_curl"
@@ -279,8 +280,7 @@ class OlxClient:
         limit: int = OFFERS_API_LIMIT,
     ) -> list[OlxListing]:
         api_params = build_offers_api_params(params, page=page, limit=limit)
-        if "query" not in api_params and not params.has_remote_filters():
-            return []
+        # category_id достатньо для «усі авто» — не форсуємо HTML-fallback (403 на VPS).
 
         url = f"{BASE_URL}{OFFERS_API_PATH}"
         referer = f"{BASE_URL}{CATEGORY_PATH}/"
@@ -303,7 +303,11 @@ class OlxClient:
                     payload = response.json()
                 except ValueError:
                     return []
-                return parse_offers_api_payload(payload)
+                listings = parse_offers_api_payload(payload)
+                if listings:
+                    return listings
+                # Порожня відповідь API — не retry (може бути реально 0 оголошень).
+                return []
 
             last_status = response.status_code
             if response.status_code in RETRYABLE_STATUS and attempt < MAX_RETRIES:

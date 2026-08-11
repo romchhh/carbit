@@ -14,7 +14,7 @@ async def main() -> int:
     url = "https://www.olx.ua/uk/transport/legkovye-avtomobili/"
     print("=== OLX probe ===")
     print(transport_summary(
-        impersonate=settings.OLX_IMPERSONATE or "chrome131",
+        impersonate=settings.OLX_IMPERSONATE or "chrome136",
         proxy=(settings.OLX_PROXY_URL or "").strip() or None,
     ))
     print("curl_cffi installed:", CURL_CFFI_AVAILABLE)

@@ -12,6 +12,8 @@ from app.services.olx.constants import BASE_URL, REQUEST_TIMEOUT, USER_AGENTS
 logger = logging.getLogger(__name__)
 
 IMPERSONATE_TARGETS: tuple[str, ...] = (
+    "chrome136",
+    "chrome133a",
     "chrome131",
     "chrome124",
     "chrome120",

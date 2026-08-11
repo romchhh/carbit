@@ -127,6 +127,8 @@ def parse_olx_published_text(text: str, *, now: datetime | None = None) -> datet
     normalized = re.sub(r"\s*р\.?\s*$", "", normalized)
     # «Опубліковано 10 липня» або злите «Опублікованосьогодні о 08:21» (get_text(strip=True))
     normalized = re.sub(r"^опубліковано\s*", "", normalized)
+    # «Оновлено 4 год тому» — окремий рядок без «Опубліковано»
+    normalized = re.sub(r"^оновлено\s*", "", normalized)
 
     if normalized in {"щойно", "just now"}:
         return current
@@ -217,6 +219,36 @@ def parse_olx_published_text(text: str, *, now: datetime | None = None) -> datet
     return None
 
 
+def split_olx_updated_published_text(text: str | None) -> tuple[str | None, str | None]:
+    """
+    Розбиває рядок OLX на частини «Оновлено …» та «Опубліковано …».
+    Приклад: «Оновлено 4 год тому • Опубліковано 4 тиж тому».
+    """
+    if not text:
+        return None, None
+
+    normalized = " ".join(text.strip().split())
+    parts = [part.strip() for part in re.split(r"\s*[•·]\s*", normalized) if part.strip()]
+    updated_part: str | None = None
+    published_part: str | None = None
+
+    for part in parts:
+        lower = part.lower()
+        if lower.startswith("оновлено"):
+            updated_part = re.sub(r"^оновлено\s*", "", part, count=1, flags=re.IGNORECASE).strip() or part
+        elif lower.startswith("опубліковано"):
+            published_part = re.sub(r"^опубліковано\s*", "", part, count=1, flags=re.IGNORECASE).strip() or part
+
+    if len(parts) == 1 and not updated_part and not published_part:
+        lower = normalized.lower()
+        if lower.startswith("оновлено"):
+            updated_part = re.sub(r"^оновлено\s*", "", normalized, count=1, flags=re.IGNORECASE).strip()
+        elif lower.startswith("опубліковано"):
+            published_part = re.sub(r"^опубліковано\s*", "", normalized, count=1, flags=re.IGNORECASE).strip()
+
+    return updated_part, published_part
+
+
 def resolve_olx_published_at(
     *,
     published: str | None,
@@ -232,7 +264,10 @@ def resolve_olx_published_at(
 
     # Fallback: текст «Опубліковано…» / хвостик локації. Не плутаємо з lastRefresh.
     if published:
-        from_iso = _parse_iso_datetime(published)
+        updated_text, published_text = split_olx_updated_published_text(published)
+        published_for_parse = published_text or (published if not updated_text else None) or published
+
+        from_iso = _parse_iso_datetime(published_for_parse)
         refresh_from_raw = _extract_timestamp_from_raw(raw_params, keys=REFRESH_TIME_KEYS)
         iso_looks_like_refresh = bool(
             from_iso
@@ -243,14 +278,14 @@ def resolve_olx_published_at(
         if from_iso and not iso_looks_like_refresh:
             return from_iso
 
-        from_text = parse_olx_published_text(published, now=current)
+        from_text = parse_olx_published_text(published_for_parse, now=current)
         if from_text:
             return from_text
 
         # «Київ - 5 хвилин тому» / «Київ – сьогодні о 08:21»
         for sep in (" - ", " – ", " — ", " • ", " · "):
-            if sep in published:
-                _, tail = published.split(sep, 1)
+            if sep in published_for_parse:
+                _, tail = published_for_parse.split(sep, 1)
                 from_tail = parse_olx_published_text(tail.strip(), now=current)
                 if from_tail:
                     return from_tail
@@ -276,12 +311,16 @@ def resolve_olx_refreshed_at(
     """Дата оновлення/підняття (lastRefreshTime). None, якщо збігається з публікацією."""
     refreshed = _extract_timestamp_from_raw(raw_params, keys=REFRESH_TIME_KEYS)
     if refreshed is None and published:
-        # Картки часто показують саме refresh у рядку «Сьогодні о …»
-        text_dt = parse_olx_published_text(published, now=now or now_kyiv())
-        if text_dt and published_at and abs((text_dt - published_at).total_seconds()) > 120:
-            refreshed = text_dt
-        elif text_dt and published_at is None:
-            refreshed = text_dt
+        updated_text, published_text = split_olx_updated_published_text(published)
+        if updated_text:
+            refreshed = parse_olx_published_text(updated_text, now=now or now_kyiv())
+        elif published_text is None:
+            # Картки часто показують саме refresh у рядку «Сьогодні о …»
+            text_dt = parse_olx_published_text(published, now=now or now_kyiv())
+            if text_dt and published_at and abs((text_dt - published_at).total_seconds()) > 120:
+                refreshed = text_dt
+            elif text_dt and published_at is None:
+                refreshed = text_dt
 
     if refreshed is None:
         return None

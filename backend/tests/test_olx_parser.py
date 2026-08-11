@@ -279,3 +279,30 @@ def test_build_offers_api_query_from_text():
     params2 = OlxSearchParams(brand="tesla", model="model-3", brand_label="Tesla", model_label="Model 3")
     assert "Tesla" in build_offers_api_query(params2)
     assert "Model 3" in build_offers_api_query(params2)
+
+
+def test_build_offers_api_params_category_only():
+    from app.services.olx.parser import build_offers_api_params
+
+    params = OlxSearchParams()
+    api = build_offers_api_params(params, page=1, limit=40)
+    assert api.get("category_id") == 108
+    assert "query" not in api
+
+
+def test_html_is_blocked_or_empty_shell():
+    from app.services.olx.parser import html_is_blocked_or_empty_shell
+
+    shell = (
+        '<html><body><script>window.__PRERENDERED_STATE__ = {"ads":[]}</script>'
+        "<p>Access Denied</p></body></html>"
+    )
+    assert html_is_blocked_or_empty_shell(shell) is True
+
+    empty_state = (
+        '<html><body><script>window.__PRERENDERED_STATE__ = {"listing":{}}</script></body></html>'
+    )
+    assert html_is_blocked_or_empty_shell(empty_state) is True
+
+    with_card = '<html><div data-testid="l-card"><a href="/d/uk/obyavlenie/test-ID1.html">X</a></div></html>'
+    assert html_is_blocked_or_empty_shell(with_card) is False

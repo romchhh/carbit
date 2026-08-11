@@ -22,6 +22,7 @@ from app.services.olx.parser import (
     build_search_url,
     has_next_page,
     html_looks_like_results_page,
+    html_is_blocked_or_empty_shell,
     listing_needs_enrichment,
     parse_listing_page,
     passes_olx_filters,
@@ -258,12 +259,30 @@ async def _collect_from_params(
                     page_listings = []
 
         if not page_listings and pages_scanned == 0 and html and html_looks_like_results_page(html):
-            await notify_admin_parsing_error(
-                source="OLX",
-                error="Сторінка видачі OLX завантажена, але оголошення не розпарсились",
-                url=url,
-                details="API-first і HTML не дали оголошень — перевірте селектори/API",
-            )
+            if html_is_blocked_or_empty_shell(html):
+                logger.warning(
+                    "OLX HTML shell (blocked/empty), retrying page=%s url=%s transport=%s",
+                    current_page,
+                    url[:120],
+                    getattr(client, "_transport_label", "?"),
+                )
+                await asyncio.sleep(2.0)
+                try:
+                    html, active, url = await _fetch_olx_search_html(
+                        client, active, filters, page=current_page
+                    )
+                    page_listings = await asyncio.to_thread(parse_listing_page, html)
+                except OlxError:
+                    page_listings = []
+                except Exception:
+                    page_listings = []
+            elif not page_listings:
+                await notify_admin_parsing_error(
+                    source="OLX",
+                    error="Сторінка видачі OLX завантажена, але оголошення не розпарсились",
+                    url=url,
+                    details="API-first і HTML не дали оголошень — перевірте селектори/API",
+                )
         if not page_listings:
             break
 

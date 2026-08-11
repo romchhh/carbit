@@ -1395,6 +1395,34 @@ def html_looks_like_results_page(html: str) -> bool:
     return any(marker in html for marker in markers)
 
 
+def html_is_blocked_or_empty_shell(html: str) -> bool:
+    """Anti-bot / порожня оболонка: є маркери сторінки, але немає оголошень."""
+    if not (html or "").strip():
+        return True
+    low = html.lower()
+    if any(
+        token in low
+        for token in (
+            "cf-browser-verification",
+            "challenge-platform",
+            "access denied",
+            "please enable javascript",
+            "captcha",
+        )
+    ):
+        return True
+    if not html_looks_like_results_page(html):
+        return False
+    if 'data-testid="l-card"' in html or 'data-cy="l-card"' in html:
+        return False
+    if _try_extract_embedded_json(html):
+        return False
+    if _listings_from_json_ld(html):
+        return False
+    # Маркери state є, карток/ads немає — типова bot-shell від CloudFront.
+    return True
+
+
 def _listing_price(listing: OlxListing) -> int | None:
     if not listing.price:
         return None

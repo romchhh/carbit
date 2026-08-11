@@ -609,6 +609,11 @@ def _olx_timeout_partial_error(error: str | None) -> bool:
     return "таймаут" in err or "timeout" in err
 
 
+def _olx_blocked_partial_error(error: str | None) -> bool:
+    err = (error or "").lower()
+    return "403" in err or "заблок" in err or "blocked" in err
+
+
 async def _notify_partial_source_failures(
     source_statuses: list[SourceSearchStatus],
     filters: SearchFilters,
@@ -623,9 +628,11 @@ async def _notify_partial_source_failures(
     details = f"Частковий пошук: {_search_filters_summary(filters)}"
     for status in failed:
         err = status.error or "невідома помилка"
-        # OLX часто не встигає на широких фільтрах; AUTO.RIA/TG уже дали видачу — не спамимо.
-        if status.source.upper() == "OLX" and _olx_timeout_partial_error(err):
-            logger.warning("OLX partial timeout (skipped admin alert): %s | %s", err, details)
+        # OLX часто не встигає / блокується; AUTO.RIA/TG уже дали видачу — не спамимо.
+        if status.source.upper() == "OLX" and (
+            _olx_timeout_partial_error(err) or _olx_blocked_partial_error(err)
+        ):
+            logger.warning("OLX partial failure (skipped admin alert): %s | %s", err, details)
             continue
         await notify_admin_parsing_error(
             source=status.source,

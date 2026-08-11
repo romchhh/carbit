@@ -122,6 +122,21 @@ class OlxPublishedDateTests(unittest.TestCase):
         )
         self.assertEqual(dt, datetime(2025, 1, 10, 8, 0, tzinfo=KYIV_TZ))
 
+    def test_combined_updated_published_text(self):
+        published = resolve_olx_published_at(
+            published="Оновлено 4 год тому • Опубліковано 4 тиж тому",
+            raw_params={},
+            now=self.now,
+        )
+        refreshed = resolve_olx_refreshed_at(
+            published="Оновлено 4 год тому • Опубліковано 4 тиж тому",
+            published_at=published,
+            raw_params={},
+            now=self.now,
+        )
+        self.assertEqual(published, self.now - timedelta(weeks=4))
+        self.assertEqual(refreshed, self.now - timedelta(hours=4))
+
 
 if __name__ == "__main__":
     unittest.main()
