@@ -17,5 +17,7 @@ def raise_olx_http(exc: OlxError) -> None:
         status = 502
     elif status == 429:
         message = "OLX тимчасово обмежує запити. Спробуйте пізніше."
+    elif status == 403:
+        message = "OLX тимчасово заблокував запит. Спробуйте через хвилину."
 
     raise HTTPException(status, message) from exc

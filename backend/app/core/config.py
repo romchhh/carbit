@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     IMPERIYA_API_KEY: str = ""
     OLX_CLIENT_ID: str = ""
     OLX_CLIENT_SECRET: str = ""
+    # curl_cffi impersonate (chrome131) — обходить CloudFront 403 для httpx
+    OLX_IMPERSONATE: str = "chrome131"
+    OLX_PROXY_URL: str = ""
 
     # База ДАІ (baza-gai.com.ua) — VIN / номери
     BAZA_GAI_API_KEY: str = ""
