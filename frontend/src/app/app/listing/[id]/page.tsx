@@ -94,7 +94,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       await favoritesApi.remove(listing.id);
       setIsFavorite(false);
     } else {
-      await favoritesApi.add(listing.id, normalizeListingForFavorite(listing));
+      await favoritesApi.add(listing.id, listing);
       setIsFavorite(true);
     }
   };
