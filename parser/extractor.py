@@ -105,6 +105,36 @@ _SALE_KEYWORDS = (
     "sale ",
 )
 
+# Оголошення «вже продано» / промо каналу (CAR MARKET) — не показуємо в пошуку.
+_SOLD_HEAD_RE = re.compile(
+    r"^(?:[\W_✅✔☑️☑🚗🎉🔥💎👏]*\s*)*(?:продано|sold)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+SOLD_OR_PROMO_PATTERNS = [
+    re.compile(p, re.IGNORECASE | re.UNICODE)
+    for p in (
+        r"знайшло\s+свого\s+власника",
+        r"нашло\s+своего\s+владельца",
+        r"через\s+car\s*market",
+        r"продаєте\s+машин",
+        r"продаете\s+машин",
+        r"\b\d{2,4}\s*грн\s*/\s*30\s*дн",
+        r"оголошення\s+побачать\s+одразу",
+        r"объявление\s+увидят",
+    )
+]
+
+
+def is_sold_or_channel_promo(text: str) -> bool:
+    """True для постів «ПРОДАНО» / реклами розміщення (CAR MARKET), не активних продажів."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    if _SOLD_HEAD_RE.search(raw):
+        return True
+    return any(pattern.search(raw) for pattern in SOLD_OR_PROMO_PATTERNS)
+
+
 # --- окремі regex-и на кожне поле ---------------------------------------
 
 # Рік: 2021, 2021г, 2021г., 2021 рік, 20 21 (рідко)
@@ -399,6 +429,9 @@ def is_valid_car_listing(listing: CarListing) -> bool:
         return False
 
     if is_car_search_request(text):
+        return False
+
+    if is_sold_or_channel_promo(text):
         return False
 
     has_brand = bool(listing.brand)

@@ -26,7 +26,7 @@ from app.services.telegram_channels.mapper import (
     car_listing_to_listing_out,
     listing_out_matches_filters,
     telegram_listing_id,
-    telegram_text_is_search_request,
+    telegram_text_is_non_listing,
 )
 
 logger = logging.getLogger(__name__)
@@ -84,9 +84,9 @@ async def ingest_telegram_listing(
     Returns (item, new_links, notifications, matched_any_search).
     Якщо передано parser_service — одне фото завантажується до сповіщень у Telegram.
     """
-    if telegram_text_is_search_request(getattr(car_listing, "raw_text", "") or ""):
+    if telegram_text_is_non_listing(getattr(car_listing, "raw_text", "") or ""):
         logger.debug(
-            "Skip telegram ingest: search request (not a sale), channel=%s msg=%s",
+            "Skip telegram ingest: non-listing post (search/sold/promo), channel=%s msg=%s",
             getattr(car_listing, "channel", ""),
             getattr(car_listing, "message_id", ""),
         )

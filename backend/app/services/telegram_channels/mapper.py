@@ -16,6 +16,7 @@ from app.services.listings.seller_contact import (
 from app.services.search.brand_model_keywords import (
     text_matches_brand_filter,
     text_matches_model_filter,
+    title_indicates_other_brand,
 )
 from app.services.telegram_channels.bootstrap import ensure_parser_path
 
@@ -106,6 +107,23 @@ def telegram_text_is_search_request(text: str) -> bool:
     from parser.extractor import is_car_search_request
 
     return is_car_search_request(text)
+
+
+def telegram_text_is_sold_or_promo(text: str) -> bool:
+    """Пост «ПРОДАНО» / реклама каналу — не показуємо в пошуку."""
+    if not (text or "").strip():
+        return False
+    from app.services.telegram_channels.bootstrap import ensure_parser_path
+
+    ensure_parser_path()
+    from parser.extractor import is_sold_or_channel_promo
+
+    return is_sold_or_channel_promo(text)
+
+
+def telegram_text_is_non_listing(text: str) -> bool:
+    """Запит на купівлю, sold-анонс або промо — не активне оголошення."""
+    return telegram_text_is_search_request(text) or telegram_text_is_sold_or_promo(text)
 
 
 def fix_telegram_listing_url(
@@ -276,6 +294,12 @@ def _listing_matches_single_brand(
     if not brand:
         return True
 
+    # Ідентичність машини — заголовок + модель. Description НЕ входить:
+    # там часто «краще за Audi / порівняння з Zeekr» → хибні матчі.
+    identity = f"{item.title} {item.model or ''}".strip()
+    if title_indicates_other_brand(identity, brand):
+        return False
+
     item_brand_raw = (item.brand or "").strip()
     if item_brand_raw:
         from app.services.olx.brand_slugs import resolve_olx_brand_slug
@@ -283,46 +307,37 @@ def _listing_matches_single_brand(
         filter_slug = resolve_olx_brand_slug(brand)
         item_slug = resolve_olx_brand_slug(item_brand_raw)
         if filter_slug and item_slug and filter_slug == item_slug:
-            # Бренди збігаються за slug — ок.
+            # Структурований brand збігається, і заголовок не суперечить.
             return True
 
         if filter_slug and item_slug and filter_slug != item_slug:
-            # Обидва бренди розпізнані і різні.
-            # Перевіряємо лише ЗАГОЛОВОК (не опис) — щоб уникнути хибних матчів:
-            # «Zeekr» в описі Tesla або «Audi» в описі VW не є підставою для матчу.
+            # Обидва бренди розпізнані і різні — довіряємо лише заголовку.
             from app.services.search.brand_model_keywords import (
                 _allows_distinctive_model_without_brand,
                 _brand_distinctive_model_in_text,
             )
 
-            title_only = f"{item.brand} {item.title}"
-
-            # Бренд прямо вказаний у заголовку (напр. «MINI COUNTRYMAN» у Tesla-пості — нема).
-            if text_matches_brand_filter(title_only, brand):
+            if text_matches_brand_filter(identity, brand):
+                return True
+            if _brand_distinctive_model_in_text(identity, brand):
                 return True
 
-            # Заголовок містить унікальну модель цього бренду
-            # (напр. «Countryman» → Mini, навіть якщо brand="BMW").
-            if _brand_distinctive_model_in_text(item.title, brand):
-                return True
-
-            # Зазначена модель унікально ідентифікує бренд і знайдена у ЗАГОЛОВКУ.
-            # Спеціально НЕ перевіряємо description, щоб уникнути хибного матчу:
-            # «Audi A4» в описі VW-оголошення — порівняння, а не сама машина.
             model_str = (model_hint or "").strip()
             if model_str and _allows_distinctive_model_without_brand(brand, model_str):
-                title_text = f"{item.model} {item.title}"
-                if text_matches_model_filter(title_text, model_str, brand=brand):
+                if text_matches_model_filter(identity, model_str, brand=brand):
                     return True
 
             return False
 
-    # item.brand порожній або бренд не в каталозі — перевіряємо повний текст.
+    # brand порожній / не в каталозі — спочатку заголовок, потім повний текст.
+    if text_matches_brand_filter(identity, brand, model=model_hint or ""):
+        return True
     if not text_matches_brand_filter(haystack, brand, model=model_hint or ""):
         item_brand = norm_text(item.brand)
         brand_n = norm_text(brand)
         if not item_brand or (brand_n not in item_brand and item_brand not in brand_n):
             return False
+    # Description згадав шукану марку, але заголовок уже перевірений на чужу марку вище.
     return True
 
 
@@ -343,7 +358,7 @@ def _listing_matches_single_model(
 
 
 def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> bool:
-    if item.source == "telegram" and telegram_text_is_search_request(
+    if item.source == "telegram" and telegram_text_is_non_listing(
         item.description or item.title or ""
     ):
         return False

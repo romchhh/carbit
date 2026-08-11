@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from parser.extractor import (
     extract_car_data,
     is_car_search_request,
+    is_sold_or_channel_promo,
     is_valid_car_listing,
     normalize_listing_text,
 )
@@ -98,6 +99,23 @@ X6 также рассмотрю
     def test_sale_listing_not_search_request(self):
         text = "Продаю BMW X5 2021, пробіг 45 тис, 52000$"
         self.assertFalse(is_car_search_request(text))
+        listing = _extract(text)
+        self.assertTrue(is_valid_car_listing(listing))
+
+    def test_sold_car_market_promo_rejected(self):
+        text = (
+            "✅ ПРОДАНО 🚗 Volkswagen Passat B8 2016 · 10800 $ "
+            "Ще одне авто знайшло свого власника через CAR MARKET. "
+            "Продаєте машину? 200 грн / 30 днів — і оголошення побачать одразу "
+            "на сайті, у Telegram, Instagram, Facebook та Viber."
+        )
+        self.assertTrue(is_sold_or_channel_promo(text))
+        listing = _extract(text)
+        self.assertFalse(is_valid_car_listing(listing))
+
+    def test_active_sale_not_sold_promo(self):
+        text = "Продаю Volkswagen Passat B8 2016, пробіг 120 тис, 10800$"
+        self.assertFalse(is_sold_or_channel_promo(text))
         listing = _extract(text)
         self.assertTrue(is_valid_car_listing(listing))
 

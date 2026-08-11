@@ -692,6 +692,36 @@ class TestBrandMismatchRejection(unittest.TestCase):
         filters = SearchFilters.model_validate({"brand": "Volkswagen", "sources": ["telegram"]})
         self.assertTrue(listing_out_matches_filters(item, filters))
 
+    def test_passat_title_empty_brand_rejects_audi(self):
+        """Типовий TG-пост: brand порожній, title=Passat, в описі згадка Audi."""
+        item = self._make_item(
+            "",
+            "🚘 Passat B6 Sedan",
+            "Стан як новий, краще за Audi A4. Торг.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Audi", "sources": ["telegram"]})
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
+    def test_misparsed_audi_brand_with_passat_title_rejects(self):
+        """Парсер поставив brand=Audi з опису, але title — Passat."""
+        item = self._make_item(
+            "Audi",
+            "Volkswagen Passat B6 2009",
+            "Альтернатива Audi A6.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Audi", "sources": ["telegram"]})
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
+    def test_passat_brand_slug_rejects_audi(self):
+        """brand=Passat (окремий slug) не повинен проходити фільтр Audi."""
+        item = self._make_item(
+            "Passat",
+            "Passat B6 Sedan",
+            "Порівняння з Audi.",
+        )
+        filters = SearchFilters.model_validate({"brand": "Audi", "sources": ["telegram"]})
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
 
 if __name__ == "__main__":
     unittest.main()

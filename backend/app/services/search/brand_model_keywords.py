@@ -2022,6 +2022,80 @@ def _brand_distinctive_model_in_text(haystack: str, brand: str) -> bool:
     return False
 
 
+@lru_cache(maxsize=1)
+def _brand_name_signals() -> tuple[tuple[str, str], ...]:
+    """(norm_variant, brand_slug) для швидкого виявлення чужої марки в заголовку."""
+    rows: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for slug, aliases in BRAND_SLUG_EXTRA_ALIASES.items():
+        for alias in aliases:
+            key = norm_text(alias)
+            if not key or len(key) < 3:
+                continue
+            pair = (key, slug)
+            if pair not in seen:
+                seen.add(pair)
+                rows.append(pair)
+    for name, slug in BRAND_TO_SLUG.items():
+        key = norm_text(name)
+        if not key or len(key) < 3:
+            continue
+        pair = (key, slug)
+        if pair not in seen:
+            seen.add(pair)
+            rows.append(pair)
+    # Довші сигнали першими — «alfa romeo» перед «alfa».
+    rows.sort(key=lambda row: (-len(row[0]), row[0], row[1]))
+    return tuple(rows)
+
+
+def title_indicates_other_brand(title: str, filter_brand: str) -> bool:
+    """Заголовок явно належить іншій марці (Passat при пошуку Audi → True).
+
+    Не дивиться в description: порівняння «краще за Audi» там — не підстава.
+    """
+    filter_slug = resolve_olx_brand_slug(filter_brand) if filter_brand else ""
+    title = (title or "").strip()
+    if not title or not filter_slug:
+        return False
+
+    # Якщо шукана марка вже є в заголовку — конфлікту немає.
+    if text_matches_brand_filter(title, filter_brand):
+        return False
+    if _brand_distinctive_model_in_text(title, filter_brand):
+        return False
+
+    hay = norm_text(title)
+    if not hay:
+        return False
+
+    # Чужа назва марки в заголовку.
+    for variant, slug in _brand_name_signals():
+        if slug == filter_slug:
+            continue
+        if _variant_in_haystack(variant, hay):
+            return True
+
+    # Унікальна модель іншої марки («Passat», «Camry», «X5»…).
+    index = unique_model_token_owner()
+    for token, owner in index.items():
+        if not owner or owner == filter_slug:
+            continue
+        if len(token) < 4:
+            continue
+        if _variant_in_haystack(token, hay):
+            return True
+
+    # VW-моделі без слова Volkswagen (golf коротший за 4 — окремо).
+    for token in _VW_MODELS_WITHOUT_BRAND:
+        if filter_slug in ("volkswagen", "vw"):
+            break
+        if _variant_in_haystack(token, hay):
+            return True
+
+    return False
+
+
 def text_matches_brand_filter(haystack: str, brand: str, *, model: str = "") -> bool:
     if not haystack or not brand:
         return True
