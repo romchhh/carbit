@@ -27,6 +27,13 @@ from app.services.olx.parser import (
     parse_listing_details,
     parse_offers_api_payload,
 )
+from app.services.olx.transport import (
+    CURL_CFFI_AVAILABLE,
+    HttpResponse,
+    impersonate_candidates,
+    system_curl_get,
+    transport_summary,
+)
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 
 logger = logging.getLogger(__name__)
@@ -41,10 +48,7 @@ except ImportError:  # pragma: no cover
 
 
 class OlxClient:
-    """HTTP-клієнт OLX.
-
-    CloudFront блокує httpx за TLS-відбитком → curl_cffi з impersonate Chrome.
-    """
+    """HTTP-клієнт OLX: curl_cffi → системний curl → httpx."""
 
     def __init__(self) -> None:
         self._curl: Any | None = None
@@ -53,12 +57,18 @@ class OlxClient:
         self._last_referer = f"{BASE_URL}/"
         self._impersonate = (settings.OLX_IMPERSONATE or "chrome131").strip() or "chrome131"
         self._proxy = (settings.OLX_PROXY_URL or "").strip() or None
+        self._transport_label = "unknown"
 
     async def __aenter__(self) -> OlxClient:
         if _CURL_CFFI:
             self._curl = CurlAsyncSession()
+            self._transport_label = "curl_cffi"
         else:
-            logger.warning("curl_cffi не встановлено — OLX може повертати 403 через CloudFront")
+            logger.warning(
+                "curl_cffi не встановлено (%s) — OLX через system curl / httpx",
+                transport_summary(impersonate=self._impersonate, proxy=self._proxy),
+            )
+            self._transport_label = "system_curl"
             self._httpx = httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True)
         await self._warm_session()
         return self
@@ -92,40 +102,104 @@ class OlxClient:
         if self._warmed:
             return
         try:
-            await self._get(
+            response = await self._get(
                 f"{BASE_URL}{CATEGORY_PATH}/",
                 headers=self._browser_headers(
                     accept="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                     referer=f"{BASE_URL}/",
                 ),
             )
-            self._warmed = True
+            if response.status_code == 200:
+                self._warmed = True
         except Exception:
             logger.debug("OLX session warm-up failed", exc_info=True)
 
-    async def _get(self, url: str, *, headers: dict[str, str], params: dict | None = None) -> Any:
+    async def _curl_cffi_get(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        params: dict | None,
+        impersonate: str,
+    ) -> HttpResponse:
+        assert self._curl is not None
+        response = await self._curl.get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=REQUEST_TIMEOUT,
+            impersonate=impersonate,
+            proxy=self._proxy,
+        )
+        return HttpResponse(status_code=response.status_code, text=response.text)
+
+    async def _get(self, url: str, *, headers: dict[str, str], params: dict | None = None) -> HttpResponse:
         from app.services.admin.api_usage import olx_operation, record_api_request
 
         operation = olx_operation(url)
+        last_response: HttpResponse | None = None
+
         try:
             if self._curl is not None:
-                response = await self._curl.get(
+                for imp in impersonate_candidates(self._impersonate):
+                    response = await self._curl_cffi_get(
+                        url,
+                        headers=headers,
+                        params=params,
+                        impersonate=imp,
+                    )
+                    last_response = response
+                    if response.status_code == 200:
+                        self._impersonate = imp
+                        self._transport_label = f"curl_cffi:{imp}"
+                        await record_api_request("olx", operation, success=True)
+                        self._last_referer = url
+                        return response
+                    if response.status_code not in RETRYABLE_STATUS:
+                        break
+                logger.warning(
+                    "OLX curl_cffi blocked (%s) for %s — trying system curl",
+                    last_response.status_code if last_response else "?",
+                    url[:120],
+                )
+
+            try:
+                response = await system_curl_get(
                     url,
                     headers=headers,
                     params=params,
-                    timeout=REQUEST_TIMEOUT,
-                    impersonate=self._impersonate,
                     proxy=self._proxy,
                 )
-            elif self._httpx is not None:
-                response = await self._httpx.get(url, headers=headers, params=params)
-            else:
-                async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
-                    response = await client.get(url, headers=headers, params=params)
-            await record_api_request("olx", operation, success=response.status_code < 400)
-            if response.status_code < 400:
-                self._last_referer = url
-            return response
+                if response.status_code == 200:
+                    self._transport_label = "system_curl"
+                    await record_api_request("olx", operation, success=True)
+                    self._last_referer = url
+                    return response
+                last_response = response
+            except Exception as exc:
+                logger.warning("OLX system curl failed: %s", exc)
+
+            if self._httpx is not None:
+                raw = await self._httpx.get(url, headers=headers, params=params)
+                response = HttpResponse(status_code=raw.status_code, text=raw.text)
+                last_response = response
+                if response.status_code == 200:
+                    self._transport_label = "httpx"
+                    await record_api_request("olx", operation, success=True)
+                    self._last_referer = url
+                    return response
+
+            await record_api_request(
+                "olx",
+                operation,
+                success=bool(last_response and last_response.status_code < 400),
+            )
+            if last_response is not None:
+                return last_response
+            raise OlxError("Не вдалося виконати запит до OLX")
+        except OlxError:
+            await record_api_request("olx", operation, success=False)
+            raise
         except Exception:
             await record_api_request("olx", operation, success=False)
             raise
@@ -134,6 +208,14 @@ class OlxClient:
     def _retry_delay(status: int, attempt: int) -> float:
         base = 5 if status in (403, 429) else 2
         return base * attempt + random.uniform(0.2, 0.8)
+
+    def _forbidden_message(self, url: str) -> str:
+        hint = transport_summary(impersonate=self._impersonate, proxy=self._proxy)
+        if not CURL_CFFI_AVAILABLE:
+            hint += "; rebuild backend: docker compose build backend"
+        if not self._proxy:
+            hint += "; або OLX_PROXY_URL у .env"
+        return f"OLX повернув статус 403 ({hint})"
 
     async def fetch_html(self, url: str) -> str:
         last_status: int | None = None
@@ -168,15 +250,23 @@ class OlxClient:
                 await asyncio.sleep(self._retry_delay(response.status_code, attempt))
                 continue
 
-            message = f"OLX повернув статус {response.status_code}"
+            message = (
+                self._forbidden_message(url)
+                if response.status_code == 403
+                else f"OLX повернув статус {response.status_code}"
+            )
             if response.status_code != 404:
                 await notify_admin_parsing_error(source="OLX", error=message, url=url)
             raise OlxError(message, status_code=response.status_code)
 
         message = (
-            f"OLX повернув статус {last_status}"
-            if last_status is not None
-            else "Не вдалося завантажити сторінку OLX"
+            self._forbidden_message(url)
+            if last_status == 403
+            else (
+                f"OLX повернув статус {last_status}"
+                if last_status is not None
+                else "Не вдалося завантажити сторінку OLX"
+            )
         )
         await notify_admin_parsing_error(source="OLX", error=message, url=url)
         raise OlxError(message, status_code=last_status or 502)
@@ -188,7 +278,6 @@ class OlxClient:
         page: int = 1,
         limit: int = OFFERS_API_LIMIT,
     ) -> list[OlxListing]:
-        """Офіційний JSON API /api/v1/offers/ з серверними фільтрами."""
         api_params = build_offers_api_params(params, page=page, limit=limit)
         if "query" not in api_params and not params.has_remote_filters():
             return []
@@ -222,14 +311,13 @@ class OlxClient:
                 continue
 
             if response.status_code == 403:
-                logger.warning("OLX API 403 (page=%s, params=%s)", page, api_params)
+                logger.warning("OLX API 403 (page=%s, transport=%s)", page, self._transport_label)
             return []
 
         _ = last_status
         return []
 
     async def fetch_offer_by_id(self, offer_id: str) -> OlxListing | None:
-        """GET /api/v1/offers/{id}/ — одне оголошення для шарингу порівняння."""
         from app.services.olx.parser import _listing_from_embedded, _normalize_api_offer
 
         oid = str(offer_id or "").strip()
