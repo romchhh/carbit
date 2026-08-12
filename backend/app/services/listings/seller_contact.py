@@ -7,8 +7,9 @@ from typing import Any
 
 from app.schemas.schemas import ListingOut
 
+# Продавці розділяють групи як завгодно, зокрема «0 97 555 44 33».
 _PHONE_RE = re.compile(
-    r"(?:\+?38)?[\s\-()]*0\d{2}[\s\-()]*\d{3}[\s\-()]*\d{2}[\s\-()]*\d{2}"
+    r"(?:\+?38)?[\s\-()]*0[\s\-()]*\d{2}[\s\-()]*\d{3}[\s\-()]*\d{2}[\s\-()]*\d{2}"
 )
 _USERNAME_RE = re.compile(r"(?:@|t\.me/)([A-Za-z0-9_]{3,32})", re.I)
 _MASKED_PHONE_RE = re.compile(r"[xх*]{2,}|\.{3,}", re.I)

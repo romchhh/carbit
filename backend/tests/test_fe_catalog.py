@@ -24,8 +24,9 @@ class FeCatalogTests(unittest.TestCase):
     def test_unique_zeekr_001_is_zeekr(self):
         owners = unique_model_token_owner()
         self.assertEqual(owners.get("001"), "zeekr")
-        self.assertEqual(owners.get("007"), "zeekr")
         self.assertEqual(owners.get("009"), "zeekr")
+        # «007» є і в Zeekr, і в Skywell — токен більше не однозначний.
+        self.assertIsNone(owners.get("007"))
 
     def test_ambiguous_digit_not_unique(self):
         owners = unique_model_token_owner()

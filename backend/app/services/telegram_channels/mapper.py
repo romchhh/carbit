@@ -425,12 +425,28 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
 
     regions = effective_regions(filters)
     if regions:
-        from app.services.search.region_match import listing_region_matches_filter
+        from app.services.search.region_match import (
+            is_generic_location,
+            listing_region_matches_filter,
+            text_mentions_any_region,
+        )
 
-        region_haystack = item.region or ""
-        if (item.source or "").lower() == "telegram":
-            region_haystack = f"{region_haystack} {item.title or ''} {item.description or ''}"
-        if not any(listing_region_matches_filter(region_haystack, region) for region in regions):
+        own_region = item.region or ""
+        if not is_generic_location(own_region):
+            ok = any(listing_region_matches_filter(own_region, r) for r in regions)
+        elif (item.source or "").lower() == "telegram":
+            # У пості міста в окремому полі немає — шукаємо його в тексті, а
+            # якщо там теж немає, показуємо: краще так, ніж втратити оголошення.
+            text = f"{item.title or ''} {item.description or ''}"
+            ok = (
+                any(listing_region_matches_filter(text, r) for r in regions)
+                if text_mentions_any_region(text)
+                else True
+            )
+        else:
+            # OLX/AUTO.RIA завжди віддають місто, тож «Україна» — це не Київ.
+            ok = not (item.region or "").strip()
+        if not ok:
             return False
 
     blob = norm_text(f"{item.title} {item.fuel} {item.transmission} {item.description}")

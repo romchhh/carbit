@@ -1666,6 +1666,11 @@ def _title_has_model(title: str, model: str, *, brand: str | None = None) -> boo
     title_n = norm_text(title)
     model_n = norm_text(model_l)
     if re.fullmatch(r"\d+[a-z]?", model_n):
+        if model_n.isdigit():
+            # «Skoda 120» не має ловитись у «120 000 км».
+            from app.services.search.brand_model_keywords import _numeric_token_matches
+
+            return _numeric_token_matches(title_n, model_n)
         return bool(
             re.search(rf"(?<![\w]){re.escape(model_n)}(?![\w])", title_n)
         )
@@ -1697,11 +1702,22 @@ def _title_has_model(title: str, model: str, *, brand: str | None = None) -> boo
     if class_m:
         letter = class_m.group(1)
         if re.search(
-            rf"(?<![\w]){letter}(?:[\s\-]?(?:class|klass|клас(?:с)?)|[\s\-]?\d{{2,3}})(?![\w])",
+            rf"(?<![\w]){letter}[\s\-]?(?:class|klass|клас(?:с)?)(?![\w])",
             title,
             re.IGNORECASE,
         ):
             return True
+        # Цифрова форма («S 500») валідна лише коли заголовок не називає іншу
+        # марку — інакше Volvo S80 / S60 / S90 матчать Mercedes S-Class.
+        if re.search(
+            rf"(?<![\w]){letter}[\s\-]?\d{{2,3}}(?![\w])",
+            title,
+            re.IGNORECASE,
+        ):
+            from app.services.search.brand_model_keywords import text_names_other_brand
+
+            if not text_names_other_brand(title, brand or ""):
+                return True
     # J7 / C5 / X3 → «Jaecoo 7», «Omoda C5»
     letter_num = re.fullmatch(r"([a-z]+)(\d+[a-z]?)", model_l)
     if letter_num:

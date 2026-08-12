@@ -723,11 +723,21 @@ def primary_model_text_token(model: str, brand_slug: str = "") -> str:
     return tokens[0]
 
 
+# OLX /q-/ вимагає всі слова, а продавці пишуть просто «Prado», тож повна
+# назва «Land Cruiser Prado» втрачає більшість оголошень.
+_OLX_SHORT_TEXT_MODELS: dict[str, str] = {
+    "land cruiser prado": "prado",
+}
+
+
 def _canonical_olx_model_token(model: str, brand_path: str = "") -> str:
     """Канонічний текст моделі для одного OLX /q-/ (пробіли, не slug)."""
     model = (model or "").strip()
     if not model:
         return ""
+    short = _OLX_SHORT_TEXT_MODELS.get(_norm(model))
+    if short:
+        return short
     if re.fullmatch(r"\d+[a-z]?", model, re.IGNORECASE):
         return model
     token = primary_model_text_token(model, brand_path)

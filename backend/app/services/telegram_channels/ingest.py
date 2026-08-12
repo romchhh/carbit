@@ -312,7 +312,7 @@ async def _telegram_listings_matching_filters(
             from app.services.telegram_channels.lazy_photos import enqueue_listing_photos
 
             for lid in to_enqueue[:60]:
-                enqueue_listing_photos(lid, priority=1)
+                enqueue_listing_photos(lid, priority=1, force=True)
         except Exception:
             logger.exception("Failed to enqueue TG photos during search")
 

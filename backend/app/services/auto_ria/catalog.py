@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from typing import Any
 
-from app.core.text import norm_text, bounded_substring
+from app.core.text import bounded_substring, letter_class_canonical, norm_text, unify_class_spelling
 from app.services.auto_ria.client import AutoRiaClient
 from app.services.auto_ria.constants import DEFAULT_CATEGORY_ID
 
@@ -14,20 +13,61 @@ _models_cache: dict[int, list[dict[str, Any]]] = {}
 
 
 def _normalize_model_key(value: str) -> str:
-    """Порівняння моделей: «GLE Coupe» ≈ «GLE-Class Coupe», «купе» ≈ coupe."""
-    text = norm_text(value)
-    # AUTO.RIA часто: «C-Класс Купе» замість «C-Class Coupe»
-    text = re.sub(r"([a-z])[\s\-]*(?:клас(?:с)?|class)", r"\1 ", text, flags=re.I)
+    """Порівняння моделей: «GLE Coupe» ≈ «GLE-Class Coupe», «S-Class» ≈ «S-Класс»."""
+    canon = letter_class_canonical(value)
+    text = unify_class_spelling(value)
+    if canon:
+        text = unify_class_spelling(value)
+        if "coupe" in text or "купе" in text:
+            return f"{canon[0]} coupe"
+        return canon
+    text = unify_class_spelling(value)
+    text = text.replace("-class", " ").replace(" class", " ")
     for src, dst in (
         ("(купе)", " coupe "),
         ("(coupe)", " coupe "),
         (" купе", " coupe "),
         ("coupe", " coupe "),
-        ("-class", " "),
-        (" class", " "),
     ):
         text = text.replace(src, dst)
     return " ".join(text.split())
+
+
+def _name_has_coupe(name: str) -> bool:
+    low = norm_text(name)
+    return "coupe" in low or "купе" in low
+
+
+def _resolve_letter_class_model(
+    models: list[dict[str, Any]],
+    model: str,
+) -> int | None:
+    """X-Class / X-Класс — точний збіг без підміни Sprinter/SL через startswith('s')."""
+    target_canon = letter_class_canonical(model)
+    if not target_canon:
+        return None
+    wants_coupe = _name_has_coupe(model)
+
+    exact: list[dict[str, Any]] = []
+    loose: list[dict[str, Any]] = []
+    for item in models:
+        name = str(item.get("name", ""))
+        item_canon = letter_class_canonical(name)
+        if item_canon != target_canon:
+            continue
+        if wants_coupe:
+            if _name_has_coupe(name):
+                exact.append(item)
+        elif not _name_has_coupe(name):
+            exact.append(item)
+        else:
+            loose.append(item)
+
+    pick_from = exact or loose
+    if not pick_from:
+        return None
+    pick_from.sort(key=lambda row: len(norm_text(str(row.get("name", "")))))
+    return int(pick_from[0]["value"])
 
 
 async def _load_marks(client: AutoRiaClient) -> list[dict[str, Any]]:
@@ -73,6 +113,9 @@ def _model_catalog_match(
 ) -> bool:
     if target == name_n or target_key == name_key:
         return True
+    # «S-Class» → target_key «s-class»; не матчити Sprinter/SL через startswith('s').
+    if len(target_key) <= 2:
+        return False
     if target_key and name_key.startswith(target_key):
         return True
     if target_key and bounded_substring(name_key, target_key):
@@ -88,6 +131,10 @@ async def resolve_model_id(client: AutoRiaClient, mark_id: int, model: str) -> i
     target = norm_text(model)
     target_key = _normalize_model_key(model)
     models = await _load_models(client, mark_id)
+
+    letter_class_id = _resolve_letter_class_model(models, model)
+    if letter_class_id is not None:
+        return letter_class_id
 
     for item in models:
         name = str(item.get("name", ""))

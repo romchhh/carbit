@@ -300,10 +300,19 @@ def _clean_model_token(model: str, *, brand: str = "") -> str:
     return tokens[0] if tokens else m.strip()
 
 
+def _hint_conflicts_with_title(title: str, brand_hint: str) -> bool:
+    """Text-query видача OLX шумить: не підставляти марку фільтра в чуже авто."""
+    if not title or not brand_hint:
+        return False
+    from app.services.search.brand_model_keywords import text_names_other_brand
+
+    return text_names_other_brand(title, brand_hint)
+
+
 def _split_brand_model(title: str, brand_hint: str = "", model_hint: str = "") -> tuple[str, str]:
     brand = brand_hint.strip()
     model = model_hint.strip()
-    if brand and model:
+    if brand and model and not _hint_conflicts_with_title(title, brand):
         return brand, model
 
     title_work = re.sub(

@@ -21,6 +21,11 @@ class FailedChargesTests(unittest.IsolatedAsyncioTestCase):
             failed_charges=MAX_FAILED_CHARGES - 1,
             last_status=None,
             cancelled_at=None,
+            card_mask=None,
+            amount=29900,
+            currency="UAH",
+            plan="pro",
+            id="sub_1",
         )
         user = SimpleNamespace(id="u1", telegram_connected=False, telegram_id=None)
         db = AsyncMock()
@@ -56,6 +61,11 @@ class FailedChargesTests(unittest.IsolatedAsyncioTestCase):
             failed_charges=0,
             last_status=None,
             cancelled_at=None,
+            card_mask=None,
+            amount=29900,
+            currency="UAH",
+            plan="pro",
+            id="sub_1",
         )
         user = SimpleNamespace(id="u1")
         db = AsyncMock()

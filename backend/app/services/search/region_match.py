@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from app.core.text import norm_text
 from app.services.search.region_cities import REGION_CITIES, cities_for_region
@@ -35,6 +36,46 @@ def _keyword_in_blob(keyword: str, blob: str) -> bool:
             )
         )
     return kw in blob
+
+
+def is_generic_location(value: str) -> bool:
+    """Локація нічого не каже: порожньо або «Україна»."""
+    key = norm_text(value or "")
+    return not key or key in _GENERIC_LOCATIONS
+
+
+@lru_cache(maxsize=1)
+def _region_hint_tokens() -> tuple[frozenset[str], tuple[str, ...]]:
+    single: set[str] = set()
+    multi: set[str] = set()
+    names = set(REGION_CITIES)
+    for region, cities in REGION_CITIES.items():
+        names.add(region)
+        names.update(cities)
+    for name in names:
+        key = norm_text(name)
+        if len(key) <= _SHORT_KW_MAX:
+            continue
+        (multi if " " in key else single).add(key)
+    return frozenset(single), tuple(sorted(multi))
+
+
+def text_mentions_any_region(text: str) -> bool:
+    """Чи згадано в тексті бодай якесь місто/область.
+
+    Пост без жодної локації не можна судити строго — інакше Telegram-оголошення
+    без міста зникають із будь-якого регіонального пошуку.
+    """
+    blob = norm_text(text or "")
+    if not blob:
+        return False
+    single, multi = _region_hint_tokens()
+    words = set(re.findall(r"[a-zа-яёіїєґ]+", blob))
+    if words & single:
+        return True
+    return any(
+        phrase in blob for phrase in multi if phrase.split(" ", 1)[0] in words
+    )
 
 
 def listing_region_matches_filter(listing_region: str, filter_region: str) -> bool:

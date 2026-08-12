@@ -269,11 +269,14 @@ def _telegram_listing_rank(row: ListingOut) -> tuple:
     published = getattr(row, "published_at", None) or getattr(row, "found_at", None)
     # newer → більший ts для порівняння
     ts = published.timestamp() if published is not None else 0.0
+    # З репостів одного авто показуємо картку з фото і найсвіжішу: різниця
+    # в пару символів заголовка не варта того, щоб показати місячний пост.
     return (
+        1 if row.images else 0,
+        ts,
         len(row.images or []),
         len((row.description or "").strip()),
         len((row.title or "").strip()),
-        ts,
     )
 
 

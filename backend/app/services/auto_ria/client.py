@@ -27,7 +27,6 @@ _client_lock = asyncio.Lock()
 
 
 async def get_shared_http_client() -> httpx.AsyncClient:
-    """Reuse one AsyncClient across concurrent AUTO.RIA requests."""
     global _http_client
     if _http_client is not None and not _http_client.is_closed:
         return _http_client
@@ -40,6 +39,18 @@ async def get_shared_http_client() -> httpx.AsyncClient:
                 limits=httpx.Limits(max_connections=40, max_keepalive_connections=20),
             )
         return _http_client
+
+
+async def _reset_shared_http_client() -> None:
+    """Скидає keep-alive пул після :closed / protocol errors upstream."""
+    global _http_client
+    async with _client_lock:
+        if _http_client is not None and not _http_client.is_closed:
+            try:
+                await _http_client.aclose()
+            except Exception:
+                pass
+        _http_client = None
 
 
 def _is_transient_http_status(status: int, body: str) -> bool:
@@ -78,6 +89,7 @@ class AutoRiaClient:
                 last_error = AutoRiaError(f"AUTO.RIA мережева помилка: {exc}")
                 if attempt + 1 >= _MAX_ATTEMPTS:
                     break
+                await _reset_shared_http_client()
                 delay = _RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)]
                 logger.warning(
                     "AUTO.RIA network error path=%s attempt=%s/%s: %s — retry in %.1fs",
@@ -111,6 +123,7 @@ class AutoRiaClient:
                         body[:120],
                     )
                     last_error = err
+                    await _reset_shared_http_client()
                     await asyncio.sleep(delay)
                     continue
                 if _is_transient_http_status(response.status_code, body):

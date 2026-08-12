@@ -20,6 +20,7 @@ class KVClient(Protocol):
     async def exists(self, key: str) -> int: ...
     async def ttl(self, key: str) -> int: ...
     async def incr(self, key: str) -> int: ...
+    async def mget(self, *keys: str) -> list[str | None]: ...
     async def ping(self) -> bool: ...
     async def hincrby(self, key: str, field: str, amount: int = 1) -> int: ...
     async def hgetall(self, key: str) -> dict[str, str]: ...
@@ -38,6 +39,19 @@ def resolve_sqlite_path(url: str, root_dir: Path) -> Path:
     db_path = Path(raw_path) if raw_path.startswith("/") else root_dir / raw_path
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return db_path.resolve()
+
+
+class _SQLitePipeline:
+    def __init__(self, kv: "SQLiteKV"):
+        self._kv = kv
+        self._ops: list[tuple[str, str, int, str]] = []
+
+    def setex(self, key: str, ttl: int, value: str) -> None:
+        self._ops.append(("setex", key, ttl, value))
+
+    async def execute(self) -> None:
+        for _, key, ttl, value in self._ops:
+            await self._kv.setex(key, ttl, value)
 
 
 class SQLiteKV:
@@ -150,6 +164,14 @@ class SQLiteKV:
 
     async def incr(self, key: str) -> int:
         return await to_thread(self._incr_sync, key)
+
+    async def mget(self, *keys: str) -> list[str | None]:
+        if not keys:
+            return []
+        return [await self.get(key) for key in keys]
+
+    def pipeline(self, transaction: bool = False) -> _SQLitePipeline:
+        return _SQLitePipeline(self)
 
     async def ping(self) -> bool:
         try:
@@ -361,6 +383,15 @@ class RedisKV:
 
     async def incr(self, key: str) -> int:
         return int(await self._client.incr(key))
+
+    async def mget(self, *keys: str) -> list[str | None]:
+        if not keys:
+            return []
+        raw = await self._client.mget(*keys)
+        return list(raw)
+
+    def pipeline(self, transaction: bool = False):
+        return self._client.pipeline(transaction=transaction)
 
     async def ping(self) -> bool:
         try:

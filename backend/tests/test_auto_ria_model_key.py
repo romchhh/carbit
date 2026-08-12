@@ -52,6 +52,28 @@ class AutoRiaModelResolveTests(unittest.IsolatedAsyncioTestCase):
             model_id = await resolve_model_id(client, 47, "C-Class Coupe")
         self.assertEqual(model_id, 3)
 
+    async def test_s_class_not_sprinter(self):
+        models = [
+            {"name": "Sprinter", "value": 100},
+            {"name": "SL", "value": 101},
+            {"name": "S-Класс", "value": 102},
+            {"name": "S-Класс AMG", "value": 103},
+        ]
+        client = AsyncMock()
+        with patch("app.services.auto_ria.catalog._load_models", return_value=models):
+            model_id = await resolve_model_id(client, 47, "S-Class")
+        self.assertEqual(model_id, 102)
+
+    async def test_s_class_coupe_prefers_coupe_variant(self):
+        models = [
+            {"name": "S-Класс", "value": 102},
+            {"name": "S-Класс Купе", "value": 104},
+        ]
+        client = AsyncMock()
+        with patch("app.services.auto_ria.catalog._load_models", return_value=models):
+            model_id = await resolve_model_id(client, 47, "S-Class Coupe")
+        self.assertEqual(model_id, 104)
+
 
 if __name__ == "__main__":
     unittest.main()

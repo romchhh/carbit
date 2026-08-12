@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.search.region_match import listing_region_matches_filter
@@ -69,8 +70,9 @@ class TouaregBoryspilSearchTests(unittest.TestCase):
             source_data={},
             price_history=[],
             is_duplicate=False,
-            published_at=None,
-            found_at=None,
+            # Свіже: тест про марку/регіон/КПП, а не про вікно давності.
+            published_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            found_at=datetime.now(timezone.utc),
         )
         filters = SearchFilters(
             brand="Volkswagen",

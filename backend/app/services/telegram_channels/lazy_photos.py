@@ -151,10 +151,19 @@ def _ensure_photo_refs(listing_id: str) -> bool:
     return True
 
 
-def enqueue_listing_photos(listing_id: str, *, priority: int = 0) -> bool:
+def enqueue_listing_photos(
+    listing_id: str,
+    *,
+    priority: int = 0,
+    force: bool = False,
+) -> bool:
     if not _ensure_photo_refs(listing_id):
         return False
-    return _media_store().enqueue_photo_download(listing_id, priority=priority)
+    return _media_store().enqueue_photo_download(
+        listing_id,
+        priority=priority,
+        force=force,
+    )
 
 
 async def telegram_worker_online() -> bool:
@@ -290,7 +299,8 @@ async def ensure_telegram_listing_photos(
     if not listing_needs_photos(listing):
         return list(listing.images or [])
 
-    enqueue_listing_photos(listing.id, priority=2)
+    # force: файлів на диску немає, тож статус 'done' у refs застарілий.
+    enqueue_listing_photos(listing.id, priority=2, force=True)
     worker_up = await telegram_worker_online()
 
     if worker_up:
@@ -301,7 +311,7 @@ async def ensure_telegram_listing_photos(
         )
         if urls:
             return urls
-        enqueue_listing_photos(listing.id, priority=3)
+        enqueue_listing_photos(listing.id, priority=3, force=True)
         urls = await wait_for_listing_photos(
             db,
             listing.id,
@@ -338,7 +348,7 @@ async def ensure_telegram_listing_photos(
         except Exception:
             logger.exception("Inline Telegram photo download failed for %s", listing.id)
 
-        enqueue_listing_photos(listing.id, priority=2)
+        enqueue_listing_photos(listing.id, priority=2, force=True)
         urls = await wait_for_listing_photos(db, listing.id, timeout=min(8.0, telethon_timeout))
         if urls:
             return urls
@@ -386,7 +396,7 @@ async def hydrate_telegram_page_photos(
     targets = need_download[: max(1, max_downloads)]
 
     for listing in targets:
-        enqueue_listing_photos(listing.id, priority=1)
+        enqueue_listing_photos(listing.id, priority=1, force=True)
 
     if worker_up and wait_seconds > 0:
         pending_ids = {listing.id for listing in targets}

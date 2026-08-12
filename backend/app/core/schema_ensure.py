@@ -71,6 +71,12 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
             if "refreshed_at" not in listing_cols:
                 await conn.execute(text("ALTER TABLE listings ADD COLUMN refreshed_at DATETIME"))
                 logger.warning("Added missing listings.refreshed_at column")
+            for column in ("seller_phone", "seller_telegram", "seller_url"):
+                if column not in listing_cols:
+                    await conn.execute(
+                        text(f"ALTER TABLE listings ADD COLUMN {column} VARCHAR")
+                    )
+                    logger.warning("Added missing listings.%s column", column)
 
             if "billing_subscriptions" not in tables:
                 await conn.execute(
@@ -301,6 +307,9 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
         for column, ddl in (
             ("vin", "ALTER TABLE listings ADD COLUMN vin VARCHAR"),
             ("refreshed_at", "ALTER TABLE listings ADD COLUMN refreshed_at TIMESTAMPTZ"),
+            ("seller_phone", "ALTER TABLE listings ADD COLUMN seller_phone VARCHAR"),
+            ("seller_telegram", "ALTER TABLE listings ADD COLUMN seller_telegram VARCHAR"),
+            ("seller_url", "ALTER TABLE listings ADD COLUMN seller_url VARCHAR"),
         ):
             col_exists = await conn.execute(
                 text(

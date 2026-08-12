@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
+
+# Матчинг марок/моделей нормалізує ті самі короткі токени сотні тисяч разів
+# за один пошук, тож кешуємо. Довгі описи повз кеш — щоб не тримати їх у памʼяті.
+_CACHEABLE_LEN = 200
 
 # Latin / UA / RU «class» у назвах Mercedes та інших
 _CLASS_WORD_RE = re.compile(
@@ -13,26 +18,41 @@ _LETTER_CLASS_RE = re.compile(
 )
 
 
+@lru_cache(maxsize=65536)
+def _norm_text_cached(value: str) -> str:
+    return " ".join(value.strip().lower().split())
+
+
 def norm_text(value: str | None) -> str:
     """Lowercase, collapse whitespace — для порівняння брендів, регіонів тощо."""
     if not value:
         return ""
+    if type(value) is str and len(value) <= _CACHEABLE_LEN:
+        return _norm_text_cached(value)
     return " ".join(str(value).strip().lower().split())
+
+
+_LETTER_CLASS_SUB_RE = re.compile(
+    r"([a-z])[\s\-]*(?:class|klass|клас(?:с)?)\b",
+    re.IGNORECASE,
+)
+
+
+@lru_cache(maxsize=65536)
+def _unify_class_spelling_cached(text: str) -> str:
+    t = norm_text(text)
+    t = _LETTER_CLASS_SUB_RE.sub(r"\1 class", t)
+    t = _CLASS_WORD_RE.sub(" class ", t)
+    return " ".join(t.split())
 
 
 def unify_class_spelling(text: str) -> str:
     """«G-Класс» / «G-Class» / «g клас» → «g class» для порівняння latin+кирилиця."""
     if not text:
         return ""
-    t = norm_text(text)
-    t = re.sub(
-        r"([a-z])[\s\-]*(?:class|klass|клас(?:с)?)\b",
-        r"\1 class",
-        t,
-        flags=re.IGNORECASE,
-    )
-    t = _CLASS_WORD_RE.sub(" class ", t)
-    return " ".join(t.split())
+    if type(text) is str and len(text) <= _CACHEABLE_LEN:
+        return _unify_class_spelling_cached(text)
+    return _unify_class_spelling_cached.__wrapped__(text)
 
 
 def letter_class_canonical(model: str) -> str | None:

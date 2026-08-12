@@ -12,6 +12,7 @@ from functools import lru_cache
 from app.core.text import norm_text, bounded_substring, unify_class_spelling, letter_class_canonical, letter_class_display, letter_class_search_tokens
 from app.services.search.fe_catalog import (
     _identity_tokens,
+    load_fe_brand_models,
     unique_model_token_owner,
 )
 from app.services.olx.brand_slugs import (
@@ -1096,12 +1097,20 @@ def collect_model_keyword_variants(brand: str, model: str) -> tuple[str, ...]:
 
     # Якщо model_key є значенням у MODEL_EXTRA_ALIASES (напр. «c 300» → ключ «c-class»)
     # — підвантажуємо всі алієси батьківського ключа.
-    for parent_key, parent_aliases in MODEL_EXTRA_ALIASES.items():
-        normed_aliases = [norm_text(a) for a in parent_aliases]
-        if model_key in normed_aliases and parent_key != model_key:
-            for extra in parent_aliases:
-                add(extra)
-            break
+    # Тільки для трим-рівня і в межах своєї марки: «C6» у Citroën — власна модель,
+    # і не має тягнути алієси Audi A6, чиї шасі-коди C5..C8 збігаються з нею
+    # (так само Genesis G80 vs шасі BMW M3 G80).
+    if not _is_catalog_model(brand_slug, model_key):
+        for parent_key, parent_aliases in MODEL_EXTRA_ALIASES.items():
+            if parent_key == model_key:
+                continue
+            if brand_slug and not _is_catalog_model(brand_slug, parent_key):
+                continue
+            normed_aliases = [norm_text(a) for a in parent_aliases]
+            if model_key in normed_aliases:
+                for extra in parent_aliases:
+                    add(extra)
+                break
 
     target_slug = slugify(primary_model_text_token(model, brand_slug))
     for alias, alias_slug in MODEL_TO_SLUG.items():
@@ -1118,6 +1127,7 @@ def collect_model_keyword_variants(brand: str, model: str) -> tuple[str, ...]:
             seen.add(key)
             deduped.append(token)
     filtered = _filter_compound_body_variants(model, deduped)
+    filtered = _filter_generic_submodel_variants(model, filtered)
     return tuple(_filter_letter_class_variants(model, filtered))
 
 
@@ -1434,18 +1444,17 @@ def _mercedes_letter_class_conflicts(hay: str, model: str, *, brand: str = "") -
     return _mercedes_compound_conflicts(norm_text(hay), key)
 
 
-def _compound_base_matches(hay: str, base: str, body: str) -> bool:
+def _compound_base_matches(hay: str, base: str, body: str, brand: str = "") -> bool:
     hay_n = norm_text(hay)
     body_n = norm_text(body)
     base_n = norm_text(base)
 
-    compound_variants = {
-        f"{base_n} {body_n}",
-        f"{base_n.replace(' ', '-')}-{body_n}",
-        f"{base_n.replace(' ', '-')} {body_n}",
-        re.sub(r"[\s\-]+", "", f"{base_n}{body_n}"),
-    }
-    if any(v in hay_n for v in compound_variants):
+    # Роздільники між словами довільні: «AMG GT 4-Door Coupe» = «amg gt 4 door coupe».
+    words = [re.escape(w) for w in re.split(r"[\s\-]+", f"{base_n} {body_n}") if w]
+    if words and re.search(
+        r"(?<![a-zа-яёіїє0-9])" + r"[\s\-]*".join(words) + r"(?![a-zа-яёіїє0-9])",
+        hay_n,
+    ):
         return True
 
     class_m = re.fullmatch(r"([a-z]) class", base_n) or re.fullmatch(
@@ -1460,8 +1469,10 @@ def _compound_base_matches(hay: str, base: str, body: str) -> bool:
             return True
         if re.search(rf"\b{letter}[\s\-]?{re.escape(body_n)}\b", hay_n):
             return True
+        # «S 500 Coupe» — так, «Volvo S80 Coupe» — ні: цифрова форма дійсна,
+        # лише коли текст не називає чужу марку.
         if re.search(rf"\b{letter}[\s\-]?\d{{2,3}}[a-z]?\b", hay_n):
-            return True
+            return not (brand and text_names_other_brand(hay_n, brand))
         return False
 
     compact_base = re.sub(r"[\s\-]+", "", base_n)
@@ -1484,7 +1495,7 @@ def _text_matches_compound_body_model(hay: str, brand: str, model: str) -> bool 
     brand_slug = resolve_olx_brand_slug(brand) if brand else ""
     if brand_slug in ("mercedes-benz", "mercedes") and _mercedes_compound_conflicts(hay_n, base):
         return False
-    return _compound_base_matches(hay_n, base, body)
+    return _compound_base_matches(hay_n, base, body, brand)
 
 
 def _filter_compound_body_variants(model: str, variants: list[str]) -> list[str]:
@@ -1524,6 +1535,151 @@ def _filter_compound_body_variants(model: str, variants: list[str]) -> list[str]
     return out
 
 
+# Слова, що самі по собі не ідентифікують модель: «Atlas Pro» не має матчити
+# «Tiggo 8 Pro», «Range Rover» — «Rover 618», «3 Series GT» — «McLaren GT».
+_GENERIC_MODEL_WORDS = frozenset({
+    "pro", "max", "plus", "gt", "gts", "gtx", "ev", "phev", "hev", "mhev",
+    "sport", "grand", "coupe", "sedan", "hatchback", "cross", "turbo", "hybrid",
+    "spider", "spyder", "cabrio", "cabriolet", "wagon", "touring", "tourer",
+    "active", "allroad", "ultra", "premium", "luxury", "long", "limited",
+    "series", "серия", "серія", "серии", "class", "клас", "класс", "rover",
+    "van", "pickup", "suv", "crossover", "electric", "eco", "line", "edition",
+    "avant", "sportback", "estate", "combi", "kombi", "универсал", "універсал",
+})
+
+
+@lru_cache(maxsize=4096)
+def _weak_submodel_tokens(model: str) -> frozenset[str]:
+    """Слова багатослівної моделі, які самі по собі її не ідентифікують.
+
+    «Atlas Pro» → {'pro'}: інакше варіант «Pro» матчить будь-який Pro-трим
+    чужої марки. Саму назву моделі («GT» для Opel GT) сюди не включаємо.
+    """
+    words = [w for w in re.split(r"[\s\-./]+", (model or "").strip()) if w]
+    if len(words) < 2:
+        return frozenset()
+
+    model_key = norm_text(model)
+    compact_key = norm_text(re.sub(r"[\s\-./]+", "", model))
+    weak = set()
+    for word in words:
+        key = norm_text(word)
+        if not key or key in (model_key, compact_key):
+            continue
+        if (
+            key in _GENERIC_MODEL_WORDS
+            or len(key) <= 2
+            or (key.isdigit() and len(key) <= 3)
+        ):
+            weak.add(key)
+    return frozenset(weak)
+
+
+def _filter_generic_submodel_variants(model: str, variants: list[str]) -> list[str]:
+    weak = _weak_submodel_tokens(model)
+    if not weak:
+        return variants
+    return [token for token in variants if norm_text(token) not in weak]
+
+
+@lru_cache(maxsize=1)
+def _catalog_model_owners() -> dict[str, frozenset[str]]:
+    """norm(назва моделі) → марки, у яких вона є.
+
+    Шасі-коди в alias-таблицях («g80» у BMW M3, «c5» у Audi A6) збігаються
+    з реальними назвами моделей інших марок (Genesis G80, Citroën C5).
+    """
+    owners: dict[str, set[str]] = {}
+    for brand, models in load_fe_brand_models().items():
+        slug = resolve_olx_brand_slug(brand)
+        if not slug:
+            continue
+        for model in models:
+            key = norm_text(model)
+            if key:
+                owners.setdefault(key, set()).add(slug)
+    return {key: frozenset(slugs) for key, slugs in owners.items()}
+
+
+# Дволітерні моделі (Lexus IS/ES/GS) збігаються зі звичайними словами.
+_TWO_LETTER_STOPWORDS = frozenset({
+    "is", "it", "in", "on", "at", "to", "no", "up", "us", "we", "he", "an",
+    "as", "be", "by", "do", "go", "if", "me", "my", "of", "or", "so", "am",
+    "he", "id", "ok", "re", "un", "vs",
+    "не", "на", "за", "до", "по", "із", "зі", "об", "від", "як", "чи", "бо",
+    "ці", "ця", "цe", "ти", "ви", "ми", "їх", "їй", "ім", "що", "бу",
+})
+
+
+def _brand_confirms_variant(raw: str, hay: str, brand: str, variant: str) -> bool:
+    """Чи підтверджує текст, що двозначний токен належить саме цій марці.
+
+    Слово «is» — це Lexus IS лише поруч із маркою («Lexus IS 250») або з
+    номером трима; в «This is a great car» — ні.
+    """
+    if text_names_other_brand(raw, brand):
+        return False
+    esc = re.escape(variant)
+    if len(variant) <= 2 and variant.isalpha():
+        for bt in match_tokens(collect_brand_keyword_variants(brand)):
+            if len(bt) < 2:
+                continue
+            if re.search(rf"(?<![a-zа-яёіїє0-9]){re.escape(bt)}[\s\-]{esc}\b", hay):
+                return True
+        return bool(
+            re.search(rf"(?<![a-zа-яёіїє0-9]){esc}[\s\-]?\d{{2,4}}\b", hay)
+        )
+    # Токен — назва моделі чужої марки (MG 550 проти трима BMW 550i).
+    # Коротку марку («MG») text_names_other_brand не ловить, тож вимагаємо,
+    # щоб наша марка була названа явно.
+    owners = _catalog_model_owners().get(variant)
+    brand_slug = resolve_olx_brand_slug(brand)
+    if owners and brand_slug and brand_slug not in owners:
+        return _text_has_brand_token(hay, brand)
+    return True
+
+
+def _text_has_brand_token(hay: str, brand: str) -> bool:
+    return any(
+        len(bt) >= 2 and _norm_variant_in_haystack(bt, hay)
+        for bt in match_tokens(collect_brand_keyword_variants(brand))
+    )
+
+
+def _variant_needs_brand_proof(variant: str, brand_slug: str) -> bool:
+    """Чи є варіант надто двозначним, щоб приймати його без назви марки."""
+    if variant.isdigit():
+        return True
+    if len(variant) <= 2 and variant.isalpha() and variant in _TWO_LETTER_STOPWORDS:
+        return True
+    owners = _catalog_model_owners().get(variant)
+    if owners and brand_slug and brand_slug not in owners:
+        return True
+    return False
+
+
+@lru_cache(maxsize=1)
+def _catalog_model_index() -> frozenset[tuple[str, str]]:
+    """{(brand_slug, norm(model))} з FE-каталогу."""
+    rows: set[tuple[str, str]] = set()
+    for brand, models in load_fe_brand_models().items():
+        slug = resolve_olx_brand_slug(brand)
+        if not slug:
+            continue
+        for model in models:
+            key = norm_text(model)
+            if key:
+                rows.add((slug, key))
+    return frozenset(rows)
+
+
+def _is_catalog_model(brand_slug: str, model_key: str) -> bool:
+    """Чи є така модель у FE-каталозі цієї марки."""
+    if not brand_slug or not model_key:
+        return False
+    return (brand_slug, norm_text(model_key)) in _catalog_model_index()
+
+
 def _filter_letter_class_variants(model: str, variants: list[str]) -> list[str]:
     """Прибирає голий «class»/«клас» для C/E/S/G-Class — інакше матчить GLA-Class."""
     if not _normalize_letter_class_key(model):
@@ -1540,6 +1696,7 @@ def _filter_letter_class_variants(model: str, variants: list[str]) -> list[str]:
     return out
 
 
+@lru_cache(maxsize=4096)
 def _model_core_tokens(brand: str, model: str) -> tuple[str, ...]:
     """Компактні токени моделі для brand+model shorthand (усі марки)."""
     brand_slug = resolve_olx_brand_slug(brand) if brand else ""
@@ -1663,19 +1820,18 @@ def _allows_distinctive_model_without_brand(brand: str, model: str) -> bool:
     return False
 
 
+@lru_cache(maxsize=4096)
 def _brand_shorthand_variants(brand: str, model: str) -> tuple[str, ...]:
     """Варіанти «brand + core» для всіх марок."""
+    brand_keys = [norm_text(bt) for bt in collect_brand_keyword_variants(brand)]
     return tuple(
         v
         for v in _generated_short_model_variants(brand, model)
-        if " " in v
-        and any(
-            norm_text(bt) in norm_text(v)
-            for bt in collect_brand_keyword_variants(brand)
-        )
+        if " " in v and any(bk in norm_text(v) for bk in brand_keys)
     )
 
 
+@lru_cache(maxsize=4096)
 def _regex_model_patterns(brand: str, model: str) -> tuple[str, ...]:
     """Regex для colloquial написань — усі марки."""
     brand_slug = resolve_olx_brand_slug(brand) if brand else ""
@@ -1718,15 +1874,27 @@ def _regex_model_patterns(brand: str, model: str) -> tuple[str, ...]:
         num = re.escape(id_m.group(1))
         add(rf"\bid[\s\-.]?{num}\b")
 
+    weak_tokens = _weak_submodel_tokens(model)
     for core in _model_core_tokens(brand, model):
         c = norm_text(core)
         if len(c) < 2:
+            continue
+        # «Song Max» не має ловитись голим «max» у «Isuzu D-Max».
+        if c in weak_tokens:
             continue
         esc = re.escape(c)
         if len(c) <= 3 and c.isalpha():
             add(rf"(?<![a-zа-яёіїє0-9]){esc}(?![a-zа-яёіїє0-9])")
         elif " " in c or "-" in c:
-            add(esc.replace(r"\ ", r"[\s\-]?").replace(r"\-", r"[\s\-]?"))
+            # Межі обовʼязкові: «i-pace» без них ловить «min-i pace-man».
+            # Збираємо з токенів, інакше друга заміна псує вже вставлений клас.
+            parts = [re.escape(p) for p in re.split(r"[\s\-]+", c) if p]
+            if parts:
+                add(
+                    r"(?<![a-zа-яёіїє0-9])"
+                    + r"[\s\-]?".join(parts)
+                    + r"(?![a-zа-яёіїє0-9])"
+                )
 
     if brand:
         for bt in collect_brand_keyword_variants(brand):
@@ -1921,8 +2089,13 @@ def strip_service_brand_noise(text: str) -> str:
     return _SERVICE_BRAND_NOISE_RE.sub(" ", text)
 
 
+@lru_cache(maxsize=2048)
 def _haystacks_for_match(text: str) -> tuple[str, ...]:
-    """Текст для матчингу марки/моделі — без «BMW Garage» / «Cooper Centre»."""
+    """Текст для матчингу марки/моделі — без «BMW Garage» / «Cooper Centre».
+
+    Кеш: один і той самий текст оголошення проганяється через кожну пару
+    brand/model у фільтрі.
+    """
     raw = text or ""
     if not raw:
         return ()
@@ -1932,6 +2105,15 @@ def _haystacks_for_match(text: str) -> tuple[str, ...]:
     unified = unify_class_spelling(base)
     if unified and unified != norm_text(base):
         variants.append(unified)
+    # «зикр007», «bmw320» — у Telegram марку й номер часто пишуть разом.
+    unglued = re.sub(
+        r"(?<![a-zа-яёіїє0-9])([a-zа-яёіїє]{3,})(\d{2,4})(?![a-zа-яёіїє0-9])",
+        r"\1 \2",
+        base,
+        flags=re.IGNORECASE,
+    )
+    if unglued != base:
+        variants.append(unglued)
     try:
         from app.services.olx.parser import _normalize_title_for_match
 
@@ -1958,12 +2140,60 @@ def message_matches_search_filters(text: str, brand: str, model: str = "") -> bo
     return False
 
 
+# Одиниці, після яких число — це пробіг/ціна/обʼєм, а не назва моделі.
+_MEASURE_UNIT_RE = r"(?:км|km|тис|тыс|тисяч|тысяч|грн|uah|usd|eur|л\b|l\b|дол|\$|€)"
+
+
+def _numeric_token_matches(hay: str, digits: str) -> bool:
+    """Числова модель («Skoda 120») — але не шматок пробігу «120 000 км».
+
+    Групу тисяч упізнаємо за наступною групою рівно з трьох цифр: у «120 000»
+    це пробіг, а в «740 2019» — трим і рік.
+    """
+    pattern = (
+        r"(?<![a-zа-яёіїє0-9])"
+        r"(?<!\d )"
+        + re.escape(digits)
+        + r"(?! ?\d{3}(?!\d))"
+        + r"(?!\s*" + _MEASURE_UNIT_RE + r")"
+        + r"(?![a-zа-яёіїє0-9])"
+    )
+    return bool(re.search(pattern, hay))
+
+
+@lru_cache(maxsize=8192)
+def match_tokens(variants: tuple[str, ...]) -> tuple[str, ...]:
+    """Нормалізовані варіанти без шумових токенів.
+
+    Рахуємо раз на (brand, model), а не для кожного оголошення: у гарячому
+    циклі це десятки тисяч зайвих нормалізацій на один пошук.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in variants:
+        v = norm_text(raw)
+        if not v or v in seen:
+            continue
+        if v in _SQL_SKIP_TOKENS and " " not in raw.strip().lower():
+            continue
+        seen.add(v)
+        out.append(v)
+    return tuple(out)
+
+
 def _variant_in_haystack(variant: str, hay: str) -> bool:
     v = norm_text(variant)
     if not v or not hay:
         return False
     # Шумні однолітерні/цифрові токени без контексту марки.
     if v in _SQL_SKIP_TOKENS and " " not in (variant or "").strip().lower():
+        return False
+    return _norm_variant_in_haystack(v, hay)
+
+
+def _norm_variant_in_haystack(v: str, hay: str) -> bool:
+    """Те саме, що _variant_in_haystack, але варіант уже нормалізований."""
+    if not v or not hay:
         return False
     if len(v) <= 2 and v.isalpha():
         return bool(
@@ -1972,26 +2202,40 @@ def _variant_in_haystack(variant: str, hay: str) -> bool:
                 hay,
             )
         )
-    if v.isdigit() and len(v) <= 2:
-        return bool(
-            re.search(
-                rf"(?<![a-zа-яёіїє0-9]){re.escape(v)}(?![a-zа-яёіїє0-9])",
-                hay,
+    if v.isdigit():
+        if _numeric_token_matches(hay, v):
+            return True
+        # «740» ↔ «740i / 740Li / 730d»: номер трима з літерним суфіксом двигуна.
+        if 3 <= len(v) <= 4:
+            return bool(
+                re.search(
+                    rf"(?<![a-zа-яёіїє0-9]){re.escape(v)}[a-z]{{1,2}}(?![a-zа-яёіїє0-9])",
+                    hay,
+                )
             )
-        )
-    if v in hay:
-        if not bounded_substring(hay, v):
-            return False
+        return False
+    if v in hay and bounded_substring(hay, v):
         return True
     u_hay = unify_class_spelling(hay)
     u_v = unify_class_spelling(v)
     if u_v and bounded_substring(u_hay, u_v):
         return True
+    # «GLC Coupe» ↔ «GLC-Class Coupe»: «class» між базою і типом кузова
+    # необовʼязкове.
+    parts = v.rsplit(" ", 1)
+    if len(parts) == 2 and parts[1] in _COMPOUND_BODY_SUFFIXES:
+        base, body = parts
+        if re.search(
+            rf"(?<![a-zа-яёіїє0-9]){re.escape(base)}[\s\-]?(?:class|клас(?:с)?)"
+            rf"[\s\-]?{re.escape(body)}(?![a-zа-яёіїє0-9])",
+            hay,
+        ):
+            return True
     # «c300» ↔ «c 300»: однолітерний префікс + цифри — шукаємо обидві форми.
+    # Межа обовʼязкова: «s580» не має матчити «EQS 580».
     m = re.fullmatch(r"([a-z])(\d{2,4})", v)
     if m:
-        alt = f"{m.group(1)} {m.group(2)}"
-        return alt in hay
+        return bounded_substring(hay, f"{m.group(1)} {m.group(2)}")
     return False
 
 
@@ -2049,6 +2293,42 @@ def _brand_name_signals() -> tuple[tuple[str, str], ...]:
     return tuple(rows)
 
 
+def text_names_other_brand(text: str, filter_brand: str) -> bool:
+    """Чи названо в тексті чужу марку. Дивиться лише назви марок — без
+    моделей, тому не викликає model-матчер і не рекурсує."""
+    filter_slug = resolve_olx_brand_slug(filter_brand) if filter_brand else ""
+    if not filter_slug:
+        return False
+    hay = norm_text(text)
+    if not hay:
+        return False
+    return _hay_names_other_brand(hay, filter_brand, filter_slug)
+
+
+@lru_cache(maxsize=32768)
+def _hay_names_other_brand(hay: str, filter_brand: str, filter_slug: str) -> bool:
+    for variant in collect_brand_keyword_variants(filter_brand):
+        if _variant_in_haystack(variant, hay):
+            return False
+    # Перебір усіх сигналів марок дорогий, тож спершу звужуємо кандидатів
+    # за словами, що реально є в тексті.
+    words = frozenset(_hay_words(hay))
+    for variant, slug in _brand_name_signals():
+        if slug == filter_slug:
+            continue
+        head = variant.split(" ", 1)[0]
+        if head and head not in words and not any(ch.isdigit() for ch in head):
+            continue
+        if _variant_in_haystack(variant, hay):
+            return True
+    return False
+
+
+@lru_cache(maxsize=32768)
+def _hay_words(hay: str) -> tuple[str, ...]:
+    return tuple(re.findall(r"[a-zа-яёіїє0-9]+", hay))
+
+
 def title_indicates_other_brand(title: str, filter_brand: str) -> bool:
     """Заголовок явно належить іншій марці (Passat при пошуку Audi → True).
 
@@ -2103,12 +2383,12 @@ def text_matches_brand_filter(haystack: str, brand: str, *, model: str = "") -> 
         hay = norm_text(raw)
         if not hay:
             continue
-        for variant in collect_brand_keyword_variants(brand):
-            if _variant_in_haystack(variant, hay):
+        for variant in match_tokens(collect_brand_keyword_variants(brand)):
+            if _norm_variant_in_haystack(variant, hay):
                 return True
         if model:
-            for shorthand in _brand_shorthand_variants(brand, model):
-                if _variant_in_haystack(shorthand, hay):
+            for shorthand in match_tokens(_brand_shorthand_variants(brand, model)):
+                if _norm_variant_in_haystack(shorthand, hay):
                     return True
             if _allows_distinctive_model_without_brand(brand, model) and text_matches_model_filter(
                 raw, model, brand=brand
@@ -2147,6 +2427,10 @@ def text_matches_model_filter(haystack: str, model: str, *, brand: str = "") -> 
     if not haystack or not model:
         return True
     for raw in _haystacks_for_match(haystack):
+        # Текст прямо називає чужу марку і мовчить про нашу — жоден спільний
+        # токен («cruiser», «mclaren», «t5») не робить це авто нашою моделлю.
+        if brand and text_names_other_brand(raw, brand):
+            continue
         compound = _text_matches_compound_body_model(raw, brand, model)
         if compound is not None:
             if compound:
@@ -2155,26 +2439,51 @@ def text_matches_model_filter(haystack: str, model: str, *, brand: str = "") -> 
         hay = norm_text(raw)
         if not hay:
             continue
-        for variant in collect_model_keyword_variants(brand, model):
-            if _variant_in_haystack(variant, hay) and _letter_class_model_match_ok(
-                hay, model, brand=brand
-            ):
+        brand_slug = resolve_olx_brand_slug(brand) if brand else ""
+
+        def accept(token: str) -> bool:
+            """Двозначний токен («240» у BMW 2 Series, шасі «g80» у M3, слово
+            «is» для Lexus IS) приймаємо лише з підтвердженням марки."""
+            if not brand or not _variant_needs_brand_proof(token, brand_slug):
                 return True
+            return _brand_confirms_variant(raw, hay, brand, token)
+
+        for variant in match_tokens(collect_model_keyword_variants(brand, model)):
+            if not _norm_variant_in_haystack(variant, hay):
+                continue
+            if not _letter_class_model_match_ok(hay, model, brand=brand):
+                continue
+            if not accept(variant):
+                continue
+            return True
         model_norm = norm_text(model)
+        model_hit = (
+            _numeric_token_matches(hay, model_norm)
+            if model_norm.isdigit()
+            else bounded_substring(hay, model_norm)
+        )
         if (
             model_norm
-            and bounded_substring(hay, model_norm)
+            and model_hit
             and _letter_class_model_match_ok(hay, model, brand=brand)
+            and accept(model_norm)
         ):
             return True
-        if _regex_model_match(hay, brand, model) and _letter_class_model_match_ok(
-            hay, model, brand=brand
+        if (
+            _regex_model_match(hay, brand, model)
+            and _letter_class_model_match_ok(hay, model, brand=brand)
+            and accept(model_norm)
         ):
             return True
         from app.services.olx.parser import _title_has_model
 
         if (
-            _title_has_model(hay, model, brand=brand) or _title_has_model(raw, model, brand=brand)
-        ) and _letter_class_model_match_ok(hay, model, brand=brand):
+            (
+                _title_has_model(hay, model, brand=brand)
+                or _title_has_model(raw, model, brand=brand)
+            )
+            and _letter_class_model_match_ok(hay, model, brand=brand)
+            and accept(model_norm)
+        ):
             return True
     return False

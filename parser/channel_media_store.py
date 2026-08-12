@@ -181,17 +181,27 @@ class ChannelMediaStore:
             )
             conn.commit()
 
-    def enqueue_photo_download(self, listing_id: str, *, priority: int = 0) -> bool:
-        """Повертає True, якщо реально поставили в чергу (ще не done)."""
+    def enqueue_photo_download(
+        self,
+        listing_id: str,
+        *,
+        priority: int = 0,
+        force: bool = False,
+    ) -> bool:
+        """Повертає True, якщо реально поставили в чергу (ще не done).
+
+        force=True — коли файли зникли з диска: 'done' скидається в 'pending',
+        інакше таке оголошення вже неможливо перезавантажити.
+        """
         refs = self.get_photo_refs(listing_id)
         if not refs:
             return False
         _, _, status = refs
-        if status == "done":
+        if status == "done" and not force:
             return False
         prio = max(0, min(int(priority), 9))
         with _lock, sqlite3.connect(self.db_path) as conn:
-            if status == "failed":
+            if status in ("failed", "done"):
                 conn.execute(
                     """
                     UPDATE listing_photo_refs

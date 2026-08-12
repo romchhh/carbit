@@ -136,6 +136,62 @@ class BrandModelKeywordTests(unittest.TestCase):
                 title,
             )
 
+    def test_mercedes_s_class_rejects_eqs_and_volvo_s_series(self):
+        brand = "Mercedes-Benz"
+        model = "S-Class"
+        should_match = [
+            "Mercedes-Benz S 500 2019",
+            "Mercedes S500 2019",
+            "Mercedes-Benz S-Class 2020",
+            "Мерседес S-Класс 350",
+            "Mercedes S 63 AMG",
+        ]
+        should_reject = [
+            # «s580» не має ловитися всередині «EQS 580»
+            "Mercedes-Benz EQS 580 2022",
+            "Mercedes-Benz EQS 450 2023",
+            # чужа марка: Volvo S40/S60/S80/S90 — не Mercedes S-Class
+            "Volvo S80 4.4 V8 AWD 2007",
+            "Volvo S60 2015",
+            "Volvo S90 2019",
+            "Volvo S40 2008",
+        ]
+        for title in should_match:
+            self.assertTrue(text_matches_model_filter(title, model, brand=brand), title)
+        for title in should_reject:
+            self.assertFalse(text_matches_model_filter(title, model, brand=brand), title)
+
+    def test_volvo_s80_not_mercedes_brand(self):
+        self.assertFalse(
+            text_matches_brand_filter(
+                "Volvo S80 4.4 V8 AWD 2007",
+                "Mercedes-Benz",
+                model="S-Class",
+            )
+        )
+
+    def test_bmw_7_series_matches_engine_suffix_trims(self):
+        brand = "BMW"
+        model = "7 Series"
+        should_match = [
+            "BMW 740i 2018",
+            "BMW 730d 2016",
+            "BMW 750Li 2015",
+            "BMW 740Ld xDrive",
+            "BMW 7 серия 730d",
+        ]
+        should_reject = [
+            "BMW X7 M50d 2020",
+            "BMW 540i 2019",
+            "BMW i7 2023",
+            "BMW 3 серия 320d",
+            "Audi A7 2019",
+        ]
+        for title in should_match:
+            self.assertTrue(text_matches_model_filter(title, model, brand=brand), title)
+        for title in should_reject:
+            self.assertFalse(text_matches_model_filter(title, model, brand=brand), title)
+
     def test_mercedes_s_class_coupe_strict(self):
         brand = "Mercedes-Benz"
         model = "S-Class Coupe"
@@ -578,6 +634,8 @@ W1N4632761X424465
             seller_type="private",
             published_at="2026-01-01T00:00:00+02:00",
             found_at="2026-01-01T00:00:00+02:00",
+            price_history=[],
+            is_duplicate=False,
         )
         filters = SearchFilters(brand="Audi", model="Q5", sources=["telegram"])
         self.assertFalse(listing_out_matches_filters(item, filters))

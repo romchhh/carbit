@@ -51,6 +51,24 @@ class ChannelMediaStoreTests(unittest.TestCase):
     def test_enqueue_without_refs_returns_false(self) -> None:
         self.assertFalse(self.store.enqueue_photo_download("telegram_missing_1"))
 
+    def test_force_requeues_done_listing(self) -> None:
+        """Файли зникли з диска — 'done' не має блокувати перезавантаження."""
+        lid = "telegram_ua_autobazar_200"
+        self.store.save_photo_refs(lid, "@ua_autobazar", [200])
+        self.store.mark_photos_done(lid)
+        self.assertFalse(self.store.enqueue_photo_download(lid))
+
+        self.assertTrue(self.store.enqueue_photo_download(lid, force=True))
+        self.assertEqual(self.store.get_photo_refs(lid)[2], "pending")
+        self.assertEqual(self.store.claim_photo_jobs(limit=5), [lid])
+
+    def test_force_requeues_failed_listing(self) -> None:
+        lid = "telegram_ua_autobazar_300"
+        self.store.save_photo_refs(lid, "@ua_autobazar", [300])
+        self.store.mark_photos_failed(lid)
+        self.assertTrue(self.store.enqueue_photo_download(lid))
+        self.assertEqual(self.store.get_photo_refs(lid)[2], "pending")
+
 
 if __name__ == "__main__":
     unittest.main()
