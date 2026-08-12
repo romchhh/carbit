@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import Listing, SearchListing, SearchQuery
 from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters, SearchQueryOut
 from app.services.listings.serialize import listing_to_out
-from app.services.parser.filter_groups import filters_group_key
+from app.services.parser.filter_groups import filters_group_key, parse_search_filters
 
 
 def _first_image_url(images: object) -> str | None:
@@ -111,6 +111,32 @@ def _sort_items(
     return [item for item, _ in ordered]
 
 
+def _result_matches_saved_model(item: ListingOut, filters: SearchFilters) -> bool:
+    """Прив'язані до пошуку оголошення матчились кодом, актуальним на той момент.
+
+    Після виправлень у матчері старі помилкові збіги інакше висіли б у видачі
+    вічно, бо збережені результати ніде не перевіряються повторно.
+    """
+    from app.services.search.brand_model_keywords import text_matches_model_filter
+    from app.services.search.filter_multi import effective_brands, effective_models
+
+    models = effective_models(filters)
+    if not models:
+        return True
+
+    # item.model для OLX проставляється з фільтра, тож підтвердити збіг може
+    # лише те, що написав продавець.
+    haystack = f"{item.title} {item.description or ''}"
+    if not haystack.strip():
+        return True
+    brands = effective_brands(filters) or [""]
+    return any(
+        text_matches_model_filter(haystack, model, brand=brand)
+        for model in models
+        for brand in brands
+    )
+
+
 async def get_search_results_from_db(
     db: AsyncSession,
     search: SearchQuery,
@@ -129,6 +155,7 @@ async def get_search_results_from_db(
         stmt = stmt.where(SearchListing.is_new.is_(True))
 
     rows = (await db.execute(stmt)).all()
+    saved_filters = parse_search_filters(search.filters)
     paired = [
         (
             listing_to_out(listing).model_copy(update={"is_new": bool(sl.is_new)}),
@@ -136,6 +163,7 @@ async def get_search_results_from_db(
         )
         for listing, sl in rows
     ]
+    paired = [pair for pair in paired if _result_matches_saved_model(pair[0], saved_filters)]
     from app.services.listings.duplicates import collapse_listings_with_db_mirrors
 
     collapsed = await collapse_listings_with_db_mirrors(db, [item for item, _ in paired])

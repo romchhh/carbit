@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
@@ -95,7 +96,13 @@ class EnsureTelegramPhotosTests(unittest.IsolatedAsyncioTestCase):
         attach.assert_not_called()
         self.assertGreaterEqual(enqueue.call_count, 2)
 
-    async def test_worker_offline_uses_inline_telethon(self) -> None:
+    async def asyncSetUp(self) -> None:
+        from app.services.telegram_channels import lazy_photos
+
+        await lazy_photos.close_shared_photo_service()
+        lazy_photos._telethon_blocked_until = 0.0
+
+    async def test_worker_offline_downloads_via_shared_client(self) -> None:
         from app.models.models import Listing, Source
         from app.services.telegram_channels import lazy_photos
 
@@ -107,16 +114,38 @@ class EnsureTelegramPhotosTests(unittest.IsolatedAsyncioTestCase):
         )
         db = unittest.mock.AsyncMock()
         expected = ["/api/v1/telegram-media/ua_autobazar/1001.jpg"]
+        synced: list[int] = []
 
-        async def _download(*_args, **_kwargs):
-            return expected
+        async def _sync(*_args, **_kwargs):
+            synced.append(1)
+            # Перший виклик — файлів ще немає, після завантаження — є.
+            return expected if len(synced) > 1 else []
 
-        class FakeService:
-            async def start(self) -> None:
-                return None
+        service = _FakeTelethonService()
 
-            async def stop(self) -> None:
-                return None
+        with (
+            patch.object(lazy_photos, "sync_telegram_photos_from_disk", side_effect=_sync),
+            patch.object(lazy_photos, "listing_needs_photos", return_value=True),
+            patch.object(lazy_photos, "enqueue_listing_photos", return_value=True),
+            patch.object(lazy_photos, "telegram_worker_online", return_value=False),
+            patch(
+                "app.services.telegram_channels.service_loader.get_parser_service",
+                return_value=service,
+            ),
+        ):
+            urls = await lazy_photos.ensure_telegram_listing_photos(db, listing)
+
+        self.assertEqual(urls, expected)
+        self.assertEqual(service.starts, 1)
+        self.assertEqual(service.downloads, 1)
+
+    async def test_shared_client_is_reused_between_requests(self) -> None:
+        """start/stop на кожен запит коштує секунди — клієнт має жити далі."""
+        from app.models.models import Listing, Source
+        from app.services.telegram_channels import lazy_photos
+
+        db = unittest.mock.AsyncMock()
+        service = _FakeTelethonService()
 
         with (
             patch.object(lazy_photos, "sync_telegram_photos_from_disk", return_value=[]),
@@ -125,14 +154,126 @@ class EnsureTelegramPhotosTests(unittest.IsolatedAsyncioTestCase):
             patch.object(lazy_photos, "telegram_worker_online", return_value=False),
             patch(
                 "app.services.telegram_channels.service_loader.get_parser_service",
-                return_value=FakeService(),
+                return_value=service,
             ),
-            patch.object(lazy_photos, "attach_photos_to_listing", side_effect=_download) as attach,
         ):
-            urls = await lazy_photos.ensure_telegram_listing_photos(db, listing)
+            for msg_id in (2001, 2002, 2003):
+                listing = Listing(
+                    id=f"telegram_ua_autobazar_{msg_id}",
+                    source=Source.telegram,
+                    title="Test",
+                    images=[],
+                )
+                await lazy_photos.ensure_telegram_listing_photos(db, listing)
 
-        attach.assert_called_once()
-        self.assertEqual(urls, expected)
+        self.assertEqual(service.starts, 1)
+        self.assertEqual(service.downloads, 3)
+
+    async def test_parallel_requests_share_one_download(self) -> None:
+        """Кілька карток/поллінгів одного оголошення = одне завантаження."""
+        from app.models.models import Listing, Source
+        from app.services.telegram_channels import lazy_photos
+
+        db = unittest.mock.AsyncMock()
+        release = asyncio.Event()
+        service = _FakeTelethonService(gate=release)
+
+        def _listing() -> Listing:
+            return Listing(
+                id="telegram_ua_autobazar_4001",
+                source=Source.telegram,
+                title="Test",
+                images=[],
+            )
+
+        with (
+            patch.object(lazy_photos, "sync_telegram_photos_from_disk", return_value=[]),
+            patch.object(lazy_photos, "listing_needs_photos", return_value=True),
+            patch.object(lazy_photos, "enqueue_listing_photos", return_value=True),
+            patch.object(lazy_photos, "telegram_worker_online", return_value=False),
+            patch(
+                "app.services.telegram_channels.service_loader.get_parser_service",
+                return_value=service,
+            ),
+        ):
+            tasks = [
+                asyncio.create_task(
+                    lazy_photos.ensure_telegram_listing_photos(db, _listing())
+                )
+                for _ in range(4)
+            ]
+            await asyncio.sleep(0)
+            release.set()
+            await asyncio.gather(*tasks)
+
+        self.assertEqual(service.downloads, 1)
+
+    async def test_unauthorized_session_fails_fast_and_pauses(self) -> None:
+        """Розлогінена сесія: без інтерактиву й без повторних спроб на кожен запит."""
+        from app.models.models import Listing, Source
+        from app.services.telegram_channels import lazy_photos
+
+        db = unittest.mock.AsyncMock()
+        service = _FakeTelethonService(start_error=RuntimeError("not authorized"))
+
+        with (
+            patch.object(lazy_photos, "sync_telegram_photos_from_disk", return_value=[]),
+            patch.object(lazy_photos, "listing_needs_photos", return_value=True),
+            patch.object(lazy_photos, "enqueue_listing_photos", return_value=True),
+            patch.object(lazy_photos, "telegram_worker_online", return_value=False),
+            patch(
+                "app.services.telegram_channels.service_loader.get_parser_service",
+                return_value=service,
+            ),
+        ):
+            for msg_id in (3001, 3002, 3003):
+                listing = Listing(
+                    id=f"telegram_ua_autobazar_{msg_id}",
+                    source=Source.telegram,
+                    title="Test",
+                    images=[],
+                )
+                urls = await lazy_photos.ensure_telegram_listing_photos(db, listing)
+                self.assertEqual(urls, [])
+
+        self.assertEqual(service.starts, 1, "після відмови Telethon не смикають знову")
+        self.assertEqual(service.downloads, 0)
+        self.assertTrue(lazy_photos.telethon_unavailable_reason())
+
+
+class _FakeTelethonService:
+    def __init__(
+        self,
+        *,
+        start_error: Exception | None = None,
+        gate: "asyncio.Event | None" = None,
+    ) -> None:
+        self.starts = 0
+        self.stops = 0
+        self.downloads = 0
+        self._start_error = start_error
+        self._gate = gate
+
+    async def start(self) -> None:
+        self.starts += 1
+        if self._start_error is not None:
+            raise self._start_error
+
+    async def stop(self) -> None:
+        self.stops += 1
+
+    async def download_listing_photos(
+        self,
+        listing_id: str,
+        channel: str,
+        message_ids: list[int],
+        *,
+        max_photos: int | None = None,
+    ) -> list[str]:
+        self.downloads += 1
+        if self._gate is not None:
+            await self._gate.wait()
+        return [f"/tmp/{message_ids[0]}.jpg"]
 
 
 if __name__ == "__main__":

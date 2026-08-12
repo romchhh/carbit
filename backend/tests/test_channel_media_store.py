@@ -69,6 +69,23 @@ class ChannelMediaStoreTests(unittest.TestCase):
         self.assertTrue(self.store.enqueue_photo_download(lid))
         self.assertEqual(self.store.get_photo_refs(lid)[2], "pending")
 
+    def test_album_message_ids_for_cleanup(self) -> None:
+        """Видаляючи оголошення, треба знати всі фото альбому, не лише перше."""
+        lid = "telegram_ua_autobazar_400"
+        self.store.save_photo_refs(lid, "@ua_autobazar", [400, 401, 402])
+        refs = self.store.all_photo_message_ids([lid, "telegram_missing_1"])
+        self.assertEqual(refs, {lid: ("@ua_autobazar", [400, 401, 402])})
+
+    def test_delete_photo_refs_clears_queue(self) -> None:
+        lid = "telegram_ua_autobazar_500"
+        self.store.save_photo_refs(lid, "@ua_autobazar", [500])
+        self.store.enqueue_photo_download(lid)
+        self.assertEqual(self.store.photo_queue_pending_count(), 1)
+
+        self.assertEqual(self.store.delete_photo_refs([lid]), 1)
+        self.assertIsNone(self.store.get_photo_refs(lid))
+        self.assertEqual(self.store.photo_queue_pending_count(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

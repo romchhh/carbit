@@ -13,6 +13,7 @@ from app.services.telegram_channels.lazy_photos import (
     ensure_telegram_listing_photos,
     listing_needs_photos,
     sync_telegram_photos_from_disk,
+    telethon_unavailable_reason,
 )
 from app.services.auto_ria.lazy_photos import attach_auto_ria_gallery, auto_ria_needs_gallery
 
@@ -98,11 +99,15 @@ async def ensure_listing_photos(
         await attach_auto_ria_gallery(db, listing)
     out = await listing_out_with_mirrors(db, listing)
     if not out.images:
+        # Якщо Telethon недоступний (розлогінена сесія) — кажемо це прямо,
+        # інакше клієнт нескінченно опитує «фото ще вантажаться».
+        unavailable = telethon_unavailable_reason()
         out = out.model_copy(
             update={
                 "source_data": {
                     **(out.source_data or {}),
-                    "photos_pending": True,
+                    "photos_pending": not unavailable,
+                    "photos_unavailable": bool(unavailable),
                 }
             }
         )

@@ -49,6 +49,8 @@ class Settings:
     max_photos_per_listing: int = int(os.getenv("TELEGRAM_MAX_PHOTOS", "1"))
     media_max_width: int = int(os.getenv("TELEGRAM_MEDIA_MAX_WIDTH", "1280"))
     media_jpeg_quality: int = int(os.getenv("TELEGRAM_MEDIA_JPEG_QUALITY", "82"))
+    # Пости старші за цей строк не скануємо взагалі (те саме значення, що й у backend).
+    listing_max_age_days: int = max(1, int(os.getenv("LISTING_MAX_AGE_DAYS", "120")))
 
 
 settings = Settings()

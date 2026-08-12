@@ -149,6 +149,73 @@ class ChannelMediaStore:
                 ids = []
             return str(row[0]), ids, str(row[2])
 
+    def all_photo_message_ids(self, listing_ids: list[str]) -> dict[str, tuple[str, list[int]]]:
+        """channel + усі message_id альбому — щоб видалити не лише перше фото."""
+        out: dict[str, tuple[str, list[int]]] = {}
+        for listing_id in listing_ids:
+            refs = self.get_photo_refs(listing_id)
+            if refs:
+                channel, message_ids, _status = refs
+                out[listing_id] = (channel, message_ids)
+        return out
+
+    def photo_refs_count(self) -> int:
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            row = conn.execute("SELECT count(*) FROM listing_photo_refs").fetchone()
+        return int(row[0]) if row else 0
+
+    def orphan_photo_refs(
+        self,
+        live_listing_ids: set[str],
+        *,
+        older_than_days: int = 7,
+    ) -> dict[str, tuple[str, list[int]]]:
+        """Refs без оголошення в основній БД.
+
+        Запас у кілька днів: між парсингом і записом оголошення refs
+        законно існують без listing.
+        """
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=max(1, older_than_days))
+        ).isoformat()
+        out: dict[str, tuple[str, list[int]]] = {}
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT listing_id, channel, message_ids FROM listing_photo_refs "
+                "WHERE updated_at < ?",
+                (cutoff,),
+            ).fetchall()
+        for listing_id, channel, raw_ids in rows:
+            if listing_id in live_listing_ids:
+                continue
+            try:
+                ids = [int(x) for x in json.loads(raw_ids)]
+            except (TypeError, ValueError, json.JSONDecodeError):
+                ids = []
+            out[str(listing_id)] = (str(channel), ids)
+        return out
+
+    def delete_photo_refs(self, listing_ids: list[str]) -> int:
+        """Прибирає refs і чергу для видалених оголошень."""
+        if not listing_ids:
+            return 0
+        removed = 0
+        with _lock, sqlite3.connect(self.db_path) as conn:
+            for chunk_start in range(0, len(listing_ids), 400):
+                chunk = listing_ids[chunk_start : chunk_start + 400]
+                marks = ",".join("?" * len(chunk))
+                cur = conn.execute(
+                    f"DELETE FROM listing_photo_refs WHERE listing_id IN ({marks})",
+                    chunk,
+                )
+                removed += cur.rowcount or 0
+                conn.execute(
+                    f"DELETE FROM photo_download_queue WHERE listing_id IN ({marks})",
+                    chunk,
+                )
+            conn.commit()
+        return removed
+
     def mark_photos_done(self, listing_id: str) -> None:
         with _lock, sqlite3.connect(self.db_path) as conn:
             conn.execute(

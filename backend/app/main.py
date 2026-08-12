@@ -74,6 +74,13 @@ async def lifespan(_app: FastAPI):
     logger.info("KV REDIS_URL=%s", settings.REDIS_URL)
     yield
 
+    try:
+        from app.services.telegram_channels.lazy_photos import close_shared_photo_service
+
+        await close_shared_photo_service()
+    except Exception:
+        logger.debug("Telethon shutdown failed", exc_info=True)
+
 
 _init_sentry()
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 
 from app.core.config import settings
+from app.services.telegram_channels.freshness import listing_max_age_days
 from app.services.telegram_channels.media_cleanup import purge_stale_media_files
 from parser.media_compress import compress_jpeg
 
@@ -52,8 +53,15 @@ def compress_all(*, dry_run: bool) -> tuple[int, int]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Telegram media disk maintenance")
     parser.add_argument("--compress", action="store_true", help="Compress large JPEG files")
-    parser.add_argument("--purge-old", action="store_true", help="Delete JPEG older than 90 days")
-    parser.add_argument("--days", type=int, default=90, help="Age for --purge-old")
+    parser.add_argument(
+        "--purge-old", action="store_true", help="Delete JPEG past the retention window"
+    )
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=listing_max_age_days(),
+        help="Age for --purge-old (default: LISTING_MAX_AGE_DAYS)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Show counts only")
     args = parser.parse_args()
 

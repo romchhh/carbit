@@ -44,18 +44,6 @@ async def run_telegram_channels_cycle(
         log.append("Telegram: вимкнено в налаштуваннях парсера")
         return 0
 
-    # Завжди чистимо старі TG-лоти (не потребує Telethon).
-    try:
-        from app.services.telegram_channels.purge import purge_stale_telegram_listings
-
-        purged = await purge_stale_telegram_listings(db)
-        if purged:
-            log.append(f"Telegram: видалено {purged} оголошень старших за 3 місяці")
-            await db.commit()
-    except Exception as exc:
-        log.append(f"Telegram purge: {exc}")
-        logger.exception("Telegram stale purge failed")
-
     if not app_settings.TELETHON_API_ID or not app_settings.TELETHON_API_HASH:
         log.append("Telegram: немає TELETHON_API_ID / TELETHON_API_HASH")
         return 0

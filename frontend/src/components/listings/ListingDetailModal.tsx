@@ -21,6 +21,11 @@ import {
   listingOpenLabel,
   listingSourceSiteName,
 } from "@/lib/listing-source";
+import {
+  ensurePhotosDeduped,
+  noteTelegramPhotosState,
+  telegramPhotosUnavailable,
+} from "@/lib/telegram-photos";
 import { hasVinCheck } from "@/lib/vin-check";
 import { hasSellerContact } from "@/lib/seller-contact";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
@@ -89,7 +94,7 @@ export function ListingDetailModal({
       (listingProp.source === "auto_ria" &&
         (listingProp.images?.length ?? 0) < 2);
 
-    if (!needsPhotos) {
+    if (!needsPhotos || telegramPhotosUnavailable()) {
       setPhotosLoading(false);
       return;
     }
@@ -103,15 +108,21 @@ export function ListingDetailModal({
       try {
         const useEnsure = attempts === 0 || attempts % 3 === 0;
         const fresh = useEnsure
-          ? await listingsApi.ensurePhotos(listingProp.id)
+          ? await ensurePhotosDeduped(listingProp.id)
           : await listingsApi.get(listingProp.id);
 
         if (cancelled) return;
+        noteTelegramPhotosState(fresh);
 
         const nextImages = resolveListingImages(fresh.images);
         if (nextImages.length) {
           setLiveListing({ ...fresh, images: nextImages });
           onListingUpdate?.({ ...fresh, images: nextImages });
+          setPhotosLoading(false);
+          return;
+        }
+
+        if (fresh.source_data?.photos_unavailable) {
           setPhotosLoading(false);
           return;
         }

@@ -348,6 +348,23 @@ async def run_parser_cycle(
     had_errors = False
 
     try:
+        # Строк зберігання стосується всіх джерел, тож чистимо до парсингу
+        # і незалежно від того, чи увімкнений Telegram.
+        try:
+            from app.services.listings.retention import (
+                listing_max_age_days,
+                purge_stale_listings,
+            )
+
+            purged = await purge_stale_listings(db)
+            if purged:
+                log.append(
+                    f"Видалено {purged} оголошень старших за {listing_max_age_days()} днів"
+                )
+        except Exception as exc:
+            log.append(f"Очищення старих оголошень: {exc}")
+            logger.exception("Stale listings purge failed")
+
         run_telegram = sources_only is None or "telegram" in sources_only
         if run_telegram and settings.get("telegram_enabled", True):
             try:

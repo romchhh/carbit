@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,130 @@ logger = logging.getLogger(__name__)
 PHOTO_WAIT_INTERVAL = 0.35
 PHOTO_PAGE_WAIT_SECONDS = 18.0
 PHOTO_SEARCH_WAIT_SECONDS = 0.0
+
+# Скільки не смикати Telethon після відмови (розлогінена сесія, обрив).
+TELETHON_RETRY_AFTER_SECONDS = 120.0
+
+_service_lock = asyncio.Lock()
+_shared_service: "CarParserService | None" = None
+_telethon_blocked_until = 0.0
+_telethon_block_reason = ""
+_inflight_downloads: dict[str, asyncio.Task] = {}
+
+
+def telethon_unavailable_reason() -> str:
+    """Причина, чому фото зараз не завантажити (для UI), або порожній рядок."""
+    return _telethon_block_reason if _telethon_blocked() else ""
+
+
+def _block_telethon(reason: str) -> None:
+    global _telethon_blocked_until, _telethon_block_reason
+    _telethon_blocked_until = time.monotonic() + TELETHON_RETRY_AFTER_SECONDS
+    _telethon_block_reason = reason
+    logger.warning("Telethon недоступний (%s), пауза %.0fс", reason, TELETHON_RETRY_AFTER_SECONDS)
+
+
+def _telethon_blocked() -> bool:
+    return time.monotonic() < _telethon_blocked_until
+
+
+async def _acquire_shared_service():
+    """Один Telethon-клієнт на процес: start/stop на кожен запит коштує секунди."""
+    global _shared_service
+    if _telethon_blocked():
+        return None
+    async with _service_lock:
+        if _telethon_blocked():
+            return None
+        if _shared_service is not None:
+            return _shared_service
+        from app.services.telegram_channels.service_loader import get_parser_service
+
+        service = get_parser_service(skip_dedupe=True)
+        try:
+            await asyncio.wait_for(service.start(), timeout=20.0)
+        except Exception as exc:  # включно з TelegramNotAuthorizedError
+            _block_telethon(type(exc).__name__)
+            try:
+                await service.stop()
+            except Exception:
+                pass
+            return None
+        _shared_service = service
+        return _shared_service
+
+
+async def _drop_shared_service() -> None:
+    global _shared_service
+    async with _service_lock:
+        service, _shared_service = _shared_service, None
+    if service is not None:
+        try:
+            await service.stop()
+        except Exception:
+            logger.exception("Telethon stop")
+
+
+async def close_shared_photo_service() -> None:
+    """Викликається на shutdown застосунку."""
+    await _drop_shared_service()
+
+
+async def _download_photos_once(
+    listing_id: str,
+    channel: str,
+    message_ids: list[int],
+    *,
+    limit: int,
+    timeout: float,
+) -> list[str]:
+    """Качає файли, склеюючи паралельні запити одного оголошення в одну задачу."""
+    existing = _inflight_downloads.get(listing_id)
+    if existing is not None and not existing.done():
+        try:
+            return await asyncio.wait_for(asyncio.shield(existing), timeout=timeout)
+        except Exception:
+            return []
+
+    async def _run() -> list[str]:
+        service = await _acquire_shared_service()
+        if service is None:
+            return []
+        try:
+            return await service.download_listing_photos(
+                listing_id,
+                channel,
+                message_ids,
+                max_photos=limit,
+            )
+        except Exception as exc:
+            logger.exception("Telegram photo download failed for %s", listing_id)
+            # Клієнт міг лишитись у неробочому стані — піднімемо новий.
+            await _drop_shared_service()
+            _block_telethon(type(exc).__name__)
+            return []
+
+    task = asyncio.create_task(_run())
+    _inflight_downloads[listing_id] = task
+    task.add_done_callback(lambda t: _inflight_downloads.pop(listing_id, None))
+    try:
+        return await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning("Telegram photo download timed out for %s", listing_id)
+        return []
+
+
+def _photo_refs_for(listing_id: str) -> tuple[str, list[int]] | None:
+    refs = _media_store().get_photo_refs(listing_id)
+    if refs:
+        channel, message_ids, _status = refs
+        if message_ids:
+            return channel, message_ids
+    body = listing_id.removeprefix("telegram_")
+    channel_part, _, msg_part = body.rpartition("_")
+    if channel_part and msg_part.isdigit():
+        return f"@{channel_part}", [int(msg_part)]
+    return None
 
 
 def _media_store():
@@ -321,37 +446,25 @@ async def ensure_telegram_listing_photos(
             return urls
         return list(listing.images or [])
 
-    if try_telethon:
-        from app.services.telegram_channels.service_loader import get_parser_service
-
-        service = get_parser_service(skip_dedupe=True)
-        inline_timeout = max(4.0, min(telethon_timeout, 22.0))
-
-        async def _download() -> list[str]:
-            await service.start()
-            try:
-                return await attach_photos_to_listing(
+    if try_telethon and not _telethon_blocked():
+        refs = _photo_refs_for(listing.id)
+        if refs:
+            channel, message_ids = refs
+            paths = await _download_photos_once(
+                listing.id,
+                channel,
+                message_ids,
+                limit=max(1, max_photos),
+                timeout=max(4.0, min(telethon_timeout, 22.0)),
+            )
+            if paths:
+                urls = await sync_telegram_photos_from_disk(
                     db,
-                    service,
-                    listing.id,
+                    listing,
                     max_photos=max_photos,
                 )
-            finally:
-                await service.stop()
-
-        try:
-            urls = await asyncio.wait_for(_download(), timeout=inline_timeout)
-            if urls:
-                return urls
-        except asyncio.TimeoutError:
-            logger.warning("Telegram photo download timed out for %s", listing.id)
-        except Exception:
-            logger.exception("Inline Telegram photo download failed for %s", listing.id)
-
-        enqueue_listing_photos(listing.id, priority=2, force=True)
-        urls = await wait_for_listing_photos(db, listing.id, timeout=min(8.0, telethon_timeout))
-        if urls:
-            return urls
+                if urls:
+                    return urls
 
     return list(listing.images or [])
 
@@ -409,49 +522,28 @@ async def hydrate_telegram_page_photos(
                     pending_ids.discard(listing_id)
             if pending_ids:
                 await asyncio.sleep(PHOTO_WAIT_INTERVAL)
-    elif not worker_up:
-        service = None
-        try:
-            from app.services.telegram_channels.service_loader import get_parser_service
-
-            service = get_parser_service(skip_dedupe=True)
-
-            async def _batch() -> None:
-                assert service is not None
-                await service.start()
-                for listing in targets:
-                    urls = await attach_photos_to_listing(
-                        db,
-                        service,
-                        listing.id,
-                        max_photos=1,
-                    )
-                    if urls:
-                        updated[listing.id] = urls
-
-            await asyncio.wait_for(_batch(), timeout=max(5.0, telethon_timeout))
-        except asyncio.TimeoutError:
-            logger.warning("Telegram page photo batch timed out")
-        except Exception:
-            logger.exception("Telegram page photo batch failed")
-        finally:
-            if service is not None:
-                try:
-                    await service.stop()
-                except Exception:
-                    logger.exception("Telegram service stop after page photos")
-
-        if wait_seconds > 0:
-            for listing in targets:
-                if listing.id in updated:
-                    continue
-                urls = await wait_for_listing_photos(
-                    db,
-                    listing.id,
-                    timeout=min(8.0, wait_seconds),
-                )
-                if urls:
-                    updated[listing.id] = urls
+    elif not worker_up and not _telethon_blocked():
+        deadline = asyncio.get_running_loop().time() + max(5.0, telethon_timeout)
+        for listing in targets:
+            left = deadline - asyncio.get_running_loop().time()
+            if left <= 0.5 or _telethon_blocked():
+                break
+            refs = _photo_refs_for(listing.id)
+            if not refs:
+                continue
+            channel, message_ids = refs
+            paths = await _download_photos_once(
+                listing.id,
+                channel,
+                message_ids,
+                limit=1,
+                timeout=min(left, 12.0),
+            )
+            if not paths:
+                continue
+            urls = await sync_telegram_photos_from_disk(db, listing, max_photos=1)
+            if urls:
+                updated[listing.id] = urls
 
     return _apply_photo_updates(items, updated)
 

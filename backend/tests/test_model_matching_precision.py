@@ -197,6 +197,27 @@ class ModelMatchingPrecisionTests(unittest.TestCase):
                     )
                 )
 
+    def test_model_glued_to_chassis_code(self) -> None:
+        """«A4B6», «а4б7» — продавці пишуть модель і кузов без пробілу."""
+        for title in ("Audi A4B6 2.5 QUATTRO", "Ауди а4б7 2:0 200ps"):
+            with self.subTest(title=title):
+                self.assertTrue(text_matches_model_filter(title, "A4", brand="Audi"))
+        self.assertFalse(
+            text_matches_model_filter("Audi A4B6 2.5 QUATTRO", "A6", brand="Audi")
+        )
+
+    def test_bmw_7_series_rejects_other_series(self) -> None:
+        for title in ("BMW 5 Series 2011", "BMW 3 Series 2015", "BMW 5 серія 2011"):
+            with self.subTest(title=title):
+                self.assertFalse(
+                    text_matches_model_filter(title, "7 Series", brand="BMW")
+                )
+        for title in ("BMW 740Li 2020", "BMW 750i 2019", "BMW 760i xDrive 2024"):
+            with self.subTest(title=title):
+                self.assertTrue(
+                    text_matches_model_filter(title, "7 Series", brand="BMW")
+                )
+
     def test_generic_trim_word_is_not_enough(self) -> None:
         """«Atlas Pro» не матчить «Tiggo 8 Pro», «Range Rover» — «Rover 618»."""
         cases = [

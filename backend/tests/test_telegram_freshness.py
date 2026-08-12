@@ -1,4 +1,4 @@
-"""Тести вікна свіжості Telegram (≤ 3 місяці)."""
+"""Тести вікна свіжості Telegram (строк зберігання, типово 4 місяці)."""
 
 from __future__ import annotations
 
@@ -17,18 +17,24 @@ from parser.freshness import message_date_is_fresh, telegram_scan_cutoff_utc
 
 
 class TelegramFreshnessTests(unittest.TestCase):
-    def test_max_age_is_three_months(self):
-        self.assertEqual(TELEGRAM_LISTING_MAX_AGE_DAYS, 90)
+    def test_max_age_is_four_months(self):
+        self.assertEqual(TELEGRAM_LISTING_MAX_AGE_DAYS, 120)
+
+    def test_scan_and_serve_windows_agree(self):
+        """Парсер і бекенд мають різати за однаковим строком."""
+        from parser.freshness import TELEGRAM_LISTING_MAX_AGE_DAYS as parser_days
+
+        self.assertEqual(parser_days, TELEGRAM_LISTING_MAX_AGE_DAYS)
 
     def test_fresh_listing_passes(self):
         published = now_kyiv() - timedelta(days=10)
         self.assertTrue(telegram_listing_is_fresh(published))
 
     def test_old_listing_rejected(self):
-        published = now_kyiv() - timedelta(days=120)
+        published = now_kyiv() - timedelta(days=150)
         self.assertFalse(telegram_listing_is_fresh(published))
 
-    def test_cutoff_around_90_days(self):
+    def test_cutoff_matches_max_age(self):
         cutoff = telegram_published_cutoff()
         self.assertLessEqual(
             abs((now_kyiv() - cutoff).days - TELEGRAM_LISTING_MAX_AGE_DAYS),

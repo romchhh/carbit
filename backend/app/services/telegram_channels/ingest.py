@@ -181,7 +181,7 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
     if found_after is not None:
         clauses.append(Listing.found_at > as_kyiv(found_after))
 
-    # Жорстке вікно: не показуємо TG-пости старші за 3 місяці.
+    # Жорстке вікно: не показуємо TG-пости поза строком зберігання.
     from app.services.telegram_channels.freshness import telegram_published_cutoff
 
     clauses.append(Listing.published_at >= telegram_published_cutoff())

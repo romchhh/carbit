@@ -19,6 +19,7 @@ htmlcov/
 # Database & runtime data (SQLite, Telethon, dedupe)
 database/*.db
 database/*.db-*
+database/*.db.bak.*
 database/*.session
 database/*.session-journal
 

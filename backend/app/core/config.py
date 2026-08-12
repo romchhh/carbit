@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     TELEGRAM_MEDIA_MAX_WIDTH: int = 1280
     TELEGRAM_MEDIA_JPEG_QUALITY: int = 82
 
+    # Скільки тримаємо оголошення: старші видаляються з БД разом із фото.
+    LISTING_MAX_AGE_DAYS: int = 120
+
     # Observability
     SENTRY_DSN: str = ""
 

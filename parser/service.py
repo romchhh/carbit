@@ -40,6 +40,10 @@ log = logging.getLogger("carbit_parser.service")
 logging.basicConfig(level=logging.INFO)
 
 
+class TelegramNotAuthorizedError(RuntimeError):
+    """Сесія є, але акаунт розлогінено — фото не завантажити без повторного входу."""
+
+
 async def _record_telegram_channels(operation: str, *, success: bool = True) -> None:
     try:
         from app.services.admin.api_usage import record_api_request
@@ -68,10 +72,25 @@ class CarParserService:
     def _message_is_fresh(msg, *, cutoff: datetime | None = None) -> bool:
         return message_date_is_fresh(getattr(msg, "date", None), cutoff=cutoff)
 
-    async def start(self):
+    async def start(self, *, allow_interactive: bool = False):
+        """allow_interactive=True — лише для CLI (auth.py).
+
+        У сервері client.start() на неавторизованій сесії питає код із stdin,
+        якого немає: запит просто висне до EOFError. Тому там — connect() і
+        явна помилка.
+        """
         for name in ("telethon", "telethon.network", "telethon.client"):
             logging.getLogger(name).setLevel(logging.WARNING)
-        await self.client.start(phone=settings.phone or None)
+        if allow_interactive:
+            await self.client.start(phone=settings.phone or None)
+        else:
+            if not self.client.is_connected():
+                await self.client.connect()
+            if not await self.client.is_user_authorized():
+                raise TelegramNotAuthorizedError(
+                    "Telethon-сесія не авторизована — потрібен повторний вхід "
+                    "(python auth.py або /admin/channels)"
+                )
         log.info("Telethon клієнт запущено")
 
     async def stop(self):
@@ -172,7 +191,7 @@ class CarParserService:
             photos=[],
         )
 
-        # Не індексуємо пости старші за 3 місяці (навіть якщо проскочили в iter).
+        # Не індексуємо пости поза строком зберігання (навіть якщо проскочили в iter).
         if listing.posted_at and not message_date_is_fresh(listing.posted_at):
             if not self.skip_dedupe:
                 self.dedupe.mark_seen(channel, ids)

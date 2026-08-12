@@ -276,12 +276,14 @@ CLI на VPS:
 
 ─── 13. Telegram media (диск) ────────────────────────────────────────────────
 
-За замовчуванням: 1 фото на оголошення, JPEG ~1280px, авто-видалення >90 днів.
+За замовчуванням: 1 фото на оголошення, JPEG ~1280px, авто-видалення за строком
+зберігання (LISTING_MAX_AGE_DAYS, типово 120 днів ≈ 4 місяці).
 
 .env:
   TELEGRAM_MAX_PHOTOS=1
   TELEGRAM_MEDIA_MAX_WIDTH=1280
   TELEGRAM_MEDIA_JPEG_QUALITY=82
+  LISTING_MAX_AGE_DAYS=120
 
 Разове очищення / стиснення на VPS:
 
@@ -300,7 +302,11 @@ CLI на VPS:
   # Без Docker (якщо є .venv на хості):
   PYTHONPATH=backend:. python backend/scripts/purge_telegram_media.py --purge-old --compress
 
-Автоматично: telegram-worker щогодини purge БД + видалення старих .jpg з media/
+Автоматично:
+  • telegram-worker — щогодини: видалення оголошень поза строком зберігання
+    (усі джерела: telegram, olx, auto_ria) + їх .jpg з media/
+  • кожен цикл парсера — те саме, перед парсингом
+  • Telegram не сканує пости, старші за LISTING_MAX_AGE_DAYS
 
 
 ─── Один рядок — повний деплой ───────────────────────────────────────────────

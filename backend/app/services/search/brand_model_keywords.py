@@ -2114,6 +2114,15 @@ def _haystacks_for_match(text: str) -> tuple[str, ...]:
     )
     if unglued != base:
         variants.append(unglued)
+    # «A4B6», «а4б7», «e46m3» — модель і код кузова/покоління без пробілу.
+    chassis_split = re.sub(
+        r"(?<![a-zа-яёіїє0-9])([a-zа-яёіїє]\d{1,3})([a-zа-яёіїє]\d{1,2})(?![a-zа-яёіїє0-9])",
+        r"\1 \2",
+        base,
+        flags=re.IGNORECASE,
+    )
+    if chassis_split != base:
+        variants.append(chassis_split)
     try:
         from app.services.olx.parser import _normalize_title_for_match
 

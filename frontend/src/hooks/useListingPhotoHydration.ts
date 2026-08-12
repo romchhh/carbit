@@ -3,24 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { listings as listingsApi } from "@/lib/api";
 import { resolveListingImages } from "@/lib/listing-image-url";
+import {
+  ensurePhotosDeduped,
+  noteTelegramPhotosState,
+  telegramPhotosUnavailable,
+} from "@/lib/telegram-photos";
 import type { Listing } from "@/types/api";
-
-const inflight = new Map<string, Promise<Listing>>();
-
-function ensurePhotosDeduped(id: string): Promise<Listing> {
-  let pending = inflight.get(id);
-  if (!pending) {
-    pending = listingsApi.ensurePhotos(id).finally(() => {
-      inflight.delete(id);
-    });
-    inflight.set(id, pending);
-  }
-  return pending;
-}
 
 function listingNeedsPhotoHydration(listing: Listing): boolean {
   if ((listing.source || "").toLowerCase() !== "telegram") return false;
-  return !(listing.images?.length ?? 0);
+  if (listing.images?.length) return false;
+  return !telegramPhotosUnavailable();
 }
 
 /** Retry: швидко на старті, потім рідше (ensure-photos може чекати worker до ~30s). */
@@ -90,9 +83,18 @@ export function useListingPhotoHydration(listing: Listing) {
 
         if (cancelled) return;
 
+        noteTelegramPhotosState(fresh);
+
         const nextImages = applyImages(fresh.images);
         if (nextImages.length) {
           setImages(nextImages);
+          setPhotosPending(false);
+          return;
+        }
+
+        // Бекенд знає, що завантажити нічим (сесія Telethon лежить) —
+        // тримати спінер до кінця спроб немає сенсу.
+        if (fresh.source_data?.photos_unavailable) {
           setPhotosPending(false);
           return;
         }
