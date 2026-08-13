@@ -5,6 +5,7 @@ import {
   listingSourceIcon,
   listingSourceLabel,
 } from "@/lib/listing-source";
+import { SourceBadge } from "@/components/listings/SourceBadge";
 import { cn } from "@/lib/utils";
 import type { Listing, ListingSourceLink } from "@/types/api";
 
@@ -43,6 +44,69 @@ export function listingSourceLinks(
     return links.filter(link => link.source !== listing.source);
   }
   return links;
+}
+
+/** Скільки майданчиків стоїть за карткою (канонічне + дзеркала). */
+export function listingOfferCount(listing: Listing): number {
+  return Math.max(1, listingSourceLinks(listing).length);
+}
+
+/** Об'єднує дзеркала з кількох копій оголошення, без дублікатів джерела. */
+export function mergeSourceLinks(
+  ...groups: Array<ListingSourceLink[] | null | undefined>
+): ListingSourceLink[] {
+  const bySource = new Map<string, ListingSourceLink>();
+  for (const group of groups) {
+    for (const link of group ?? []) {
+      if (!link?.source || !link?.url) continue;
+      if (!bySource.has(link.source)) {
+        bySource.set(link.source, {
+          source: link.source,
+          url: link.url,
+          id: link.id ?? undefined,
+        });
+      }
+    }
+  }
+  return [...bySource.values()].sort((a, b) => rank(a.source) - rank(b.source));
+}
+
+/** Підвантаження з БД не повинно затирати дзеркала, знайдені в живому пошуку. */
+export function keepListingMirrors(
+  fresh: Listing,
+  ...prior: Array<Listing | null | undefined>
+): Listing {
+  return {
+    ...fresh,
+    alternate_sources: mergeSourceLinks(
+      fresh.alternate_sources,
+      ...prior.map(item => item?.alternate_sources),
+    ),
+  };
+}
+
+/** Основне джерело + «Також на» з підписами інших майданчиків. */
+export function ListingFoundOn({
+  listing,
+  className,
+  badgeVariant = "gray",
+}: {
+  listing: Listing;
+  className?: string;
+  badgeVariant?: "gray" | "outline";
+}) {
+  const alts = listingSourceLinks(listing, { alternatesOnly: true });
+  return (
+    <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
+      <SourceBadge source={listing.source} variant={badgeVariant} />
+      {alts.length > 0 ? (
+        <>
+          <span className="text-[11px] font-semibold text-indigo-700">Також на</span>
+          <SourceLinks listing={listing} alternatesOnly />
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 type Props = {

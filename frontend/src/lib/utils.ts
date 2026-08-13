@@ -5,6 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Українська множина: 1 картка, 2 картки, 5 карток. */
+export function ukPlural(n: number, one: string, few: string, many: string): string {
+  const abs = Math.abs(Math.trunc(n)) % 100;
+  const digit = abs % 10;
+  if (abs > 10 && abs < 20) return many;
+  if (digit === 1) return one;
+  if (digit >= 2 && digit <= 4) return few;
+  return many;
+}
+
 export function formatPrice(price: number, currency = "грн") {
   return new Intl.NumberFormat("uk-UA").format(price) + " " + currency;
 }

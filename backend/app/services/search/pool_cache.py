@@ -371,6 +371,29 @@ async def _apply_vin_mirrors_to_page(items: list[ListingOut]) -> list[ListingOut
         return await collapse_listings_with_db_mirrors(db, merged)
 
 
+def collapse_pool_totals(
+    *,
+    slot_total: int,
+    unique_count: int,
+    page: int,
+    per_page: int,
+    slot_count: int,
+) -> tuple[int, int, int, int | None]:
+    """Пагінація після VIN-склеювання.
+
+    Повертає (total карток, pages, offer_count, duplicate_count).
+    Якщо весь пул вмістився на сторінку — total = унікальні картки,
+    а не сирі слоти джерел (інакше «знайдено 3 / показано 2» і фейкова «Показати ще»).
+    """
+    offer_count = slot_total
+    if page == 1 and slot_count <= per_page:
+        dups = max(0, offer_count - unique_count)
+        pages = 1 if unique_count else 0
+        return unique_count, pages, offer_count, dups
+    pages = (slot_total + per_page - 1) // per_page if slot_total else 0
+    return slot_total, pages, offer_count, None
+
+
 async def slice_pool(
     pool: dict[str, Any],
     *,
@@ -407,7 +430,13 @@ async def slice_pool(
 
     items = await _apply_vin_mirrors_to_page(items)
 
-    pages = (total + per_page - 1) // per_page if total else 0
+    total, pages, offer_count, duplicate_count = collapse_pool_totals(
+        slot_total=total,
+        unique_count=len(items),
+        page=page,
+        per_page=per_page,
+        slot_count=len(slots),
+    )
 
     sources_raw = pool.get("sources") or []
     sources = [SourceStatusOut.model_validate(row) for row in sources_raw]
@@ -422,6 +451,8 @@ async def slice_pool(
         sources=sources,
         partial=bool(pool.get("partial")),
         from_cache=True,
+        offer_count=offer_count,
+        duplicate_count=duplicate_count,
     )
 
 

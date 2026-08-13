@@ -10,8 +10,11 @@ import { ListingCompareButton } from "@/components/listings/ListingCompareButton
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
-import { SourceBadge } from "@/components/listings/SourceBadge";
-import { SourceLinks, listingSourceLinks } from "@/components/listings/SourceLinks";
+import {
+  ListingFoundOn,
+  keepListingMirrors,
+  listingSourceLinks,
+} from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -19,6 +22,8 @@ import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
   listingAttributionUrl,
   listingOpenLabel,
+  listingSourceIcon,
+  listingSourceLabel,
   listingSourceSiteName,
 } from "@/lib/listing-source";
 import {
@@ -116,8 +121,12 @@ export function ListingDetailModal({
 
         const nextImages = resolveListingImages(fresh.images);
         if (nextImages.length) {
-          setLiveListing({ ...fresh, images: nextImages });
-          onListingUpdate?.({ ...fresh, images: nextImages });
+          const merged = keepListingMirrors(
+            { ...fresh, images: nextImages },
+            listingProp,
+          );
+          setLiveListing(merged);
+          onListingUpdate?.(merged);
           setPhotosLoading(false);
           return;
         }
@@ -304,11 +313,7 @@ export function ListingDetailModal({
 
           <div className="flex items-center gap-3 px-3 pb-2.5 sm:px-4 sm:pb-3">
             <div className="min-w-0 flex-1 sm:hidden">
-              {(listing.alternate_sources?.length ?? 0) > 0 ? (
-                <SourceLinks listing={listing} className="mb-1" />
-              ) : (
-                <SourceBadge source={listing.source} className="mb-1 bg-transparent px-0 shadow-none" />
-              )}
+              <ListingFoundOn listing={listing} className="mb-1" />
               <h2 className="truncate text-[15px] font-bold leading-snug text-ink">
                 {isNewCar && <strong className="text-blue-600">НОВИЙ </strong>}
                 {listing.title}
@@ -536,11 +541,7 @@ export function ListingDetailModal({
               <div className="w-1/2 min-w-0">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    {(listing.alternate_sources?.length ?? 0) > 0 ? (
-                      <SourceLinks listing={listing} className="mb-2" />
-                    ) : (
-                      <SourceBadge source={listing.source} variant="outline" className="mb-2" />
-                    )}
+                    <ListingFoundOn listing={listing} badgeVariant="outline" className="mb-2" />
                     <h2 id="listing-modal-title" className="text-[20px] font-bold leading-snug text-ink">
                       {isNewCar && <strong className="text-blue-600">НОВИЙ </strong>}
                       {listing.title}
@@ -629,11 +630,7 @@ export function ListingDetailModal({
                   </p>
                 )}
               </div>
-              {(listing.alternate_sources?.length ?? 0) > 0 ? (
-                <SourceLinks listing={listing} />
-              ) : (
-                <SourceBadge source={listing.source} variant="outline" />
-              )}
+              <ListingFoundOn listing={listing} badgeVariant="outline" />
             </div>
 
             {specs.length > 0 && (
@@ -704,27 +701,36 @@ export function ListingDetailModal({
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {listingSourceLinks(listing).map((link, index) => (
-              <Link
-                key={`${link.source}-${link.url}-cta`}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={index === 0 ? "flex-1 sm:min-w-[240px]" : "sm:w-auto"}
-              >
-                <Button
-                  variant={index === 0 ? "emerald" : "secondary"}
-                  size="lg"
-                  className={cn(
-                    "w-full gap-2 py-3 text-[15px] font-bold",
-                    index > 0 && "border-border text-ink",
-                  )}
+            {listingSourceLinks(listing).map((link, index) => {
+              const icon = listingSourceIcon(link.source);
+              return (
+                <Link
+                  key={`${link.source}-${link.url}-cta`}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={index === 0 ? "flex-1 sm:min-w-[240px]" : "sm:w-auto"}
                 >
-                  <IconGlobe size={18} />
-                  {listingOpenLabel(link.source)}
-                </Button>
-              </Link>
-            ))}
+                  <Button
+                    variant={index === 0 ? "emerald" : "secondary"}
+                    size="lg"
+                    className={cn(
+                      "w-full gap-2 py-3 text-[15px] font-bold",
+                      index > 0 && "border-border text-ink",
+                    )}
+                  >
+                    {icon ? (
+                      <Image src={icon} alt="" width={18} height={18} className="rounded-sm object-contain" unoptimized />
+                    ) : (
+                      <IconGlobe size={18} />
+                    )}
+                    {index === 0
+                      ? listingOpenLabel(link.source)
+                      : `Також на ${listingSourceLabel(link.source)}`}
+                  </Button>
+                </Link>
+              );
+            })}
             {hasVinCheck(listing) && (
               <VinCheckButton listing={listing} size="md" className="w-full sm:w-auto sm:min-w-[180px]" />
             )}

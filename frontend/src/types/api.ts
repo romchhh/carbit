@@ -128,6 +128,10 @@ export interface PaginatedListings {
   from_cache?: boolean;
   /** Реальна кількість оголошень в API (може перевищувати total — розмір локального пулу). */
   market_total?: number | null;
+  /** Сирі пропозиції до VIN-склеювання. */
+  offer_count?: number | null;
+  /** Скільки пропозицій згорнули в дублі. */
+  duplicate_count?: number | null;
 }
 
 export interface SearchLiveResults {

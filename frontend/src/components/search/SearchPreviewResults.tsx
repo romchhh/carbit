@@ -11,6 +11,7 @@ import { useCompareOnListingCard } from "@/hooks/useCompareOnListingCard";
 import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import { listingsToExportItems } from "@/lib/export-listings";
+import { listingOfferCount } from "@/components/listings/SourceLinks";
 import { SEARCH_PAGE_SIZE, type SearchFreshness } from "@/lib/search-preview";
 import { flavorForLoadMore, flavorForRefresh } from "@/lib/search-flavor";
 import { isSearchRateLimitMessage } from "@/components/search/SearchRateLimitNotice";
@@ -93,7 +94,7 @@ export function SearchPreviewResults({
   loadingMore,
   hasMore,
   total,
-  marketTotal,
+  marketTotal: _marketTotal,
   results,
   sort,
   freshness,
@@ -112,13 +113,20 @@ export function SearchPreviewResults({
   const exportItems = useMemo(() => listingsToExportItems(results), [results]);
   const remaining = Math.max(0, total - results.length);
   const nextBatch = Math.min(SEARCH_PAGE_SIZE, remaining);
+  const canLoadMore = Boolean(hasMore && onLoadMore && remaining > 0);
+
+  const offerStats = useMemo(() => {
+    const fromCards = results.reduce((sum, item) => sum + listingOfferCount(item), 0);
+    const duplicatesFromCards = Math.max(0, fromCards - results.length);
+    return {
+      offers: fromCards,
+      duplicates: duplicatesFromCards,
+    };
+  }, [results]);
 
   const partialHint = buildPartialHint(sourceStatuses, partial, fromCache);
   const loadMoreLabel = useMemo(() => flavorForLoadMore(results.length), [results.length]);
   const refreshLabel = useMemo(() => flavorForRefresh(total), [total]);
-
-  const rawTotal = marketTotal ?? total;
-  const displayTotal = rawTotal > 80 ? rawTotal + 10 : rawTotal;
 
   const openListing = (listing: Listing) => {
     saveRecentListing(listing);
@@ -131,12 +139,15 @@ export function SearchPreviewResults({
         {running && (
           <SearchResultsToolbar
             running={running}
-            total={displayTotal}
+            total={total}
             shown={results.length}
             sort={sort}
             onSortChange={onSortChange}
             exportItems={exportItems}
             exportName="search"
+            offerCount={offerStats.offers}
+            duplicateCount={offerStats.duplicates}
+            hasMore={canLoadMore}
           />
         )}
 
@@ -233,7 +244,7 @@ export function SearchPreviewResults({
               ))}
             </div>
 
-            {hasMore && onLoadMore && (
+            {canLoadMore && (
               <button
                 type="button"
                 onClick={onLoadMore}
@@ -248,9 +259,9 @@ export function SearchPreviewResults({
                     {nextBatch > 0 && (
                       <span className="font-bold text-ink">+{nextBatch}</span>
                     )}
-                    {displayTotal > 0 && (
+                    {total > 0 && (
                       <span className="font-medium text-muted">
-                        · {results.length} з {displayTotal.toLocaleString("uk-UA")}
+                        · {results.length} з {total.toLocaleString("uk-UA")}
                       </span>
                     )}
                   </span>

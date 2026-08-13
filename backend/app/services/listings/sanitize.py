@@ -134,6 +134,8 @@ def sanitize_paginated_listings(results: PaginatedListings) -> PaginatedListings
         sources=list(results.sources or []),
         partial=bool(results.partial),
         from_cache=bool(results.from_cache),
+        offer_count=results.offer_count,
+        duplicate_count=results.duplicate_count,
     )
 
 

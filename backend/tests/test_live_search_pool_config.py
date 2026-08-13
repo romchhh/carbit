@@ -124,5 +124,46 @@ class LiveSearchPoolConfigTests(unittest.TestCase):
         self.assertEqual(len(page_items), 2)
 
 
+class CollapsePoolTotalsTests(unittest.TestCase):
+    def test_small_pool_counts_unique_cards_not_raw_slots(self):
+        total, pages, offers, dups = pool_cache.collapse_pool_totals(
+            slot_total=3,
+            unique_count=2,
+            page=1,
+            per_page=20,
+            slot_count=3,
+        )
+        self.assertEqual(total, 2)
+        self.assertEqual(pages, 1)
+        self.assertEqual(offers, 3)
+        self.assertEqual(dups, 1)
+
+    def test_large_pool_keeps_slot_pagination(self):
+        total, pages, offers, dups = pool_cache.collapse_pool_totals(
+            slot_total=200,
+            unique_count=20,
+            page=1,
+            per_page=20,
+            slot_count=200,
+        )
+        self.assertEqual(total, 200)
+        self.assertEqual(pages, 10)
+        self.assertEqual(offers, 200)
+        self.assertIsNone(dups)
+
+    def test_no_duplicates(self):
+        total, pages, offers, dups = pool_cache.collapse_pool_totals(
+            slot_total=2,
+            unique_count=2,
+            page=1,
+            per_page=20,
+            slot_count=2,
+        )
+        self.assertEqual(total, 2)
+        self.assertEqual(offers, 2)
+        self.assertEqual(dups, 0)
+        self.assertEqual(pages, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,7 @@ import type { Listing, SourceStatus } from "@/types/api";
 type PageResult = {
   items: Listing[];
   total: number;
+  pages: number;
   marketTotal?: number | null;
   sources?: SourceStatus[];
   partial?: boolean;
@@ -70,6 +71,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
   const [marketTotal, setMarketTotal] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
+  const [poolSize, setPoolSize] = useState(0);
+  const [loadedApiPage, setLoadedApiPage] = useState(0);
   const [sort, setSort] = useState<SortOption>("newest");
   const [freshness, setFreshness] = useState<SearchFreshness>("all");
   const [running, setRunning] = useState(false);
@@ -157,6 +160,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       return {
         items: data.items,
         total: data.total,
+        pages: data.pages || Math.max(1, Math.ceil((data.total || 0) / SEARCH_FIRST_BATCH)),
         marketTotal: data.market_total,
         sources: data.sources,
         partial: data.partial,
@@ -216,7 +220,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setRunning(true);
     setError(null);
     setErrorRetryAfter(null);
-    setPages(Math.max(1, Math.ceil(data.total / SEARCH_PAGE_SIZE)));
+    setPages(Math.max(data.pages || 0, Math.ceil(data.total / SEARCH_PAGE_SIZE) || 0));
   };
 
   const scrollToProgress = useCallback(() => {
@@ -244,7 +248,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       const apiSort = poolApiSortRef.current;
       try {
         let apiPage = lastApiPageRef.current + 1;
-        const maxApiPage = Math.ceil(targetTotal / SEARCH_FIRST_BATCH) + 4;
+        const maxApiPage = Math.max(1, Math.ceil(targetTotal / SEARCH_FIRST_BATCH));
         let emptyPages = 0;
 
         while (
@@ -258,6 +262,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           if (gen !== searchGen.current) return;
           fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, data.items);
           lastApiPageRef.current = Math.max(lastApiPageRef.current, apiPage);
+          setPoolSize(fullPoolRef.current.length);
+          setLoadedApiPage(lastApiPageRef.current);
           apiPage += 1;
           // Зупиняємось тільки якщо API дійсно не повернув нічого (не плутаємо з дедупом)
           if (data.items.length === 0) {
@@ -300,6 +306,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       displayPoolRef.current = [];
       displayCountRef.current = 0;
       lastApiPageRef.current = 0;
+      setPoolSize(0);
+      setLoadedApiPage(0);
       poolApiSortRef.current = nextSort;
       scrollToProgress();
 
@@ -321,17 +329,21 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         startTransition(() => {
           setResults([...initialDisplay]);
           setPage(Math.max(1, Math.ceil(initialDisplay.length / SEARCH_PAGE_SIZE)));
+          setPoolSize(fullPoolRef.current.length);
+          setLoadedApiPage(1);
           syncMeta(first, nextFilters, nextSort, nextFreshness);
           setSearching(false);
         });
 
-        if (first.total > first.items.length) {
+        if (first.pages > 1) {
           const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2, signal);
           if (gen !== searchGen.current) return;
           lastApiPageRef.current = 2;
           // Дописуємо стор. 2 у пул — без розширення display (лише preload).
           fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, second.items);
           startTransition(() => {
+            setPoolSize(fullPoolRef.current.length);
+            setLoadedApiPage(2);
             syncMeta(second, nextFilters, nextSort, nextFreshness);
           });
         }
@@ -348,6 +360,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         setTotal(0);
         setPage(1);
         setPages(0);
+        setPoolSize(0);
+        setLoadedApiPage(0);
         setSourceStatuses([]);
         setPartial(false);
         setFromCache(false);
@@ -390,6 +404,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         lastMeta = data;
         fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, data.items);
         lastApiPageRef.current = Math.max(lastApiPageRef.current, apiPage);
+        setPoolSize(fullPoolRef.current.length);
+        setLoadedApiPage(lastApiPageRef.current);
         apiPage += 1;
         if (data.items.length === 0) {
           emptyPages += 1;
@@ -416,7 +432,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           setFromCache(Boolean(fc));
           setTotal(t);
           setMarketTotal(mt ?? null);
-          setPages(Math.max(1, Math.ceil(t / SEARCH_PAGE_SIZE)));
+          setPages(Math.max(lastMeta.pages || 0, Math.ceil(t / SEARCH_PAGE_SIZE) || 0));
         }
       });
     },
@@ -425,7 +441,10 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
 
   const loadMore = useCallback(() => {
     if (!running || loadingMore || searching) return;
-    if (displayCountRef.current >= total && total > 0) return;
+    const poolLen = fullPoolRef.current.length;
+    const canShowMoreFromPool = poolLen > displayCountRef.current;
+    const canFetchMorePages = lastApiPageRef.current < pages;
+    if (!canShowMoreFromPool && !canFetchMorePages) return;
 
     const gen = searchGen.current;
     const targetDisplay = displayCountRef.current + SEARCH_PAGE_SIZE;
@@ -436,7 +455,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       return;
     }
 
-    if (fullPoolRef.current.length >= total) {
+    if (!canFetchMorePages || fullPoolRef.current.length >= total) {
       applyDisplaySlice(Math.min(targetDisplay, fullPoolRef.current.length));
       return;
     }
@@ -453,6 +472,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     loadingMore,
     running,
     searching,
+    pages,
     total,
   ]);
 
@@ -506,6 +526,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setMarketTotal(null);
     setPage(1);
     setPages(0);
+    setPoolSize(0);
+    setLoadedApiPage(0);
     setSourceStatuses([]);
     setPartial(false);
     setFromCache(false);
@@ -529,7 +551,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     running,
     searching,
     loadingMore,
-    hasMore: running && results.length < total,
+    hasMore:
+      running &&
+      (results.length < poolSize || (loadedApiPage < pages && pages > 1)),
     error,
     errorRetryAfter,
     sourceStatuses,

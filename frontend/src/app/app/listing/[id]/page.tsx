@@ -6,8 +6,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { listings as listingsApi, favorites as favoritesApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
-import { SourceBadge } from "@/components/listings/SourceBadge";
-import { SourceLinks, listingSourceLinks } from "@/components/listings/SourceLinks";
+import {
+  ListingFoundOn,
+  keepListingMirrors,
+  listingSourceLinks,
+} from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
@@ -28,8 +31,11 @@ import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-curren
 import {
   listingAttributionUrl,
   listingOpenLabel,
+  listingSourceIcon,
+  listingSourceLabel,
   listingSourceSiteName,
 } from "@/lib/listing-source";
+import { loadRecentListings } from "@/lib/recent-listings";
 import { hasVinCheck } from "@/lib/vin-check";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
 import { hasSellerContact } from "@/lib/seller-contact";
@@ -52,7 +58,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       listingsApi
         .get(p.id)
         .then(data => {
-          setListing(data);
+          const cached = loadRecentListings().find(item => item.id === data.id);
+          const merged = keepListingMirrors(data, cached);
+          setListing(merged);
           setNotFound(false);
           if (
             data.source === "auto_ria" &&
@@ -60,11 +68,17 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           ) {
             listingsApi
               .ensurePhotos(data.id)
-              .then(fresh => setListing(fresh))
+              .then(fresh => setListing(prev => keepListingMirrors(fresh, prev, cached)))
               .catch(() => {});
           }
         })
         .catch(() => {
+          const cached = loadRecentListings().find(item => item.id === p.id);
+          if (cached) {
+            setListing(cached);
+            setNotFound(false);
+            return;
+          }
           setListing(null);
           setNotFound(true);
         })
@@ -281,11 +295,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Mobile summary */}
           <section className="rounded-2xl border border-border/80 bg-white p-4 shadow-sm lg:hidden">
-            {(listing.alternate_sources?.length ?? 0) > 0 ? (
-              <SourceLinks listing={listing} className="mb-2" />
-            ) : (
-              <SourceBadge source={listing.source} className="mb-2" />
-            )}
+            <ListingFoundOn listing={listing} className="mb-2" />
             <h1 className="text-[18px] font-bold leading-snug text-ink">{listing.title}</h1>
             <p className="mt-1 text-[12px] text-muted">
               {listing.brand} {listing.model}
@@ -302,18 +312,27 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
             <div className="mt-4 flex flex-col gap-2">
-              {listingSourceLinks(listing).map((link, index) => (
-                <a key={`${link.source}-${link.url}-m`} href={link.url} target="_blank" rel="noopener noreferrer">
-                  <Button
-                    variant={index === 0 ? "emerald" : "secondary"}
-                    size="lg"
-                    className="w-full gap-2 py-3 text-[15px] font-bold"
-                  >
-                    <IconGlobe size={18} />
-                    {listingOpenLabel(link.source)}
-                  </Button>
-                </a>
-              ))}
+              {listingSourceLinks(listing).map((link, index) => {
+                const icon = listingSourceIcon(link.source);
+                return (
+                  <a key={`${link.source}-${link.url}-m`} href={link.url} target="_blank" rel="noopener noreferrer">
+                    <Button
+                      variant={index === 0 ? "emerald" : "secondary"}
+                      size="lg"
+                      className="w-full gap-2 py-3 text-[15px] font-bold"
+                    >
+                      {icon ? (
+                        <Image src={icon} alt="" width={18} height={18} className="rounded-sm object-contain" unoptimized />
+                      ) : (
+                        <IconGlobe size={18} />
+                      )}
+                      {index === 0
+                        ? listingOpenLabel(link.source)
+                        : `Також на ${listingSourceLabel(link.source)}`}
+                    </Button>
+                  </a>
+                );
+              })}
               {hasVinCheck(listing) && <VinCheckButton listing={listing} size="md" className="w-full" />}
             </div>
           </section>
@@ -404,25 +423,30 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
             <div className="mt-4">
-              {(listing.alternate_sources?.length ?? 0) > 0 ? (
-                <SourceLinks listing={listing} />
-              ) : (
-                <SourceBadge source={listing.source} variant="outline" />
-              )}
+              <ListingFoundOn listing={listing} badgeVariant="outline" />
             </div>
             <div className="mt-5 space-y-2">
-              {listingSourceLinks(listing).map((link, index) => (
-                <a key={`${link.source}-${link.url}-d`} href={link.url} target="_blank" rel="noopener noreferrer">
-                  <Button
-                    variant={index === 0 ? "emerald" : "secondary"}
-                    size="lg"
-                    className="w-full gap-2 py-3 text-[15px] font-bold"
-                  >
-                    <IconGlobe size={18} />
-                    {listingOpenLabel(link.source)}
-                  </Button>
-                </a>
-              ))}
+              {listingSourceLinks(listing).map((link, index) => {
+                const icon = listingSourceIcon(link.source);
+                return (
+                  <a key={`${link.source}-${link.url}-d`} href={link.url} target="_blank" rel="noopener noreferrer">
+                    <Button
+                      variant={index === 0 ? "emerald" : "secondary"}
+                      size="lg"
+                      className="w-full gap-2 py-3 text-[15px] font-bold"
+                    >
+                      {icon ? (
+                        <Image src={icon} alt="" width={18} height={18} className="rounded-sm object-contain" unoptimized />
+                      ) : (
+                        <IconGlobe size={18} />
+                      )}
+                      {index === 0
+                        ? listingOpenLabel(link.source)
+                        : `Також на ${listingSourceLabel(link.source)}`}
+                    </Button>
+                  </a>
+                );
+              })}
               {hasVinCheck(listing) && <VinCheckButton listing={listing} size="md" className="w-full" />}
             </div>
             {hasSellerContact(listing) && <SellerContactBlock listing={listing} compact className="mt-4 shadow-sm" />}

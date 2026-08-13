@@ -3,6 +3,7 @@
 import { ExportMenu } from "@/components/search/ExportMenu";
 import type { ExportListing } from "@/lib/export-listings";
 import type { SortOption } from "@/lib/search-catalog";
+import { ukPlural } from "@/lib/utils";
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "newest", label: "Спочатку нові" },
@@ -23,6 +24,10 @@ type Props = {
   isActive?: boolean;
   newCount?: number;
   idleLabel?: string;
+  /** Сирі пропозиції до склеювання дублів. */
+  offerCount?: number;
+  duplicateCount?: number;
+  hasMore?: boolean;
 };
 
 export function SearchResultsToolbar({
@@ -36,6 +41,9 @@ export function SearchResultsToolbar({
   isActive,
   newCount,
   idleLabel = "Натисніть «Шукати»",
+  offerCount,
+  duplicateCount,
+  hasMore = false,
 }: Props) {
   return (
     <div className="mb-4 rounded-2xl border border-border bg-white p-3.5 sm:px-5 sm:py-3.5">
@@ -69,10 +77,13 @@ export function SearchResultsToolbar({
                 </>
               )}
               <span className="text-muted">
-                Знайдено <strong className="text-ink">{total.toLocaleString("uk-UA")}</strong>
-                {shown < total && (
-                  <span className="hidden sm:inline"> · показано {shown}</span>
-                )}
+                <FoundCount
+                  cards={total}
+                  shown={shown}
+                  offers={offerCount}
+                  duplicates={duplicateCount}
+                  hasMore={hasMore}
+                />
               </span>
               {typeof newCount === "number" && newCount > 0 && (
                 <>
@@ -80,7 +91,7 @@ export function SearchResultsToolbar({
                   <span className="font-semibold text-emerald-dark">{newCount} нових</span>
                 </>
               )}
-              {shown < total && (
+              {hasMore && shown < total && (
                 <span className="w-full text-[12px] text-muted sm:hidden">
                   Показано {shown} з {total.toLocaleString("uk-UA")}
                 </span>
@@ -109,5 +120,47 @@ export function SearchResultsToolbar({
         )}
       </div>
     </div>
+  );
+}
+
+function FoundCount({
+  cards,
+  shown,
+  offers,
+  duplicates,
+  hasMore,
+}: {
+  cards: number;
+  shown: number;
+  offers?: number;
+  duplicates?: number;
+  hasMore: boolean;
+}) {
+  const dups = Math.max(0, duplicates ?? 0);
+  const offerTotal = offers ?? cards;
+  const moreHint = hasMore && shown < cards && (
+    <span className="hidden sm:inline"> · показано {shown}</span>
+  );
+
+  if (!hasMore && dups > 0 && offerTotal > cards) {
+    return (
+      <>
+        Знайдено{" "}
+        <strong className="text-ink">{offerTotal.toLocaleString("uk-UA")}</strong>{" "}
+        {ukPlural(offerTotal, "пропозицію", "пропозиції", "пропозицій")}
+        {" · "}
+        {dups.toLocaleString("uk-UA")} {ukPlural(dups, "дубль", "дублі", "дублів")}
+        {" · "}
+        {cards.toLocaleString("uk-UA")} {ukPlural(cards, "картка", "картки", "карток")}
+        {moreHint}
+      </>
+    );
+  }
+
+  return (
+    <>
+      Знайдено <strong className="text-ink">{cards.toLocaleString("uk-UA")}</strong>
+      {moreHint}
+    </>
   );
 }

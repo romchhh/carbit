@@ -340,6 +340,10 @@ class PaginatedListings(BaseModel):
     # Реальна кількість оголошень за запитом у зовнішніх джерелах (AUTO.RIA API count).
     # Може бути більшою за total (розмір пулу), оскільки ми завантажуємо лише перші N.
     market_total: int | None = None
+    # Сирі пропозиції до VIN-склеювання (слоти джерел). None — не рахували.
+    offer_count: int | None = None
+    # Скільки пропозицій згорнули в картки-дублі. None — невідомо (пул більший за сторінку).
+    duplicate_count: int | None = None
 
 
 class SearchLiveResultsOut(BaseModel):
