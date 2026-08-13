@@ -190,6 +190,8 @@ async def run_live_search(
 
                 model_post_filter = await model_filter_needs_post_filter(AutoRiaClient(), filters)
             except Exception:
+                # Краще перевірити зайвий раз, ніж показати всю марку.
+                model_post_filter = True
                 logger.exception("model_post_filter check failed")
 
         pool_market_total = _pool_market_total_for_cache(

@@ -1537,6 +1537,9 @@ async def build_live_search_pool(
         try:
             model_post_filter = await model_filter_needs_post_filter(AutoRiaClient(), filters)
         except Exception:
+            # Не змогли підтвердити, що AUTO.RIA відфільтрувала модель —
+            # перевіряємо самі, інакше в пул потрапить уся марка.
+            model_post_filter = True
             logger.exception("model_post_filter check failed in pool build")
 
     if model_post_filter and auto_ria_ids:

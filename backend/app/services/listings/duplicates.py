@@ -431,18 +431,25 @@ def mark_duplicates_in_pool(
             canonical = canonical.model_copy(update={"url": canon_url})
 
         for member in sorted(group, key=lambda row: (_source_rank(row.source), row.id)):
-            if member.id == canonical.id:
-                continue
-            url = _telegram_url_for(member)
-            if not url:
-                continue
-            url_key = url.rstrip("/").split("?", 1)[0]
-            if url_key in seen_urls:
-                continue
-            seen_urls.add(url_key)
-            alternates.append(
-                ListingSourceLink(source=member.source, url=url, id=member.id)
-            )
+            if member.id != canonical.id:
+                url = _telegram_url_for(member)
+                if url:
+                    url_key = url.rstrip("/").split("?", 1)[0]
+                    if url_key not in seen_urls:
+                        seen_urls.add(url_key)
+                        alternates.append(
+                            ListingSourceLink(source=member.source, url=url, id=member.id)
+                        )
+            # Дзеркала, знайдені попереднім склеюванням, треба зберегти: інакше
+            # повторний прохід (пул → collapse_listings_with_db_mirrors) їх стирає.
+            for link in member.alternate_sources or []:
+                if not link.url:
+                    continue
+                url_key = link.url.rstrip("/").split("?", 1)[0]
+                if url_key in seen_urls:
+                    continue
+                seen_urls.add(url_key)
+                alternates.append(link)
 
         is_new = any(bool(getattr(m, "is_new", None)) for m in group)
 

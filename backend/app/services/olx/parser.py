@@ -1729,10 +1729,19 @@ def _title_has_model(title: str, model: str, *, brand: str | None = None) -> boo
         ):
             return True
         brand_l = (brand or "").strip().lower()
-        if brand_l and re.search(
-            rf"(?<![\w]){re.escape(brand_l)}\s+{re.escape(num)}(?![\w])",
-            title,
-            re.IGNORECASE,
+        # «Jaecoo 7» = J7, але «BMW 5» = 5 Series, а не X5.
+        from app.services.search.brand_model_keywords import (
+            bare_number_belongs_to_other_model,
+        )
+
+        if (
+            brand_l
+            and not bare_number_belongs_to_other_model(brand or "", num, model)
+            and re.search(
+                rf"(?<![\w]){re.escape(brand_l)}\s+{re.escape(num)}(?![\w])",
+                title,
+                re.IGNORECASE,
+            )
         ):
             return True
     return False

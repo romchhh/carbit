@@ -451,3 +451,79 @@ class DuplicatesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MirrorLinkPersistenceTests(unittest.TestCase):
+    """Повторне склеювання не має стирати вже знайдені дзеркала.
+
+    У живому пошуку mark_duplicates_in_pool викликається двічі: спершу для
+    пулу, потім у collapse_listings_with_db_mirrors. Другий прохід бачить уже
+    згорнуту картку саму в групі — і раніше перезаписував alternate_sources
+    порожнім списком, через що посилання на Імперію зникало з картки.
+    """
+
+    VIN = "WP0AB2A81JK278085"
+
+    def _merged_pair(self) -> ListingOut:
+        merged = mark_duplicates_in_pool(
+            [
+                _item(
+                    id="auto_ria_38801428",
+                    source="auto_ria",
+                    vin=self.VIN,
+                    url="https://auto.ria.com/auto_porsche_cayman_38801428.html",
+                ),
+                _item(
+                    id="imperiya_51740",
+                    source="imperiya",
+                    vin=self.VIN,
+                    url="https://imperiya-auto.com.ua/listing/porsche-cayman-51740",
+                ),
+            ]
+        )
+        self.assertEqual(len(merged), 1)
+        return merged[0]
+
+    def test_first_pass_keeps_imperiya_link(self):
+        card = self._merged_pair()
+        self.assertEqual(card.source, "auto_ria")
+        self.assertEqual([a.source for a in card.alternate_sources], ["imperiya"])
+
+    def test_second_pass_is_idempotent(self):
+        card = self._merged_pair()
+        again = mark_duplicates_in_pool([card])
+        self.assertEqual(len(again), 1)
+        self.assertEqual(
+            [a.source for a in again[0].alternate_sources],
+            ["imperiya"],
+            "друге склеювання стерло дзеркало",
+        )
+        self.assertEqual(
+            again[0].alternate_sources[0].url,
+            "https://imperiya-auto.com.ua/listing/porsche-cayman-51740",
+        )
+
+    def test_repeated_passes_do_not_duplicate_links(self):
+        card = self._merged_pair()
+        for _ in range(3):
+            card = mark_duplicates_in_pool([card])[0]
+        self.assertEqual(len(card.alternate_sources), 1)
+
+    def test_mirror_survives_merge_with_third_source(self):
+        card = self._merged_pair()
+        merged = mark_duplicates_in_pool(
+            [
+                card,
+                _item(
+                    id="olx_777",
+                    source="olx",
+                    vin=self.VIN,
+                    url="https://olx.example/porsche-cayman",
+                ),
+            ]
+        )
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(
+            sorted(a.source for a in merged[0].alternate_sources),
+            ["imperiya", "olx"],
+        )

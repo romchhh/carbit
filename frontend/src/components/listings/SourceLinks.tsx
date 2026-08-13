@@ -16,7 +16,10 @@ function rank(source: string): number {
 }
 
 /** Усі джерела оголошення: канонічне + дзеркала (AUTO.RIA першим). */
-export function listingSourceLinks(listing: Listing): ListingSourceLink[] {
+export function listingSourceLinks(
+  listing: Listing,
+  opts?: { alternatesOnly?: boolean },
+): ListingSourceLink[] {
   const bySource = new Map<string, ListingSourceLink>();
   if (listing.url) {
     bySource.set(listing.source, {
@@ -35,7 +38,11 @@ export function listingSourceLinks(listing: Listing): ListingSourceLink[] {
       });
     }
   }
-  return [...bySource.values()].sort((a, b) => rank(a.source) - rank(b.source));
+  const links = [...bySource.values()].sort((a, b) => rank(a.source) - rank(b.source));
+  if (opts?.alternatesOnly) {
+    return links.filter(link => link.source !== listing.source);
+  }
+  return links;
 }
 
 type Props = {
@@ -43,6 +50,8 @@ type Props = {
   className?: string;
   /** Лише іконки без підписів (картки). */
   iconOnly?: boolean;
+  /** Лише дзеркала, без канонічного джерела («Також на …»). */
+  alternatesOnly?: boolean;
   size?: "sm" | "md";
   stopPropagation?: boolean;
 };
@@ -51,10 +60,11 @@ export function SourceLinks({
   listing,
   className,
   iconOnly = false,
+  alternatesOnly = false,
   size = "sm",
   stopPropagation = true,
 }: Props) {
-  const links = listingSourceLinks(listing);
+  const links = listingSourceLinks(listing, { alternatesOnly });
   if (links.length === 0) return null;
 
   const iconPx = size === "md" ? 18 : 14;

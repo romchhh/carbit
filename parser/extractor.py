@@ -285,7 +285,10 @@ MILEAGE_THOUSAND_WORDS_RE = re.compile(
 PRICE_THOUSAND_RE = re.compile(
     r"(?<![A-Za-zА-Яа-яЁёІіЇїЄєҐґ0-9/])"
     r"(?P<amount>\d{1,2}(?:[.,]\d)?)\s*"
-    r"(?:тис\.?|тыс\.?)\.?\s*"
+    r"(?:тис\.?|тыс\.?)"
+    # «19 тис км» / «19 тис.км» — це пробіг, а не 19 тисяч доларів.
+    r"(?![\s.]*(?:км|km|миль|mil|мил))"
+    r"\.?\s*"
     r"(?:[\$€]|usd|eur|грн\.?|uah|у\.?\s?е\.?)?",
     re.IGNORECASE,
 )
@@ -721,6 +724,22 @@ def _correct_mislabelled_uah(amount: float, currency: str | None, text: str) -> 
     return currency
 
 
+def _paren_spans(text: str) -> list[tuple[int, int]]:
+    """Межі дужок — ціна в них зазвичай довідкова: «95000$ (ріа 105000$)»."""
+    spans: list[tuple[int, int]] = []
+    stack: list[int] = []
+    for idx, char in enumerate(text):
+        if char in "([":
+            stack.append(idx)
+        elif char in ")]" and stack:
+            spans.append((stack.pop(), idx))
+    return spans
+
+
+def _is_in_parens(pos: int, spans: list[tuple[int, int]]) -> bool:
+    return any(start < pos < end for start, end in spans)
+
+
 def _find_price(text: str):
     # Кілька 💰 (стара/нова ціна) — беремо останню валідну (часто акційна).
     labeled_hits: list[tuple[float, str | None]] = []
@@ -771,6 +790,7 @@ def _find_price(text: str):
 
     best = None
     best_score = -1
+    paren_spans = _paren_spans(text)
     for m in PRICE_RE.finditer(text):
         amount = _normalize_amount(m.group("amount"))
         if amount is None:
@@ -802,6 +822,9 @@ def _find_price(text: str):
             score += 2
         if has_label:
             score += 3
+        # Ціна продавця стоїть поза дужками, у дужках — довідкова.
+        if not _is_in_parens(m.start("amount"), paren_spans):
+            score += 1
         # при рівному score — пізніша ціна (часто актуальна)
         if best is None or score >= best_score:
             best = (amount, currency)

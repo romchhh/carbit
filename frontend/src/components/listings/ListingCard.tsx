@@ -14,7 +14,7 @@ import {
   resolveListingMileage,
 } from "@/lib/listing-specs";
 import { SourceBadge } from "@/components/listings/SourceBadge";
-import { SourceLinks, listingSourceLinks } from "@/components/listings/SourceLinks";
+import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { useVinCheckCache } from "@/hooks/useVinCheckCache";
 import { useListingPhotoHydration } from "@/hooks/useListingPhotoHydration";
@@ -84,7 +84,6 @@ export function ListingCard({
   // На фото — дата публікації, не lastRefresh (підняття на OLX).
   const timeBadgeDate = listing.published_at;
   const hasMirrorSources = (listing.alternate_sources?.length ?? 0) > 0;
-  const sourceLinkCount = hasMirrorSources ? listingSourceLinks(listing).length : 0;
   const isNewForMonitor = Boolean(listing.is_new);
   const isNewCar = listing.id?.startsWith("new_auto_ria_");
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -160,13 +159,14 @@ export function ListingCard({
                 Новий
               </span>
             )}
-            {hasMirrorSources && (
-              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-indigo-700 shadow-sm">
-                {sourceLinkCount} джерела
-              </span>
-            )}
             {hasMirrorSources ? (
-              <SourceLinks listing={listing} iconOnly />
+              <>
+                <SourceBadge source={listing.source} />
+                <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold text-indigo-700 shadow-sm">
+                  Також на
+                </span>
+                <SourceLinks listing={listing} iconOnly alternatesOnly />
+              </>
             ) : (
               <SourceBadge source={listing.source} />
             )}
@@ -321,8 +321,11 @@ export function ListingCard({
                 </span>
               )}
               {hasMirrorSources && (
-                <span className="hidden rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700 sm:inline-flex">
-                  {sourceLinkCount} джерела
+                <span className="hidden items-center gap-1.5 sm:inline-flex">
+                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                    Також на
+                  </span>
+                  <SourceLinks listing={listing} iconOnly alternatesOnly />
                 </span>
               )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[15px] sm:line-clamp-1">

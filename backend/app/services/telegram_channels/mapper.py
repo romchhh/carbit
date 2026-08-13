@@ -349,12 +349,23 @@ def _listing_matches_single_model(
 ) -> bool:
     if not model:
         return True
-    model_haystack = f"{item.model} {item.title} {item.description or ''}"
-    return text_matches_model_filter(
-        model_haystack,
-        model,
-        brand=brand or "",
-    )
+
+    # Заголовок і опис — першоджерело: їх писав продавець.
+    text_haystack = f"{item.title} {item.description or ''}"
+    if text_matches_model_filter(text_haystack, model, brand=brand or ""):
+        return True
+
+    item_model = (item.model or "").strip()
+    if not item_model:
+        return False
+    if not text_matches_model_filter(item_model, model, brand=brand or ""):
+        return False
+
+    # Поле «model» могло бути проштамповане з фільтра (OLX/AUTO.RIA hint),
+    # тож віримо йому лише коли текст не називає іншу модель цієї марки.
+    from app.services.search.brand_model_keywords import text_names_other_model
+
+    return not text_names_other_model(text_haystack, brand or item.brand or "", model)
 
 
 def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> bool:

@@ -1128,6 +1128,7 @@ def collect_model_keyword_variants(brand: str, model: str) -> tuple[str, ...]:
             deduped.append(token)
     filtered = _filter_compound_body_variants(model, deduped)
     filtered = _filter_generic_submodel_variants(model, filtered)
+    filtered = _filter_nested_other_model_variants(brand, model, filtered)
     return tuple(_filter_letter_class_variants(model, filtered))
 
 
@@ -1582,6 +1583,52 @@ def _filter_generic_submodel_variants(model: str, variants: list[str]) -> list[s
     return [token for token in variants if norm_text(token) not in weak]
 
 
+def _filter_nested_other_model_variants(
+    brand: str,
+    model: str,
+    variants: list[str],
+) -> list[str]:
+    """Прибирає варіанти, що є назвою іншої моделі («e-tron» для «Q4 e-tron»).
+
+    Плюс частини назви, які ділять кілька моделей марки: сам «pace» не
+    відрізняє F-Pace від E-Pace, а «picasso» — C4 Picasso від Xsara Picasso.
+    """
+    drop = _nested_other_model_words(brand, model) | _shared_submodel_words(brand, model)
+    if not drop:
+        return variants
+    model_key = norm_text(model)
+    return [
+        token
+        for token in variants
+        if norm_text(token) == model_key or norm_text(token) not in drop
+    ]
+
+
+@lru_cache(maxsize=4096)
+def _shared_submodel_words(brand: str, model: str) -> frozenset[str]:
+    """Слова назви, які є більш ніж в однієї моделі марки."""
+    if not brand:
+        return frozenset()
+    model_key = norm_text(model)
+    parts = {
+        key
+        for key in (norm_text(w) for w in re.split(r"[\s\-./]+", (model or "").strip()))
+        if len(key) > 2 and key != model_key
+    }
+    if not parts:
+        return frozenset()
+    counts = dict.fromkeys(parts, 0)
+    for candidate in _brand_catalog_models(brand):
+        # «Cayman» не робить слово «cayman» двозначним для «718 Cayman».
+        if _is_generation_variant(model_key, norm_text(candidate)):
+            continue
+        words = {norm_text(w) for w in re.split(r"[\s\-./]+", candidate)}
+        for part in parts:
+            if part in words:
+                counts[part] += 1
+    return frozenset(part for part, hits in counts.items() if hits > 1)
+
+
 @lru_cache(maxsize=1)
 def _catalog_model_owners() -> dict[str, frozenset[str]]:
     """norm(назва моделі) → марки, у яких вона є.
@@ -1741,6 +1788,22 @@ def _model_core_tokens(brand: str, model: str) -> tuple[str, ...]:
     if letter_num:
         add(compact)
 
+    # «CX-5» не має давати токен «5»: «Mazda 5» — інша модель.
+    tokens = [
+        t
+        for t in tokens
+        if not (
+            norm_text(t).isdigit()
+            and bare_number_belongs_to_other_model(brand, norm_text(t), model)
+        )
+    ]
+    # «Q4 e-tron» не має давати токен «e-tron»/«tron» — це окрема модель Audi.
+    nested = _nested_other_model_words(brand, model)
+    if nested:
+        model_key = norm_text(model)
+        tokens = [
+            t for t in tokens if norm_text(t) == model_key or norm_text(t) not in nested
+        ]
     return tuple(tokens[:16])
 
 
@@ -2261,6 +2324,147 @@ def _distinctive_model_tokens_for_brand_slug(slug: str) -> tuple[str, ...]:
     )
 
 
+@lru_cache(maxsize=512)
+def _brand_catalog_models(brand: str) -> tuple[str, ...]:
+    """Моделі однієї марки з FE-каталогу."""
+    slug = resolve_olx_brand_slug(brand) if brand else ""
+    if not slug:
+        return ()
+    for name, models in load_fe_brand_models().items():
+        if resolve_olx_brand_slug(name) == slug:
+            return tuple(models)
+    return ()
+
+
+def _is_generation_variant(model_key: str, candidate_key: str) -> bool:
+    """Чи відрізняються назви лише номером покоління.
+
+    «718 Cayman» — це Cayman покоління 982, тож заголовок «Porsche Cayman»
+    описує те саме авто. А «Q4 e-tron» і «e-tron» — різні автомобілі.
+    """
+    if not candidate_key or candidate_key == model_key:
+        return False
+    if candidate_key not in model_key:
+        return False
+    rest = re.sub(r"[\s\-./]+", " ", model_key.replace(candidate_key, " ")).strip()
+    if not rest:
+        return False
+    return all(part.isdigit() for part in rest.split())
+
+
+@lru_cache(maxsize=4096)
+def _nested_other_model_words(brand: str, model: str) -> frozenset[str]:
+    """Слова, що всередині назви позначають ІНШУ модель тієї ж марки.
+
+    «Q4 e-tron» містить «e-tron», який в Audi є окремим авто, тож токени
+    «e-tron»/«tron» не мають ідентифікувати Q4 e-tron.
+    """
+    if not brand or len(re.split(r"\s+", (model or "").strip())) < 2:
+        return frozenset()
+    model_key = norm_text(model)
+    out: set[str] = set()
+    for candidate in _brand_catalog_models(brand):
+        if _is_generation_variant(model_key, norm_text(candidate)):
+            continue
+        key = norm_text(candidate)
+        # Цікавлять лише моделі, чия назва — частина нашої.
+        if not key or key == model_key or key not in model_key:
+            continue
+        # Дефіс лишається в norm_text, а токени бувають і «e tron», і «etron».
+        spaced = re.sub(r"[\s\-./]+", " ", key).strip()
+        out.update({key, spaced, spaced.replace(" ", "")})
+        for word in re.split(r"[\s\-./]+", key):
+            if len(word) > 2:
+                out.add(word)
+    return frozenset(out)
+
+
+@lru_cache(maxsize=4096)
+def bare_number_belongs_to_other_model(brand: str, number: str, model: str) -> bool:
+    """Чи позначає сама ця цифра іншу модель тієї ж марки.
+
+    «BMW 5» — це 5 Series, а не X5; «Mazda 5» — не CX-5. Але «Jaecoo 7» —
+    справді J7, бо моделі, що починається з «7», у Jaecoo немає.
+    """
+    if not brand or not number or not number.isdigit():
+        return False
+    requested = norm_text(model)
+    # Цифра на початку назви належить самій моделі («5 Series» → «5»).
+    if requested == number or requested.startswith(f"{number} "):
+        return False
+    for candidate in _brand_catalog_models(brand):
+        key = norm_text(candidate)
+        if not key or key == requested:
+            continue
+        if key == number or key.startswith(f"{number} "):
+            return True
+    return False
+
+
+@lru_cache(maxsize=4096)
+def letter_prefixed_model_owns_number(brand: str, number: str, model: str) -> tuple[str, ...]:
+    """Моделі марки виду «<літери><цифра>» для голої цифри в фільтрі.
+
+    Фільтр «Mazda 6» не має ловити «Mazda CX-6».
+    """
+    if not brand or not number or not number.isdigit():
+        return ()
+    requested = norm_text(model)
+    prefixes: list[str] = []
+    for candidate in _brand_catalog_models(brand):
+        key = norm_text(candidate)
+        if not key or key == requested:
+            continue
+        hit = re.fullmatch(r"([a-z]{1,3})[\s\-]?" + re.escape(number), key)
+        if hit:
+            prefixes.append(hit.group(1))
+    return tuple(dict.fromkeys(prefixes))
+
+
+def number_only_inside_other_model(hay: str, brand: str, model: str) -> bool:
+    """True, якщо цифра з фільтра є в тексті лише як частина іншої моделі.
+
+    Фільтр «Mazda 3» не має ловити «Mazda CX-3».
+    """
+    number = norm_text(model)
+    if not number.isdigit() or not hay:
+        return False
+    prefixes = letter_prefixed_model_owns_number(brand, number, model)
+    if not prefixes:
+        return False
+    stripped = hay
+    for prefix in prefixes:
+        stripped = re.sub(
+            rf"{re.escape(prefix)}[\s\-]?{re.escape(number)}(?![0-9])",
+            " ",
+            stripped,
+        )
+    return not re.search(rf"(?<![0-9a-zа-яёіїєґ]){re.escape(number)}(?![0-9])", stripped)
+
+
+def text_names_other_model(text: str, brand: str, model: str) -> bool:
+    """True, якщо текст називає іншу модель тієї ж марки.
+
+    Потрібно там, де структурне поле «model» могло бути проштамповане з
+    фільтра: у полі «5 Series», а в заголовку «X5 M60I».
+    """
+    if not text or not brand or not model:
+        return False
+    requested = norm_text(model)
+    if not requested:
+        return False
+    for candidate in _brand_catalog_models(brand):
+        candidate_key = norm_text(candidate)
+        if not candidate_key or candidate_key == requested:
+            continue
+        # «3 Series» vs «3 Series GT» — уточнення тієї ж моделі, не конфлікт.
+        if candidate_key in requested or requested in candidate_key:
+            continue
+        if text_matches_model_filter(text, candidate, brand=brand):
+            return True
+    return False
+
+
 def _brand_distinctive_model_in_text(haystack: str, brand: str) -> bool:
     """Чи є в тексті унікальна модель цієї марки (для brand-only фільтра)."""
     slug = resolve_olx_brand_slug(brand) if brand else ""
@@ -2447,6 +2651,9 @@ def text_matches_model_filter(haystack: str, model: str, *, brand: str = "") -> 
             return False
         hay = norm_text(raw)
         if not hay:
+            continue
+        # «Mazda 3» не має ловити «Mazda CX-3».
+        if brand and number_only_inside_other_model(hay, brand, model):
             continue
         brand_slug = resolve_olx_brand_slug(brand) if brand else ""
 
