@@ -85,6 +85,12 @@ class LetterNumberModelTests(unittest.TestCase):
         self.assertTrue(matches("BMW X5 xDrive40i 2022", "BMW", "X5"))
         self.assertTrue(matches("BMW X3 2020", "BMW", "X3"))
 
+    def test_other_series_numbers_do_not_match(self):
+        """«5 Series» не має ловити «Series 3» чи «3 Series»."""
+        for title in ("BMW Series 3 F30 330I Xdrive", "BMW 3 Series 2020", "BMW Series 7 G11"):
+            with self.subTest(title=title):
+                self.assertFalse(matches(title, "BMW", "5 Series"))
+
     def test_brand_number_shorthand_kept_where_unambiguous(self):
         """«Jaecoo 7» = J7: моделі, що починається з «7», у марки немає."""
         self.assertFalse(bare_number_belongs_to_other_model("Jaecoo", "7", "J7"))

@@ -26,7 +26,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from typing import Any
+from typing import Any, TypeGuard
 
 from app.core.redis import get_redis
 from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters, SourceStatusOut
@@ -86,7 +86,8 @@ async def set_live_pool(
         payload = {
             "slots": slots,
             "sources": [
-                s.model_dump() if hasattr(s, "model_dump") else s for s in (sources or [])
+                s.model_dump() if isinstance(s, SourceStatusOut) else s
+                for s in (sources or [])
             ],
             "partial": partial,
             "total": total,
@@ -278,7 +279,7 @@ async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
     return items
 
 
-def _search_needs_listing_filter(filters: SearchFilters | None) -> bool:
+def _search_needs_listing_filter(filters: SearchFilters | None) -> TypeGuard[SearchFilters]:
     if not filters:
         return False
     return bool((filters.brand or "").strip() or (filters.model or "").strip())

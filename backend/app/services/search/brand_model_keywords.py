@@ -1804,6 +1804,9 @@ def _model_core_tokens(brand: str, model: str) -> tuple[str, ...]:
         tokens = [
             t for t in tokens if norm_text(t) == model_key or norm_text(t) not in nested
         ]
+    # «5 Series» не має давати «Series» без цифри: «BMW Series» ловить 3/5/7 Series.
+    if re.fullmatch(r"\d+\s+series", mk):
+        tokens = [t for t in tokens if norm_text(t) not in ("series", "серии", "серія")]
     return tuple(tokens[:16])
 
 
