@@ -59,6 +59,20 @@ class CategoryMatchTests(unittest.TestCase):
         self.assertTrue(listing_matches_category(item, "new"))
         self.assertFalse(listing_matches_category(item, "used"))
 
+    def test_new_rejects_high_mileage_even_with_novyi_word(self):
+        item = _item(mileage=90000, title="BMW 320 як новий")
+        self.assertFalse(listing_matches_category(item, "new"))
+        self.assertTrue(listing_matches_category(item, "used"))
+
+    def test_new_rejects_unknown_mileage_without_markers(self):
+        item = _item(mileage=0, title="Toyota Camry 2018")
+        self.assertFalse(listing_matches_category(item, "new"))
+
+    def test_new_zero_mileage_with_salon_marker(self):
+        item = _item(mileage=0, title="Toyota Camry з салону")
+        self.assertTrue(listing_matches_category(item, "new"))
+        self.assertFalse(listing_matches_category(item, "used"))
+
     def test_used(self):
         item = _item(mileage=90000)
         self.assertTrue(listing_matches_category(item, "used"))

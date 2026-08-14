@@ -180,6 +180,11 @@ async def filters_to_search_params(
         if filters.mileage_to is not None:
             params["mileageTo"] = max(filters.mileage_to // 1000, 0)
 
+    if (filters.category or "").strip().lower() == "new":
+        current_to = params.get("mileageTo")
+        params["mileageFrom"] = params.get("mileageFrom", 0) or 0
+        params["mileageTo"] = 1 if current_to is None else min(int(current_to), 1)
+
     regions: list[str] = []
     if filters.regions:
         regions.extend(str(r) for r in filters.regions if r)

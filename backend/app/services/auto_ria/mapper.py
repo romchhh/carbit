@@ -206,10 +206,11 @@ async def filters_to_search_params(
         params["searchType"] = 4
         params["custom"] = 0
     elif category == "new":
-        # Нові / з мінімальним пробігом (race* — тисячі км).
+        # Нові = пробіг до 1000 км (race* — тисячі км). Не перебиваємо жорсткішим mileage_to.
         params["searchType"] = 1
         params["raceFrom"] = 0
-        params["raceTo"] = 1
+        existing_to = params.get("raceTo")
+        params["raceTo"] = 1 if existing_to is None else min(int(existing_to), 1)
     elif category == "import":
         # Нерозмитнені / під пригон.
         params["searchType"] = 4

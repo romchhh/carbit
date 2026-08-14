@@ -229,10 +229,29 @@ export const IconDownload = icon(
   </>
 );
 
+/** Канонічна іконка «Поділитися»: квадрат зі стрілкою вгору. */
 export const IconShare = icon(
   <>
-    <path d="M8 12l8-5v10l-8-5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-    <path d="M4 6v12a2 2 0 0 0 2 2h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+    <path
+      d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 3v12"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <path
+      d="M8 7l4-4 4 4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </>
 );
 

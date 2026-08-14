@@ -149,7 +149,7 @@ export const OWNERS_FILTER_OPTIONS = [
 export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
   { value: "all", label: "Всі" },
   { value: "used", label: "Вживані" },
-  { value: "new", label: "Нові" },
+  { value: "new", label: "Нові · до 1000 км" },
   { value: "import", label: "Під пригон" },
 ];
 
@@ -345,9 +345,14 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
     if (filters.category && filters.category !== "all") {
       const desc = `${item.title} ${item.desc ?? ""}`.toLowerCase();
       const isImport = /пригон|нерозмит|єврономер|еврономер/.test(desc);
-      const isNew = item.mileage <= 1000 || /новий|з салону|без пробігу|0\s*км/.test(desc);
+      const isNewMileage = item.mileage > 0 && item.mileage <= 1000;
+      const isNewText =
+        /(з\s+салону|без\s+проб[іi]гу|без\s+пробега|0\s*км|нове\s+авто|новий\s+автомобіль)/i.test(
+          desc,
+        );
+      const isNew = isNewMileage || (item.mileage === 0 && isNewText);
       if (filters.category === "import" && !isImport) return false;
-      if (filters.category === "new" && (isImport || !isNew)) return false;
+      if (filters.category === "new" && (isImport || !isNew || item.mileage > 1000)) return false;
       if (filters.category === "used" && (isImport || isNew)) return false;
     }
     return true;

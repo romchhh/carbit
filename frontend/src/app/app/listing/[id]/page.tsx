@@ -16,6 +16,7 @@ import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetai
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { Button } from "@/components/ui/Button";
 import { IconArrowLeft, IconArrowRight, IconGlobe, IconHeart } from "@/components/icons";
+import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
   formatEngineVolume,
@@ -36,6 +37,7 @@ import {
   listingSourceSiteName,
 } from "@/lib/listing-source";
 import { loadRecentListings } from "@/lib/recent-listings";
+import { normalizeListingIdParam } from "@/lib/listing-share";
 import { hasVinCheck } from "@/lib/vin-check";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
 import { hasSellerContact } from "@/lib/seller-contact";
@@ -53,10 +55,30 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   useEffect(() => {
     params.then(p => {
+      const listingId = normalizeListingIdParam(p.id);
+      if (!listingId) {
+        setListing(null);
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      // Месенджери інколи склеюють title до path — чистимо URL.
+      let decodedRaw = p.id;
+      try {
+        decodedRaw = decodeURIComponent(p.id);
+      } catch {
+        /* ignore */
+      }
+      if (decodedRaw !== listingId) {
+        router.replace(`/app/listing/${encodeURIComponent(listingId)}`);
+        return;
+      }
+
       setLoading(true);
       setNotFound(false);
       listingsApi
-        .get(p.id)
+        .get(listingId)
         .then(data => {
           const cached = loadRecentListings().find(item => item.id === data.id);
           const merged = keepListingMirrors(data, cached);
@@ -73,7 +95,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           }
         })
         .catch(() => {
-          const cached = loadRecentListings().find(item => item.id === p.id);
+          const cached = loadRecentListings().find(item => item.id === listingId);
           if (cached) {
             setListing(cached);
             setNotFound(false);
@@ -84,10 +106,10 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         })
         .finally(() => setLoading(false));
       if (user) {
-        favoritesApi.check(p.id).then(r => setIsFavorite(r.is_favorite)).catch(() => {});
+        favoritesApi.check(listingId).then(r => setIsFavorite(r.is_favorite)).catch(() => {});
       }
     });
-  }, [params, user]);
+  }, [params, user, router]);
 
   const scrollToPhoto = useCallback((index: number) => {
     const container = galleryRef.current;
@@ -143,6 +165,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     listing.source === "auto_ria" &&
     listing.source_data &&
     Object.keys(listing.source_data).length > 0;
+  const descriptionText = (() => {
+    const fromListing = (listing.description || "").trim();
+    if (fromListing) return fromListing;
+    const fromSource = listing.source_data?.description;
+    return typeof fromSource === "string" ? fromSource.trim() : "";
+  })();
 
   const mileageKm = resolveListingMileage(listing);
   const engineVolume = resolveListingEngineVolume(listing);
@@ -184,17 +212,20 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           <span>/</span>
           <span className="truncate font-medium text-ink">{listing.title}</span>
         </nav>
-        <button
-          type="button"
-          aria-label={isFavorite ? "Прибрати з обраного" : "Додати в обране"}
-          onClick={() => void toggleFavorite()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/80 bg-white shadow-sm lg:hidden"
-        >
-          <IconHeart
-            size={16}
-            className={cn("transition-colors", isFavorite ? "fill-current text-emerald" : "text-muted/75")}
-          />
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <ListingShareButton listing={listing} size="md" />
+          <button
+            type="button"
+            aria-label={isFavorite ? "Прибрати з обраного" : "Додати в обране"}
+            onClick={() => void toggleFavorite()}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/80 bg-white shadow-sm lg:hidden"
+          >
+            <IconHeart
+              size={16}
+              className={cn("transition-colors", isFavorite ? "fill-current text-emerald" : "text-muted/75")}
+            />
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-6">
@@ -337,6 +368,15 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </section>
 
+          {descriptionText && (
+            <section className="rounded-2xl border border-border/80 bg-white p-4 sm:p-6">
+              <h2 className="mb-3 text-[15px] font-bold text-ink">Опис</h2>
+              <p className="text-[13px] leading-relaxed text-muted whitespace-pre-wrap">
+                {descriptionText}
+              </p>
+            </section>
+          )}
+
           {specs.length > 0 && (
             <section className="rounded-2xl border border-border/80 bg-white p-4 sm:p-5">
               <h2 className="mb-3 text-[13px] font-bold text-ink">Характеристики</h2>
@@ -358,18 +398,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
           {hasSellerContact(listing) && <SellerContactBlock listing={listing} />}
 
-          {!hasAutoRiaDetails && listing.description && (
-            <section className="rounded-2xl border border-border/80 bg-white p-4 sm:p-6">
-              <h2 className="mb-3 text-[15px] font-bold text-ink">Опис</h2>
-              <p className="text-[13px] leading-relaxed text-muted whitespace-pre-wrap">
-                {listing.description}
-              </p>
-            </section>
-          )}
-
           {hasAutoRiaDetails && (
             <section className="rounded-2xl border border-border/80 bg-white p-4 sm:p-6">
-              <AutoRiaListingDetails listing={listing} />
+              <AutoRiaListingDetails listing={listing} omitDescription={Boolean(descriptionText)} />
             </section>
           )}
 
@@ -396,17 +427,20 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           <div className="rounded-2xl border border-border/80 bg-white p-6 shadow-[0_2px_12px_-6px_rgba(10,12,14,0.12)]">
             <div className="mb-1 flex items-start justify-between gap-3">
               <h1 className="text-[18px] font-bold leading-snug text-ink">{listing.title}</h1>
-              <button
-                type="button"
-                aria-label={isFavorite ? "Прибрати з обраного" : "Додати в обране"}
-                onClick={() => void toggleFavorite()}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-              >
-                <IconHeart
-                  size={16}
-                  className={cn("transition-colors", isFavorite ? "fill-current text-emerald" : "text-muted/75")}
-                />
-              </button>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <ListingShareButton listing={listing} size="md" />
+                <button
+                  type="button"
+                  aria-label={isFavorite ? "Прибрати з обраного" : "Додати в обране"}
+                  onClick={() => void toggleFavorite()}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                >
+                  <IconHeart
+                    size={16}
+                    className={cn("transition-colors", isFavorite ? "fill-current text-emerald" : "text-muted/75")}
+                  />
+                </button>
+              </div>
             </div>
             <p className="text-[12px] text-muted">
               {listing.brand} {listing.model}

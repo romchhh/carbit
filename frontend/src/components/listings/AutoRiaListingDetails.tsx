@@ -8,19 +8,23 @@ import type { Listing } from "@/types/api";
 
 type Props = {
   listing: Listing;
+  /** Якщо опис уже показаний окремо на сторінці. */
+  omitDescription?: boolean;
 };
 
-export function AutoRiaListingDetails({ listing }: Props) {
+export function AutoRiaListingDetails({ listing, omitDescription = false }: Props) {
   if (!listing.source_data || listing.source !== "auto_ria") return null;
 
   const sourceData = {
     ...listing.source_data,
-    ...(listing.description && !listing.source_data.description
+    ...(listing.description && !listing.source_data.description && !omitDescription
       ? { description: listing.description }
       : {}),
   };
 
-  const sections = buildAutoRiaDetailSections(sourceData, listing.url);
+  const sections = buildAutoRiaDetailSections(sourceData, listing.url).filter(
+    section => !(omitDescription && section.title === "Опис"),
+  );
   if (!sections.length) return null;
 
   return (

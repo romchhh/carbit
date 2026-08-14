@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
+import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
@@ -172,6 +173,7 @@ export function ListingCard({
             )}
           </div>
           <div className="flex items-center gap-1.5">
+            <ListingShareButton listing={listing} variant="overlay" />
             {onToggleCompare && (
               <ListingCompareButton
                 active={isCompared}
@@ -252,24 +254,25 @@ export function ListingCard({
             Без фото
           </div>
         )}
-        {onToggleFavorite && (
-          <div className="absolute right-2 top-2 z-[1] flex items-center gap-1.5">
-            {onToggleCompare && (
-              <ListingCompareButton
-                active={isCompared}
-                disabled={compareDisabled}
-                onToggle={onToggleCompare}
-                variant="overlay"
-              />
-            )}
+        <div className="absolute right-2 top-2 z-[1] flex items-center gap-1.5">
+          <ListingShareButton listing={listing} variant="overlay" />
+          {onToggleCompare && (
+            <ListingCompareButton
+              active={isCompared}
+              disabled={compareDisabled}
+              onToggle={onToggleCompare}
+              variant="overlay"
+            />
+          )}
+          {onToggleFavorite && (
             <ListingFavoriteButton
               active={isFavorite}
               loading={favoriteLoading}
               onToggle={onToggleFavorite}
               variant="overlay"
             />
-          </div>
-        )}
+          )}
+        </div>
         {showGalleryNav && (
           <>
             <button

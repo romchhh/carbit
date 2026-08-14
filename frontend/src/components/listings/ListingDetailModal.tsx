@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { IconGlobe, IconHeart, IconX, IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
+import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
@@ -249,6 +250,12 @@ export function ListingDetailModal({
     listing.source === "auto_ria" &&
     listing.source_data &&
     Object.keys(listing.source_data).length > 0;
+  const descriptionText = (() => {
+    const fromListing = (listing.description || "").trim();
+    if (fromListing) return fromListing;
+    const fromSource = listing.source_data?.description;
+    return typeof fromSource === "string" ? fromSource.trim() : "";
+  })();
 
   const highlights = hasAutoRiaDetails ? [] : getAutoRiaHighlights(listing.source_data);
   const mileageKm = resolveListingMileage(listing);
@@ -327,6 +334,14 @@ export function ListingDetailModal({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
+              {listing && (
+                <ListingShareButton
+                  listing={listing}
+                  variant="default"
+                  size="md"
+                  className={MODAL_ACTION_CLASS}
+                />
+              )}
               {listing && (
                 <ListingCompareButton
                   active={compareIds.has(listing.id)}
@@ -633,6 +648,15 @@ export function ListingDetailModal({
               <ListingFoundOn listing={listing} badgeVariant="outline" />
             </div>
 
+            {descriptionText && (
+              <div>
+                <h3 className="text-[13px] font-bold text-ink">Опис</h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-muted whitespace-pre-wrap">
+                  {descriptionText}
+                </p>
+              </div>
+            )}
+
             {specs.length > 0 && (
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {specs.map(({ label, value }) => (
@@ -659,15 +683,9 @@ export function ListingDetailModal({
               </div>
             )}
 
-            {!hasAutoRiaDetails && listing.description && (
-              <div>
-                <h3 className="text-[13px] font-bold text-ink">Опис</h3>
-                <p className="mt-2 text-[13px] leading-relaxed text-muted">{listing.description}</p>
-              </div>
+            {hasAutoRiaDetails && (
+              <AutoRiaListingDetails listing={listing} omitDescription={Boolean(descriptionText)} />
             )}
-
-            {hasAutoRiaDetails && <AutoRiaListingDetails listing={listing} />}
-
             {listing.vin_checked && listing.source === "auto_ria" && (
               <p className="text-center text-[12px] font-medium text-emerald-dark">
                 VIN-код перевірено на AUTO.RIA

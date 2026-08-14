@@ -113,6 +113,13 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
         if filters.mileage_to is not None:
             params.mileage_to = max(filters.mileage_to // 1000, 0)
 
+    # Категорія «Нові» = пробіг до 1000 км (тис. у параметрах OLX).
+    if (filters.category or "").strip().lower() == "new":
+        current_to = params.mileage_to
+        params.mileage_to = 1 if current_to is None else min(int(current_to), 1)
+        if params.mileage_from is None:
+            params.mileage_from = 0
+
     params.engine_from = filters.engine_volume_from
     params.engine_to = filters.engine_volume_to
 
