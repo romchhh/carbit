@@ -241,6 +241,7 @@ docker compose start backend bot worker telegram-worker
 | Старий UI                            | rebuild frontend + hard refresh                   |
 | no such table                        | alembic upgrade head (локально або в Docker logs) |
 | backend unhealthy / dependency failed | docker logs carbit-backend --tail 80; див. §14   |
+| no space left on device (docker build)| Див. §14b — prune + Playwright лише в backend    |
 
 
 ─── 14. backend unhealthy (docker compose up) ─────────────────────────────────
@@ -262,6 +263,23 @@ docker compose start backend bot worker telegram-worker
 Після git pull з /health/live:
   docker compose build backend && docker compose up -d backend
   curl -s http://localhost:8000/health/live
+
+
+─── 14b. Немає місця на диску (docker build) ─────────────────────────────────
+
+Chromium для VIN ставиться ЛИШЕ в образ carbit-backend.
+bot / worker / telegram-worker ділять один slim-образ carbit-python (без браузера).
+
+Перед білдом на VPS звільни місце:
+  df -h /
+  docker builder prune -af
+  docker image prune -af
+  docker system prune -af --volumes   # обережно: видалить unused volumes
+
+Потім:
+  docker compose build backend
+  docker compose build bot worker telegram-worker   # один шар carbit-python
+  docker compose up -d
 
 
 ─── 12. Telethon-сесія ───────────────────────────────────────────────────────

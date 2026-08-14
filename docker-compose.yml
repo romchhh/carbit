@@ -1,5 +1,13 @@
 name: carbit
 
+x-python-slim: &python-slim
+  image: carbit-python:latest
+  build:
+    context: .
+    dockerfile: docker/python/Dockerfile
+    args:
+      INSTALL_PLAYWRIGHT: "0"
+
 services:
   # Опційно: docker compose --profile cache up -d
   # Тоді в .env / environment постав REDIS_URL=redis://redis:6379/0
@@ -34,9 +42,13 @@ services:
       retries: 5
 
   backend:
+    image: carbit-backend:latest
     build:
       context: .
       dockerfile: docker/python/Dockerfile
+      args:
+        # Chromium лише тут (VIN-аукціон). Без --with-deps — менше місця на диску.
+        INSTALL_PLAYWRIGHT: "1"
     container_name: carbit-backend
     restart: unless-stopped
     env_file:
@@ -67,9 +79,7 @@ services:
       start_period: 120s
 
   bot:
-    build:
-      context: .
-      dockerfile: docker/python/Dockerfile
+    <<: *python-slim
     container_name: carbit-bot
     restart: unless-stopped
     env_file:
@@ -86,26 +96,8 @@ services:
       backend:
         condition: service_healthy
 
-  support-bot:
-    build:
-      context: .
-      dockerfile: docker/python/Dockerfile
-    container_name: carbit-support-bot
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      TZ: Europe/Kyiv
-    entrypoint: ["python", "main.py"]
-    working_dir: /app/support_bot
-    depends_on:
-      backend:
-        condition: service_healthy
-
   worker:
-    build:
-      context: .
-      dockerfile: docker/python/Dockerfile
+    <<: *python-slim
     container_name: carbit-worker
     restart: unless-stopped
     env_file:
@@ -124,9 +116,7 @@ services:
         condition: service_healthy
 
   telegram-worker:
-    build:
-      context: .
-      dockerfile: docker/python/Dockerfile
+    <<: *python-slim
     container_name: carbit-telegram-worker
     restart: unless-stopped
     env_file:
