@@ -9,9 +9,11 @@ export function VideoInstructions() {
         controls
         playsInline
         preload="metadata"
-        title="Відеоінструкція Carbit"
+        title="Як шукати авто в Carbit — відеоінструкція"
+        aria-label="Відеоінструкція: пошук і моніторинг авто оголошень у Carbit"
       >
-        Ваш браузер не підтримує відтворення відео.
+        Ваш браузер не підтримує відтворення відео. Дивіться інструкцію після реєстрації в кабінеті
+        Carbit.
       </video>
     </div>
   );

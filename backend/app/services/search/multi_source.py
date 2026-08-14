@@ -13,13 +13,15 @@ from app.services.auto_ria.mapper import sort_listings
 from app.services.auto_ria.service import search_auto_ria
 from app.services.imperiya.errors import ImperiyaError
 from app.services.imperiya.service import search_imperiya
+from app.services.udrive.errors import UdriveError
+from app.services.udrive.service import search_udrive
 from app.services.olx.errors import OlxError
 from app.services.olx.service import _search_olx_body
 from app.services.search.concurrency import acquire_olx_slot
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 from app.services.telegram_channels.ingest import search_telegram_listings
 
-IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram", "imperiya"}
+IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram", "imperiya", "udrive"}
 # Бюджет лише на HTTP-сканування після acquire_olx_slot (черга не входить у wait_for).
 OLX_SEARCH_TIMEOUT_SECONDS = 22.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
@@ -31,10 +33,12 @@ AUTO_RIA_PAGE_SIZE = 50
 AUTO_RIA_POOL_TIMEOUT_SECONDS = 25.0
 IMPERIYA_POOL_TIMEOUT_SECONDS = 25.0
 IMPERIYA_PAGE_SIZE = 50
+UDRIVE_POOL_TIMEOUT_SECONDS = 25.0
+UDRIVE_PAGE_SIZE = 50
 # TG — лише БД (без keyword refresh на live-пошуку).
 TELEGRAM_POOL_TIMEOUT_SECONDS = 12.0
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
-_SOURCE_BLEND_ORDER = {"olx": 0, "imperiya": 1, "telegram": 2, "auto_ria": 3}
+_SOURCE_BLEND_ORDER = {"olx": 0, "imperiya": 1, "udrive": 2, "telegram": 3, "auto_ria": 4}
 _DATE_SORT_KEYS = frozenset({"newest", "published_desc"})
 # Максимум AR IDs для model_post_filter гідрації (захист від 500 API-запитів).
 # AR IDs вже відсортовані від нових до старих, тому перші N найрелевантніші.
@@ -57,7 +61,7 @@ class SearchListingsOutcome:
 
 
 def normalize_sources(sources: list[str] | None) -> list[str]:
-    default = ["auto_ria", "olx", "imperiya"]
+    default = ["auto_ria", "olx", "imperiya", "udrive"]
     if app_settings.TELEGRAM_ENABLED:
         default.append("telegram")
 
@@ -73,6 +77,8 @@ def normalize_sources(sources: list[str] | None) -> list[str]:
             normalized.append("olx")
         elif key in ("imperiya", "imperiya_auto", "imperiya-auto", "iautos"):
             normalized.append("imperiya")
+        elif key in ("udrive", "u_drive", "u-drive"):
+            normalized.append("udrive")
         elif key == "telegram":
             normalized.append("telegram")
 
@@ -353,6 +359,15 @@ async def _search_single_source(
             use_cache=use_cache,
             cache_ttl_seconds=cache_ttl_seconds,
         )
+    if source == "udrive":
+        return await search_udrive(
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            use_cache=use_cache,
+            cache_ttl_seconds=cache_ttl_seconds,
+        )
     return await search_auto_ria(
         filters,
         page=page,
@@ -380,7 +395,7 @@ async def _fetch_source_pool(
     from app.services.search.filter_multi import expand_filters_for_api_fetch, needs_api_fanout
 
     need = max(need, 1)
-    if source in ("auto_ria", "olx", "imperiya") and needs_api_fanout(filters):
+    if source in ("auto_ria", "olx", "imperiya", "udrive") and needs_api_fanout(filters):
         variants = expand_filters_for_api_fetch(filters)
         per_variant = max(need // len(variants), 20)
         chunks = await asyncio.gather(
@@ -491,6 +506,44 @@ async def _fetch_source_pool(
             market_total=total,
         )
 
+    if source == "udrive":
+        collected: list[ListingOut] = []
+        seen: set[str] = set()
+        total = 0
+        page = 1
+        max_pages = max((need + UDRIVE_PAGE_SIZE - 1) // UDRIVE_PAGE_SIZE, 1)
+        while len(collected) < need and page <= max_pages:
+            chunk = await _search_single_source(
+                source,
+                filters,
+                page=page,
+                per_page=min(UDRIVE_PAGE_SIZE, need - len(collected)),
+                sort_by=sort_by,
+                use_cache=use_cache,
+                cache_ttl_seconds=cache_ttl_seconds,
+            )
+            total = max(total, chunk.total)
+            for item in chunk.items:
+                if item.id in seen:
+                    continue
+                seen.add(item.id)
+                collected.append(item)
+                if len(collected) >= need:
+                    break
+            if len(chunk.items) < UDRIVE_PAGE_SIZE:
+                break
+            page += 1
+        collected = sort_listings(collected[:need], sort_by)
+        pages = (total + need - 1) // need if total else 0
+        return PaginatedListings(
+            items=collected,
+            total=max(total, len(collected)),
+            page=1,
+            per_page=need,
+            pages=pages,
+            market_total=total,
+        )
+
     # AUTO.RIA: countpage ≤ 50 — збираємо кілька сторінок
     collected: list[ListingOut] = []
     seen: set[str] = set()
@@ -583,6 +636,8 @@ def _source_label(source: str) -> str:
         return "AUTO.RIA"
     if source == "imperiya":
         return "Імперія Авто"
+    if source == "udrive":
+        return "uDrive"
     if source == "telegram":
         return "Telegram"
     return source.upper()
@@ -695,7 +750,7 @@ async def search_listings_outcome(
                     per_page=per_page,
                     pages=pages,
                 )
-            elif source in ("auto_ria", "olx", "imperiya") and needs_api_fanout(filters):
+            elif source in ("auto_ria", "olx", "imperiya", "udrive") and needs_api_fanout(filters):
                 pool_need = per_page * max(page, 1)
                 pool = await _fetch_source_pool(
                     source,
@@ -815,6 +870,26 @@ async def search_listings_outcome(
         except Exception as exc:
             return exc
 
+    async def run_udrive() -> PaginatedListings | Exception:
+        try:
+            return await asyncio.wait_for(
+                _fetch_source_pool(
+                    "udrive",
+                    filters,
+                    need=pool_need,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
+                    keyword_refresh=keyword_refresh,
+                    olx_enrich_details=olx_enrich_details,
+                ),
+                timeout=UDRIVE_POOL_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return TimeoutError(f"uDrive: таймаут {UDRIVE_POOL_TIMEOUT_SECONDS:.0f}s")
+        except Exception as exc:
+            return exc
+
     async def run_telegram() -> PaginatedListings | Exception:
         try:
             # Окрема сесія: AsyncSession не можна ділити між asyncio.gather
@@ -845,6 +920,8 @@ async def search_listings_outcome(
         tasks.append(asyncio.create_task(run_olx()))
     if "imperiya" in sources:
         tasks.append(asyncio.create_task(run_imperiya()))
+    if "udrive" in sources:
+        tasks.append(asyncio.create_task(run_udrive()))
     if "telegram" in sources:
         tasks.append(asyncio.create_task(run_telegram()))
 
@@ -897,6 +974,24 @@ async def search_listings_outcome(
             successful.append(("imperiya", imperiya_out))
             source_statuses.append(
                 SourceSearchStatus(source="Імперія Авто", item_count=len(imperiya_out.items))
+            )
+
+    if "udrive" in sources:
+        udrive_out = raw_results[result_index]
+        result_index += 1
+        if isinstance(udrive_out, Exception):
+            errors.append(udrive_out)
+            source_statuses.append(
+                SourceSearchStatus(
+                    source="uDrive",
+                    item_count=0,
+                    error=str(udrive_out),
+                )
+            )
+        else:
+            successful.append(("udrive", udrive_out))
+            source_statuses.append(
+                SourceSearchStatus(source="uDrive", item_count=len(udrive_out.items))
             )
 
     if "telegram" in sources:
@@ -1086,6 +1181,8 @@ def _listing_to_slot(item: ListingOut) -> dict:
         return {"s": "t", "d": item.model_dump(mode="json")}
     if src == "imperiya" or lid.startswith("imperiya_"):
         return {"s": "i", "d": item.model_dump(mode="json")}
+    if src == "udrive" or lid.startswith("udrive_"):
+        return {"s": "u", "d": item.model_dump(mode="json")}
     return {"s": "o", "d": item.model_dump(mode="json")}
 
 
@@ -1212,12 +1309,14 @@ async def _build_vin_aware_slots(
         logger.warning("VIN-aware pool: AR hydrate failed, falling back to fair blend")
         olx_only = [i for i in ot_items if (i.source or "").lower() == "olx"]
         imperiya_only = [i for i in ot_items if (i.source or "").lower() == "imperiya"]
+        udrive_only = [i for i in ot_items if (i.source or "").lower() == "udrive"]
         tg_only = [i for i in ot_items if (i.source or "").lower() == "telegram"]
         return _build_fair_blend_slots(
             auto_ria_ids=auto_ria_ids,
             olx_items=olx_only,
             telegram_items=tg_only,
             imperiya_items=imperiya_only,
+            udrive_items=udrive_only,
             limit=limit,
             sort_by=sort_by,
         )
@@ -1272,11 +1371,13 @@ def _build_fair_blend_slots(
     olx_items: list[ListingOut],
     telegram_items: list[ListingOut],
     imperiya_items: list[ListingOut] | None = None,
+    udrive_items: list[ListingOut] | None = None,
     limit: int,
     sort_by: str = "newest",
 ) -> list[dict]:
-    """Round-robin OLX → Імперія → Telegram → AUTO.RIA; усередині кожного — sort_by."""
+    """Round-robin OLX → Імперія → uDrive → Telegram → AUTO.RIA; усередині кожного — sort_by."""
     imperiya_items = imperiya_items or []
+    udrive_items = udrive_items or []
     batches: list[tuple[str, list[dict]]] = []
     if olx_items:
         batches.append(
@@ -1290,6 +1391,13 @@ def _build_fair_blend_slots(
             (
                 "imperiya",
                 [_listing_to_slot(item) for item in sort_listings(imperiya_items, sort_by)],
+            )
+        )
+    if udrive_items:
+        batches.append(
+            (
+                "udrive",
+                [_listing_to_slot(item) for item in sort_listings(udrive_items, sort_by)],
             )
         )
     if telegram_items:
@@ -1339,6 +1447,7 @@ def _build_interleaved_slots(
     limit: int,
     sort_by: str = "newest",
     imperiya_items: list[ListingOut] | None = None,
+    udrive_items: list[ListingOut] | None = None,
 ) -> list[dict]:
     """Fallback: fair round-robin між джерелами (коли гідрація AR недоступна)."""
     return _build_fair_blend_slots(
@@ -1346,6 +1455,7 @@ def _build_interleaved_slots(
         olx_items=olx_items,
         telegram_items=telegram_items,
         imperiya_items=imperiya_items,
+        udrive_items=udrive_items,
         limit=limit,
         sort_by=sort_by,
     )
@@ -1380,6 +1490,7 @@ async def build_live_search_pool(
     auto_ria_market_total = 0
     olx_result = _empty_page(1, max_ids)
     imperiya_result = _empty_page(1, max_ids)
+    udrive_result = _empty_page(1, max_ids)
     telegram_result = _empty_page(1, max_ids)
     olx_error: str | None = None
 
@@ -1438,6 +1549,24 @@ async def build_live_search_pool(
             logger.warning("Імперія Авто pool fetch failed: %s", exc)
             return _empty_page(1, max_ids)
 
+    async def run_udrive():
+        try:
+            return await asyncio.wait_for(
+                _fetch_source_pool(
+                    "udrive",
+                    filters,
+                    need=max_ids,
+                    sort_by=sort_by,
+                    keyword_refresh=keyword_refresh,
+                ),
+                timeout=UDRIVE_POOL_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return _empty_page(1, max_ids)
+        except Exception as exc:
+            logger.warning("uDrive pool fetch failed: %s", exc)
+            return _empty_page(1, max_ids)
+
     async def run_telegram():
         try:
             return await asyncio.wait_for(
@@ -1468,6 +1597,9 @@ async def build_live_search_pool(
     if "imperiya" in sources:
         tasks.append(asyncio.create_task(run_imperiya()))
         task_order.append("imperiya")
+    if "udrive" in sources:
+        tasks.append(asyncio.create_task(run_udrive()))
+        task_order.append("udrive")
     if "telegram" in sources:
         tasks.append(asyncio.create_task(run_telegram()))
         task_order.append("telegram")
@@ -1511,6 +1643,20 @@ async def build_live_search_pool(
                 SourceSearchStatus(source="Імперія Авто", item_count=len(imperiya_result.items))
             )
 
+    if "udrive" in task_order:
+        res = raw_results[result_index]
+        result_index += 1
+        if isinstance(res, BaseException):
+            udrive_result = _empty_page(1, max_ids)
+            source_statuses.append(
+                SourceSearchStatus(source="uDrive", item_count=0, error=str(res))
+            )
+        else:
+            udrive_result = res
+            source_statuses.append(
+                SourceSearchStatus(source="uDrive", item_count=len(udrive_result.items))
+            )
+
     if "telegram" in task_order:
         res = raw_results[result_index]
         if isinstance(res, BaseException):
@@ -1550,15 +1696,19 @@ async def build_live_search_pool(
 
     olx_filtered = _filter_listings_by_brand_model(list(olx_result.items), filters)
     imperiya_filtered = _filter_listings_by_brand_model(list(imperiya_result.items), filters)
+    udrive_filtered = _filter_listings_by_brand_model(list(udrive_result.items), filters)
     telegram_filtered = _sort_telegram_photos_first(
         _filter_listings_by_brand_model(list(telegram_result.items), filters)
     )
 
-    # VIN-дублі між OLX / Імперія / Telegram — в одному пулі.
+    # VIN-дублі між OLX / Імперія / uDrive / Telegram — в одному пулі.
     ot_merged = mark_duplicates_in_pool(
         dedupe_telegram_posts_in_pool(
             sort_listings(
-                list(olx_filtered) + list(imperiya_filtered) + list(telegram_filtered),
+                list(olx_filtered)
+                + list(imperiya_filtered)
+                + list(udrive_filtered)
+                + list(telegram_filtered),
                 sort_by,
             ),
         ),
@@ -1566,9 +1716,10 @@ async def build_live_search_pool(
     ot_merged = filter_listings_by_advanced(ot_merged, filters)
     olx_sorted = [item for item in ot_merged if (item.source or "").lower() == "olx"]
     imperiya_sorted = [item for item in ot_merged if (item.source or "").lower() == "imperiya"]
+    udrive_sorted = [item for item in ot_merged if (item.source or "").lower() == "udrive"]
     telegram_sorted = [item for item in ot_merged if (item.source or "").lower() == "telegram"]
 
-    if auto_ria_ids and (olx_sorted or imperiya_sorted or telegram_sorted) and sort_by not in _DATE_SORT_KEYS:
+    if auto_ria_ids and (olx_sorted or imperiya_sorted or udrive_sorted or telegram_sorted) and sort_by not in _DATE_SORT_KEYS:
         # VIN-aware гідрація потрібна лише для сортувань за ціною/пробігом,
         # де треба знати точні значення AR-оголошень для глобального rank.
         # Для «newest»/«published_desc» — AR API вже повертає IDs у порядку дати;
@@ -1579,12 +1730,13 @@ async def build_live_search_pool(
             limit=POOL_LIMIT,
             sort_by=sort_by,
         )
-    elif auto_ria_ids and (olx_sorted or imperiya_sorted or telegram_sorted) and sort_by in _DATE_SORT_KEYS:
+    elif auto_ria_ids and (olx_sorted or imperiya_sorted or udrive_sorted or telegram_sorted) and sort_by in _DATE_SORT_KEYS:
         slots = _build_fair_blend_slots(
             auto_ria_ids=auto_ria_ids,
             olx_items=olx_sorted,
             telegram_items=telegram_sorted,
             imperiya_items=imperiya_sorted,
+            udrive_items=udrive_sorted,
             limit=POOL_LIMIT,
             sort_by=sort_by,
         )
@@ -1606,6 +1758,7 @@ async def build_live_search_pool(
             olx_items=olx_sorted,
             telegram_items=telegram_sorted,
             imperiya_items=imperiya_sorted,
+            udrive_items=udrive_sorted,
             limit=POOL_LIMIT,
             sort_by=sort_by,
         )
@@ -1618,6 +1771,7 @@ async def build_live_search_pool(
             auto_ria_market_total
             + olx_result.total
             + imperiya_result.total
+            + udrive_result.total
             + telegram_result.total
         )
 
@@ -1630,6 +1784,8 @@ async def build_live_search_pool(
                     if row.source == "OLX"
                     else len(imperiya_sorted)
                     if row.source == "Імперія Авто"
+                    else len(udrive_sorted)
+                    if row.source == "uDrive"
                     else len(telegram_sorted)
                     if row.source == "Telegram"
                     else len(auto_ria_ids)

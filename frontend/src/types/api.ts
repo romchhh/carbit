@@ -307,6 +307,51 @@ export interface VinCheckStolen {
   department_title?: string | null;
 }
 
+export interface VinAuctionPhoto {
+  url: string;
+  caption?: string | null;
+}
+
+export interface VinAuctionLinks {
+  carhistory?: string | null;
+  autocheck?: string | null;
+  window_sticker?: string | null;
+  copart?: string | null;
+  iaai?: string | null;
+}
+
+/** Аукціонна історія (autohelperbot / Copart). */
+export interface VinAuctionResult {
+  vin?: string | null;
+  title?: string | null;
+  page_url?: string | null;
+  lot_id?: string | null;
+  copart_url?: string | null;
+  iaai_url?: string | null;
+  mileage?: string | null;
+  mileage_km?: string | null;
+  sale_date?: string | null;
+  sale_price?: string | null;
+  sale_records?: string | null;
+  engine?: string | null;
+  color?: string | null;
+  transmission?: string | null;
+  fuel?: string | null;
+  drive?: string | null;
+  keys?: string | null;
+  repair_cost?: string | null;
+  market_value?: string | null;
+  primary_damage?: string | null;
+  primary_damage_en?: string | null;
+  exterior_condition?: string | null;
+  avg_price?: string | null;
+  meta_description?: string | null;
+  photo_url?: string | null;
+  photos: VinAuctionPhoto[];
+  links?: VinAuctionLinks | null;
+  source: string;
+}
+
 export interface VinCheckResult {
   vin: string;
   plate?: string | null;
@@ -326,4 +371,27 @@ export interface VinCheckResult {
   stolen_details: VinCheckStolen[];
   source_url: string;
   note?: string | null;
+  auction?: VinAuctionResult | null;
+}
+
+export interface VinCheckHistoryItem {
+  vin: string;
+  title?: string | null;
+  photo_url?: string | null;
+  is_stolen: boolean;
+  has_auction: boolean;
+  color?: string | null;
+  checked_at?: string | null;
+}
+
+export interface VinCheckHistory {
+  items: VinCheckHistoryItem[];
+}
+
+export interface VinQuotaStatus {
+  unlimited: boolean;
+  limit?: number | null;
+  used: number;
+  remaining?: number | null;
+  upgrade_plan: string;
 }

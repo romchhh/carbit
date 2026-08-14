@@ -23,7 +23,9 @@ import type {
   TokenResponse,
   UpgradeQuote,
   User,
+  VinCheckHistory,
   VinCheckResult,
+  VinQuotaStatus,
   MonitoringSourceRequest,
   SavedComparison,
   SavedComparisonDetail,
@@ -433,6 +435,11 @@ export const telegram = {
 // ── VIN / База ДАІ ────────────────────────────────────
 export const vin = {
   lookup: (vinCode: string) => request<VinCheckResult>(`/vin/${encodeURIComponent(vinCode)}`),
+  quota: () => request<VinQuotaStatus>("/vin/quota"),
+  myHistory: (limit = 20) =>
+    request<VinCheckHistory>(`/vin/history/me?limit=${encodeURIComponent(String(limit))}`),
+  recentHistory: (limit = 20) =>
+    request<VinCheckHistory>(`/vin/history/recent?limit=${encodeURIComponent(String(limit))}`),
 };
 
 // ── Заявки на джерела ─────────────────────────────────

@@ -7,6 +7,7 @@ Slot-based pool format (Redis):
       {"s": "n", "i": "1928969"},         # AUTO.RIA нові   — тільки ID, гідратується через /auto/new/auto
       {"s": "o", "d": {...listing}},      # OLX      — повний об'єкт
       {"s": "i", "d": {...listing}},      # Імперія  — повний об'єкт
+      {"s": "u", "d": {...listing}},      # uDrive   — повний об'єкт
       {"s": "t", "d": {...listing}},      # Telegram — повний об'єкт
       ...
     ],

@@ -48,14 +48,24 @@ function telegramFromText(text: string | null | undefined): string | null {
 export function resolveSellerContact(listing: Listing): SellerContact | null {
   const sd = asRecord(listing.source_data);
   const imperiya = asRecord(sd?.imperiya);
-  const dealer = asRecord(imperiya?.dealer) ?? asRecord(sd?.dealer);
+  const udrive = asRecord(sd?.udrive);
+  const dealer =
+    asRecord(imperiya?.dealer) ??
+    asRecord(udrive?.holderDealer) ??
+    asRecord(udrive?.dealer) ??
+    asRecord(sd?.dealer);
+  const udriveContact = asRecord(dealer?.salesContact);
 
   const name =
     readString(listing.seller_name) ??
     readString(dealer?.name) ??
-    readString(asRecord(imperiya?.contact)?.name);
+    readString(asRecord(imperiya?.contact)?.name) ??
+    readString(udriveContact?.name);
 
-  let phone = readString(listing.seller_phone) ?? readString(sd?.phone);
+  let phone =
+    readString(listing.seller_phone) ??
+    readString(sd?.phone) ??
+    readString(udriveContact?.telephone);
   if (phone && isMaskedPhone(phone)) phone = null;
   if (!phone) phone = phoneFromText(listing.description);
 

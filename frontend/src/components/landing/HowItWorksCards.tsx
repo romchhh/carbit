@@ -4,50 +4,56 @@ import { LANDING_IMAGES } from "@/lib/brand-assets";
 
 const STEPS = [
   {
-    title: "Налаштуй пошук",
+    title: "Налаштуй пошук авто",
     description: "Марка, модель, рік, ціна, регіон. До 10 запитів одночасно.",
     cta: "Створити запит",
     href: "/auth/login",
     image: LANDING_IMAGES.howItWorksSetup,
+    imageAlt: "Налаштування пошуку авто в Carbit",
   },
   {
-    title: "Сканування скрізь",
-    description: "AUTO.RIA, OLX і Telegram. Анти-дубль злипає однакові авто.",
+    title: "Сканування AUTO.RIA, OLX, uDrive і Telegram",
+    description: "Один моніторинг по майданчиках. Анти-дубль злипає однакові авто.",
     cta: "Спробувати",
     href: "/auth/login",
     image: LANDING_IMAGES.howItWorksScan,
+    imageAlt: "Сканування оголошень авто на AUTO.RIA, OLX, uDrive і Telegram",
   },
   {
-    title: "Сповіщення миттєво",
+    title: "Сповіщення про нові оголошення",
     description: "Нове авто в Telegram за 5 хвилин з оцінкою ризику.",
     cta: "Підключити Telegram",
     href: "/auth/login",
     image: LANDING_IMAGES.howItWorksNotify,
+    imageAlt: "Миттєві сповіщення про нові авто в Telegram",
   },
 ] as const;
 
 export function HowItWorksCards() {
   return (
-    <section id="how-it-works" className="bg-white section-y">
+    <section id="how-it-works" className="bg-white section-y" aria-labelledby="how-it-works-heading">
       <div className="section-wrap">
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-10 sm:mb-12">
-          <h2 className="text-[32px] sm:text-[40px] font-bold tracking-[-0.03em] text-ink leading-tight">
-            Три кроки до угоди
+          <h2
+            id="how-it-works-heading"
+            className="text-[32px] sm:text-[40px] font-bold tracking-[-0.03em] text-ink leading-tight"
+          >
+            Як працює моніторинг авто
           </h2>
           <p className="text-ink/70 text-[16px] sm:text-[18px] max-w-[340px] leading-relaxed font-medium">
-            Від реєстрації до першого сповіщення — менше 10 хвилин
+            Від реєстрації до першого сповіщення про оголошення — менше 10 хвилин
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-          {STEPS.map(({ title, description, cta, href, image }) => (
+          {STEPS.map(({ title, description, cta, href, image, imageAlt }) => (
             <article
               key={title}
               className="group relative flex min-h-[380px] sm:min-h-[440px] flex-col justify-between overflow-hidden rounded-[1.75rem] p-6 sm:p-7"
             >
               <Image
                 src={image}
-                alt=""
+                alt={imageAlt}
                 fill
                 className="object-cover transition-transform duration-700 motion-safe:group-hover:scale-105"
                 sizes="(max-width: 768px) 100vw, 33vw"

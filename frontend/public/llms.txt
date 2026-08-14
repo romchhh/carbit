@@ -1,13 +1,13 @@
 # Carbit
 
-> Carbit — агрегатор оголошень авторинку України (AUTO.RIA, OLX, Telegram) з моніторингом, миттєвими сповіщеннями та AI-голосовим пошуком у кабінеті.
+> Carbit — агрегатор і моніторинг оголошень авторинку України: пошук авто на AUTO.RIA, OLX, Імперія Авто і Telegram з миттєвими сповіщеннями.
 
 Сервіс для перекупників і підбірників: один пошук по кількох джерелах, збережені фільтри, Telegram-бот для сповіщень. Реєстрація та вхід — за номером телефону (SMS при реєстрації; при вході — код у Telegram, якщо акаунт привʼязаний).
 
 ## Основне
 
-- [Головна](https://carbit.info/): Лендінг, опис продукту та форма пошуку авто
-- [Тарифи](https://carbit.info/pricing): Плани підписки Free, Lite, Standard, Pro
+- [Головна](https://carbit.info/): Пошук авто, моніторинг оголошень, опис продукту
+- [Тарифи](https://carbit.info/pricing): Плани підписки Безкоштовно, Старт, Про, Бізнес
 - [Вхід і реєстрація](https://carbit.info/auth/login): Авторизація за номером телефону
 
 ## Продукт
@@ -22,14 +22,22 @@
 - [Умови використання](https://carbit.info/terms): Правила користування сервісом
 - [Політика конфіденційності](https://carbit.info/privacy): Обробка персональних даних
 
+## SEO / discovery
+
+- [robots.txt](https://carbit.info/robots.txt): Правила індексації
+- [sitemap.xml](https://carbit.info/sitemap.xml): Карта публічних сторінок
+- [llms.txt](https://carbit.info/llms.txt): Цей індекс для мовних моделей
+- [humans.txt](https://carbit.info/humans.txt): Контакти оператора
+- [security.txt](https://carbit.info/.well-known/security.txt): Контакт для security-повідомлень
+
+## Про продукт (для LLM)
+
+Carbit вирішує задачу «пошук авто з пробігом по кількох майданчиках одночасно». Користувач задає фільтри (марка, модель, ціна, регіон), сервіс моніторить AUTO.RIA, OLX, Імперія Авто і Telegram-канали та надсилає сповіщення про нові оголошення. Дублікати зливаються. Оплата — підписка через LiqPay.
+
 ## Контакт
 
 - [Email підтримки](mailto:Carbit.ceo@gmail.com): Carbit.ceo@gmail.com — питання щодо сервісу та підписки
 - [Instagram @carbit.info](https://www.instagram.com/carbit.info): Офіційний акаунт у соцмережах
+- [TikTok @carbit.info](https://www.tiktok.com/@carbit.info): Короткі відео про продукт
 
 Оператор: ФОП Білоус О. В., 02055, м. Київ, вул. Урлівська, 20, кв. 79
-
-## Optional
-
-- [AI discovery — цей файл](https://carbit.info/llms.txt): Індекс для мовних моделей
-- [Instagram @carbit.info](https://www.instagram.com/carbit.info): Новини та оновлення продукту

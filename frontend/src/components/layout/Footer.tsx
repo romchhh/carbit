@@ -12,7 +12,8 @@ const columns: {
   {
     title: "Продукт",
     links: [
-      { label: "Пошук", href: "/app/search" },
+      { label: "Пошук авто", href: "/#search" },
+      { label: "Як працює", href: "/#how-it-works" },
       { label: "Тарифи", href: "/pricing" },
       { label: "Оплата і повернення", href: "/payment" },
     ],
@@ -23,7 +24,6 @@ const columns: {
       { label: "Публічна оферта", href: "/oferta" },
       { label: "Умови використання", href: "/terms" },
       { label: "Конфіденційність", href: "/privacy" },
-      { label: "Оплата і повернення", href: "/payment" },
     ],
   },
   {
@@ -41,7 +41,8 @@ export function Footer() {
             <CarbitLogo variant="full" height={36} light className="transition-opacity group-hover:opacity-90" />
           </Link>
           <p className="mt-3 max-w-[280px] text-[12px] leading-snug text-white/50 sm:max-w-none">
-            Агрегатор оголошень авторинку України для перекупників та підбірників.
+            Пошук і моніторинг авто оголошень з AUTO.RIA, OLX і Telegram для перекупників та
+            підбірників.
           </p>
           <p className="mt-3 max-w-[280px] text-[11px] leading-snug text-white/40 sm:max-w-none">
             ФОП Білоус О. В.

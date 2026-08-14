@@ -12,7 +12,8 @@ RUN apt-get update \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
-    && python -c "from curl_cffi.requests import AsyncSession; print('curl_cffi OK')"
+    && python -c "from curl_cffi.requests import AsyncSession; print('curl_cffi OK')" \
+    && playwright install --with-deps chromium
 
 COPY backend ./backend
 COPY frontend/src/lib/search-data/brands-models.ts ./frontend/src/lib/search-data/brands-models.ts

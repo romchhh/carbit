@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -7,13 +8,15 @@ from typing import Any
 from app.core.config import settings
 from app.core.redis import get_redis
 from app.schemas.schemas import (
+    VinAuctionOut,
     VinCheckOperationOut,
     VinCheckOut,
     VinCheckRegionOut,
     VinCheckStolenOut,
 )
+from app.services.autohelperbot.service import lookup_vin_auction
 from app.services.baza_gai.client import BazaGaiClient
-from app.services.baza_gai.errors import BazaGaiNotFound
+from app.services.baza_gai.errors import BazaGaiError, BazaGaiNotFound
 from app.services.vin import is_valid_vin
 
 logger = logging.getLogger(__name__)
@@ -188,11 +191,48 @@ def _cache_key(vin: str) -> str:
     return f"{CACHE_PREFIX}{vin}"
 
 
-async def lookup_vin_check(vin_raw: str) -> VinCheckOut:
-    vin = normalize_vin(vin_raw)
-    if not vin:
-        raise ValueError("Невалідний VIN")
+def _vin_check_from_auction(vin: str, auction: VinAuctionOut) -> VinCheckOut:
+    title = (auction.title or "").strip().replace("\n", " ")
+    # Прибрати VIN з кінця title, якщо приліпився.
+    if vin and title.upper().endswith(vin.upper()):
+        title = title[: -len(vin)].strip(" -|/")
+    vendor = None
+    model = None
+    model_year = None
+    if title:
+        bits = [b for b in title.split() if b]
+        if bits and bits[0].isdigit() and len(bits[0]) == 4:
+            try:
+                model_year = int(bits[0])
+            except ValueError:
+                model_year = None
+            bits = bits[1:]
+        if bits:
+            vendor = bits[0]
+            model = " ".join(bits[1:]) or None
 
+    note_parts = [
+        "У Базі ДАІ VIN не знайдено.",
+        "Показано аукціонну історію (autohelperbot).",
+    ]
+    return VinCheckOut(
+        vin=vin,
+        vendor=vendor,
+        model=model,
+        model_year=model_year,
+        photo_url=auction.photo_url,
+        color=auction.color,
+        is_stolen=False,
+        registrations_count=0,
+        operations=[],
+        stolen_details=[],
+        source_url=auction.page_url or f"https://autohelperbot.com/car/{vin}",
+        note=" ".join(note_parts),
+        auction=auction,
+    )
+
+
+async def _lookup_baza_only(vin: str) -> VinCheckOut:
     try:
         redis = await get_redis()
         cached = await redis.get(_cache_key(vin))
@@ -230,3 +270,53 @@ async def lookup_vin_check(vin_raw: str) -> VinCheckOut:
         logger.exception("VIN hit cache write failed")
 
     return result
+
+
+async def lookup_vin_check(vin_raw: str) -> VinCheckOut:
+    vin = normalize_vin(vin_raw)
+    if not vin:
+        raise ValueError("Невалідний VIN")
+
+    baza_task = asyncio.create_task(_lookup_baza_only(vin))
+    auction_task = (
+        asyncio.create_task(lookup_vin_auction(vin))
+        if settings.VIN_AUCTION_CHECK_ENABLED
+        else None
+    )
+
+    baza_result: VinCheckOut | None = None
+    baza_fatal: BazaGaiError | None = None
+    try:
+        baza_result = await baza_task
+    except BazaGaiNotFound:
+        pass
+    except BazaGaiError as exc:
+        baza_fatal = exc
+        logger.exception("Baza GAI VIN lookup failed; trying auction fallback")
+
+    auction: VinAuctionOut | None = None
+    if auction_task is not None:
+        try:
+            auction = await asyncio.wait_for(
+                auction_task,
+                timeout=settings.VIN_AUCTION_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("VIN auction timed out for %s", vin)
+            auction_task.cancel()
+        except Exception:
+            logger.exception("VIN auction failed for %s", vin)
+
+    if baza_result is not None:
+        if auction is not None:
+            baza_result.auction = auction
+            if not baza_result.photo_url and auction.photo_url:
+                baza_result.photo_url = auction.photo_url
+        return baza_result
+
+    if auction is not None:
+        return _vin_check_from_auction(vin, auction)
+
+    if baza_fatal is not None:
+        raise baza_fatal
+    raise BazaGaiNotFound(vin)

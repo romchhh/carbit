@@ -1,6 +1,6 @@
 import type { VinCheckResult } from "@/types/api";
 
-const KEY = "carbit:vin-checks";
+const KEY = "carbit:vin-checks:v2";
 const MAX_ITEMS = 40;
 const EVENT = "carbit:vin-check-changed";
 

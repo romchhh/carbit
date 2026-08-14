@@ -164,6 +164,28 @@ def seller_contact_from_source_data(source: str, source_data: dict[str, Any] | N
             return seller_contact_from_imperiya(imperiya)
         return seller_contact_from_imperiya(source_data)
 
+    if source == "udrive":
+        udrive = source_data.get("udrive")
+        payload = udrive if isinstance(udrive, dict) else source_data
+        dealer = (
+            payload.get("holderDealer")
+            if isinstance(payload.get("holderDealer"), dict)
+            else (payload.get("dealer") if isinstance(payload.get("dealer"), dict) else {})
+        )
+        contact = dealer.get("salesContact") if isinstance(dealer.get("salesContact"), dict) else {}
+        phone = contact.get("telephone") if isinstance(contact.get("telephone"), str) else None
+        name = (
+            contact.get("name")
+            if isinstance(contact.get("name"), str)
+            else (dealer.get("name") if isinstance(dealer.get("name"), str) else None)
+        )
+        return {
+            "seller_name": (name or "").strip() or None,
+            "seller_phone": normalize_phone(phone) if is_usable_phone(phone) else None,
+            "seller_telegram": None,
+            "seller_url": None,
+        }
+
     return {
         "seller_name": None,
         "seller_phone": None,

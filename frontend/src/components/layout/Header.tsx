@@ -13,6 +13,7 @@ import { InstagramLink } from "@/components/social/InstagramLink";
 const navLinks = [
   { href: "/", label: "Головна" },
   { href: "/#search", label: "Пошук" },
+  { href: "/#how-it-works", label: "Як працює" },
   { href: "/pricing", label: "Тарифи" },
   { href: "/#faq", label: "FAQ" },
 ];
@@ -74,18 +75,19 @@ export function Header() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const scrollToSearch = () => {
+  const scrollToHash = (hash: string) => {
     setMenuOpen(false);
     if (pathname === "/") {
-      document.getElementById("search")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      window.history.replaceState(null, "", "#search");
+      const id = hash.replace(/^#/, "");
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.history.replaceState(null, "", `#${id}`);
       return true;
     }
     return false;
   };
 
   const handleNavClick = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (href === "/#search" && scrollToSearch()) {
+    if (href.startsWith("/#") && scrollToHash(href.slice(1))) {
       e.preventDefault();
     } else if (menuOpen) {
       setMenuOpen(false);

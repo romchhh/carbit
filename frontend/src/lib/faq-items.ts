@@ -6,7 +6,7 @@ export type FaqItem = {
 export const CARBIT_FAQ_ITEMS: readonly FaqItem[] = [
   {
     q: "Звідки беруться оголошення?",
-    a: "AUTO.RIA, OLX, Імперія Авто та тематичні Telegram-канали авторинку. Дублікати зливаємо в одне авто.",
+    a: "AUTO.RIA, OLX, Імперія Авто, uDrive та тематичні Telegram-канали авторинку. Дублікати зливаємо в одне авто.",
   },
   {
     q: "Як швидко приходять сповіщення?",

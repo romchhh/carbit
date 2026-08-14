@@ -569,6 +569,52 @@ class VinCheckStolenOut(BaseModel):
     department_title: Optional[str] = None
 
 
+class VinAuctionPhotoOut(BaseModel):
+    url: str
+    caption: Optional[str] = None
+
+
+class VinAuctionLinksOut(BaseModel):
+    carhistory: Optional[str] = None
+    autocheck: Optional[str] = None
+    window_sticker: Optional[str] = None
+    copart: Optional[str] = None
+    iaai: Optional[str] = None
+
+
+class VinAuctionOut(BaseModel):
+    """Аукціонна історія (autohelperbot / Copart)."""
+
+    vin: Optional[str] = None
+    title: Optional[str] = None
+    page_url: Optional[str] = None
+    lot_id: Optional[str] = None
+    copart_url: Optional[str] = None
+    iaai_url: Optional[str] = None
+    mileage: Optional[str] = None
+    mileage_km: Optional[str] = None
+    sale_date: Optional[str] = None
+    sale_price: Optional[str] = None
+    sale_records: Optional[str] = None
+    engine: Optional[str] = None
+    color: Optional[str] = None
+    transmission: Optional[str] = None
+    fuel: Optional[str] = None
+    drive: Optional[str] = None
+    keys: Optional[str] = None
+    repair_cost: Optional[str] = None
+    market_value: Optional[str] = None
+    primary_damage: Optional[str] = None
+    primary_damage_en: Optional[str] = None
+    exterior_condition: Optional[str] = None
+    avg_price: Optional[str] = None
+    meta_description: Optional[str] = None
+    photo_url: Optional[str] = None
+    photos: list[VinAuctionPhotoOut] = Field(default_factory=list)
+    links: Optional[VinAuctionLinksOut] = None
+    source: str = "autohelperbot"
+
+
 class VinCheckOut(BaseModel):
     vin: str
     plate: Optional[str] = None
@@ -588,6 +634,29 @@ class VinCheckOut(BaseModel):
     stolen_details: list[VinCheckStolenOut] = Field(default_factory=list)
     source_url: str
     note: Optional[str] = None
+    auction: Optional[VinAuctionOut] = None
+
+
+class VinCheckHistoryItemOut(BaseModel):
+    vin: str
+    title: Optional[str] = None
+    photo_url: Optional[str] = None
+    is_stolen: bool = False
+    has_auction: bool = False
+    color: Optional[str] = None
+    checked_at: Optional[str] = None
+
+
+class VinCheckHistoryOut(BaseModel):
+    items: list[VinCheckHistoryItemOut] = Field(default_factory=list)
+
+
+class VinQuotaStatusOut(BaseModel):
+    unlimited: bool = False
+    limit: Optional[int] = None
+    used: int = 0
+    remaining: Optional[int] = None
+    upgrade_plan: str = "lite"
 
 
 # Заявки на нові джерела моніторингу

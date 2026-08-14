@@ -3,7 +3,9 @@ import { Montserrat } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthProvider";
 import { PwaSplash } from "@/components/pwa/PwaSplash";
 import { PwaServiceWorker } from "@/components/pwa/PwaServiceWorker";
+import { JsonLd } from "@/components/seo/JsonLd";
 import { DEFAULT_SITE_METADATA } from "@/lib/site-metadata";
+import { organizationJsonLd, productJsonLd, websiteJsonLd } from "@/lib/structured-data";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -25,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="uk" className={`${montserrat.variable} h-full`}>
       <body className={`${montserrat.className} h-full min-h-[100dvh] bg-white`}>
+        <JsonLd data={[organizationJsonLd(), websiteJsonLd(), productJsonLd()]} />
         <PwaSplash />
         <PwaServiceWorker />
         <AuthProvider>{children}</AuthProvider>

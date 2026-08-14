@@ -9,7 +9,7 @@ import { SourceBadge } from "@/components/listings/SourceBadge";
 import { cn } from "@/lib/utils";
 import type { Listing, ListingSourceLink } from "@/types/api";
 
-const SOURCE_ORDER = ["auto_ria", "olx", "imperiya", "telegram"] as const;
+const SOURCE_ORDER = ["auto_ria", "olx", "imperiya", "udrive", "telegram"] as const;
 
 function rank(source: string): number {
   const i = SOURCE_ORDER.indexOf(source as (typeof SOURCE_ORDER)[number]);

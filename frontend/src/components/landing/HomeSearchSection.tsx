@@ -67,10 +67,10 @@ export function HomeSearchSection() {
         <div className="section-wrap">
           <div className="mb-10 sm:mb-12">
             <h2 className="text-[32px] font-bold leading-tight tracking-[-0.03em] text-ink sm:text-[40px]">
-              Моніторинг авто
+              Пошук і моніторинг авто
             </h2>
             <p className="mt-3 max-w-[560px] text-[16px] font-medium leading-relaxed text-ink/70 sm:mt-4 sm:text-[18px]">
-              Оберіть фільтри й запускайте пошук по AUTO.RIA, OLX і Telegram
+              Оголошення з AUTO.RIA, OLX, Імперія Авто, uDrive і Telegram — оберіть фільтри й запускайте моніторинг
             </p>
           </div>
 

@@ -12,6 +12,7 @@ const SOURCE_OPTIONS = [
   { value: "auto_ria", label: "AUTO.RIA" },
   { value: "olx", label: "OLX" },
   { value: "imperiya", label: "Імперія Авто" },
+  { value: "udrive", label: "uDrive" },
   { value: "telegram", label: "Telegram" },
 ];
 
@@ -19,6 +20,7 @@ const SOURCE_LABELS: Record<string, string> = {
   auto_ria: "AUTO.RIA",
   olx: "OLX",
   imperiya: "Імперія Авто",
+  udrive: "uDrive",
   telegram: "Telegram",
 };
 

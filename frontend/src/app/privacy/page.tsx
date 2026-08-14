@@ -4,8 +4,9 @@ import { OperatorRequisites } from "@/components/legal/OperatorRequisites";
 import { pageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = pageMetadata(
-  "Політика конфіденційності — Carbit",
-  "Як Carbit збирає, використовує та захищає персональні дані користувачів.",
+  "Політика конфіденційності",
+  "Як Carbit збирає, використовує та захищає персональні дані користувачів сервісу пошуку авто.",
+  { alternates: { canonical: "/privacy" } },
 );
 
 const sections = [
@@ -252,6 +253,7 @@ export default function PrivacyPage() {
       title="Політика конфіденційності"
       subtitle="Як ми збираємо, використовуємо та захищаємо ваші персональні дані в Carbit."
       updated="29 червня 2026"
+      path="/privacy"
       sections={sections}
     />
   );

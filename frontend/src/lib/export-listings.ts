@@ -75,6 +75,7 @@ function sourceLabel(source: string): string {
   if (key === "olx") return "OLX";
   if (key === "auto_ria" || key === "auto.ria") return "AUTO.RIA";
   if (key === "imperiya") return "Імперія Авто";
+  if (key === "udrive") return "uDrive";
   if (key === "telegram") return "Telegram";
   return source || "";
 }

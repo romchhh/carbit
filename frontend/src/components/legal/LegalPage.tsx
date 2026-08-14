@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbJsonLd } from "@/lib/structured-data";
 
 type LegalSection = {
   title: string;
@@ -12,21 +14,38 @@ type LegalPageProps = {
   subtitle: string;
   updated: string;
   sections: LegalSection[];
+  /** Шлях для canonical / breadcrumb, напр. /terms */
+  path?: string;
 };
 
-export function LegalPage({ title, subtitle, updated, sections }: LegalPageProps) {
+export function LegalPage({ title, subtitle, updated, sections, path }: LegalPageProps) {
   return (
     <>
+      {path ? (
+        <JsonLd
+          data={breadcrumbJsonLd([
+            { name: "Головна", path: "/" },
+            { name: title, path },
+          ])}
+        />
+      ) : null}
       <Header />
       <main className="bg-white min-h-screen">
         <section className="border-b border-border/60 bg-surface/40">
           <div className="max-w-[800px] mx-auto px-5 sm:px-8 pt-28 pb-12">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-emerald-dark transition-colors mb-8"
-            >
-              ← На головну
-            </Link>
+            <nav aria-label="Хлібні крихти" className="mb-8 text-[13px] text-muted">
+              <ol className="flex flex-wrap items-center gap-1.5">
+                <li>
+                  <Link href="/" className="hover:text-emerald-dark transition-colors">
+                    Головна
+                  </Link>
+                </li>
+                <li aria-hidden="true">/</li>
+                <li className="text-ink font-medium" aria-current="page">
+                  {title}
+                </li>
+              </ol>
+            </nav>
             <h1 className="text-[36px] sm:text-[48px] font-black tracking-[-0.03em] text-ink leading-tight">
               {title}
             </h1>

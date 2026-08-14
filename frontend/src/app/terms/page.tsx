@@ -4,8 +4,9 @@ import { OperatorRequisites } from "@/components/legal/OperatorRequisites";
 import { pageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = pageMetadata(
-  "Умови використання — Carbit",
-  "Умови надання послуг сервісу Carbit — агрегатора оголошень авторинку України.",
+  "Умови використання",
+  "Умови надання послуг Carbit — агрегатора пошуку авто та моніторингу оголошень AUTO.RIA, OLX і Telegram.",
+  { alternates: { canonical: "/terms" } },
 );
 
 const sections = [
@@ -211,6 +212,7 @@ export default function TermsPage() {
       title="Умови використання"
       subtitle="Правила користування сервісом Carbit для перекупників, підбірників та інших користувачів."
       updated="29 червня 2026"
+      path="/terms"
       sections={sections}
     />
   );

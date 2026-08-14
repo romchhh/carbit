@@ -1,0 +1,12 @@
+/* TEAM */
+Operator: ФОП Білоус Олександр Володимирович
+Site: https://carbit.info
+Contact: Carbit.ceo@gmail.com
+Location: Kyiv, Ukraine
+
+/* SITE */
+Standards: HTML5, JSON-LD (Organization, SoftwareApplication/Product, WebSite, FAQPage)
+Language: uk-UA
+Doctype: HTML5
+Components: Next.js
+Software: Carbit — пошук і моніторинг авто оголошень (AUTO.RIA, OLX, Telegram)

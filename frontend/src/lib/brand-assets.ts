@@ -9,6 +9,7 @@ export const SOURCE_LOGOS = {
   olx: "/icons/source-olx.png",
   telegram: "/icons/source-telegram.png",
   imperiya: "/icons/source-imperiya.png",
+  udrive: "/icons/source-udrive.png",
 } as const;
 
 export const LANDING_IMAGES = {

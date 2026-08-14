@@ -7,8 +7,9 @@ import { PRICING_PLANS, SUPPORT_EMAIL } from "@/lib/pricing-plans";
 import { pageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = pageMetadata(
-  "Оплата і повернення — Carbit",
-  "Умови оплати, надання цифрової послуги та повернення коштів у сервісі Carbit. Оплата через LiqPay.",
+  "Оплата і повернення",
+  "Оплата підписки на моніторинг авто оголошень Carbit через LiqPay. Умови надання цифрової послуги та повернення коштів.",
+  { alternates: { canonical: "/payment" } },
 );
 
 const paidPlans = PRICING_PLANS.filter(p => p.id !== "free");
@@ -137,6 +138,7 @@ export default function PaymentPage() {
       title="Оплата і повернення"
       subtitle="Правила оплати підписки Carbit, надання цифрової послуги та повернення коштів. Приймаємо оплату через LiqPay."
       updated="14 липня 2026"
+      path="/payment"
       sections={sections}
     />
   );

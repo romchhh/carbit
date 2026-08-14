@@ -5,8 +5,9 @@ import { OperatorRequisites } from "@/components/legal/OperatorRequisites";
 import { pageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = pageMetadata(
-  "Договір публічної оферти — Carbit",
-  "Публічна оферта про надання інформаційних онлайн-послуг платформою Carbit (ФОП Білоус О. В.).",
+  "Публічна оферта",
+  "Публічна оферта Carbit про надання онлайн-послуг пошуку авто та моніторингу оголошень (ФОП Білоус О. В.).",
+  { alternates: { canonical: "/oferta" } },
 );
 
 const Bullet = ({ items }: { items: string[] }) => (
@@ -425,6 +426,7 @@ export default function OfertaPage() {
       title="Договір публічної оферти"
       subtitle="Про надання інформаційних онлайн-послуг платформою Carbit."
       updated="14 липня 2026"
+      path="/oferta"
       sections={sections}
     />
   );

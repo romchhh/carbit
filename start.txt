@@ -6,6 +6,8 @@
 
 # Термінал 1 — Backend
 source .venv/bin/activate
+# Один раз після додавання VIN-аукціону / оновлення playwright:
+#   .venv/bin/playwright install chromium
 cd backend
 PYTHONPATH=. alembic upgrade head   # один раз після git pull, якщо «no such table»
 PYTHONPATH=. python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

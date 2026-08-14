@@ -1,27 +1,42 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { HomeSearchSection } from "@/components/landing/HomeSearchSection";
+import { HowItWorksCards } from "@/components/landing/HowItWorksCards";
+import { LandingAbout } from "@/components/landing/LandingAbout";
 import { LandingFaq } from "@/components/landing/LandingFaq";
 import { VideoInstructions } from "@/components/landing/VideoInstructions";
 import { PricingPlans } from "@/components/pricing/PricingPlans";
 import { CtaLink } from "@/components/ui/CtaLink";
 import { IconCheck } from "@/components/icons";
-
+import { JsonLd } from "@/components/seo/JsonLd";
 import { LANDING_IMAGES, SOURCE_LOGOS } from "@/lib/brand-assets";
+import {
+  HOME_DESCRIPTION,
+  HOME_TITLE,
+  pageMetadata,
+} from "@/lib/site-metadata";
+import { faqJsonLd, homeWebPageJsonLd, videoObjectJsonLd } from "@/lib/structured-data";
+
+export const metadata: Metadata = pageMetadata(HOME_TITLE, HOME_DESCRIPTION, {
+  alternates: { canonical: "/" },
+});
 
 const PARTNER_LOGOS = [
-  { src: SOURCE_LOGOS.autoRia, alt: "AUTO.RIA" },
-  { src: SOURCE_LOGOS.olx, alt: "OLX" },
+  { src: SOURCE_LOGOS.autoRia, alt: "AUTO.RIA — оголошення авто" },
+  { src: SOURCE_LOGOS.olx, alt: "OLX — продаж авто" },
   { src: SOURCE_LOGOS.imperiya, alt: "Імперія Авто" },
-  { src: SOURCE_LOGOS.telegram, alt: "Telegram" },
+  { src: SOURCE_LOGOS.udrive, alt: "uDrive" },
+  { src: SOURCE_LOGOS.telegram, alt: "Telegram — канали авторинку" },
 ] as const;
 
 export default function HomePage() {
   return (
     <>
+      <JsonLd data={[homeWebPageJsonLd(), faqJsonLd(), videoObjectJsonLd()]} />
       <Header />
       <main className="bg-white">
 
@@ -29,7 +44,7 @@ export default function HomePage() {
         <section id="landing-hero" className="relative min-h-[100dvh] flex items-start sm:items-center overflow-hidden pt-[72px] sm:pt-[80px]">
           <Image
             src={LANDING_IMAGES.hero}
-            alt=""
+            alt="Пошук авто на AUTO.RIA, OLX і Telegram — Carbit"
             fill
             priority
             className="object-cover object-center sm:scale-105"
@@ -44,13 +59,13 @@ export default function HomePage() {
           <div className="relative section-wrap w-full pt-10 pb-14 sm:py-20">
             <div className="flex w-full max-w-[720px] flex-col min-h-[calc(100dvh-10rem)] sm:min-h-0 pt-4 sm:pt-0">
               <h1 className="w-full text-[clamp(2.05rem,6.8vw+0.4rem,4rem)] font-semibold leading-[1.12] tracking-[-0.015em] text-white animate-fade-up">
-                <span className="block sm:whitespace-nowrap">Знайди авто раніше</span>
-                <span className="block sm:whitespace-nowrap">конкурентів</span>
+                <span className="block sm:whitespace-nowrap">Пошук авто раніше</span>
+                <span className="block sm:whitespace-nowrap">за конкурентів</span>
               </h1>
 
               <div className="mt-7 w-full animate-fade-up-delay sm:mt-8">
                 <p className="text-[18px] leading-relaxed text-white/90 sm:text-[21px] sm:leading-snug">
-                  Миттєві сповіщення та моніторинг потрібної моделі
+                  Моніторинг оголошень на AUTO.RIA, OLX і Telegram з миттєвими сповіщеннями
                 </p>
               </div>
 
@@ -67,7 +82,7 @@ export default function HomePage() {
 
               <div className="mt-auto pt-8 pb-2 sm:mt-12 sm:pt-10 sm:pb-0">
                 <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
-                  Партнери
+                  Джерела оголошень
                 </p>
                 <div className="mt-4 inline-flex items-center sm:mt-5">
                   {PARTNER_LOGOS.map(({ src, alt }, index) => (
@@ -117,19 +132,26 @@ export default function HomePage() {
 
         <HomeSearchSection />
 
+        <HowItWorksCards />
+
+        <LandingAbout />
+
         <LandingFaq />
 
         {/* ── VIDEO INSTRUCTIONS ───────────────────────────── */}
-        <section className="bg-white section-y">
+        <section className="bg-white section-y" aria-labelledby="video-heading">
           <div className="section-wrap">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
               <div>
-                <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.02em] leading-tight text-ink">
-                  Перестань гаяти час на ручний моніторинг
+                <h2
+                  id="video-heading"
+                  className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.02em] leading-tight text-ink"
+                >
+                  Перестань гаяти час на ручний пошук авто
                 </h2>
                 <div className="mt-5 sm:mt-6 space-y-3">
                   {[
-                    "Не витрачаєш годин на пошук по 3+ сайтах",
+                    "Не витрачаєш годин на моніторинг AUTO.RIA, OLX і Telegram",
                     "Знаєш ринкову ціну до першого дзвінка",
                     "Отримуєш сигнал «брати/торгуватись» на даних",
                     "Не пропускаєш вигідні авто через запізнення",
@@ -153,12 +175,17 @@ export default function HomePage() {
         </section>
 
         {/* ── PRICING ──────────────────────────────────────── */}
-        <section className="bg-white section-y">
+        <section className="bg-white section-y" aria-labelledby="pricing-heading">
           <div className="section-wrap">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-8 sm:mb-10">
-              <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.02em] text-ink">Обери план</h2>
+              <h2
+                id="pricing-heading"
+                className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.02em] text-ink"
+              >
+                Тарифи на моніторинг авто
+              </h2>
               <Link href="/pricing" className="inline-flex items-center gap-1.5 text-[12px] text-muted hover:text-emerald-dark transition-colors group">
-                Детальне порівняння
+                Детальне порівняння тарифів
                 <span className="w-6 h-6 rounded-full border border-border flex items-center justify-center group-hover:bg-emerald group-hover:border-emerald group-hover:text-white transition-all text-[11px]">
                   →
                 </span>
@@ -177,7 +204,7 @@ export default function HomePage() {
 
               <div className="relative max-w-[480px] text-center lg:text-left">
                 <h2 className="text-[26px] sm:text-[32px] font-semibold text-white tracking-[-0.02em] leading-tight">
-                  Знаходь авто швидше за конкурентів
+                  Починай пошук авто швидше за ринок
                 </h2>
                 <p className="mt-2 text-[13px] text-white/50">Без прив&apos;язки карти. Перші 7 днів безкоштовно.</p>
               </div>

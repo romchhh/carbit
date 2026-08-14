@@ -4,14 +4,17 @@ import { Footer } from "@/components/layout/Footer";
 import { PricingPlans } from "@/components/pricing/PricingPlans";
 import { CtaLink } from "@/components/ui/CtaLink";
 import { FaqAccordion } from "@/components/ui/FaqAccordion";
+import { JsonLd } from "@/components/seo/JsonLd";
 import { cn } from "@/lib/utils";
 import { PRICING_COMPARE, PRICING_PLAN_HEADERS } from "@/lib/pricing-plans";
 import { IconCheck, IconX } from "@/components/icons";
 import { pageMetadata } from "@/lib/site-metadata";
+import { breadcrumbJsonLd, faqPageJsonLd } from "@/lib/structured-data";
 
 export const metadata: Metadata = pageMetadata(
-  "Тарифи — Carbit",
-  "Плани підписки Carbit: Free, Старт, Про та Бізнес. Моніторинг AUTO.RIA, OLX і Telegram.",
+  "Тарифи на моніторинг авто оголошень",
+  "Тарифи Carbit: Безкоштовно, Старт, Про та Бізнес. Моніторинг пошуку авто на AUTO.RIA, OLX і Telegram зі сповіщеннями.",
+  { alternates: { canonical: "/pricing" } },
 );
 
 const PRICING_FAQ = [
@@ -33,11 +36,11 @@ const PRICING_FAQ = [
   },
   {
     q: "Чи є повернення коштів?",
-    a: "Так. Умови повернення описані на сторінці /payment.",
+    a: "Так. Умови повернення описані на сторінці оплати та повернення.",
   },
   {
     q: "Це фізичний товар?",
-    a: "Ні. Carbit — цифрова підписка; доставка не потрібна, доступ надається онлайн.",
+    a: "Ні. Carbit — цифрова підписка на моніторинг авто оголошень; доставка не потрібна, доступ надається онлайн.",
   },
 ] as const;
 
@@ -53,36 +56,43 @@ function Cell({ v }: { v: string | boolean }) {
 export default function PricingPage() {
   return (
     <>
+      <JsonLd
+        data={[
+          breadcrumbJsonLd([
+            { name: "Головна", path: "/" },
+            { name: "Тарифи", path: "/pricing" },
+          ]),
+          faqPageJsonLd(PRICING_FAQ),
+        ]}
+      />
       <Header />
       <main className="bg-white min-h-screen">
 
-        {/* Intro — як блок «Обери план» на головній */}
         <section className="border-b border-border/60 pt-[72px] sm:pt-[80px] section-y">
           <div className="section-wrap">
             <h1 className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.02em] text-ink">
-              Простий вибір
+              Тарифи на моніторинг пошуку авто
             </h1>
             <p className="mt-3 max-w-[560px] text-[16px] font-medium leading-relaxed text-ink/70 sm:mt-4 sm:text-[18px]">
-              Починай безкоштовно. Плати тільки коли бачиш результат.
+              Підписка на сповіщення про нові оголошення з AUTO.RIA, OLX і Telegram. Починай
+              безкоштовно — плати, коли бачиш результат.
             </p>
           </div>
         </section>
 
-        {/* Тарифи — ті самі картки, що на головній */}
         <section className="section-y">
           <div className="section-wrap">
             <PricingPlans variant="home" />
           </div>
         </section>
 
-        {/* Порівняння */}
         <section className="section-y border-t border-border/60">
           <div className="section-wrap">
             <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.02em] text-ink">
-              Повне порівняння
+              Порівняння тарифів Carbit
             </h2>
             <p className="mt-3 max-w-[480px] text-[16px] leading-relaxed text-ink/70 sm:mt-4 sm:text-[18px]">
-              Усі можливості в одній таблиці — обери те, що підходить саме тобі.
+              Ліміти моніторингів, пристроїв і можливостей — у одній таблиці.
             </p>
             <div className="mt-8 sm:mt-10 border border-border/60 rounded-2xl sm:rounded-3xl overflow-hidden shadow-card overflow-x-auto">
               <table className="w-full min-w-[640px]">
@@ -123,24 +133,22 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* FAQ */}
         <section className="section-y border-t border-border/60 bg-surface/30">
           <div className="section-wrap">
             <h2 className="mb-8 text-[28px] font-semibold tracking-[-0.02em] text-ink sm:mb-10 sm:text-[36px]">
-              Часті питання
+              Часті питання про тарифи
             </h2>
             <FaqAccordion items={PRICING_FAQ} />
           </div>
         </section>
 
-        {/* CTA — як на головній */}
         <section className="section-y">
           <div className="section-wrap">
             <div className="relative bg-ink rounded-2xl sm:rounded-3xl px-6 sm:px-10 py-8 sm:py-10 overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-6">
               <div className="absolute top-0 right-0 w-64 h-64 bg-emerald/15 rounded-full blur-[100px] pointer-events-none" />
               <div className="relative max-w-[480px] text-center lg:text-left">
                 <h2 className="text-[26px] sm:text-[32px] font-semibold text-white tracking-[-0.02em] leading-tight">
-                  Починай безкоштовно сьогодні
+                  Починай пошук авто безкоштовно
                 </h2>
                 <p className="mt-2 text-[13px] text-white/50">Без прив&apos;язки карти. Перші 7 днів безкоштовно.</p>
               </div>

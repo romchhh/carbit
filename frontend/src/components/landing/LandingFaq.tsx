@@ -7,10 +7,10 @@ export function LandingFaq() {
       <div className="section-wrap">
         <div className="mb-8 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
           <h2 className="text-[28px] font-semibold tracking-[-0.02em] text-ink sm:text-[36px]">
-            Часті питання
+            Часті питання про пошук авто
           </h2>
           <p className="max-w-[320px] text-[14px] leading-relaxed text-muted sm:text-[15px]">
-            Коротко про пошук, сповіщення та підписку
+            Джерела оголошень, сповіщення та підписка на моніторинг
           </p>
         </div>
 

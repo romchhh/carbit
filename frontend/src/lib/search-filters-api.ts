@@ -66,6 +66,7 @@ const SOURCE_TO_BACKEND: Record<string, string> = {
   "AUTO.RIA": "auto_ria",
   OLX: "olx",
   "Імперія Авто": "imperiya",
+  uDrive: "udrive",
   Telegram: "telegram",
 };
 
@@ -179,6 +180,7 @@ const BACKEND_SOURCE_TO_UI: Record<string, string> = {
   auto_ria: "AUTO.RIA",
   olx: "OLX",
   imperiya: "Імперія Авто",
+  udrive: "uDrive",
   telegram: "Telegram",
 };
 

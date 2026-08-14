@@ -1,7 +1,7 @@
 {
-  "name": "Carbit — агрегатор авторинку",
+  "name": "Carbit — пошук авто",
   "short_name": "Carbit",
-  "description": "AUTO.RIA, OLX і Telegram в одному пошуку",
+  "description": "Пошук авто на AUTO.RIA, OLX і Telegram з моніторингом оголошень",
   "start_url": "/app/dashboard",
   "scope": "/",
   "display": "standalone",

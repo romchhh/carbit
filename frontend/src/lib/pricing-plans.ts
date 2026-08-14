@@ -23,6 +23,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "Пробний період 7 днів",
       "До 1 активного моніторингу",
+      "3 перевірки VIN",
       "1 пристрій",
       "Веб-кабінет і сповіщення",
     ],
@@ -42,6 +43,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "30 днів доступу",
       "До 10 активних моніторингів",
+      "Необмежені перевірки VIN",
       "До 2 пристроїв",
       "Telegram-сповіщення",
       "Веб-кабінет",
@@ -62,6 +64,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "30 днів доступу",
       "До 30 активних моніторингів",
+      "Необмежені перевірки VIN",
       "До 6 пристроїв",
       "Telegram-сповіщення",
       "Анти-дубль оголошень",
@@ -82,6 +85,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "30 днів доступу",
       "До 100 активних моніторингів",
+      "Необмежені перевірки VIN",
       "До 12 пристроїв",
       "Telegram-сповіщення",
       "Пріоритетна обробка пошуків",
@@ -98,6 +102,7 @@ export const PRICING_COMPARE = [
   { feature: "Тривалість", free: "7 днів", lite: "30 днів", std: "30 днів", pro: "30 днів" },
   { feature: "Ціна", free: "Безкоштовно", lite: "390 грн", std: "790 грн", pro: "1 790 грн" },
   { feature: "Активні моніторинги", free: "1", lite: "10", std: "30", pro: "100" },
+  { feature: "Перевірки VIN", free: "3", lite: "Безліміт", std: "Безліміт", pro: "Безліміт" },
   { feature: "Пристрої", free: "1", lite: "2", std: "6", pro: "12" },
   { feature: "Telegram-сповіщення", free: true, lite: true, std: true, pro: true },
   { feature: "Веб-кабінет", free: true, lite: true, std: true, pro: true },

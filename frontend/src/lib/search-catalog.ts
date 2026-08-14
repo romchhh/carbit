@@ -101,7 +101,7 @@ export const BODY_TYPE_OPTIONS = [
   "Пікап",
   "Ліфтбек",
 ] as const;
-export const SOURCE_OPTIONS = ["AUTO.RIA", "OLX", "Імперія Авто", "Telegram"] as const;
+export const SOURCE_OPTIONS = ["AUTO.RIA", "OLX", "Імперія Авто", "uDrive", "Telegram"] as const;
 export const DRIVE_OPTIONS = ["Передній", "Задній", "Повний"] as const;
 export const COLOR_SWATCHES = [
   { name: "Білий", hex: "#F5F5F5", border: true },

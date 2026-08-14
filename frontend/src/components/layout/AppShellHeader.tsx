@@ -167,6 +167,14 @@ export function AppShellHeader({ className }: Props) {
                   Акаунт
                 </Link>
                 <Link
+                  href="/app/vin"
+                  data-tour="nav-vin"
+                  className="block px-3 py-2.5 text-[13px] text-ink transition-colors hover:bg-surface"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Перевірка VIN
+                </Link>
+                <Link
                   href="/app/search"
                   className="block px-3 py-2.5 text-[13px] text-ink transition-colors hover:bg-surface"
                   onClick={() => setMenuOpen(false)}

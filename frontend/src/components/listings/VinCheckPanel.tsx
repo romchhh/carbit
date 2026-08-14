@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { getApiErrorMessage, vin as vinApi } from "@/lib/api";
+import { ApiError, getApiErrorMessage, vin as vinApi } from "@/lib/api";
 import { getVinCheck, saveVinCheck } from "@/lib/vin-check-cache";
+import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { cn } from "@/lib/utils";
 import type { VinCheckResult } from "@/types/api";
 
@@ -30,10 +31,18 @@ function displacementLabel(value?: number | null): string | null {
   return `${value} см³`;
 }
 
+function isVinLimitError(err: unknown): err is ApiError {
+  return (
+    err instanceof ApiError &&
+    (err.status === 402 || err.code === "vin_check_limit" || /перевірк.*VIN|VIN.*ліміт/i.test(err.message))
+  );
+}
+
 export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onChecked }: Props) {
   const titleId = useId();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limitReached, setLimitReached] = useState(false);
   const [data, setData] = useState<VinCheckResult | null>(null);
 
   useEffect(() => {
@@ -49,6 +58,7 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
     if (!open || !vin) {
       setLoading(false);
       setError(null);
+      setLimitReached(false);
       setData(null);
       return;
     }
@@ -59,11 +69,15 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
       setData(cached.result);
       setLoading(false);
       setError(null);
-    } else {
-      setLoading(true);
-      setError(null);
-      setData(null);
+      setLimitReached(false);
+      // Повторний перегляд уже перевіреного VIN — без нового запиту / квоти.
+      return;
     }
+
+    setLoading(true);
+    setError(null);
+    setLimitReached(false);
+    setData(null);
 
     vinApi
       .lookup(vin)
@@ -74,9 +88,13 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
         onChecked?.(result);
       })
       .catch(err => {
-        if (!cancelled && !cached) {
-          setError(getApiErrorMessage(err, "Не вдалося перевірити VIN"));
+        if (cancelled) return;
+        if (isVinLimitError(err)) {
+          setLimitReached(true);
+          setError(err.message);
+          return;
         }
+        setError(getApiErrorMessage(err, "Не вдалося перевірити VIN"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -158,7 +176,9 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
           )}
 
           {vin && loading && (
-            <p className="py-8 text-center text-[14px] text-muted">Запит до Бази ДАІ…</p>
+            <p className="py-8 text-center text-[14px] text-muted">
+              Запит до Бази ДАІ та аукціонної історії…
+            </p>
           )}
 
           {vin && !loading && error && (
@@ -166,7 +186,13 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-950">
                 {error}
               </div>
-              {fallbackUrl && (
+              {limitReached && (
+                <UpgradeOffer
+                  planId="lite"
+                  title="Необмежені перевірки VIN — тариф «Старт»"
+                />
+              )}
+              {!limitReached && fallbackUrl && (
                 <a
                   href={fallbackUrl}
                   target="_blank"
@@ -294,13 +320,180 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
                 <p className="text-[12px] leading-relaxed text-muted">{data.note}</p>
               )}
 
+              {data.auction && (
+                <div className="space-y-3 rounded-xl border border-border/80 bg-surface/40 px-4 py-3">
+                  <h3 className="text-[13px] font-bold text-ink">Аукціонна історія</h3>
+                  {data.auction.title && (
+                    <p className="text-[14px] font-semibold text-ink">
+                      {data.auction.title.split("\n")[0]}
+                      {data.auction.vin ? (
+                        <span className="mt-0.5 block text-[12px] font-medium text-muted">
+                          {data.auction.vin}
+                        </span>
+                      ) : null}
+                    </p>
+                  )}
+                  {data.auction.meta_description && (
+                    <p className="text-[12px] leading-relaxed text-muted">
+                      {data.auction.meta_description}
+                    </p>
+                  )}
+                  {(data.auction.photos?.length ?? 0) > 0 ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {data.auction.photos.map((photo, idx) => (
+                        <a
+                          key={`${photo.url}-${idx}`}
+                          href={photo.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group block overflow-hidden rounded-lg"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={photo.url}
+                            alt={photo.caption || data.auction?.title || `Фото ${idx + 1}`}
+                            className="aspect-[4/3] w-full object-cover transition group-hover:opacity-90"
+                          />
+                          {photo.caption ? (
+                            <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted">
+                              {photo.caption}
+                            </p>
+                          ) : null}
+                        </a>
+                      ))}
+                    </div>
+                  ) : data.auction.photo_url && data.auction.photo_url !== data.photo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={data.auction.photo_url}
+                      alt={data.auction.title || "Аукціонне фото"}
+                      className="h-36 w-full rounded-xl object-cover object-center"
+                    />
+                  ) : null}
+                  <dl className="grid grid-cols-2 gap-3">
+                    <Fact label="Дата продажу" value={data.auction.sale_date} />
+                    <Fact
+                      label="Ціна продажу"
+                      value={data.auction.sale_price ? `$ ${data.auction.sale_price}` : null}
+                    />
+                    <Fact
+                      label="Пробіг"
+                      value={
+                        [data.auction.mileage, data.auction.mileage_km]
+                          .filter(Boolean)
+                          .join(" · ") || null
+                      }
+                    />
+                    <Fact label="Записів про продаж" value={data.auction.sale_records} />
+                    <Fact label="Двигун" value={data.auction.engine} />
+                    <Fact label="Колір" value={data.auction.color} />
+                    <Fact label="КПП" value={data.auction.transmission} />
+                    <Fact label="Паливо" value={data.auction.fuel} />
+                    <Fact label="Привід" value={data.auction.drive} />
+                    <Fact label="Ключі" value={data.auction.keys} />
+                    <Fact
+                      label="Ремонт"
+                      value={data.auction.repair_cost ? `$ ${data.auction.repair_cost}` : null}
+                    />
+                    <Fact
+                      label="Ринкова"
+                      value={data.auction.market_value ? `$ ${data.auction.market_value}` : null}
+                    />
+                    <Fact
+                      label="Пошкодження"
+                      value={
+                        [
+                          data.auction.primary_damage,
+                          data.auction.primary_damage_en &&
+                          data.auction.primary_damage_en !== data.auction.primary_damage
+                            ? data.auction.primary_damage_en
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || null
+                      }
+                    />
+                    <Fact label="Стан" value={data.auction.exterior_condition} />
+                    <Fact
+                      label="Сер. ціна"
+                      value={data.auction.avg_price ? `$ ${data.auction.avg_price}` : null}
+                    />
+                    <Fact label="Лот" value={data.auction.lot_id} />
+                  </dl>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {data.auction.page_url && (
+                      <a
+                        href={data.auction.page_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex text-[13px] font-semibold text-emerald-dark underline-offset-2 hover:underline"
+                      >
+                        Звіт AutoHelperBot
+                      </a>
+                    )}
+                    {(data.auction.links?.copart || data.auction.copart_url) && (
+                      <a
+                        href={data.auction.links?.copart || data.auction.copart_url || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex text-[13px] font-semibold text-emerald-dark underline-offset-2 hover:underline"
+                      >
+                        Copart
+                      </a>
+                    )}
+                    {(data.auction.links?.iaai || data.auction.iaai_url) && (
+                      <a
+                        href={data.auction.links?.iaai || data.auction.iaai_url || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex text-[13px] font-semibold text-emerald-dark underline-offset-2 hover:underline"
+                      >
+                        IAAI
+                      </a>
+                    )}
+                    {data.auction.links?.carhistory && (
+                      <a
+                        href={data.auction.links.carhistory}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex text-[13px] font-semibold text-emerald-dark underline-offset-2 hover:underline"
+                      >
+                        CarHistory
+                      </a>
+                    )}
+                    {data.auction.links?.autocheck && (
+                      <a
+                        href={data.auction.links.autocheck}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex text-[13px] font-semibold text-emerald-dark underline-offset-2 hover:underline"
+                      >
+                        Autocheck
+                      </a>
+                    )}
+                    {data.auction.links?.window_sticker && (
+                      <a
+                        href={data.auction.links.window_sticker}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex text-[13px] font-semibold text-emerald-dark underline-offset-2 hover:underline"
+                      >
+                        Window sticker
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <a
                 href={data.source_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex text-[13px] font-semibold text-emerald-dark underline-offset-2 hover:underline"
               >
-                Відкрити на База ДАІ
+                {data.auction && !data.operations.length
+                  ? "Відкрити джерело"
+                  : "Відкрити на База ДАІ"}
               </a>
             </div>
           )}

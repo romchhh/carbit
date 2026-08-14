@@ -7,6 +7,7 @@ import {
   IconCar,
   IconGlobe,
   IconCompare,
+  IconShield,
 } from "@/components/icons";
 
 export type NavBadgeKey = "notifications" | "monitors";
@@ -32,6 +33,13 @@ export const primaryNav: DashboardNavItem[] = [
     badgeAccent: true,
     tourId: "nav-monitors",
   },
+  {
+    href: "/app/vin",
+    icon: IconShield,
+    label: "Перевірка VIN",
+    shortLabel: "VIN",
+    tourId: "nav-vin",
+  },
   { href: "/app/favorites", icon: IconHeart, label: "Обране", shortLabel: "Обране", tourId: "nav-favorites" },
   { href: "/app/notifications", icon: IconBell, label: "Сповіщення", shortLabel: "Алерти", badgeKey: "notifications", badgeAccent: true, tourId: "nav-notifications" },
 ];
@@ -43,11 +51,11 @@ export const secondaryNav: DashboardNavItem[] = [
   { href: "/app/suggest-source", icon: IconGlobe, label: "Запропонувати джерело", tourId: "nav-suggest-source" },
 ];
 
-/** Bottom bar: без статистики, щоб лишилось місце під «Монітори». */
+/** Bottom bar: акаунт — у шапці (аватар). */
 export const mobileNav: DashboardNavItem[] = [
   primaryNav[0],
   primaryNav[1],
   primaryNav[2],
   primaryNav[3],
-  { href: "/app/account", icon: IconUser, label: "Акаунт", shortLabel: "Профіль" },
+  primaryNav[4],
 ];
