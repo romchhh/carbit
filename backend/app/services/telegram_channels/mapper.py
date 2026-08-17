@@ -341,7 +341,7 @@ def _listing_matches_single_brand(
     return True
 
 
-def _listing_matches_single_model(
+def _listing_matches_model_name(
     item: ListingOut,
     model: str,
     *,
@@ -350,7 +350,11 @@ def _listing_matches_single_model(
     if not model:
         return True
 
-    # Заголовок і опис — першоджерело: їх писав продавець.
+    # Заголовок — першоджерело; довгий дилерський опис не має ветошити збіг.
+    title = item.title or ""
+    if title and text_matches_model_filter(title, model, brand=brand or ""):
+        return True
+
     text_haystack = f"{item.title} {item.description or ''}"
     if text_matches_model_filter(text_haystack, model, brand=brand or ""):
         return True
@@ -362,10 +366,33 @@ def _listing_matches_single_model(
         return False
 
     # Поле «model» могло бути проштамповане з фільтра (OLX/AUTO.RIA hint),
-    # тож віримо йому лише коли текст не називає іншу модель цієї марки.
+    # тож віримо йому лише коли заголовок не називає іншу модель цієї марки.
     from app.services.search.brand_model_keywords import text_names_other_model
 
-    return not text_names_other_model(text_haystack, brand or item.brand or "", model)
+    return not text_names_other_model(title or text_haystack, brand or item.brand or "", model)
+
+
+def _listing_matches_single_model(
+    item: ListingOut,
+    model: str,
+    *,
+    brand: str = "",
+    category: str = "",
+) -> bool:
+    if not model:
+        return True
+
+    names = [model]
+    cat = (category or "").strip().lower()
+    from app.services.search.category import listing_from_new_catalog
+    from app.services.search.new_generation import new_generation_models
+
+    if cat == "new" or listing_from_new_catalog(item):
+        names = list(new_generation_models(brand, model)) or [model]
+
+    return any(
+        _listing_matches_model_name(item, name, brand=brand) for name in names
+    )
 
 
 def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> bool:
@@ -400,7 +427,9 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
                     item, haystack, brand, model_hint=model
                 ):
                     continue
-                if not _listing_matches_single_model(item, model, brand=brand):
+                if not _listing_matches_single_model(
+                    item, model, brand=brand, category=filters.category or ""
+                ):
                     continue
                 matched = True
                 break

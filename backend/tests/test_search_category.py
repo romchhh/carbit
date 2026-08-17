@@ -59,8 +59,24 @@ class CategoryMatchTests(unittest.TestCase):
         self.assertTrue(listing_matches_category(item, "new"))
         self.assertFalse(listing_matches_category(item, "used"))
 
-    def test_new_rejects_before_2020(self):
+    def test_auto_ria_low_mileage_old_year_counts_as_new(self):
         item = _item(mileage=200, title="Audi A4 з салону", year=2019)
+        self.assertTrue(listing_matches_category(item, "new"))
+        self.assertFalse(listing_matches_category(item, "used"))
+
+    def test_auto_ria_zero_km_old_year_counts_as_new(self):
+        item = _item(mileage=0, title="BMW 320", year=2018)
+        self.assertTrue(listing_matches_category(item, "new"))
+        self.assertFalse(listing_matches_category(item, "used"))
+
+    def test_olx_still_rejects_before_2020(self):
+        item = _item(
+            id="olx_1",
+            source="olx",
+            mileage=200,
+            title="Audi A4 з салону",
+            year=2019,
+        )
         self.assertFalse(listing_matches_category(item, "new"))
         self.assertTrue(listing_matches_category(item, "used"))
 
@@ -70,7 +86,7 @@ class CategoryMatchTests(unittest.TestCase):
         self.assertTrue(listing_matches_category(item, "used"))
 
     def test_new_rejects_unknown_mileage_without_markers(self):
-        item = _item(mileage=0, title="Toyota Camry 2018")
+        item = _item(id="olx_1", source="olx", mileage=0, title="Toyota Camry 2018", year=2018)
         self.assertFalse(listing_matches_category(item, "new"))
 
     def test_new_zero_mileage_with_salon_marker(self):
@@ -83,10 +99,10 @@ class CategoryMatchTests(unittest.TestCase):
         self.assertTrue(listing_matches_category(item, "new"))
         self.assertFalse(listing_matches_category(item, "used"))
 
-    def test_new_auto_ria_catalog_rejects_before_2020(self):
+    def test_new_auto_ria_catalog_old_year_counts_as_new(self):
         item = _item(id="new_auto_ria_555", title="BMW X5", mileage=0, year=2018)
-        self.assertFalse(listing_matches_category(item, "new"))
-        self.assertTrue(listing_matches_category(item, "used"))
+        self.assertTrue(listing_matches_category(item, "new"))
+        self.assertFalse(listing_matches_category(item, "used"))
 
     def test_udrive_always_counts_as_new(self):
         item = _item(id="udrive_abc", source="udrive", title="Audi A5", mileage=0, year=2024)
@@ -143,7 +159,7 @@ class AutoRiaCategoryParamsTests(unittest.IsolatedAsyncioTestCase):
         new = await fake_params("new")
         self.assertEqual(new.get("searchType"), 1)
         self.assertEqual(new.get("raceTo"), 1)
-        self.assertEqual(new.get("s_yers[0]"), 2020)
+        self.assertNotIn("s_yers[0]", new)
 
         imp = await fake_params("import")
         self.assertEqual(imp.get("custom"), 1)
@@ -166,7 +182,9 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.auto_ria.service.AutoRiaClient") as client_cls:
             client = client_cls.return_value
-            client.search = AsyncMock()
+            client.search = AsyncMock(
+                return_value={"result": {"search_result": {"count": 0, "ids": []}}}
+            )
             client.search_new = AsyncMock(return_value={"count": 1, "ids": [555]})
             client.get_new_info = AsyncMock(return_value=mock_info)
             client.get_info = AsyncMock()
@@ -177,6 +195,10 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
             ), patch(
                 "app.services.auto_ria.service.new_info_to_listing",
                 return_value=_item(id="new_auto_ria_555", title="BMW X5", mileage=0, year=2025),
+            ), patch(
+                "app.services.auto_ria.catalog.resolve_new_search_model_ids",
+                new_callable=AsyncMock,
+                return_value=[],
             ):
                 body = await _search_auto_ria_body(
                     SearchFilters(category="new", brand="BMW"),
@@ -188,7 +210,7 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
                     max_ids=20,
                 )
 
-        client.search.assert_not_called()
+        client.search.assert_called()
         client.get_info.assert_not_called()
         client.search_new.assert_called()
         client.get_new_info.assert_called()
@@ -202,7 +224,9 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("app.services.auto_ria.service.AutoRiaClient") as client_cls:
             client = client_cls.return_value
-            client.search = AsyncMock()
+            client.search = AsyncMock(
+                return_value={"result": {"search_result": {"count": 0, "ids": []}}}
+            )
             client.search_new = AsyncMock(return_value={"count": 1, "autos": [777]})
             client.get_new_info = AsyncMock(return_value={"autoId": 777})
             with patch(
@@ -218,6 +242,10 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
                     mileage=0,
                     year=2025,
                 ),
+            ), patch(
+                "app.services.auto_ria.catalog.resolve_new_search_model_ids",
+                new_callable=AsyncMock,
+                return_value=[],
             ):
                 body = await _search_auto_ria_body(
                     SearchFilters(category="new", brand="BMW", model="5 Series"),

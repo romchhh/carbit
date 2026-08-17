@@ -349,14 +349,22 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
         item.id.startsWith("new_auto_ria_") ||
         item.id.startsWith("udrive_") ||
         item.src === "uDrive";
-      const tooOld = item.year > 0 && item.year < 2020;
+      const fromAutoRia =
+        item.src === "AUTO.RIA" ||
+        item.id.startsWith("new_auto_ria_") ||
+        item.id.startsWith("auto_ria_");
+      const tooOld =
+        item.year > 0 && item.year < 2020 && !(fromAutoRia && item.mileage <= 1000);
       const isNewMileage = item.mileage > 0 && item.mileage <= 1000;
       const isNewText =
         /(з\s+салону|без\s+проб[іi]гу|без\s+пробега|0\s*км|нове\s+авто|новий\s+автомобіль)/i.test(
           desc,
         );
       const isNew =
-        !tooOld && (fromNewCatalog || isNewMileage || (item.mileage === 0 && isNewText));
+        !tooOld &&
+        (fromNewCatalog ||
+          isNewMileage ||
+          (item.mileage === 0 && (isNewText || fromAutoRia)));
       if (filters.category === "import" && (fromNewCatalog || !isImport)) return false;
       if (filters.category === "new") {
         if (!isNew) return false;

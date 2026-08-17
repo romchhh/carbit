@@ -23,6 +23,8 @@ class ScriptNormalizationTests(unittest.TestCase):
         self.assertEqual(unify_class_spelling("G-Class"), "g class")
         self.assertEqual(unify_class_spelling("G-Класс AMG"), "g class amg")
         self.assertEqual(unify_class_spelling("C клас"), "c class")
+        self.assertEqual(unify_class_spelling("с клас"), "c class")
+        self.assertEqual(unify_class_spelling("С-клас"), "c class")
 
     def test_letter_class_canonical_from_cyrillic_filter(self):
         self.assertEqual(letter_class_canonical("G-Класс"), "g-class")
@@ -30,6 +32,9 @@ class ScriptNormalizationTests(unittest.TestCase):
         self.assertEqual(letter_class_canonical("G Class"), "g-class")
         self.assertEqual(letter_class_display("G-Класс AMG"), "G-Class")
         self.assertEqual(canonical_search_model("G-Класс AMG"), "G-Class")
+        self.assertEqual(letter_class_canonical("с клас"), "c-class")
+        self.assertEqual(letter_class_canonical("С-клас"), "c-class")
+        self.assertEqual(canonical_search_model("С клас"), "C-Class")
 
     def test_g_class_sql_has_both_scripts(self):
         tokens = filter_sql_search_tokens(

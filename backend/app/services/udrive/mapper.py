@@ -224,7 +224,17 @@ async def filters_to_query_body(
 
     make_id = int(make["id"])
     brand_slug = str(make.get("slug") or brand).strip().lower()
-    model_ids = await resolve_model_ids(client, make_id, model, brand=brand) if model else []
+    model_ids: list[int] = []
+    if model:
+        from app.services.search.new_generation import new_generation_models
+
+        names = new_generation_models(brand, model)
+        seen: set[int] = set()
+        for name in names or (model,):
+            for mid in await resolve_model_ids(client, make_id, name, brand=brand):
+                if mid not in seen:
+                    seen.add(mid)
+                    model_ids.append(mid)
 
     body: dict[str, Any] = {
         "makeId": [make_id],

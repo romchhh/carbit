@@ -64,15 +64,6 @@ async def _search_auto_ria_body(
         raise AutoRiaError(str(exc)) from exc
 
     category = (filters.category or "all").strip().lower()
-    if category == "new":
-        return await _search_new_auto_ria_only(
-            client,
-            params,
-            filters,
-            page=page,
-            per_page=per_page,
-            sort_by=sort_by,
-        )
 
     try:
         search_data = await client.search(params)
@@ -94,21 +85,18 @@ async def _search_auto_ria_body(
             except AutoRiaError:
                 return None
 
-    # Для категорії "all" паралельно тягнемо також нові авто від дилерів (/auto/new/search)
+    # Для «всі» і «нові» паралельно тягнемо дилерські авто (/auto/new/search)
     new_car_task = None
     new_total = 0
-    if category == "all" and page == 1:
-        new_params = _build_new_search_params(params)
+    if category in ("all", "new") and page == 1:
         new_cap = max(min(per_page // 2, 50), 20)
-        new_params.update({"page": 1, "limit": new_cap})
 
         async def _fetch_new_cars() -> list[ListingOut]:
             nonlocal new_total
             try:
-                async with acquire_auto_ria_slot():
-                    new_data = await client.search_new(new_params)
-                new_total = int(new_data.get("count") or 0)
-                new_ids = _new_search_ids(new_data)[:new_cap]
+                new_ids, new_total = await _collect_new_ids_expanded(
+                    client, params, filters, max_ids=new_cap, use_slot=False
+                )
 
                 async def fetch_new_one(aid: str) -> ListingOut | None:
                     async with sem:
@@ -162,11 +150,12 @@ async def _search_new_auto_ria_only(
     sort_by: str,
 ) -> PaginatedListings:
     """Лише GET /auto/new/search + /auto/new/auto/{id} — без /auto/search."""
-    new_params = _build_new_search_params(used_params)
-    new_params.update({"page": max(page, 1), "limit": min(max(per_page, 1), 50)})
-    new_data = await client.search_new(new_params)
-    total = int(new_data.get("count") or 0)
-    auto_ids = _new_search_ids(new_data)[: max(per_page, 0)]
+    offset = (max(page, 1) - 1) * max(per_page, 1)
+    need = offset + max(per_page, 0)
+    all_ids, total = await _collect_new_ids_expanded(
+        client, used_params, filters, max_ids=max(need, 1), use_slot=False
+    )
+    auto_ids = all_ids[offset : offset + max(per_page, 0)]
 
     sem = asyncio.Semaphore(10)
 
@@ -267,6 +256,7 @@ async def _collect_new_ids_raw(
     new_params: dict,
     *,
     max_ids: int,
+    use_slot: bool = True,
 ) -> tuple[list[str], int]:
     """Paginate /auto/new/search (1-indexed, limit ≤ 50). Returns (ids, api_total)."""
     all_ids: list[str] = []
@@ -275,7 +265,10 @@ async def _collect_new_ids_raw(
 
     while len(all_ids) < max_ids:
         params = {**new_params, "page": api_page, "limit": 50}
-        async with acquire_auto_ria_slot():
+        if use_slot:
+            async with acquire_auto_ria_slot():
+                data = await client.search_new(params)
+        else:
             data = await client.search_new(params)
 
         if api_page == 1:
@@ -294,6 +287,86 @@ async def _collect_new_ids_raw(
         api_page += 1
 
     return all_ids, total
+
+
+async def _new_model_ids_for_search(
+    client: AutoRiaClient,
+    used_params: dict,
+    filters: SearchFilters,
+) -> list[int]:
+    """modelId з params + successor IDs для нових авто (A4→A5)."""
+    primary: list[int] = []
+    raw = used_params.get("model_id[0]")
+    if raw:
+        try:
+            mid = int(raw)
+        except (TypeError, ValueError):
+            mid = 0
+        if mid:
+            primary.append(mid)
+    if not ((filters.brand or "").strip() and (filters.model or "").strip()):
+        return primary
+    try:
+        from app.services.auto_ria.catalog import resolve_new_search_model_ids
+
+        extra = await resolve_new_search_model_ids(
+            client, filters.brand or "", filters.model or ""
+        )
+    except Exception:
+        extra = []
+    if not extra:
+        return primary
+    seen = set(primary)
+    out = list(primary)
+    for mid in extra:
+        if mid not in seen:
+            seen.add(mid)
+            out.append(mid)
+    return out
+
+
+async def _collect_new_ids_expanded(
+    client: AutoRiaClient,
+    used_params: dict,
+    filters: SearchFilters,
+    *,
+    max_ids: int,
+    use_slot: bool = True,
+) -> tuple[list[str], int]:
+    new_params = _build_new_search_params(used_params)
+    model_ids = await _new_model_ids_for_search(client, used_params, filters)
+    if len(model_ids) <= 1:
+        if model_ids:
+            new_params["modelId"] = model_ids[0]
+        return await _collect_new_ids_raw(
+            client, new_params, max_ids=max_ids, use_slot=use_slot
+        )
+
+    new_params.pop("modelId", None)
+    parts = await asyncio.gather(
+        *[
+            _collect_new_ids_raw(
+                client,
+                {**new_params, "modelId": mid},
+                max_ids=max_ids,
+                use_slot=use_slot,
+            )
+            for mid in model_ids
+        ]
+    )
+    seen: set[str] = set()
+    ids: list[str] = []
+    total = 0
+    for part_ids, part_total in parts:
+        total += int(part_total or 0)
+        for aid in part_ids:
+            if aid in seen:
+                continue
+            seen.add(aid)
+            ids.append(aid)
+            if len(ids) >= max_ids:
+                return ids, total
+    return ids, total
 
 
 def _interleave_two(a: list[str], b: list[str]) -> list[str]:
@@ -321,7 +394,7 @@ async def collect_auto_ria_ids(
 ) -> tuple[list[str], int]:
     """Collect AUTO.RIA listing IDs without hydrating details. Much faster than full search.
 
-    For "new": only GET /auto/new/search (ids tagged n:).
+    For "new": used /auto/search (≤1000 км, будь-який рік) + /auto/new/search.
     For "all": used /auto/search + new /auto/new/search interleaved.
     """
     client = AutoRiaClient()
@@ -333,24 +406,17 @@ async def collect_auto_ria_ids(
     sort_newest = sort_by in ("newest", "published_desc")
     category = (filters.category or "all").strip().lower()
 
-    if category == "new":
-        new_params = _build_new_search_params(base_params)
-        new_ids, new_total = await _collect_new_ids_raw(client, new_params, max_ids=max_ids)
-        return [f"n:{aid}" for aid in new_ids], new_total
-
-    if category == "all":
+    if category in {"new", "all"}:
         # Два паралельних запити:
-        #   1. /auto/search (searchType=4) — вживані/приватні
-        #   2. /auto/new/search — нові авто від дилерів (справжній окремий endpoint)
+        #   1. /auto/search — для «new» уже raceTo=1 (≤1000 км, без підлоги року)
+        #   2. /auto/new/search — нові авто від дилерів
         half = max(max_ids // 2, 50)
-        new_params = _build_new_search_params(base_params)
 
         (used_ids, used_total), (new_ids, new_total) = await asyncio.gather(
             _collect_ids_raw(client, base_params, max_ids=half, sort_newest=sort_newest),
-            _collect_new_ids_raw(client, new_params, max_ids=half),
+            _collect_new_ids_expanded(client, base_params, filters, max_ids=half),
         )
 
-        # Нові авто позначаємо префіксом "n:" — щоб пул-кеш знав який endpoint використовувати
         tagged_new_ids = [f"n:{aid}" for aid in new_ids]
 
         seen: set[str] = set()

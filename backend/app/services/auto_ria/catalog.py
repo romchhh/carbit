@@ -125,6 +125,48 @@ def _model_catalog_match(
     return False
 
 
+async def resolve_named_model_id(client: AutoRiaClient, mark_id: int, model: str) -> int | None:
+    """Exact / normalized name first — so «C-Class All-Terrain» ≠ shortest «C-Class»."""
+    if not model:
+        return None
+    target = norm_text(model)
+    target_key = _normalize_model_key(model)
+    models = await _load_models(client, mark_id)
+    for item in models:
+        name = str(item.get("name", ""))
+        if norm_text(name) == target:
+            return int(item["value"])
+    for item in models:
+        name = str(item.get("name", ""))
+        if target_key and _normalize_model_key(name) == target_key:
+            return int(item["value"])
+    return await resolve_model_id(client, mark_id, model)
+
+
+async def resolve_new_search_model_ids(
+    client: AutoRiaClient,
+    brand: str,
+    model: str,
+) -> list[int]:
+    """Primary model plus new-generation aliases (A4→A5, C-Class→CLE)."""
+    if not brand or not model:
+        return []
+    mark_id = await resolve_mark_id(client, brand)
+    if mark_id is None:
+        return []
+    from app.services.search.new_generation import new_generation_models
+
+    ids: list[int] = []
+    seen: set[int] = set()
+    for name in new_generation_models(brand, model):
+        mid = await resolve_named_model_id(client, mark_id, name)
+        if mid is None or mid in seen:
+            continue
+        seen.add(mid)
+        ids.append(mid)
+    return ids
+
+
 async def resolve_model_id(client: AutoRiaClient, mark_id: int, model: str) -> int | None:
     if not model:
         return None

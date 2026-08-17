@@ -27,17 +27,25 @@ export function listingSourceLabel(source: string): string {
   return source.toUpperCase();
 }
 
-/** Нові з салону: каталог AUTO.RIA /new і весь uDrive, рік від 2020. */
+/** Нові з салону: AUTO.RIA з пробігом ≤1000 км (будь-який рік), каталог /new, uDrive від 2020. */
 export function listingIsNewCar(listing: {
   id?: string | null;
   source?: string | null;
   year?: number | null;
+  mileage?: number | null;
 }): boolean {
-  const year = Number(listing.year) || 0;
-  if (year > 0 && year < 2020) return false;
   const id = listing.id || "";
+  const source = (listing.source || "").toLowerCase();
+  const mileage = Number(listing.mileage) || 0;
+  const year = Number(listing.year) || 0;
+  const fromAutoRia =
+    source === "auto_ria" ||
+    id.startsWith("new_auto_ria_") ||
+    id.startsWith("auto_ria_");
+  if (fromAutoRia && mileage <= 1000) return true;
+  if (year > 0 && year < 2020) return false;
   if (id.startsWith("new_auto_ria_") || id.startsWith("udrive_")) return true;
-  return (listing.source || "").toLowerCase() === "udrive";
+  return source === "udrive";
 }
 
 export function listingSourceIcon(source: string): string | null {

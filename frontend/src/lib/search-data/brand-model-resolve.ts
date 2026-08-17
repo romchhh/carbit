@@ -51,6 +51,12 @@ export function normalizeSearchKey(raw: string): string {
     .replace(/&/g, " and ")
     .replace(/ё/g, "е");
 
+  // Кирилична «С-клас» = C-Class (С виглядає як C; трансліт С→s дав би S-Class).
+  text = text.replace(
+    /(^|[^a-z\u0400-\u04ff0-9])[сc][\s\-]*(class|klass|клас(?:с)?)(?![a-z\u0400-\u04ff0-9])/gi,
+    "$1c class",
+  );
+
   text = text.replace(/[a-z\u0400-\u04ff0-9]+/g, token => {
     if (/^[a-z0-9]+$/i.test(token)) return token;
     return token

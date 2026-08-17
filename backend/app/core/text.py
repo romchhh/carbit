@@ -17,6 +17,17 @@ _LETTER_CLASS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Кириличні літери, що виглядають як латинські класи Mercedes:
+# «С-клас» = C-Class (не S-Class: трансліт С→s тут хибний).
+_VISUAL_CLASS_LETTER = {
+    "а": "a",
+    "в": "b",
+    "с": "c",
+    "е": "e",
+    "г": "g",
+    "х": "x",
+}
+
 
 @lru_cache(maxsize=65536)
 def _norm_text_cached(value: str) -> str:
@@ -33,15 +44,24 @@ def norm_text(value: str | None) -> str:
 
 
 _LETTER_CLASS_SUB_RE = re.compile(
-    r"([a-z])[\s\-]*(?:class|klass|клас(?:с)?)\b",
+    r"([a-zавсгех])[\s\-]*(?:class|klass|клас(?:с)?)\b",
     re.IGNORECASE,
 )
+
+
+def _latin_class_letter(ch: str) -> str:
+    low = (ch or "").lower()
+    return _VISUAL_CLASS_LETTER.get(low, low)
+
+
+def _sub_letter_class(match: re.Match[str]) -> str:
+    return f"{_latin_class_letter(match.group(1))} class"
 
 
 @lru_cache(maxsize=65536)
 def _unify_class_spelling_cached(text: str) -> str:
     t = norm_text(text)
-    t = _LETTER_CLASS_SUB_RE.sub(r"\1 class", t)
+    t = _LETTER_CLASS_SUB_RE.sub(_sub_letter_class, t)
     t = _CLASS_WORD_RE.sub(" class ", t)
     return " ".join(t.split())
 
@@ -97,6 +117,8 @@ def letter_class_search_tokens(letter: str) -> tuple[str, ...]:
         f"{u} Класс",
         f"{u} Клас",
     ]
+    if l == "c":
+        tokens.extend(["с-клас", "С-клас", "с клас", "С клас", "с-класс", "С-класс"])
     if l == "g":
         tokens.extend(["гелик", "gelik", "G-Класс", "G-Клас", "G Класс"])
     seen: set[str] = set()
