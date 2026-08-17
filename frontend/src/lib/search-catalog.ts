@@ -349,12 +349,14 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
         item.id.startsWith("new_auto_ria_") ||
         item.id.startsWith("udrive_") ||
         item.src === "uDrive";
+      const tooOld = item.year > 0 && item.year < 2020;
       const isNewMileage = item.mileage > 0 && item.mileage <= 1000;
       const isNewText =
         /(з\s+салону|без\s+проб[іi]гу|без\s+пробега|0\s*км|нове\s+авто|новий\s+автомобіль)/i.test(
           desc,
         );
-      const isNew = fromNewCatalog || isNewMileage || (item.mileage === 0 && isNewText);
+      const isNew =
+        !tooOld && (fromNewCatalog || isNewMileage || (item.mileage === 0 && isNewText));
       if (filters.category === "import" && (fromNewCatalog || !isImport)) return false;
       if (filters.category === "new") {
         if (!isNew) return false;

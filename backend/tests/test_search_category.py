@@ -55,9 +55,14 @@ class CategoryMatchTests(unittest.TestCase):
         self.assertFalse(listing_matches_category(item, "used"))
 
     def test_new_by_mileage(self):
-        item = _item(mileage=200, title="Audi A4")
+        item = _item(mileage=200, title="Audi A4", year=2024)
         self.assertTrue(listing_matches_category(item, "new"))
         self.assertFalse(listing_matches_category(item, "used"))
+
+    def test_new_rejects_before_2020(self):
+        item = _item(mileage=200, title="Audi A4 з салону", year=2019)
+        self.assertFalse(listing_matches_category(item, "new"))
+        self.assertTrue(listing_matches_category(item, "used"))
 
     def test_new_rejects_high_mileage_even_with_novyi_word(self):
         item = _item(mileage=90000, title="BMW 320 як новий")
@@ -69,26 +74,36 @@ class CategoryMatchTests(unittest.TestCase):
         self.assertFalse(listing_matches_category(item, "new"))
 
     def test_new_zero_mileage_with_salon_marker(self):
-        item = _item(mileage=0, title="Toyota Camry з салону")
+        item = _item(mileage=0, title="Toyota Camry з салону", year=2024)
         self.assertTrue(listing_matches_category(item, "new"))
         self.assertFalse(listing_matches_category(item, "used"))
 
     def test_new_auto_ria_catalog_id_counts_as_new(self):
-        item = _item(id="new_auto_ria_555", title="BMW X5", mileage=0)
+        item = _item(id="new_auto_ria_555", title="BMW X5", mileage=0, year=2025)
         self.assertTrue(listing_matches_category(item, "new"))
         self.assertFalse(listing_matches_category(item, "used"))
 
+    def test_new_auto_ria_catalog_rejects_before_2020(self):
+        item = _item(id="new_auto_ria_555", title="BMW X5", mileage=0, year=2018)
+        self.assertFalse(listing_matches_category(item, "new"))
+        self.assertTrue(listing_matches_category(item, "used"))
+
     def test_udrive_always_counts_as_new(self):
-        item = _item(id="udrive_abc", source="udrive", title="Audi A5", mileage=0)
+        item = _item(id="udrive_abc", source="udrive", title="Audi A5", mileage=0, year=2024)
         self.assertTrue(listing_matches_category(item, "all"))
         self.assertTrue(listing_matches_category(item, "new"))
         self.assertFalse(listing_matches_category(item, "used"))
         self.assertFalse(listing_matches_category(item, "import"))
 
     def test_udrive_new_even_with_nonzero_mileage(self):
-        item = _item(id="udrive_abc", source="udrive", title="Audi A5", mileage=50)
+        item = _item(id="udrive_abc", source="udrive", title="Audi A5", mileage=50, year=2025)
         self.assertTrue(listing_matches_category(item, "new"))
         self.assertFalse(listing_matches_category(item, "used"))
+
+    def test_udrive_rejects_before_2020(self):
+        item = _item(id="udrive_abc", source="udrive", title="Audi A5", mileage=0, year=2019)
+        self.assertFalse(listing_matches_category(item, "new"))
+        self.assertTrue(listing_matches_category(item, "used"))
 
     def test_used(self):
         item = _item(mileage=90000)
@@ -128,6 +143,7 @@ class AutoRiaCategoryParamsTests(unittest.IsolatedAsyncioTestCase):
         new = await fake_params("new")
         self.assertEqual(new.get("searchType"), 1)
         self.assertEqual(new.get("raceTo"), 1)
+        self.assertEqual(new.get("s_yers[0]"), 2020)
 
         imp = await fake_params("import")
         self.assertEqual(imp.get("custom"), 1)
@@ -160,7 +176,7 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
                 return_value={"marka_id[0]": 9},
             ), patch(
                 "app.services.auto_ria.service.new_info_to_listing",
-                return_value=_item(id="new_auto_ria_555", title="BMW X5", mileage=0),
+                return_value=_item(id="new_auto_ria_555", title="BMW X5", mileage=0, year=2025),
             ):
                 body = await _search_auto_ria_body(
                     SearchFilters(category="new", brand="BMW"),
@@ -200,6 +216,7 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
                     title="BMW 5 Series",
                     model="5 Series",
                     mileage=0,
+                    year=2025,
                 ),
             ):
                 body = await _search_auto_ria_body(

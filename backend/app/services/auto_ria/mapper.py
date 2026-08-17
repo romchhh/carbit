@@ -206,11 +206,19 @@ async def filters_to_search_params(
         params["searchType"] = 4
         params["custom"] = 0
     elif category == "new":
-        # Нові = пробіг до 1000 км (race* — тисячі км). Не перебиваємо жорсткішим mileage_to.
+        # Нові = рік від 2020 + пробіг до 1000 км (race* — тисячі км).
         params["searchType"] = 1
         params["raceFrom"] = 0
         existing_to = params.get("raceTo")
         params["raceTo"] = 1 if existing_to is None else min(int(existing_to), 1)
+        from app.services.search.category import NEW_YEAR_MIN
+
+        existing_year_from = params.get("s_yers[0]")
+        params["s_yers[0]"] = (
+            NEW_YEAR_MIN
+            if existing_year_from is None
+            else max(int(existing_year_from), NEW_YEAR_MIN)
+        )
     elif category == "import":
         # Нерозмитнені / під пригон.
         params["searchType"] = 4
@@ -352,6 +360,30 @@ def _listing_price_from_info(info: dict[str, Any]) -> tuple[int, str]:
     return 0, "USD"
 
 
+# CDN нових AUTO.RIA: photosnewr/.../bmw-5-series__123 — без суфікса 404.
+# Робочі варіанти: -620x465x90.jpg, -1024x768.jpg, -b.jpg.
+_NEW_AUTO_PHOTO_SUFFIX = "-620x465x90.jpg"
+
+
+def _new_auto_photo_urls(photos: Any) -> list[str]:
+    urls: list[str] = []
+    if not isinstance(photos, list):
+        return urls
+    for raw in photos[:10]:
+        if not isinstance(raw, str):
+            continue
+        base = raw.strip()
+        if not base:
+            continue
+        if base.startswith("http"):
+            path = base.lower().split("?", 1)[0]
+            if path.endswith((".jpg", ".jpeg", ".webp")):
+                urls.append(base)
+                continue
+        urls.append(f"{base}{_NEW_AUTO_PHOTO_SUFFIX}")
+    return urls
+
+
 def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> ListingOut:
     auto_data = info.get("autoData") or {}
     state_data = info.get("stateData") or {}
@@ -459,7 +491,7 @@ def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
         price, currency = 0, "USD"
 
     photos = info.get("photos") or []
-    images = [f"{p}-680x510x85.jpg" for p in photos[:10] if p]
+    images = _new_auto_photo_urls(photos)
 
     city = str(salon.get("city") or "").strip()
     region = city or "Україна"

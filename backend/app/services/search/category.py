@@ -1,7 +1,8 @@
 """Фільтр категорії авто: всі / вживані / нові / під пригон.
 
-«Нові» = пробіг до 1000 км (включно), каталог AUTO.RIA /new, або весь uDrive
-(там лише нові авто з салону).
+«Нові» = рік від 2020, пробіг до 1000 км (включно), каталог AUTO.RIA /new,
+або uDrive (там лише нові з салону).
+Авто до 2020 року новими не вважаємо, навіть з нульовим пробігом.
 Оголошення без пробігу (0/порожньо) не вважаємо новими, якщо немає явних
 маркерів на кшталт «з салону» / «без пробігу» — інакше в «Нові» потрапляє
 весь вживаний парк із нерозпарсеним mileage.
@@ -15,6 +16,8 @@ from app.core.text import norm_text
 from app.schemas.schemas import ListingOut
 
 NEW_MILEAGE_MAX_KM = 1000
+# «Нові» лише з 2020 року: старіші з низьким пробігом / каталогу дилерів — це не новий парк.
+NEW_YEAR_MIN = 2020
 
 IMPORT_MARKERS = (
     "пригон",
@@ -81,6 +84,11 @@ def _from_new_catalog(item: ListingOut) -> bool:
     return False
 
 
+def _year_too_old_for_new(item: ListingOut) -> bool:
+    year = int(item.year or 0)
+    return 0 < year < NEW_YEAR_MIN
+
+
 def listing_matches_category(item: ListingOut, category: str | None) -> bool:
     key = (category or "all").strip().lower()
     if not key or key == "all":
@@ -91,14 +99,17 @@ def listing_matches_category(item: ListingOut, category: str | None) -> bool:
     looks_import = _looks_import(blob)
     looks_new_text = _looks_new_text(blob)
     from_new_catalog = _from_new_catalog(item)
+    too_old = _year_too_old_for_new(item)
     # 1..1000 км — однозначно «нові»; 0 км — лише з явним маркером (або каталог нових).
     looks_new_mileage = 0 < mileage <= NEW_MILEAGE_MAX_KM
     looks_new_zero = mileage == 0 and (looks_new_text or from_new_catalog)
-    looks_new = looks_new_mileage or looks_new_zero or from_new_catalog
+    looks_new = (looks_new_mileage or looks_new_zero or from_new_catalog) and not too_old
 
     if key == "import":
         return looks_import and not from_new_catalog
     if key == "new":
+        if too_old:
+            return False
         if looks_import and not from_new_catalog:
             return False
         if mileage > NEW_MILEAGE_MAX_KM and not from_new_catalog:

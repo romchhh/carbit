@@ -75,5 +75,19 @@ class AutoRiaModelResolveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(model_id, 104)
 
 
+class NewAutoPhotoUrlTests(unittest.TestCase):
+    def test_appends_newauto_cdn_suffix(self):
+        from app.services.auto_ria.mapper import _new_auto_photo_urls
+
+        base = "https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/bmw-5-series__3848966"
+        urls = _new_auto_photo_urls([base, f"{base}.jpg", ""])
+        self.assertEqual(
+            urls[0],
+            f"{base}-620x465x90.jpg",
+        )
+        self.assertEqual(urls[1], f"{base}.jpg")
+        self.assertEqual(len(urls), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
