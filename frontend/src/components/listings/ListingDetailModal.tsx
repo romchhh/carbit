@@ -1,18 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { IconGlobe, IconHeart, IconX, IconArrowLeft, IconArrowRight } from "@/components/icons";
+import { IconHeart, IconX, IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
 import {
-  ListingFoundOn,
+  ListingOpenCta,
   keepListingMirrors,
   listingSourceLinks,
 } from "@/components/listings/SourceLinks";
@@ -22,9 +21,6 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
   listingAttributionUrl,
-  listingOpenLabel,
-  listingSourceIcon,
-  listingSourceLabel,
   listingSourceSiteName,
 } from "@/lib/listing-source";
 import {
@@ -320,7 +316,6 @@ export function ListingDetailModal({
 
           <div className="flex items-center gap-3 px-3 pb-2.5 sm:px-4 sm:pb-3">
             <div className="min-w-0 flex-1 sm:hidden">
-              <ListingFoundOn listing={listing} className="mb-1" />
               <h2 className="truncate text-[15px] font-bold leading-snug text-ink">
                 {isNewCar && <strong className="text-blue-600">НОВИЙ </strong>}
                 {listing.title}
@@ -556,7 +551,6 @@ export function ListingDetailModal({
               <div className="w-1/2 min-w-0">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <ListingFoundOn listing={listing} badgeVariant="outline" className="mb-2" />
                     <h2 id="listing-modal-title" className="text-[20px] font-bold leading-snug text-ink">
                       {isNewCar && <strong className="text-blue-600">НОВИЙ </strong>}
                       {listing.title}
@@ -645,7 +639,6 @@ export function ListingDetailModal({
                   </p>
                 )}
               </div>
-              <ListingFoundOn listing={listing} badgeVariant="outline" />
             </div>
 
             {descriptionText && (
@@ -719,38 +712,14 @@ export function ListingDetailModal({
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {listingSourceLinks(listing).map((link, index) => {
-              const icon = listingSourceIcon(link.source);
-              return (
-                <Link
-                  key={`${link.source}-${link.url}-cta`}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={index === 0 ? "flex-1 sm:min-w-[240px]" : "sm:w-auto"}
-                >
-                  <Button
-                    variant={index === 0 ? "emerald" : "secondary"}
-                    size="lg"
-                    className={cn(
-                      "w-full gap-2 py-3 text-[15px] font-bold",
-                      index > 0 && "border-border text-ink",
-                    )}
-                  >
-                    {icon ? (
-                      <Image src={icon} alt="" width={18} height={18} className="rounded-sm object-contain" unoptimized />
-                    ) : (
-                      <IconGlobe size={18} />
-                    )}
-                    {index === 0
-                      ? listingOpenLabel(link.source)
-                      : `Також на ${listingSourceLabel(link.source)}`}
-                  </Button>
-                </Link>
-              );
-            })}
+            <ListingOpenCta listing={listing} className="flex-1 sm:min-w-[240px]" />
             {hasVinCheck(listing) && (
-              <VinCheckButton listing={listing} size="md" className="w-full sm:w-auto sm:min-w-[180px]" />
+              <VinCheckButton
+                listing={listing}
+                size="md"
+                showSummary
+                className="w-full sm:w-auto sm:min-w-[180px]"
+              />
             )}
           </div>
         </div>

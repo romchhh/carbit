@@ -52,6 +52,21 @@ async def _search_auto_ria_body(
 
     try:
         params = await filters_to_search_params(client, filters, page=page, per_page=per_page)
+    except ValueError as exc:
+        raise AutoRiaError(str(exc)) from exc
+
+    category = (filters.category or "all").strip().lower()
+    if category == "new":
+        return await _search_new_auto_ria_only(
+            client,
+            params,
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+        )
+
+    try:
         search_data = await client.search(params)
     except ValueError as exc:
         raise AutoRiaError(str(exc)) from exc
@@ -72,7 +87,6 @@ async def _search_auto_ria_body(
                 return None
 
     # Для категорії "all" паралельно тягнемо також нові авто від дилерів (/auto/new/search)
-    category = (filters.category or "all").strip().lower()
     new_car_task = None
     new_total = 0
     if category == "all" and page == 1:
@@ -120,6 +134,48 @@ async def _search_auto_ria_body(
 
     listings = [item for item in listings if listing_out_matches_filters(item, filters)]
 
+    pages = (total + per_page - 1) // per_page if total else 0
+    return PaginatedListings(
+        items=listings,
+        total=total,
+        page=page,
+        per_page=per_page,
+        pages=pages,
+    )
+
+
+async def _search_new_auto_ria_only(
+    client: AutoRiaClient,
+    used_params: dict,
+    filters: SearchFilters,
+    *,
+    page: int,
+    per_page: int,
+    sort_by: str,
+) -> PaginatedListings:
+    """Лише GET /auto/new/search + /auto/new/auto/{id} — без /auto/search."""
+    new_params = _build_new_search_params(used_params)
+    new_params.update({"page": max(page, 1), "limit": min(max(per_page, 1), 50)})
+    new_data = await client.search_new(new_params)
+    total = int(new_data.get("count") or 0)
+    auto_ids = [str(rid) for rid in (new_data.get("autos") or []) if rid][: max(per_page, 0)]
+
+    sem = asyncio.Semaphore(10)
+
+    async def fetch_one(auto_id: str) -> ListingOut | None:
+        async with sem:
+            try:
+                info = await client.get_new_info(auto_id)
+                return new_info_to_listing(info)
+            except Exception:
+                return None
+
+    listings = [item for item in await asyncio.gather(*(fetch_one(aid) for aid in auto_ids)) if item]
+    listings = sort_listings(listings, sort_by)
+
+    from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+    listings = [item for item in listings if listing_out_matches_filters(item, filters)]
     pages = (total + per_page - 1) // per_page if total else 0
     return PaginatedListings(
         items=listings,
@@ -257,8 +313,8 @@ async def collect_auto_ria_ids(
 ) -> tuple[list[str], int]:
     """Collect AUTO.RIA listing IDs without hydrating details. Much faster than full search.
 
-    For "all" category: two parallel searches — used (searchType=4) + new/dealer (searchType=1).
-    Returns (ids, api_total_combined).
+    For "new": only GET /auto/new/search (ids tagged n:).
+    For "all": used /auto/search + new /auto/new/search interleaved.
     """
     client = AutoRiaClient()
     try:
@@ -268,6 +324,11 @@ async def collect_auto_ria_ids(
 
     sort_newest = sort_by in ("newest", "published_desc")
     category = (filters.category or "all").strip().lower()
+
+    if category == "new":
+        new_params = _build_new_search_params(base_params)
+        new_ids, new_total = await _collect_new_ids_raw(client, new_params, max_ids=max_ids)
+        return [f"n:{aid}" for aid in new_ids], new_total
 
     if category == "all":
         # Два паралельних запити:

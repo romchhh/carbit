@@ -7,6 +7,57 @@ import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { cn } from "@/lib/utils";
 import type { VinCheckResult } from "@/types/api";
 
+const SEARCH_STEPS = [
+  "Перевіряємо Базу ДАІ…",
+  "Шукаємо аукціонну історію…",
+  "Збираємо фото та звіти…",
+] as const;
+
+function VinSearchPreloader({ vin }: { vin: string }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setElapsed(s => s + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const stepIndex = elapsed < 4 ? 0 : elapsed < 12 ? 1 : 2;
+
+  return (
+    <div className="flex flex-col items-center py-10 text-center" role="status" aria-live="polite">
+      <div
+        className="h-11 w-11 animate-spin rounded-full border-[3px] border-emerald/20 border-t-emerald"
+        aria-hidden
+      />
+      <p className="mt-4 text-[15px] font-semibold text-ink">Шукаємо авто за VIN…</p>
+      <p className="mt-1 font-mono text-[12px] tracking-wide text-muted">{vin}</p>
+      <p className="mt-4 text-[13px] font-medium text-emerald-dark">{SEARCH_STEPS[stepIndex]}</p>
+      <ul className="mt-4 space-y-1.5 text-[12px] text-muted">
+        {SEARCH_STEPS.map((label, idx) => (
+          <li
+            key={label}
+            className={cn(
+              "transition-colors",
+              idx === stepIndex && "font-semibold text-ink",
+              idx < stepIndex && "text-emerald-dark",
+            )}
+          >
+            {idx < stepIndex ? "✓ " : idx === stepIndex ? "● " : "○ "}
+            {label.replace("…", "")}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-5 text-[12px] text-muted">
+        {elapsed < 8
+          ? "Зазвичай кілька секунд"
+          : elapsed < 20
+            ? "Аукціонна історія ще завантажується…"
+            : "Ще шукаємо — не закривайте вікно"}
+      </p>
+    </div>
+  );
+}
+
 type Props = {
   vin: string | null;
   listingId?: string | null;
@@ -14,6 +65,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onChecked?: (result: VinCheckResult) => void;
+  onLoadingChange?: (loading: boolean) => void;
 };
 
 function Fact({ label, value }: { label: string; value?: string | number | null }) {
@@ -22,6 +74,46 @@ function Fact({ label, value }: { label: string; value?: string | number | null 
     <div>
       <dt className="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</dt>
       <dd className="mt-0.5 text-[14px] font-semibold text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function AuctionPhotoGrid({
+  photos,
+  alt,
+}: {
+  photos: { url: string; caption?: string | null }[];
+  alt?: string;
+}) {
+  if (photos.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-2 text-[12px] font-semibold text-ink">
+        Фото аукціону · {photos.length}
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {photos.map((photo, idx) => (
+          <a
+            key={`${photo.url}-${idx}`}
+            href={photo.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group block overflow-hidden rounded-lg"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photo.url}
+              alt={photo.caption || alt || `Фото ${idx + 1}`}
+              className="aspect-[4/3] w-full object-cover transition group-hover:opacity-90"
+            />
+            {photo.caption ? (
+              <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted">
+                {photo.caption}
+              </p>
+            ) : null}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -38,9 +130,19 @@ function isVinLimitError(err: unknown): err is ApiError {
   );
 }
 
-export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onChecked }: Props) {
+export function VinCheckPanel({
+  vin,
+  listingId,
+  fallbackUrl,
+  open,
+  onClose,
+  onChecked,
+  onLoadingChange,
+}: Props) {
   const titleId = useId();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(
+    () => open && Boolean(vin) && !getVinCheck(vin),
+  );
   const [error, setError] = useState<string | null>(null);
   const [limitReached, setLimitReached] = useState(false);
   const [data, setData] = useState<VinCheckResult | null>(null);
@@ -105,6 +207,10 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
     };
   }, [open, vin, listingId, onChecked]);
 
+  useEffect(() => {
+    onLoadingChange?.(open && Boolean(vin) && loading);
+  }, [open, vin, loading, onLoadingChange]);
+
   if (!open) return null;
 
   const regionLabel = data?.region?.name_ua || data?.region?.name || null;
@@ -131,7 +237,8 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-border bg-white shadow-xl sm:rounded-2xl"
+        aria-busy={Boolean(vin && loading)}
+        className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-border bg-white shadow-xl sm:max-w-2xl sm:rounded-2xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-border/70 px-5 py-4">
@@ -175,11 +282,7 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
             </div>
           )}
 
-          {vin && loading && (
-            <p className="py-8 text-center text-[14px] text-muted">
-              Запит до Бази ДАІ та аукціонної історії…
-            </p>
-          )}
+          {vin && loading && <VinSearchPreloader vin={vin} />}
 
           {vin && !loading && error && (
             <div className="space-y-4">
@@ -228,7 +331,8 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
                 </div>
               )}
 
-              {data.photo_url && (
+              {data.photo_url &&
+                !(data.auction?.photos || []).some(photo => photo.url === data.photo_url) && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={data.photo_url}
@@ -338,38 +442,20 @@ export function VinCheckPanel({ vin, listingId, fallbackUrl, open, onClose, onCh
                       {data.auction.meta_description}
                     </p>
                   )}
-                  {(data.auction.photos?.length ?? 0) > 0 ? (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {data.auction.photos.map((photo, idx) => (
-                        <a
-                          key={`${photo.url}-${idx}`}
-                          href={photo.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group block overflow-hidden rounded-lg"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={photo.url}
-                            alt={photo.caption || data.auction?.title || `Фото ${idx + 1}`}
-                            className="aspect-[4/3] w-full object-cover transition group-hover:opacity-90"
-                          />
-                          {photo.caption ? (
-                            <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted">
-                              {photo.caption}
-                            </p>
-                          ) : null}
-                        </a>
-                      ))}
-                    </div>
-                  ) : data.auction.photo_url && data.auction.photo_url !== data.photo_url ? (
+                  <AuctionPhotoGrid
+                    photos={data.auction.photos || []}
+                    alt={data.auction.title || title}
+                  />
+                  {!data.auction.photos?.length &&
+                    data.auction.photo_url &&
+                    data.auction.photo_url !== data.photo_url && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={data.auction.photo_url}
                       alt={data.auction.title || "Аукціонне фото"}
                       className="h-36 w-full rounded-xl object-cover object-center"
                     />
-                  ) : null}
+                  )}
                   <dl className="grid grid-cols-2 gap-3">
                     <Fact label="Дата продажу" value={data.auction.sale_date} />
                     <Fact

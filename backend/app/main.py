@@ -81,6 +81,13 @@ async def lifespan(_app: FastAPI):
     except Exception:
         logger.debug("Telethon shutdown failed", exc_info=True)
 
+    try:
+        from app.services.autohelperbot.scraper import close_shared_browser
+
+        await close_shared_browser()
+    except Exception:
+        logger.debug("VIN browser shutdown failed", exc_info=True)
+
 
 _init_sentry()
 

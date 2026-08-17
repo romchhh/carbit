@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 CACHE_HIT_TTL = 60 * 60 * 24 * 7
 CACHE_MISS_TTL = 60 * 60 * 12
-CACHE_PREFIX = "vin:auction:v2:"
+CACHE_PREFIX = "vin:auction:v3:"
 MISSING_MARKER = {"_missing": True}
 
 

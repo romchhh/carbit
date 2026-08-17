@@ -1596,6 +1596,11 @@ def _normalize_title_for_match(text: str) -> str:
 _NON_CAR_TITLE_RE = re.compile(
     r"(?i)(?:"
     r"коврик|килимок|килимки|автоковрик|eva\b|єва\b|"
+    r"органайзер|органайз|"
+    r"аксесуар|аксессуар|"
+    r"чохол|чехол|накидк|"
+    r"підлокітник|подлокотник|"
+    r"в багажник|для багажник|"
     r"фара\b|бампер|крило\b|капот|решітк|решетк|"
     r"запчаст|розборк|фаркоп|обвес|спойлер|дифузор|"
     r"шина\b|шини\b|диск[аи]\b|проставк|"
@@ -1796,11 +1801,12 @@ def _title_matches_brand_model(
 
 
 def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
+    if _is_non_car_listing(listing):
+        return False
+
     brand_hint = params.brand_label or None
     model_hint = params.model_label or None
     if params.text_query:
-        if _is_non_car_listing(listing):
-            return False
         if brand_hint or model_hint:
             if not _title_matches_brand_model(listing, brand=brand_hint, model=model_hint):
                 return False
@@ -1814,8 +1820,6 @@ def passes_olx_filters(listing: OlxListing, params: OlxSearchParams) -> bool:
         # Для /brand/model/ достатньо моделі в title (кемрі/camry…) —
         # OLX path уже відсікає чужі марки, API-query інколи шумить.
         if params.brand and params.model and model_hint:
-            if _is_non_car_listing(listing):
-                return False
             from app.services.search.brand_model_keywords import (
                 _haystacks_for_match,
                 text_matches_model_filter,

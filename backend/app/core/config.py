@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     BAZA_GAI_BASE_URL: str = "https://baza-gai.com.ua"
     # Аукціонна історія VIN через autohelperbot (Playwright)
     VIN_AUCTION_CHECK_ENABLED: bool = True
-    VIN_AUCTION_TIMEOUT_SECONDS: float = 90.0
+    VIN_AUCTION_TIMEOUT_SECONDS: float = 45.0
 
     # CORS
     ALLOWED_ORIGINS: list[str] = [

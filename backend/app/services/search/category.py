@@ -79,9 +79,11 @@ def listing_matches_category(item: ListingOut, category: str | None) -> bool:
     mileage = int(item.mileage or 0)
     looks_import = _looks_import(blob)
     looks_new_text = _looks_new_text(blob)
+    # Каталог нових AUTO.RIA (/auto/new) — дилерські авто з mileage=0 без тексту «з салону».
+    from_new_catalog = str(item.id or "").startswith("new_auto_ria_")
     # 1..1000 км — однозначно «нові»; 0 км — лише з явним маркером (або справді нуль).
     looks_new_mileage = 0 < mileage <= NEW_MILEAGE_MAX_KM
-    looks_new_zero = mileage == 0 and looks_new_text
+    looks_new_zero = mileage == 0 and (looks_new_text or from_new_catalog)
     looks_new = looks_new_mileage or looks_new_zero
 
     if key == "import":

@@ -1,12 +1,15 @@
 import type { VinCheckResult } from "@/types/api";
+import type { Listing } from "@/types/api";
+import { resolveListingVin } from "@/lib/vin-check";
 
-const KEY = "carbit:vin-checks:v2";
+const KEY = "carbit:vin-checks:v3";
 const MAX_ITEMS = 40;
 const EVENT = "carbit:vin-check-changed";
 
 export type StoredVinCheck = {
   vin: string;
   listingId?: string;
+  listingIds?: string[];
   checkedAt: string;
   result: VinCheckResult;
 };
@@ -30,6 +33,12 @@ function writeAll(data: Record<string, StoredVinCheck>) {
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
+function listingIdsOf(row: StoredVinCheck): string[] {
+  const ids = [...(row.listingIds || [])];
+  if (row.listingId && !ids.includes(row.listingId)) ids.push(row.listingId);
+  return ids;
+}
+
 /** Збережена перевірка за VIN (ключ — нормалізований VIN). */
 export function getVinCheck(vin: string | null | undefined): StoredVinCheck | null {
   const code = (vin || "").trim().toUpperCase();
@@ -39,15 +48,35 @@ export function getVinCheck(vin: string | null | undefined): StoredVinCheck | nu
   return row;
 }
 
+export function getVinCheckByListingId(listingId: string | null | undefined): StoredVinCheck | null {
+  const id = (listingId || "").trim();
+  if (!id) return null;
+  for (const row of Object.values(readAll())) {
+    if (!row?.result) continue;
+    if (listingIdsOf(row).includes(id)) return row;
+  }
+  return null;
+}
+
+/** Перевірка, закріплена за оголошенням: спочатку VIN, потім id картки. */
+export function getVinCheckForListing(listing: Listing): StoredVinCheck | null {
+  return getVinCheck(resolveListingVin(listing)) || getVinCheckByListingId(listing.id);
+}
+
 export function saveVinCheck(
   vin: string,
   result: VinCheckResult,
   listingId?: string | null,
 ): StoredVinCheck {
   const code = vin.trim().toUpperCase();
+  const prev = readAll()[code];
+  const listingIds = listingIdsOf(prev || { vin: code, checkedAt: "", result });
+  if (listingId && !listingIds.includes(listingId)) listingIds.push(listingId);
+
   const entry: StoredVinCheck = {
     vin: code,
-    listingId: listingId ?? undefined,
+    listingId: listingId ?? prev?.listingId ?? listingIds[0],
+    listingIds: listingIds.length ? listingIds : undefined,
     checkedAt: new Date().toISOString(),
     result,
   };

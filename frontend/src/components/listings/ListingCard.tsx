@@ -17,7 +17,7 @@ import {
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
-import { useVinCheckCache } from "@/hooks/useVinCheckCache";
+import { useListingVinCheck } from "@/hooks/useVinCheckCache";
 import { useListingPhotoHydration } from "@/hooks/useListingPhotoHydration";
 import { hasVinCheck, resolveListingVin } from "@/lib/vin-check";
 import { cn, formatMileage, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
@@ -72,7 +72,7 @@ export function ListingCard({
   const region = typeof listing.region === "string" ? listing.region : "";
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
   const resolvedVin = resolveListingVin(listing);
-  const cachedVinCheck = useVinCheckCache(resolvedVin);
+  const cachedVinCheck = useListingVinCheck(listing);
   const showVinBlock = Boolean(resolvedVin) || hasVinCheck(listing);
   const highlights = getAutoRiaHighlights(listing.source_data).slice(0, 3);
   const mileageKm = resolveListingMileage(listing);
@@ -159,17 +159,6 @@ export function ListingCard({
               <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
                 Новий
               </span>
-            )}
-            {hasMirrorSources ? (
-              <>
-                <SourceBadge source={listing.source} />
-                <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold text-indigo-700 shadow-sm">
-                  Також на
-                </span>
-                <SourceLinks listing={listing} iconOnly alternatesOnly />
-              </>
-            ) : (
-              <SourceBadge source={listing.source} />
             )}
           </div>
           <div className="flex items-center gap-1.5">
@@ -323,14 +312,6 @@ export function ListingCard({
                   Новий
                 </span>
               )}
-              {hasMirrorSources && (
-                <span className="hidden items-center gap-1.5 sm:inline-flex">
-                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                    Також на
-                  </span>
-                  <SourceLinks listing={listing} iconOnly alternatesOnly />
-                </span>
-              )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[15px] sm:line-clamp-1">
                 {isNewCar && (
                   <strong className="text-blue-600">НОВИЙ </strong>
@@ -421,9 +402,9 @@ export function ListingCard({
               )
             )}
           </div>
-          <span className="hidden items-center gap-1.5 sm:flex">
+          <span className="flex items-center gap-1.5">
             {hasMirrorSources && (
-              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+              <span className="hidden rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 sm:inline-flex">
                 VIN-дубль
               </span>
             )}
@@ -432,7 +413,7 @@ export function ListingCard({
             ) : (
               <SourceBadge source={listing.source} variant="outline" />
             )}
-            <span className="text-[11px] text-muted">{sellerLabel}</span>
+            <span className="hidden text-[11px] text-muted sm:inline">{sellerLabel}</span>
           </span>
           <span className="flex items-center gap-0.5 text-[12px] font-semibold text-emerald-dark sm:ml-auto">
             Деталі

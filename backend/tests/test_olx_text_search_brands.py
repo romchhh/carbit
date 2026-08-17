@@ -131,6 +131,23 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         )
         self.assertFalse(passes_olx_filters(scooter, nio))
 
+    def test_rejects_xiaomi_su7_trunk_organizer(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Xiaomi", model="SU7", currency="USD")
+        )
+        accessory = OlxListing(
+            title="Органайзер в багажник для Хаоті SU7 та YU7",
+            price="122",
+            currency="USD",
+        )
+        car = OlxListing(
+            title="Xiaomi SU7 2025",
+            price="35000",
+            currency="USD",
+        )
+        self.assertFalse(passes_olx_filters(accessory, params))
+        self.assertTrue(passes_olx_filters(car, params))
+
     def test_rejects_genesis_apartments(self):
         params = filters_to_olx_params(SearchFilters(brand="Genesis", currency="USD"))
         apt = OlxListing(

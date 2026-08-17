@@ -80,6 +80,7 @@ export default function VinCheckPage() {
   const [input, setInput] = useState("");
   const [activeVin, setActiveVin] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [limitReached, setLimitReached] = useState(false);
   const [quota, setQuota] = useState<VinQuotaStatus | null>(null);
@@ -116,6 +117,7 @@ export default function VinCheckPage() {
     setFormError(null);
     setLimitReached(false);
     setActiveVin(code);
+    setSearching(true);
     setPanelOpen(true);
   };
 
@@ -145,6 +147,7 @@ export default function VinCheckPage() {
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               value={input}
+              disabled={searching}
               onChange={e => {
                 setInput(e.target.value.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/gi, "").slice(0, 17));
                 setFormError(null);
@@ -156,13 +159,25 @@ export default function VinCheckPage() {
                 "w-full rounded-xl border border-border bg-white px-4 py-3 font-mono text-[15px] tracking-wide text-ink outline-none",
                 "placeholder:font-sans placeholder:tracking-normal placeholder:text-muted",
                 "focus:border-emerald focus:ring-2 focus:ring-emerald/20",
+                "disabled:bg-surface disabled:text-muted",
               )}
             />
             <button
               type="submit"
-              className="inline-flex shrink-0 items-center justify-center rounded-full bg-emerald px-5 py-3 text-[14px] font-bold text-white transition-colors hover:bg-emerald-dark sm:min-w-[140px]"
+              disabled={searching}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-emerald px-5 py-3 text-[14px] font-bold text-white transition-colors hover:bg-emerald-dark disabled:cursor-wait disabled:opacity-80 sm:min-w-[140px]"
             >
-              Перевірити
+              {searching ? (
+                <>
+                  <span
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                    aria-hidden
+                  />
+                  Пошук…
+                </>
+              ) : (
+                "Перевірити"
+              )}
             </button>
           </div>
           {quota && (
@@ -202,11 +217,14 @@ export default function VinCheckPage() {
       <VinCheckPanel
         vin={activeVin}
         open={panelOpen}
+        onLoadingChange={setSearching}
         onClose={() => {
           setPanelOpen(false);
+          setSearching(false);
           void refreshMeta();
         }}
         onChecked={() => {
+          setSearching(false);
           void refreshMeta();
         }}
       />

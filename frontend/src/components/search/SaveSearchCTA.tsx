@@ -72,7 +72,7 @@ export function SaveSearchCTA({
             onClick={handleConnectClick}
             disabled={saving || limitReached}
             className={cn(
-              "inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold transition-colors sm:w-auto",
+              "inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold transition-colors sm:w-auto sm:shrink-0",
               "disabled:cursor-not-allowed disabled:opacity-60",
               connected
                 ? "border border-border bg-white text-ink hover:bg-surface"
@@ -86,6 +86,11 @@ export function SaveSearchCTA({
                 ? "Моніторинг підключено"
                 : "Підключити моніторинг"}
           </button>
+          <p className="text-[12px] leading-snug text-muted sm:max-w-[240px] sm:text-right">
+            {connected
+              ? "Усі нові пропозиції приходитимуть у Telegram."
+              : "Отримуйте всі нові пропозиції, щойно вони з’являться на ринку."}
+          </p>
         </div>
 
         {successMessage && !connected && (

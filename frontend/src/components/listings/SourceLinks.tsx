@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import {
+  listingOpenLabel,
   listingSourceIcon,
   listingSourceLabel,
 } from "@/lib/listing-source";
-import { SourceBadge } from "@/components/listings/SourceBadge";
+import { Button } from "@/components/ui/Button";
+import { IconGlobe } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { Listing, ListingSourceLink } from "@/types/api";
 
@@ -85,30 +87,6 @@ export function keepListingMirrors(
   };
 }
 
-/** Основне джерело + «Також на» з підписами інших майданчиків. */
-export function ListingFoundOn({
-  listing,
-  className,
-  badgeVariant = "gray",
-}: {
-  listing: Listing;
-  className?: string;
-  badgeVariant?: "gray" | "outline";
-}) {
-  const alts = listingSourceLinks(listing, { alternatesOnly: true });
-  return (
-    <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
-      <SourceBadge source={listing.source} variant={badgeVariant} />
-      {alts.length > 0 ? (
-        <>
-          <span className="text-[11px] font-semibold text-indigo-700">Також на</span>
-          <SourceLinks listing={listing} alternatesOnly />
-        </>
-      ) : null}
-    </div>
-  );
-}
-
 type Props = {
   listing: Listing;
   className?: string;
@@ -170,6 +148,49 @@ export function SourceLinks({
             {!iconOnly && (
               <span className="text-[10px] font-semibold text-ink">{label}</span>
             )}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Кнопки «Відкрити на …» для кожного майданчика (без дубля «Також на» зверху). */
+export function ListingOpenCta({
+  listing,
+  className,
+}: {
+  listing: Listing;
+  className?: string;
+}) {
+  const links = listingSourceLinks(listing);
+  if (links.length === 0) return null;
+  return (
+    <div className={cn("flex flex-col gap-2", className)}>
+      {links.map((link, index) => {
+        const icon = listingSourceIcon(link.source);
+        return (
+          <a
+            key={`${link.source}-${link.url}`}
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button
+              variant={index === 0 ? "emerald" : "secondary"}
+              size="lg"
+              className={cn(
+                "w-full gap-2 py-3 text-[15px] font-bold",
+                index > 0 && "border-border text-ink",
+              )}
+            >
+              {icon ? (
+                <Image src={icon} alt="" width={18} height={18} className="rounded-sm object-contain" unoptimized />
+              ) : (
+                <IconGlobe size={18} />
+              )}
+              {listingOpenLabel(link.source)}
+            </Button>
           </a>
         );
       })}
