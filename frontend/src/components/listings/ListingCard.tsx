@@ -314,9 +314,6 @@ export function ListingCard({
                 </span>
               )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[15px] sm:line-clamp-1">
-                {isNewCar && (
-                  <strong className="text-blue-600">НОВИЙ </strong>
-                )}
                 {listing.title}
               </h3>
             </div>
