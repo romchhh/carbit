@@ -89,6 +89,15 @@ def normalize_sources(sources: list[str] | None) -> list[str]:
     return deduped or default
 
 
+def sources_for_filters(filters: SearchFilters) -> list[str]:
+    """uDrive — лише нові авто: не смикаємо API для «вживані» / «під пригон»."""
+    sources = normalize_sources(filters.sources)
+    category = (filters.category or "all").strip().lower()
+    if category in {"used", "import"}:
+        return [source for source in sources if source != "udrive"]
+    return sources
+
+
 def _empty_page(page: int, per_page: int) -> PaginatedListings:
     return PaginatedListings(items=[], total=0, page=page, per_page=per_page, pages=0)
 
@@ -712,7 +721,7 @@ async def search_listings_outcome(
     from app.services.search.brand_model_keywords import normalize_search_filters
 
     filters = normalize_search_filters(filters)
-    sources = normalize_sources(filters.sources)
+    sources = sources_for_filters(filters)
     source_statuses: list[SourceSearchStatus] = []
     max_age = _published_max_age(filters)
 
@@ -1482,7 +1491,7 @@ async def build_live_search_pool(
     from app.services.auto_ria.service import collect_auto_ria_ids
     from app.services.search.pool_cache import LIVE_POOL_SIZE as POOL_LIMIT, filter_auto_ria_ids_by_filters
 
-    sources = normalize_sources(filters.sources)
+    sources = sources_for_filters(filters)
     source_statuses: list[SourceSearchStatus] = []
     errors: list[Exception] = []
 

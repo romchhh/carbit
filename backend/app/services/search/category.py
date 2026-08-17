@@ -1,6 +1,7 @@
 """Фільтр категорії авто: всі / вживані / нові / під пригон.
 
-«Нові» = пробіг до 1000 км (включно).
+«Нові» = пробіг до 1000 км (включно), каталог AUTO.RIA /new, або весь uDrive
+(там лише нові авто з салону).
 Оголошення без пробігу (0/порожньо) не вважаємо новими, якщо немає явних
 маркерів на кшталт «з салону» / «без пробігу» — інакше в «Нові» потрапляє
 весь вживаний парк із нерозпарсеним mileage.
@@ -70,6 +71,16 @@ def _looks_new_text(blob: str) -> bool:
     return bool(_NEW_TEXT_RE.search(blob))
 
 
+def _from_new_catalog(item: ListingOut) -> bool:
+    """Джерела, де всі авто нові з салону (не евристика по пробігу)."""
+    if str(item.id or "").startswith("new_auto_ria_"):
+        return True
+    source = (item.source or "").strip().lower()
+    if source == "udrive" or str(item.id or "").startswith("udrive_"):
+        return True
+    return False
+
+
 def listing_matches_category(item: ListingOut, category: str | None) -> bool:
     key = (category or "all").strip().lower()
     if not key or key == "all":
@@ -79,19 +90,18 @@ def listing_matches_category(item: ListingOut, category: str | None) -> bool:
     mileage = int(item.mileage or 0)
     looks_import = _looks_import(blob)
     looks_new_text = _looks_new_text(blob)
-    # Каталог нових AUTO.RIA (/auto/new) — дилерські авто з mileage=0 без тексту «з салону».
-    from_new_catalog = str(item.id or "").startswith("new_auto_ria_")
-    # 1..1000 км — однозначно «нові»; 0 км — лише з явним маркером (або справді нуль).
+    from_new_catalog = _from_new_catalog(item)
+    # 1..1000 км — однозначно «нові»; 0 км — лише з явним маркером (або каталог нових).
     looks_new_mileage = 0 < mileage <= NEW_MILEAGE_MAX_KM
     looks_new_zero = mileage == 0 and (looks_new_text or from_new_catalog)
-    looks_new = looks_new_mileage or looks_new_zero
+    looks_new = looks_new_mileage or looks_new_zero or from_new_catalog
 
     if key == "import":
-        return looks_import
+        return looks_import and not from_new_catalog
     if key == "new":
-        if looks_import:
+        if looks_import and not from_new_catalog:
             return False
-        if mileage > NEW_MILEAGE_MAX_KM:
+        if mileage > NEW_MILEAGE_MAX_KM and not from_new_catalog:
             return False
         return looks_new
     if key == "used":

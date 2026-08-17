@@ -78,6 +78,18 @@ class CategoryMatchTests(unittest.TestCase):
         self.assertTrue(listing_matches_category(item, "new"))
         self.assertFalse(listing_matches_category(item, "used"))
 
+    def test_udrive_always_counts_as_new(self):
+        item = _item(id="udrive_abc", source="udrive", title="Audi A5", mileage=0)
+        self.assertTrue(listing_matches_category(item, "all"))
+        self.assertTrue(listing_matches_category(item, "new"))
+        self.assertFalse(listing_matches_category(item, "used"))
+        self.assertFalse(listing_matches_category(item, "import"))
+
+    def test_udrive_new_even_with_nonzero_mileage(self):
+        item = _item(id="udrive_abc", source="udrive", title="Audi A5", mileage=50)
+        self.assertTrue(listing_matches_category(item, "new"))
+        self.assertFalse(listing_matches_category(item, "used"))
+
     def test_used(self):
         item = _item(mileage=90000)
         self.assertTrue(listing_matches_category(item, "used"))

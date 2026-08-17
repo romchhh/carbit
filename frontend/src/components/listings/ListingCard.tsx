@@ -17,6 +17,7 @@ import {
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
+import { listingIsNewCar } from "@/lib/listing-source";
 import { useListingVinCheck } from "@/hooks/useVinCheckCache";
 import { useListingPhotoHydration } from "@/hooks/useListingPhotoHydration";
 import { hasVinCheck, resolveListingVin } from "@/lib/vin-check";
@@ -86,7 +87,7 @@ export function ListingCard({
   const timeBadgeDate = listing.published_at;
   const hasMirrorSources = (listing.alternate_sources?.length ?? 0) > 0;
   const isNewForMonitor = Boolean(listing.is_new);
-  const isNewCar = listing.id?.startsWith("new_auto_ria_");
+  const isNewCar = listingIsNewCar(listing);
   const [photoIndex, setPhotoIndex] = useState(0);
   const photoCount = images.length;
   const safeIndex = photoCount > 0 ? ((photoIndex % photoCount) + photoCount) % photoCount : 0;

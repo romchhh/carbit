@@ -345,14 +345,21 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
     if (filters.category && filters.category !== "all") {
       const desc = `${item.title} ${item.desc ?? ""}`.toLowerCase();
       const isImport = /пригон|нерозмит|єврономер|еврономер/.test(desc);
+      const fromNewCatalog =
+        item.id.startsWith("new_auto_ria_") ||
+        item.id.startsWith("udrive_") ||
+        item.src === "uDrive";
       const isNewMileage = item.mileage > 0 && item.mileage <= 1000;
       const isNewText =
         /(з\s+салону|без\s+проб[іi]гу|без\s+пробега|0\s*км|нове\s+авто|новий\s+автомобіль)/i.test(
           desc,
         );
-      const isNew = isNewMileage || (item.mileage === 0 && isNewText);
-      if (filters.category === "import" && !isImport) return false;
-      if (filters.category === "new" && (isImport || !isNew || item.mileage > 1000)) return false;
+      const isNew = fromNewCatalog || isNewMileage || (item.mileage === 0 && isNewText);
+      if (filters.category === "import" && (fromNewCatalog || !isImport)) return false;
+      if (filters.category === "new") {
+        if (!isNew) return false;
+        if (!fromNewCatalog && (isImport || item.mileage > 1000)) return false;
+      }
       if (filters.category === "used" && (isImport || isNew)) return false;
     }
     return true;

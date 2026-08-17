@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
   listingAttributionUrl,
+  listingIsNewCar,
   listingSourceSiteName,
 } from "@/lib/listing-source";
 import {
@@ -80,7 +81,7 @@ export function ListingDetailModal({
   photoIndexRef.current = photoIndex;
 
   const listing = liveListing ?? listingProp;
-  const isNewCar = listing?.id?.startsWith("new_auto_ria_");
+  const isNewCar = listing ? listingIsNewCar(listing) : false;
   const { compareIds, toggle: toggleCompare, isFull } = useListingCompare();
 
   useEffect(() => {

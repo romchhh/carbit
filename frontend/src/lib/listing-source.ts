@@ -27,6 +27,16 @@ export function listingSourceLabel(source: string): string {
   return source.toUpperCase();
 }
 
+/** Нові з салону: каталог AUTO.RIA /new і весь uDrive. */
+export function listingIsNewCar(listing: {
+  id?: string | null;
+  source?: string | null;
+}): boolean {
+  const id = listing.id || "";
+  if (id.startsWith("new_auto_ria_") || id.startsWith("udrive_")) return true;
+  return (listing.source || "").toLowerCase() === "udrive";
+}
+
 export function listingSourceIcon(source: string): string | null {
   const key = source as keyof typeof SOURCE_ICON_KEYS;
   if (key in SOURCE_ICON_KEYS) return SOURCE_ICON_KEYS[key];
