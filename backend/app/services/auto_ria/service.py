@@ -25,6 +25,14 @@ def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
 
+def _new_search_ids(data: dict) -> list[str]:
+    """AUTO.RIA /auto/new/search віддає `ids`; старі приклади в документації мали `autos`."""
+    raw = data.get("ids")
+    if not raw:
+        raw = data.get("autos") or []
+    return [str(rid) for rid in raw if rid]
+
+
 async def _search_auto_ria_uncached(
     filters: SearchFilters,
     *,
@@ -100,7 +108,7 @@ async def _search_auto_ria_body(
                 async with acquire_auto_ria_slot():
                     new_data = await client.search_new(new_params)
                 new_total = int(new_data.get("count") or 0)
-                new_ids = [str(rid) for rid in (new_data.get("autos") or []) if rid][:new_cap]
+                new_ids = _new_search_ids(new_data)[:new_cap]
 
                 async def fetch_new_one(aid: str) -> ListingOut | None:
                     async with sem:
@@ -158,7 +166,7 @@ async def _search_new_auto_ria_only(
     new_params.update({"page": max(page, 1), "limit": min(max(per_page, 1), 50)})
     new_data = await client.search_new(new_params)
     total = int(new_data.get("count") or 0)
-    auto_ids = [str(rid) for rid in (new_data.get("autos") or []) if rid][: max(per_page, 0)]
+    auto_ids = _new_search_ids(new_data)[: max(per_page, 0)]
 
     sem = asyncio.Semaphore(10)
 
@@ -273,7 +281,7 @@ async def _collect_new_ids_raw(
         if api_page == 1:
             total = int(data.get("count") or 0)
 
-        raw_ids = data.get("autos") or []
+        raw_ids = _new_search_ids(data)
         if not raw_ids:
             break
 

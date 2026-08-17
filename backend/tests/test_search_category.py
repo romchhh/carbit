@@ -151,7 +151,7 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.auto_ria.service.AutoRiaClient") as client_cls:
             client = client_cls.return_value
             client.search = AsyncMock()
-            client.search_new = AsyncMock(return_value={"count": 1, "autos": [555]})
+            client.search_new = AsyncMock(return_value={"count": 1, "ids": [555]})
             client.get_new_info = AsyncMock(return_value=mock_info)
             client.get_info = AsyncMock()
             with patch(
@@ -180,6 +180,44 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(aid.startswith("n:") for aid in ids))
         self.assertEqual(len(body.items), 1)
         self.assertTrue(body.items[0].id.startswith("new_auto_ria_"))
+
+    async def test_new_search_reads_legacy_autos_key(self):
+        from app.services.auto_ria.service import _search_auto_ria_body
+
+        with patch("app.services.auto_ria.service.AutoRiaClient") as client_cls:
+            client = client_cls.return_value
+            client.search = AsyncMock()
+            client.search_new = AsyncMock(return_value={"count": 1, "autos": [777]})
+            client.get_new_info = AsyncMock(return_value={"autoId": 777})
+            with patch(
+                "app.services.auto_ria.service.filters_to_search_params",
+                new_callable=AsyncMock,
+                return_value={"marka_id[0]": 9},
+            ), patch(
+                "app.services.auto_ria.service.new_info_to_listing",
+                return_value=_item(
+                    id="new_auto_ria_777",
+                    title="BMW 5 Series",
+                    model="5 Series",
+                    mileage=0,
+                ),
+            ):
+                body = await _search_auto_ria_body(
+                    SearchFilters(category="new", brand="BMW", model="5 Series"),
+                    page=1,
+                    per_page=10,
+                )
+        client.get_new_info.assert_called()
+        self.assertEqual(len(body.items), 1)
+
+
+class NewSearchIdsParseTests(unittest.TestCase):
+    def test_prefers_ids_over_autos(self):
+        from app.services.auto_ria.service import _new_search_ids
+
+        self.assertEqual(_new_search_ids({"ids": [1, 2], "autos": [9]}), ["1", "2"])
+        self.assertEqual(_new_search_ids({"autos": [9, 8]}), ["9", "8"])
+        self.assertEqual(_new_search_ids({"count": 3}), [])
 
 
 if __name__ == "__main__":
