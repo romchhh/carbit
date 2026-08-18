@@ -90,11 +90,15 @@ def normalize_sources(sources: list[str] | None) -> list[str]:
 
 
 def sources_for_filters(filters: SearchFilters) -> list[str]:
-    """uDrive — лише нові авто: не смикаємо API для «вживані» / «під пригон»."""
+    """uDrive — лише нові; OLX для «Нові» не смикаємо (рідкі оголошення, часті таймаути)."""
     sources = normalize_sources(filters.sources)
     category = (filters.category or "all").strip().lower()
     if category in {"used", "import"}:
         return [source for source in sources if source != "udrive"]
+    if category == "new":
+        without_olx = [source for source in sources if source != "olx"]
+        if without_olx:
+            return without_olx
     return sources
 
 
