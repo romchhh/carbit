@@ -206,12 +206,16 @@ async def filters_to_search_params(
         params["searchType"] = 4
         params["custom"] = 0
     elif category == "new":
-        # Нові = пробіг до 1000 км (race* — тисячі км), без підлоги року:
-        # старі AUTO.RIA з ≤1000 км теж у «Нові».
+        # Нові = 2025–2026, пробіг до 1000 км (race* — тисячі км).
+        from app.services.search.category import new_category_year_bounds
+
         params["searchType"] = 1
         params["raceFrom"] = 0
         existing_to = params.get("raceTo")
         params["raceTo"] = 1 if existing_to is None else min(int(existing_to), 1)
+        yf, yt = new_category_year_bounds(filters.year_from, filters.year_to)
+        params["s_yers[0]"] = yf
+        params["po_yers[0]"] = yt
     elif category == "import":
         # Нерозмитнені / під пригон.
         params["searchType"] = 4

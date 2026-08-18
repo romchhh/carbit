@@ -246,19 +246,15 @@ async def filters_to_query_body(
     if model_ids:
         body["modelId"] = model_ids
 
-    from app.services.search.category import NEW_YEAR_MIN
-
-    category = (filters.category or "all").strip().lower()
     year_from = filters.year_from
-    if category == "new":
-        year_from = max(int(year_from or 0), NEW_YEAR_MIN)
+    year_to = filters.year_to
 
-    if year_from or filters.year_to:
+    if year_from or year_to:
         year_filter: dict[str, int] = {}
         if year_from:
             year_filter["from"] = year_from
-        if filters.year_to:
-            year_filter["to"] = filters.year_to
+        if year_to:
+            year_filter["to"] = year_to
         body["productionYear"] = year_filter
 
     filter_cur = resolve_filter_currency(filters.currency)

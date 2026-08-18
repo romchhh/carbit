@@ -1,5 +1,10 @@
 import type { ExportListing } from "@/lib/export-listings";
 import type { Listing } from "@/types/api";
+import {
+  NEW_CAR_MILEAGE_MAX_KM,
+  NEW_CAR_YEAR_MAX,
+  NEW_CAR_YEAR_MIN,
+} from "@/lib/listing-source";
 import { regionMatchesListing } from "@/lib/search-data/regions";
 import { resolveDisplayCurrency, resolveListingCurrency, toUah } from "@/lib/display-currency";
 
@@ -345,30 +350,19 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
     if (filters.category && filters.category !== "all") {
       const desc = `${item.title} ${item.desc ?? ""}`.toLowerCase();
       const isImport = /пригон|нерозмит|єврономер|еврономер/.test(desc);
-      const fromNewCatalog =
-        item.id.startsWith("new_auto_ria_") ||
-        item.id.startsWith("udrive_") ||
-        item.src === "uDrive";
-      const fromAutoRia =
-        item.src === "AUTO.RIA" ||
-        item.id.startsWith("new_auto_ria_") ||
-        item.id.startsWith("auto_ria_");
-      const tooOld =
-        item.year > 0 && item.year < 2020 && !(fromAutoRia && item.mileage <= 1000);
-      const isNewMileage = item.mileage > 0 && item.mileage <= 1000;
-      const isNewText =
-        /(з\s+салону|без\s+проб[іi]гу|без\s+пробега|0\s*км|нове\s+авто|новий\s+автомобіль)/i.test(
-          desc,
-        );
-      const isNew =
-        !tooOld &&
-        (fromNewCatalog ||
-          isNewMileage ||
-          (item.mileage === 0 && (isNewText || fromAutoRia)));
-      if (filters.category === "import" && (fromNewCatalog || !isImport)) return false;
+      const fromUdrive =
+        item.id.startsWith("udrive_") || item.src === "uDrive";
+      const fromNewAutoRia = item.id.startsWith("new_auto_ria_");
+      const yearOk =
+        item.year >= NEW_CAR_YEAR_MIN && item.year <= NEW_CAR_YEAR_MAX;
+      const isNewMileage = item.mileage <= NEW_CAR_MILEAGE_MAX_KM;
+      const isNew = fromUdrive || (yearOk && isNewMileage);
+      if (filters.category === "import" && (fromUdrive || fromNewAutoRia || !isImport))
+        return false;
       if (filters.category === "new") {
         if (!isNew) return false;
-        if (!fromNewCatalog && (isImport || item.mileage > 1000)) return false;
+        if (!fromUdrive && !fromNewAutoRia && (isImport || item.mileage > 1000))
+          return false;
       }
       if (filters.category === "used" && (isImport || isNew)) return false;
     }

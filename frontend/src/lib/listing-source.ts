@@ -27,25 +27,30 @@ export function listingSourceLabel(source: string): string {
   return source.toUpperCase();
 }
 
-/** Нові з салону: AUTO.RIA з пробігом ≤1000 км (будь-який рік), каталог /new, uDrive від 2020. */
+/** Нові = 2025–2026 і ≤1000 км; uDrive — завжди нові з салону. */
+export const NEW_CAR_YEAR_MIN = 2025;
+export const NEW_CAR_YEAR_MAX = 2026;
+export const NEW_CAR_MILEAGE_MAX_KM = 1000;
+
+function isUdriveListing(listing: {
+  id?: string | null;
+  source?: string | null;
+}): boolean {
+  const id = listing.id || "";
+  return id.startsWith("udrive_") || (listing.source || "").toLowerCase() === "udrive";
+}
+
 export function listingIsNewCar(listing: {
   id?: string | null;
   source?: string | null;
   year?: number | null;
   mileage?: number | null;
 }): boolean {
-  const id = listing.id || "";
-  const source = (listing.source || "").toLowerCase();
-  const mileage = Number(listing.mileage) || 0;
+  if (isUdriveListing(listing)) return true;
   const year = Number(listing.year) || 0;
-  const fromAutoRia =
-    source === "auto_ria" ||
-    id.startsWith("new_auto_ria_") ||
-    id.startsWith("auto_ria_");
-  if (fromAutoRia && mileage <= 1000) return true;
-  if (year > 0 && year < 2020) return false;
-  if (id.startsWith("new_auto_ria_") || id.startsWith("udrive_")) return true;
-  return source === "udrive";
+  const mileage = Number(listing.mileage) || 0;
+  if (year < NEW_CAR_YEAR_MIN || year > NEW_CAR_YEAR_MAX) return false;
+  return mileage <= NEW_CAR_MILEAGE_MAX_KM;
 }
 
 export function listingSourceIcon(source: string): string | null {

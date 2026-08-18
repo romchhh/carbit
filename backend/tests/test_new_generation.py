@@ -89,6 +89,7 @@ class NewGenerationAliasTests(unittest.TestCase):
             brand="Mercedes-Benz",
             model="CLE-Class",
             year=2026,
+            mileage=0,
         )
         self.assertTrue(
             listing_out_matches_filters(
@@ -104,6 +105,7 @@ class NewGenerationAliasTests(unittest.TestCase):
             brand="Mercedes-Benz",
             model="C-Class",
             year=2026,
+            mileage=0,
         )
         self.assertTrue(
             listing_out_matches_filters(

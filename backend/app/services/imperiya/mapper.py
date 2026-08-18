@@ -157,6 +157,13 @@ async def filters_to_search_params(
     if filters.year_to:
         params["yearTo"] = filters.year_to
 
+    if (filters.category or "").strip().lower() == "new":
+        from app.services.search.category import new_category_year_bounds
+
+        yf, yt = new_category_year_bounds(filters.year_from, filters.year_to)
+        params["yearFrom"] = yf
+        params["yearTo"] = yt
+
     filter_cur = resolve_filter_currency(filters.currency)
     if filters.price_from is not None:
         params["priceFrom"] = (

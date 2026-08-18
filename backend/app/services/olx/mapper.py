@@ -113,8 +113,13 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
         if filters.mileage_to is not None:
             params.mileage_to = max(filters.mileage_to // 1000, 0)
 
-    # Категорія «Нові» = пробіг до 1000 км (тис. у параметрах OLX).
+    # Категорія «Нові» = 2025–2026, пробіг до 1000 км (тис. у параметрах OLX).
     if (filters.category or "").strip().lower() == "new":
+        from app.services.search.category import new_category_year_bounds
+
+        yf, yt = new_category_year_bounds(filters.year_from, filters.year_to)
+        params.year_from = yf
+        params.year_to = yt
         current_to = params.mileage_to
         params.mileage_to = 1 if current_to is None else min(int(current_to), 1)
         if params.mileage_from is None:
