@@ -77,6 +77,9 @@ export type SearchFilterState = {
   powerUnit: "hp" | "kw";
   /** Оголошення, додані за останні N днів (порожньо = без обмеження). */
   publishedWithinDays: PublishedWithinDaysValue;
+  /** Кастомний діапазон публікації (datetime-local). */
+  publishedFrom: string;
+  publishedTo: string;
 };
 
 export type SortOption =
@@ -176,6 +179,19 @@ export const PUBLISHED_WITHIN_OPTIONS = [
   { value: "30" as PublishedWithinDaysValue, label: "За 30 днів" },
 ] as const;
 
+export const PUBLISHED_WITHIN_LABELS = PUBLISHED_WITHIN_OPTIONS.filter(o => o.value).map(
+  o => o.label,
+);
+
+export function publishedWithinDaysLabel(value: PublishedWithinDaysValue): string {
+  return PUBLISHED_WITHIN_OPTIONS.find(o => o.value === value)?.label ?? "Будь-коли";
+}
+
+export function publishedWithinDaysFromLabel(label: string): PublishedWithinDaysValue {
+  if (!label || label === "Будь-коли") return "";
+  return PUBLISHED_WITHIN_OPTIONS.find(o => o.label === label)?.value ?? "";
+}
+
 export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
   { value: "all", label: "Всі" },
   { value: "used", label: "Вживані" },
@@ -252,6 +268,8 @@ export const DEFAULT_FILTERS: SearchFilterState = {
   metallic: false,
   powerUnit: "hp",
   publishedWithinDays: "",
+  publishedFrom: "",
+  publishedTo: "",
 };
 
 export const CATALOG_LISTINGS: SearchResult[] = [
@@ -519,6 +537,8 @@ export function countAdvancedFilterFields(
       filters.bargain,
       fieldActive(filters.inCredit),
       fieldActive(filters.publishedWithinDays),
+      fieldActive(filters.publishedFrom),
+      fieldActive(filters.publishedTo),
     ].filter(Boolean).length;
   }
   return [fieldActive(filters.usaImport), fieldActive(filters.notCustoms)].filter(Boolean).length;

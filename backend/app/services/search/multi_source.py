@@ -268,11 +268,64 @@ def _merge_multi_source_page(
 def _published_max_age(filters: SearchFilters):
     from datetime import timedelta
 
+    if filters.published_from or filters.published_to:
+        return None
     if filters.published_within_hours:
         return timedelta(hours=filters.published_within_hours)
     if filters.published_within_days:
         return timedelta(days=filters.published_within_days)
     return None
+
+
+def _has_published_filter(filters: SearchFilters) -> bool:
+    return bool(
+        filters.published_within_hours
+        or filters.published_within_days
+        or filters.published_from
+        or filters.published_to
+    )
+
+
+def _filter_listings_by_published_range(
+    items: list[ListingOut],
+    published_from,
+    published_to,
+) -> list[ListingOut]:
+    if not published_from and not published_to:
+        return items
+
+    from app.core.timezone import as_kyiv
+
+    start = as_kyiv(published_from) if published_from else None
+    end = as_kyiv(published_to) if published_to else None
+    filtered: list[ListingOut] = []
+    for item in items:
+        try:
+            published = as_kyiv(item.published_at)
+        except Exception:
+            continue
+        if start and published < start:
+            continue
+        if end and published > end:
+            continue
+        filtered.append(item)
+    return filtered
+
+
+def _filter_listings_by_published_filters(
+    items: list[ListingOut],
+    filters: SearchFilters,
+) -> list[ListingOut]:
+    if filters.published_from or filters.published_to:
+        return _filter_listings_by_published_range(
+            items,
+            filters.published_from,
+            filters.published_to,
+        )
+    max_age = _published_max_age(filters)
+    if max_age:
+        return _filter_listings_by_published_age(items, max_age)
+    return items
 
 
 def _filter_listings_by_published_age(
@@ -760,13 +813,14 @@ async def search_listings_outcome(
     sources = sources_for_filters(filters)
     source_statuses: list[SourceSearchStatus] = []
     max_age = _published_max_age(filters)
+    has_published_filter = _has_published_filter(filters)
 
     if len(sources) == 1:
         source = sources[0]
         from app.services.search.filter_multi import needs_api_fanout
 
         try:
-            if max_age:
+            if has_published_filter:
                 raw = await _search_single_source(
                     source,
                     filters,
@@ -781,7 +835,7 @@ async def search_listings_outcome(
                     telegram_found_after=telegram_found_after,
                 )
                 filtered = sort_listings(
-                    _filter_listings_by_published_age(raw.items, max_age),
+                    _filter_listings_by_published_filters(raw.items, filters),
                     sort_by,
                 )
                 start = (page - 1) * per_page
@@ -846,7 +900,7 @@ async def search_listings_outcome(
         return SearchListingsOutcome(result=result, sources=source_statuses)
 
     # Для «Шукати всі» тягнемо пул з кожного джерела і змішуємо fair interleave
-    fetch_multiplier = 3 if max_age else 2
+    fetch_multiplier = 3 if has_published_filter else 2
     pool_need = min(SOURCE_POOL_CAP, per_page * max(page, 1) * fetch_multiplier)
     telegram_need = min(TELEGRAM_POOL_CAP, max(pool_need, per_page * max(page, 1) * 5))
     errors: list[Exception] = []
@@ -1096,10 +1150,10 @@ async def search_listings_outcome(
                 SourceSearchStatus(source="Telegram", item_count=len(telegram_out.items))
             )
 
-    if max_age:
+    if has_published_filter:
         filtered_batches: list[tuple[str, PaginatedListings]] = []
         for source, result in successful:
-            items = _filter_listings_by_published_age(result.items, max_age)
+            items = _filter_listings_by_published_filters(result.items, filters)
             filtered_batches.append(
                 (
                     source,

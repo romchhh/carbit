@@ -16,6 +16,7 @@ from app.services.telegram_channels.mapper import listing_out_matches_filters
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
     payload = {
         "source": "car_market",
+        "cm_v": "card-photo-v1",
         "filters": filters.model_dump(mode="json"),
         "page": page,
         "per_page": per_page,

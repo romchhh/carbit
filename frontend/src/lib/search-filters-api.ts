@@ -13,6 +13,7 @@ import {
   effectiveRegions,
   syncSearchFilterArrays,
 } from "@/lib/search-filter-multi";
+import { toLocalDateTimeInput } from "@/lib/published-date-filter";
 
 export type BackendSearchFilters = {
   brand?: string | null;
@@ -61,6 +62,8 @@ export type BackendSearchFilters = {
   metallic?: boolean | null;
   power_unit?: string | null;
   published_within_days?: number | null;
+  published_from?: string | null;
+  published_to?: string | null;
 };
 
 const SOURCE_TO_BACKEND: Record<string, string> = {
@@ -117,6 +120,13 @@ function parsePublishedWithinDays(value: PublishedWithinDaysValue): number | nul
   return Number.isFinite(n) ? n : null;
 }
 
+function parsePublishedDateTime(value: string): string | null {
+  if (!value.trim()) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 export function toBackendSearchFilters(filters: SearchFilterState): BackendSearchFilters {
   const synced = syncSearchFilterArrays(filters);
   const brands = effectiveBrands(synced);
@@ -124,6 +134,8 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
   const regions = effectiveRegions(synced);
   const mileageFrom = synced.zeroMileage ? 0 : parseThousandsKm(synced.mileageFrom);
   const mileageTo = synced.zeroMileage ? 500 : parseThousandsKm(synced.mileageTo);
+  const customPublished =
+    Boolean(synced.publishedFrom.trim()) || Boolean(synced.publishedTo.trim());
 
   return {
     brand: brands[0] || null,
@@ -171,7 +183,11 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
     not_customs: mapTri(synced.notCustoms),
     metallic: synced.metallic || null,
     power_unit: synced.powerUnit || "hp",
-    published_within_days: parsePublishedWithinDays(synced.publishedWithinDays),
+    published_within_days: customPublished
+      ? null
+      : parsePublishedWithinDays(synced.publishedWithinDays),
+    published_from: customPublished ? parsePublishedDateTime(synced.publishedFrom) : null,
+    published_to: customPublished ? parsePublishedDateTime(synced.publishedTo) : null,
   };
 }
 
@@ -266,6 +282,8 @@ export function mergeAiSearchFilters(
   if (raw.not_customs != null && String(raw.not_customs).trim()) next.notCustoms = parsed.notCustoms;
   if (raw.metallic === true) next.metallic = true;
   if (raw.published_within_days != null) next.publishedWithinDays = parsed.publishedWithinDays;
+  if (raw.published_from != null) next.publishedFrom = parsed.publishedFrom;
+  if (raw.published_to != null) next.publishedTo = parsed.publishedTo;
 
   return next;
 }
@@ -455,6 +473,8 @@ export function fromBackendSearchFilters(
       }
       return "" as PublishedWithinDaysValue;
     })(),
+    publishedFrom: raw.published_from ? toLocalDateTimeInput(String(raw.published_from)) : "",
+    publishedTo: raw.published_to ? toLocalDateTimeInput(String(raw.published_to)) : "",
   };
 }
 
@@ -505,6 +525,8 @@ const COMPARE_KEYS: (keyof BackendSearchFilters)[] = [
   "metallic",
   "power_unit",
   "published_within_days",
+  "published_from",
+  "published_to",
 ];
 
 function normalizeCompareSlice(filters: BackendSearchFilters): Record<string, unknown> {

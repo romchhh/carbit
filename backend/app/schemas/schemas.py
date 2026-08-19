@@ -226,6 +226,9 @@ class SearchFilters(BaseModel):
     power_unit: Optional[str] = None  # hp | kw
     # Тільки оголошення, опубліковані за останні N днів (напр. 7 = «тільки нові»)
     published_within_days: Optional[int] = Field(default=None, ge=1, le=90)
+    # Кастомний діапазон дати публікації (ISO datetime, Europe/Kyiv на бекенді)
+    published_from: Optional[datetime] = None
+    published_to: Optional[datetime] = None
     # Для моніторингу / Telegram: лише оголошення за останні N годин
     published_within_hours: Optional[int] = Field(default=None, ge=1, le=168)
 

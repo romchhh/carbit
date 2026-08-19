@@ -70,6 +70,62 @@ class CarMarketCar:
     details: dict = field(default_factory=dict)
 
 
+def _normalize_image_url(src: object) -> Optional[str]:
+    if not src or not isinstance(src, str):
+        return None
+    src = src.strip()
+    if not src or src.startswith("data:"):
+        return None
+    return src if src.startswith("http") else CAR_MARKET_BASE_URL + src
+
+
+def _img_src(img: Tag) -> Optional[str]:
+    for attr in ("src", "data-src", "data-lazy-src", "data-original"):
+        url = _normalize_image_url(img.get(attr))
+        if url:
+            return url
+    srcset = img.get("srcset") or img.get("data-srcset")
+    if srcset:
+        first = str(srcset).split(",")[0].strip().split()[0]
+        url = _normalize_image_url(first)
+        if url:
+            return url
+    return None
+
+
+def _card_container(a_tag: Tag) -> Optional[Tag]:
+    """Обгортка картки (фото в сусідньому <a>, не в текстовому)."""
+    node = a_tag.parent
+    while node is not None and hasattr(node, "get"):
+        if getattr(node, "name", None) != "div":
+            node = node.parent
+            continue
+        classes = node.get("class") or []
+        class_set = set(classes)
+        if "group" in class_set and any("rounded" in c for c in classes):
+            return node
+        node = node.parent
+    return None
+
+
+def _is_car_market_image(url: str) -> bool:
+    return "/uploads/cars/" in url or "/uploads/user/" in url
+
+
+def _image_from_card_context(a_tag: Tag) -> Optional[str]:
+    for img in a_tag.find_all("img", limit=3):
+        url = _img_src(img)
+        if url and _is_car_market_image(url):
+            return url
+    container = _card_container(a_tag)
+    if container:
+        for img in container.find_all("img", limit=5):
+            url = _img_src(img)
+            if url and _is_car_market_image(url):
+                return url
+    return None
+
+
 def parse_catalog_page(html: str) -> tuple[list[CarMarketCar], int]:
     soup = BeautifulSoup(html, "html.parser")
     total = 0
@@ -122,12 +178,7 @@ def _parse_card(a_tag: Tag, badges_before: list[str]) -> CarMarketCar | None:
     if id_match:
         car_id = int(id_match.group(1))
 
-    img = a_tag.find("img")
-    image_url = None
-    if img:
-        src = img.get("src") or img.get("data-src") or img.get("data-lazy-src")
-        if src:
-            image_url = src if src.startswith("http") else CAR_MARKET_BASE_URL + src
+    image_url = _image_from_card_context(a_tag)
 
     raw = a_tag.get_text(" ", strip=True)
     year_match = re.search(r"\b(19[5-9]\d|20[0-2]\d)\b", raw)

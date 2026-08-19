@@ -342,6 +342,7 @@ export function SearchFiltersPanel({
               searchable
               emptyLabel="Вся Україна"
             />
+
           </div>
 
           <div className="relative z-10 space-y-2 overflow-hidden rounded-b-[1.35rem] border-t border-border/60 bg-white px-3 py-3.5 sm:px-5">
