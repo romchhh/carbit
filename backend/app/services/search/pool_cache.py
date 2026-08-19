@@ -8,6 +8,7 @@ Slot-based pool format (Redis):
       {"s": "o", "d": {...listing}},      # OLX      — повний об'єкт
       {"s": "i", "d": {...listing}},      # Імперія  — повний об'єкт
       {"s": "u", "d": {...listing}},      # uDrive   — повний об'єкт
+      {"s": "c", "d": {...listing}},      # Car Market — повний об'єкт
       {"s": "t", "d": {...listing}},      # Telegram — повний об'єкт
       ...
     ],

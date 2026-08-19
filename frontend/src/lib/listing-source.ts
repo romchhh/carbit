@@ -14,6 +14,7 @@ const SOURCE_FILTER_LABEL_TO_KEY: Record<string, keyof typeof SOURCE_ICON_KEYS> 
   "AUTO.RIA": "auto_ria",
   OLX: "olx",
   "Імперія Авто": "imperiya",
+  "Car Market": "car_market",
   uDrive: "udrive",
   Telegram: "telegram",
 };
@@ -22,6 +23,7 @@ export function listingSourceLabel(source: string): string {
   if (source === "olx") return "OLX";
   if (source === "auto_ria") return "AUTO.RIA";
   if (source === "imperiya") return "Імперія Авто";
+  if (source === "car_market") return "Car Market";
   if (source === "udrive") return "uDrive";
   if (source === "telegram") return "Telegram";
   return source.toUpperCase();
@@ -79,6 +81,7 @@ export function listingAttributionUrl(source: string, listingUrl?: string): stri
   if (source === "olx") return "https://www.olx.ua";
   if (source === "auto_ria") return "https://auto.ria.com";
   if (source === "imperiya") return "https://imperiya-auto.com.ua";
+  if (source === "car_market") return "https://car-market.net";
   if (source === "udrive") return "https://udrive.com.ua";
   if (source === "telegram") return "https://t.me";
   return "#";

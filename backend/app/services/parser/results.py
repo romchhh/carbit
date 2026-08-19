@@ -107,6 +107,14 @@ def _sort_items(
             key=lambda row: (new_rank(row[0]), -listing_sort_date(row[0]).timestamp()),
         )
         return [item for item, _ in ordered]
+    if sort_by == "published_asc":
+        from app.services.listings.sort_dates import listing_sort_date
+
+        ordered = sorted(
+            items,
+            key=lambda row: (new_rank(row[0]), listing_sort_date(row[0]).timestamp()),
+        )
+        return [item for item, _ in ordered]
     ordered = sorted(items, key=lambda row: (new_rank(row[0]), -row[1].timestamp()))
     return [item for item, _ in ordered]
 

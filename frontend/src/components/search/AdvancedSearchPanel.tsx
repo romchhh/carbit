@@ -18,6 +18,7 @@ import {
   DRIVE_OPTIONS,
   FUEL_OPTIONS,
   OWNERS_FILTER_OPTIONS,
+  PUBLISHED_WITHIN_OPTIONS,
   SELLER_FILTER_OPTIONS,
   SOURCE_OPTIONS,
   TRANSMISSION_OPTIONS,
@@ -171,6 +172,16 @@ function ActiveSummary({
       key: "customs",
       label: filters.notCustoms === "show" ? "Нерозмитнені" : "Розмитнені",
       clear: () => onClearOne({ notCustoms: "" }),
+    });
+  }
+  if (filters.publishedWithinDays) {
+    const label =
+      PUBLISHED_WITHIN_OPTIONS.find(o => o.value === filters.publishedWithinDays)?.label ||
+      filters.publishedWithinDays;
+    chips.push({
+      key: "published",
+      label: `Додано: ${label}`,
+      clear: () => onClearOne({ publishedWithinDays: "" }),
     });
   }
 
@@ -424,6 +435,12 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
 
         <FilterAccordionSection title="Стан та історія" badge={conditionBadge} defaultOpen={false}>
           <div className="space-y-3 rounded-xl border border-border/60 bg-surface/20 p-3">
+            <FilterSegmentedRow
+              label="Дата додавання"
+              value={filters.publishedWithinDays}
+              options={PUBLISHED_WITHIN_OPTIONS}
+              onChange={publishedWithinDays => update({ publishedWithinDays })}
+            />
             <FilterSegmentedRow
               label="Участь у ДТП"
               value={filters.accident}

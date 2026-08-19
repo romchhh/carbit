@@ -7,6 +7,7 @@ import { ukPlural } from "@/lib/utils";
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "newest", label: "Спочатку нові" },
+  { value: "published_asc", label: "Спочатку старі" },
   { value: "price_asc", label: "Спочатку дешеві" },
   { value: "price_desc", label: "Спочатку дорогі" },
   { value: "year_desc", label: "За роком випуску" },

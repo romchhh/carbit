@@ -9,6 +9,7 @@ from app.services.olx.parser import (
     _listing_mileage_km,
     _parse_mileage_text,
     _parse_single_card,
+    _photos_from_embedded,
     build_search_url,
     parse_listing_page,
     passes_olx_filters,
@@ -64,6 +65,31 @@ def test_embedded_listing_enrichment():
     assert listing.city == "Київ"
     assert listing.mileage == "95 тис. км"
     assert listing.photo_url
+
+
+def test_photos_from_embedded_collects_all():
+    raw = {
+        "photos": [
+            {"link": "https://ireland.apollo.olxcdn.com/v1/files/a/image;s={width}x{height}"},
+            {"link": "https://ireland.apollo.olxcdn.com/v1/files/b/image;s={width}x{height}"},
+            {"url": "https://ireland.apollo.olxcdn.com/v1/files/c/image"},
+        ]
+    }
+    photos = _photos_from_embedded(raw)
+    assert len(photos) == 3
+    assert all("800x600" in url or "/files/c/" in url for url in photos)
+
+    listing = _listing_from_embedded(
+        {
+            "id": 1,
+            "url": "/d/uk/obyavlenie/test-ID1.html",
+            "title": "Test",
+            **raw,
+        }
+    )
+    assert listing is not None
+    assert len(listing.photos) == 3
+    assert listing.photo_url == listing.photos[0]
 
 
 def test_parse_listing_page_from_next_data():

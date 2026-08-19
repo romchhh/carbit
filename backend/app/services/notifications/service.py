@@ -661,6 +661,8 @@ def _notification_order_by(sort_by: str):
         return (nulls_last(desc(Listing.year)), desc(Notification.created_at))
     if sort_by == "mileage_asc":
         return (nulls_last(asc(Listing.mileage)), desc(Notification.created_at))
+    if sort_by == "published_asc":
+        return (nulls_last(asc(Listing.published_at)), asc(Notification.created_at))
     return (desc(Notification.created_at),)
 
 

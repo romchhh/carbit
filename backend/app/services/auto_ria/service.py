@@ -188,7 +188,7 @@ async def _collect_ids_raw(
     base_params: dict,
     *,
     max_ids: int,
-    sort_newest: bool = False,
+    sort_by: str = "newest",
 ) -> tuple[list[str], int]:
     """Paginate AUTO.RIA search with given params, return (ids, api_total). No get_info calls."""
     all_ids: list[str] = []
@@ -196,7 +196,12 @@ async def _collect_ids_raw(
     api_page = 0
 
     # order_by=7 → date_desc (найновіші); 8 = date_asc (найстаріші). НЕ плутати.
-    sort_patch: dict = {"order_by": 7} if sort_newest else {}
+    if sort_by in ("newest", "published_desc"):
+        sort_patch: dict = {"order_by": 7}
+    elif sort_by == "published_asc":
+        sort_patch = {"order_by": 8}
+    else:
+        sort_patch = {}
 
     while len(all_ids) < max_ids:
         params = {**base_params, **sort_patch, "page": api_page, "countpage": 50}
@@ -403,7 +408,7 @@ async def collect_auto_ria_ids(
     except ValueError as exc:
         raise AutoRiaError(str(exc)) from exc
 
-    sort_newest = sort_by in ("newest", "published_desc")
+    sort_oldest = sort_by == "published_asc"
     category = (filters.category or "all").strip().lower()
 
     if category in {"new", "all"}:
@@ -413,7 +418,7 @@ async def collect_auto_ria_ids(
         half = max(max_ids // 2, 50)
 
         (used_ids, used_total), (new_ids, new_total) = await asyncio.gather(
-            _collect_ids_raw(client, base_params, max_ids=half, sort_newest=sort_newest),
+            _collect_ids_raw(client, base_params, max_ids=half, sort_by=sort_by),
             _collect_new_ids_expanded(client, base_params, filters, max_ids=half),
         )
 
@@ -421,7 +426,11 @@ async def collect_auto_ria_ids(
 
         seen: set[str] = set()
         combined: list[str] = []
-        for aid in _interleave_two(tagged_new_ids, used_ids):
+        if sort_oldest:
+            stream = _interleave_two(used_ids, tagged_new_ids)
+        else:
+            stream = _interleave_two(tagged_new_ids, used_ids)
+        for aid in stream:
             if aid not in seen:
                 seen.add(aid)
                 combined.append(aid)
@@ -431,7 +440,7 @@ async def collect_auto_ria_ids(
         return combined, used_total + new_total
     else:
         # Category-specific: mapper already set correct searchType/custom
-        return await _collect_ids_raw(client, base_params, max_ids=max_ids, sort_newest=sort_newest)
+        return await _collect_ids_raw(client, base_params, max_ids=max_ids, sort_by=sort_by)
 
 
 async def hydrate_auto_ria_ids(

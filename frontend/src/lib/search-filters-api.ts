@@ -1,6 +1,7 @@
 import type {
   AccidentFilterValue,
   OwnersFilterValue,
+  PublishedWithinDaysValue,
   SearchFilterState,
   SellerFilterValue,
   TriFilterValue,
@@ -66,6 +67,7 @@ const SOURCE_TO_BACKEND: Record<string, string> = {
   "AUTO.RIA": "auto_ria",
   OLX: "olx",
   "Імперія Авто": "imperiya",
+  "Car Market": "car_market",
   uDrive: "udrive",
   Telegram: "telegram",
 };
@@ -104,6 +106,12 @@ function mapSources(sources: string[]): string[] | null {
 }
 
 function parseOwnersMax(value: OwnersFilterValue): number | null {
+  if (!value) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parsePublishedWithinDays(value: PublishedWithinDaysValue): number | null {
   if (!value) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
@@ -163,6 +171,7 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
     not_customs: mapTri(synced.notCustoms),
     metallic: synced.metallic || null,
     power_unit: synced.powerUnit || "hp",
+    published_within_days: parsePublishedWithinDays(synced.publishedWithinDays),
   };
 }
 
@@ -180,6 +189,7 @@ const BACKEND_SOURCE_TO_UI: Record<string, string> = {
   auto_ria: "AUTO.RIA",
   olx: "OLX",
   imperiya: "Імперія Авто",
+  car_market: "Car Market",
   udrive: "uDrive",
   telegram: "Telegram",
 };
@@ -255,6 +265,7 @@ export function mergeAiSearchFilters(
   if (raw.usa_import != null && String(raw.usa_import).trim()) next.usaImport = parsed.usaImport;
   if (raw.not_customs != null && String(raw.not_customs).trim()) next.notCustoms = parsed.notCustoms;
   if (raw.metallic === true) next.metallic = true;
+  if (raw.published_within_days != null) next.publishedWithinDays = parsed.publishedWithinDays;
 
   return next;
 }
@@ -435,6 +446,15 @@ export function fromBackendSearchFilters(
     notCustoms: (String(raw.not_customs || "") || "") as TriFilterValue,
     metallic: Boolean(raw.metallic),
     powerUnit: raw.power_unit === "kw" ? "kw" : "hp",
+    publishedWithinDays: (() => {
+      const days = raw.published_within_days;
+      if (days == null || days === "") return "" as PublishedWithinDaysValue;
+      const text = String(days);
+      if (text === "1" || text === "3" || text === "7" || text === "14" || text === "30") {
+        return text as PublishedWithinDaysValue;
+      }
+      return "" as PublishedWithinDaysValue;
+    })(),
   };
 }
 
@@ -484,6 +504,7 @@ const COMPARE_KEYS: (keyof BackendSearchFilters)[] = [
   "not_customs",
   "metallic",
   "power_unit",
+  "published_within_days",
 ];
 
 function normalizeCompareSlice(filters: BackendSearchFilters): Record<string, unknown> {

@@ -416,6 +416,49 @@ def _normalize_photo_url(url: object) -> Optional[str]:
     return str(url).replace("{width}", "800").replace("{height}", "600")
 
 
+def _photos_from_embedded(raw: dict) -> list[str]:
+    """Усі фото з offers API / __PRERENDERED_STATE__ (не лише перше)."""
+    urls: list[str] = []
+    seen: set[str] = set()
+
+    def add_url(url: object) -> None:
+        normalized = _normalize_photo_url(url)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            urls.append(normalized)
+
+    def add_from_item(item: object) -> None:
+        if isinstance(item, str):
+            add_url(item)
+            return
+        if not isinstance(item, dict):
+            return
+        for key in ("link", "url", "src", "original", "photo", "image"):
+            add_url(item.get(key))
+
+    photos_raw = raw.get("photos") or raw.get("images")
+    if isinstance(photos_raw, list):
+        for item in photos_raw:
+            add_from_item(item)
+    elif photos_raw is not None:
+        add_from_item(photos_raw)
+
+    for key in ("photo", "thumbnail", "image", "mainPhoto"):
+        val = raw.get(key)
+        if isinstance(val, list):
+            for item in val:
+                add_from_item(item)
+        else:
+            add_from_item(val)
+
+    return urls
+
+
+def _photo_from_embedded(raw: dict) -> Optional[str]:
+    photos = _photos_from_embedded(raw)
+    return photos[0] if photos else None
+
+
 def _param_value_text(value: object) -> str:
     if value is None:
         return ""
@@ -477,22 +520,6 @@ def _price_from_embedded(raw: dict) -> tuple[Optional[str], Optional[str]]:
         if amount is not None:
             return str(int(float(amount))), _normalize_currency(currency)
     return _price_from_params(raw.get("params"))
-
-
-def _photo_from_embedded(raw: dict) -> Optional[str]:
-    photos = raw.get("photos") or raw.get("images") or []
-    if isinstance(photos, list):
-        for item in photos:
-            if isinstance(item, str):
-                normalized = _normalize_photo_url(item)
-                if normalized:
-                    return normalized
-            if isinstance(item, dict):
-                for key in ("link", "url", "src", "original"):
-                    candidate = _normalize_photo_url(item.get(key))
-                    if candidate:
-                        return candidate
-    return None
 
 
 def _params_from_embedded(params: object) -> tuple[Optional[str], Optional[str], dict[str, str]]:
@@ -790,6 +817,7 @@ def _listing_from_embedded(raw: dict) -> Optional[OlxListing]:
         city=_city_from_embedded(raw),
         published=str(created) if created else None,
         photo_url=_photo_from_embedded(raw),
+        photos=_photos_from_embedded(raw),
         promoted=bool(raw.get("isHighlighted") or raw.get("promoted") or raw.get("isPromoted")),
         specs=specs,
         raw_params=raw if isinstance(raw, dict) else {},
@@ -954,14 +982,14 @@ def _listings_from_json_ld(html: str) -> list[OlxListing]:
             elif isinstance(area, str):
                 city = area
             images = offer.get("image") or []
-            photo = None
+            photos_list: list[str] = []
             if isinstance(images, list):
                 for img in images:
-                    if is_valid_image_url(img):
-                        photo = img
-                        break
+                    if is_valid_image_url(img) and img not in photos_list:
+                        photos_list.append(str(img))
             elif is_valid_image_url(images):
-                photo = images
+                photos_list.append(str(images))
+            photo = photos_list[0] if photos_list else None
             year = None
             year_match = re.search(r"(19[5-9]\d|20[0-4]\d)", str(title))
             if year_match:
@@ -976,6 +1004,7 @@ def _listings_from_json_ld(html: str) -> list[OlxListing]:
                     year=year,
                     city=str(city).strip() if city else None,
                     photo_url=photo,
+                    photos=photos_list,
                     published=str(offer.get("priceValidUntil") or "") or None,
                 )
             )
@@ -1100,21 +1129,22 @@ def _parse_single_card(card) -> Optional[OlxListing]:
 
     mileage = _parse_mileage_text(params_text or "")
 
-    img_tag = card.select_one("img")
-    photo_url = None
-    if img_tag:
+    img_tags = card.select("img")
+    photos: list[str] = []
+    for img_tag in img_tags:
         for attr in ("src", "data-src", "data-lazy-src"):
             candidate = img_tag.get(attr)
-            if is_valid_image_url(candidate):
-                photo_url = candidate
+            if is_valid_image_url(candidate) and candidate not in photos:
+                photos.append(candidate)
                 break
-        if not photo_url:
+        else:
             srcset = img_tag.get("srcset") or ""
             for part in srcset.split(","):
                 candidate = part.strip().split(" ")[0]
-                if is_valid_image_url(candidate):
-                    photo_url = candidate
+                if is_valid_image_url(candidate) and candidate not in photos:
+                    photos.append(candidate)
                     break
+    photo_url = photos[0] if photos else None
 
     return OlxListing(
         listing_id=listing_id,
@@ -1127,6 +1157,7 @@ def _parse_single_card(card) -> Optional[OlxListing]:
         published=published,
         url=url,
         photo_url=photo_url,
+        photos=photos,
         promoted=is_promoted,
     )
 

@@ -537,6 +537,8 @@ def sort_listings(items: list[ListingOut], sort_by: str) -> list[ListingOut]:
 
     if sort_by in ("published_desc", "newest"):
         return sorted(items, key=listing_sort_date, reverse=True)
+    if sort_by == "published_asc":
+        return sorted(items, key=listing_sort_date)
     if sort_by == "price_desc":
         return sorted(
             items,

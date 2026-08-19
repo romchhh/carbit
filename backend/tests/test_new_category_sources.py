@@ -13,6 +13,7 @@ class NewCategorySourcesTests(unittest.TestCase):
     def test_new_excludes_olx_by_default(self):
         sources = sources_for_filters(SearchFilters(category="new"))
         self.assertNotIn("olx", sources)
+        self.assertNotIn("car_market", sources)
         self.assertIn("auto_ria", sources)
         self.assertIn("udrive", sources)
         self.assertIn("imperiya", sources)
@@ -31,6 +32,7 @@ class NewCategorySourcesTests(unittest.TestCase):
     def test_all_includes_everything(self):
         sources = sources_for_filters(SearchFilters(category="all"))
         self.assertIn("olx", sources)
+        self.assertIn("car_market", sources)
         self.assertIn("udrive", sources)
 
 

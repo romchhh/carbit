@@ -337,7 +337,7 @@ def _cache_key(
         "per_page": per_page,
         "sort_by": sort_by,
         "enrich": enrich_details,
-        "olx_q": "api-first-filters-v1",
+        "olx_q": "api-first-filters-v2-photos",
     }
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 

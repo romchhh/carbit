@@ -39,6 +39,12 @@ class SortListingsTests(unittest.TestCase):
         newer = _item(now - timedelta(minutes=20))
         self.assertIs(sort_listings([older, newer], "published_desc")[0], newer)
 
+    def test_published_asc_is_oldest_first(self):
+        now = now_kyiv()
+        older = _item(now - timedelta(days=3))
+        newer = _item(now - timedelta(hours=2))
+        self.assertIs(sort_listings([newer, older], "published_asc")[0], older)
+
     def test_newest_prefers_refreshed_at_when_present(self):
         now = now_kyiv()
         old_pub_fresh_refresh = _item(

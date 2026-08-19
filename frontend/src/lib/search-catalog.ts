@@ -21,6 +21,7 @@ export type TriFilterValue = "" | "show" | "hide";
 export type SellerFilterValue = "" | "private" | "dealer";
 export type AccidentFilterValue = "" | "none" | "had";
 export type OwnersFilterValue = "" | "1" | "2" | "3" | "4";
+export type PublishedWithinDaysValue = "" | "1" | "3" | "7" | "14" | "30";
 
 export type SearchFilterState = {
   name: string;
@@ -74,9 +75,17 @@ export type SearchFilterState = {
   notCustoms: TriFilterValue;
   metallic: boolean;
   powerUnit: "hp" | "kw";
+  /** Оголошення, додані за останні N днів (порожньо = без обмеження). */
+  publishedWithinDays: PublishedWithinDaysValue;
 };
 
-export type SortOption = "newest" | "price_asc" | "price_desc" | "year_desc" | "mileage_asc";
+export type SortOption =
+  | "newest"
+  | "published_asc"
+  | "price_asc"
+  | "price_desc"
+  | "year_desc"
+  | "mileage_asc";
 
 export const FUEL_OPTIONS = [
   "Бензин",
@@ -106,7 +115,14 @@ export const BODY_TYPE_OPTIONS = [
   "Пікап",
   "Ліфтбек",
 ] as const;
-export const SOURCE_OPTIONS = ["AUTO.RIA", "OLX", "Імперія Авто", "uDrive", "Telegram"] as const;
+export const SOURCE_OPTIONS = [
+  "AUTO.RIA",
+  "OLX",
+  "Car Market",
+  "Імперія Авто",
+  "uDrive",
+  "Telegram",
+] as const;
 export const DRIVE_OPTIONS = ["Передній", "Задній", "Повний"] as const;
 export const COLOR_SWATCHES = [
   { name: "Білий", hex: "#F5F5F5", border: true },
@@ -150,6 +166,15 @@ export const OWNERS_FILTER_OPTIONS = [
   { value: "3" as OwnersFilterValue, label: "3" },
   { value: "4" as OwnersFilterValue, label: "4+" },
 ];
+
+export const PUBLISHED_WITHIN_OPTIONS = [
+  { value: "" as PublishedWithinDaysValue, label: "Будь-коли" },
+  { value: "1" as PublishedWithinDaysValue, label: "За 1 день" },
+  { value: "3" as PublishedWithinDaysValue, label: "За 3 дні" },
+  { value: "7" as PublishedWithinDaysValue, label: "За 7 днів" },
+  { value: "14" as PublishedWithinDaysValue, label: "За 14 днів" },
+  { value: "30" as PublishedWithinDaysValue, label: "За 30 днів" },
+] as const;
 
 export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
   { value: "all", label: "Всі" },
@@ -226,6 +251,7 @@ export const DEFAULT_FILTERS: SearchFilterState = {
   notCustoms: "",
   metallic: false,
   powerUnit: "hp",
+  publishedWithinDays: "",
 };
 
 export const CATALOG_LISTINGS: SearchResult[] = [
@@ -392,6 +418,17 @@ export function sortListings(items: SearchResult[], sort: SortOption): SearchRes
         };
         return sortMs(b) - sortMs(a);
       });
+    case "published_asc":
+      return sorted.sort((a, b) => {
+        const sortMs = (item: SearchResult) => {
+          for (const raw of [item.refreshedAt, item.publishedAt, item.foundAt]) {
+            const t = Date.parse(raw || "");
+            if (Number.isFinite(t) && t > 0) return t;
+          }
+          return 0;
+        };
+        return sortMs(a) - sortMs(b);
+      });
     default:
       return sorted;
   }
@@ -426,6 +463,8 @@ export function sortListingItems(items: Listing[], sort: SortOption): Listing[] 
       return sorted.sort((a, b) => (b.year || 0) - (a.year || 0));
     case "mileage_asc":
       return sorted.sort((a, b) => (a.mileage || 0) - (b.mileage || 0));
+    case "published_asc":
+      return sorted.sort((a, b) => publishedMs(a) - publishedMs(b));
     default:
       return sorted.sort((a, b) => publishedMs(b) - publishedMs(a));
   }
@@ -479,6 +518,7 @@ export function countAdvancedFilterFields(
       filters.vinVerified,
       filters.bargain,
       fieldActive(filters.inCredit),
+      fieldActive(filters.publishedWithinDays),
     ].filter(Boolean).length;
   }
   return [fieldActive(filters.usaImport), fieldActive(filters.notCustoms)].filter(Boolean).length;
