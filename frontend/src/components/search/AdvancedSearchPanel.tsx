@@ -227,9 +227,10 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
   };
 
   const techBadge = countAdvancedFilterFields(filters, "technical");
+  const publishedBadge = countAdvancedFilterFields(filters, "published");
   const conditionBadge = countAdvancedFilterFields(filters, "condition");
   const originBadge = countAdvancedFilterFields(filters, "origin");
-  const totalActive = techBadge + conditionBadge + originBadge;
+  const totalActive = techBadge + publishedBadge + conditionBadge + originBadge;
 
   return (
     <div className="mt-4 overflow-hidden rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04]">
@@ -253,6 +254,15 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
 
       <div className="relative z-20 space-y-4 overflow-visible px-4 py-4 sm:px-5">
         <ActiveSummary filters={filters} onClearOne={update} />
+
+        <FilterAccordionSection title="Дата публікації" badge={publishedBadge} defaultOpen>
+          <FilterPublishedDateRange
+            publishedWithinDays={filters.publishedWithinDays}
+            publishedFrom={filters.publishedFrom}
+            publishedTo={filters.publishedTo}
+            onChange={update}
+          />
+        </FilterAccordionSection>
 
         <FilterAccordionSection title="Кузов і техніка" badge={techBadge} defaultOpen>
           <FilterChipGroup
@@ -439,12 +449,6 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
 
         <FilterAccordionSection title="Стан та історія" badge={conditionBadge} defaultOpen={false}>
           <div className="space-y-3 rounded-xl border border-border/60 bg-surface/20 p-3">
-            <FilterPublishedDateRange
-              publishedWithinDays={filters.publishedWithinDays}
-              publishedFrom={filters.publishedFrom}
-              publishedTo={filters.publishedTo}
-              onChange={update}
-            />
             <FilterSegmentedRow
               label="Участь у ДТП"
               value={filters.accident}

@@ -499,7 +499,7 @@ function fieldActive(value: string | boolean | undefined): boolean {
 
 export function countAdvancedFilterFields(
   filters: SearchFilterState,
-  section: "technical" | "condition" | "origin",
+  section: "technical" | "published" | "condition" | "origin",
 ): number {
   if (section === "technical") {
     return [
@@ -528,6 +528,13 @@ export function countAdvancedFilterFields(
       fieldActive(filters.doorsTo),
     ].filter(Boolean).length;
   }
+  if (section === "published") {
+    return [
+      fieldActive(filters.publishedWithinDays),
+      fieldActive(filters.publishedFrom),
+      fieldActive(filters.publishedTo),
+    ].filter(Boolean).length;
+  }
   if (section === "condition") {
     return [
       fieldActive(filters.accident),
@@ -536,9 +543,6 @@ export function countAdvancedFilterFields(
       filters.vinVerified,
       filters.bargain,
       fieldActive(filters.inCredit),
-      fieldActive(filters.publishedWithinDays),
-      fieldActive(filters.publishedFrom),
-      fieldActive(filters.publishedTo),
     ].filter(Boolean).length;
   }
   return [fieldActive(filters.usaImport), fieldActive(filters.notCustoms)].filter(Boolean).length;
