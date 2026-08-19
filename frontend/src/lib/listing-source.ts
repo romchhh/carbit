@@ -1,16 +1,27 @@
 import { SOURCE_LOGOS } from "@/lib/brand-assets";
 
-/** Ключі API / listing.source */
-const SOURCE_ICON_KEYS = {
+export type ListingSourceKey =
+  | "auto_ria"
+  | "olx"
+  | "imperiya"
+  | "car_market"
+  | "udrive"
+  | "telegram";
+
+/** Ключі API / listing.source з іконкою */
+const SOURCE_ICON_KEYS: Record<
+  Exclude<ListingSourceKey, "car_market">,
+  string
+> = {
   auto_ria: SOURCE_LOGOS.autoRia,
   olx: SOURCE_LOGOS.olx,
   imperiya: SOURCE_LOGOS.imperiya,
   udrive: SOURCE_LOGOS.udrive,
   telegram: SOURCE_LOGOS.telegram,
-} as const;
+};
 
 /** Підписи з фільтра SearchFilterState.sources */
-const SOURCE_FILTER_LABEL_TO_KEY: Record<string, keyof typeof SOURCE_ICON_KEYS> = {
+const SOURCE_FILTER_LABEL_TO_KEY: Record<string, ListingSourceKey> = {
   "AUTO.RIA": "auto_ria",
   OLX: "olx",
   "Імперія Авто": "imperiya",
@@ -56,15 +67,18 @@ export function listingIsNewCar(listing: {
 }
 
 export function listingSourceIcon(source: string): string | null {
-  const key = source as keyof typeof SOURCE_ICON_KEYS;
-  if (key in SOURCE_ICON_KEYS) return SOURCE_ICON_KEYS[key];
+  const key = source as ListingSourceKey;
+  if (key in SOURCE_ICON_KEYS) {
+    return SOURCE_ICON_KEYS[key as Exclude<ListingSourceKey, "car_market">];
+  }
   return null;
 }
 
 /** Іконка для чіпів фільтра «Джерела» (AUTO.RIA, OLX, …). */
 export function sourceFilterIcon(sourceLabel: string): string | null {
   const key = SOURCE_FILTER_LABEL_TO_KEY[sourceLabel];
-  return key ? SOURCE_ICON_KEYS[key] : null;
+  if (!key || !(key in SOURCE_ICON_KEYS)) return null;
+  return SOURCE_ICON_KEYS[key as Exclude<ListingSourceKey, "car_market">];
 }
 
 export function listingSourceSiteName(source: string): string {

@@ -47,7 +47,7 @@ export function FilterTriStateRow({ label, value, onChange }: Props) {
 type SegmentedProps<T extends string> = {
   label: string;
   value: T;
-  options: { value: T; label: string }[];
+  options: ReadonlyArray<{ value: T; label: string }>;
   onChange: (value: T) => void;
 };
 
