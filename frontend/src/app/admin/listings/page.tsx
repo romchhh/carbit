@@ -13,6 +13,7 @@ const SOURCE_OPTIONS = [
   { value: "olx", label: "OLX" },
   { value: "imperiya", label: "Імперія Авто" },
   { value: "car_market", label: "Car Market" },
+  { value: "reono", label: "REONO" },
   { value: "udrive", label: "uDrive" },
   { value: "telegram", label: "Telegram" },
 ];
@@ -22,6 +23,7 @@ const SOURCE_LABELS: Record<string, string> = {
   olx: "OLX",
   imperiya: "Імперія Авто",
   car_market: "Car Market",
+  reono: "REONO",
   udrive: "uDrive",
   telegram: "Telegram",
 };

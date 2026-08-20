@@ -47,8 +47,9 @@ def filters_group_key(filters: SearchFilters | dict) -> str:
 
 
 def _normalized_sources(sources: list[str] | None) -> tuple[str, ...]:
+    default = ("auto_ria", "olx", "car_market", "reono", "imperiya", "udrive", "telegram")
     if not sources:
-        return ("auto_ria", "olx", "imperiya", "telegram")
+        return default
     out: list[str] = []
     for raw in sources:
         key = raw.strip().lower().replace(".", "_").replace(" ", "_")
@@ -58,9 +59,15 @@ def _normalized_sources(sources: list[str] | None) -> tuple[str, ...]:
             out.append("olx")
         elif key in ("imperiya", "imperiya_auto", "imperiya-auto", "iautos") and "imperiya" not in out:
             out.append("imperiya")
+        elif key in ("udrive", "u_drive", "u-drive") and "udrive" not in out:
+            out.append("udrive")
+        elif key in ("car_market", "carmarket", "car-market", "car_market_net") and "car_market" not in out:
+            out.append("car_market")
+        elif key in ("reono", "reono_ua", "reono-ua") and "reono" not in out:
+            out.append("reono")
         elif key == "telegram" and "telegram" not in out:
             out.append("telegram")
-    return tuple(out or ("auto_ria", "olx", "imperiya", "telegram"))
+    return tuple(out or default)
 
 
 def similar_fetch_signature(filters: SearchFilters) -> str | None:

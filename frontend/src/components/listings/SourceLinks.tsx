@@ -6,12 +6,12 @@ import {
   listingSourceIcon,
   listingSourceLabel,
 } from "@/lib/listing-source";
-import { Button } from "@/components/ui/Button";
 import { IconGlobe } from "@/components/icons";
+import { openExternalUrl } from "@/lib/open-external";
 import { cn } from "@/lib/utils";
 import type { Listing, ListingSourceLink } from "@/types/api";
 
-const SOURCE_ORDER = ["auto_ria", "olx", "car_market", "imperiya", "udrive", "telegram"] as const;
+const SOURCE_ORDER = ["auto_ria", "olx", "car_market", "reono", "imperiya", "udrive", "telegram"] as const;
 
 function rank(source: string): number {
   const i = SOURCE_ORDER.indexOf(source as (typeof SOURCE_ORDER)[number]);
@@ -129,6 +129,7 @@ export function SourceLinks({
             rel="noopener noreferrer"
             title={label}
             aria-label={`Відкрити на ${label}`}
+            onClick={e => openExternalUrl(link.url, e)}
             className={cn(
               "inline-flex items-center gap-1 rounded-md border border-border/80 bg-white/95 shadow-sm transition-colors hover:border-emerald/40 hover:bg-white",
               pad,
@@ -175,22 +176,20 @@ export function ListingOpenCta({
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={e => openExternalUrl(link.url, e)}
+            className={cn(
+              "group inline-flex w-full items-center justify-center gap-2 rounded-full px-3.5 py-3 text-[15px] font-bold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]",
+              index === 0
+                ? "bg-emerald text-white shadow-md shadow-emerald/25 hover:bg-emerald-dark hover:shadow-lg hover:shadow-emerald/35"
+                : "border border-border bg-white text-ink shadow-sm hover:bg-surface",
+            )}
           >
-            <Button
-              variant={index === 0 ? "emerald" : "secondary"}
-              size="lg"
-              className={cn(
-                "w-full gap-2 py-3 text-[15px] font-bold",
-                index > 0 && "border-border text-ink",
-              )}
-            >
-              {icon ? (
-                <Image src={icon} alt="" width={18} height={18} className="rounded-sm object-contain" unoptimized />
-              ) : (
-                <IconGlobe size={18} />
-              )}
-              {listingOpenLabel(link.source)}
-            </Button>
+            {icon ? (
+              <Image src={icon} alt="" width={18} height={18} className="rounded-sm object-contain" unoptimized />
+            ) : (
+              <IconGlobe size={18} />
+            )}
+            {listingOpenLabel(link.source)}
           </a>
         );
       })}

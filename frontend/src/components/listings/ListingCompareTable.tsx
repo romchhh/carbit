@@ -11,6 +11,7 @@ import {
   filterDifferentRows,
 } from "@/lib/listing-compare-rows";
 import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
+import { openExternalUrl } from "@/lib/open-external";
 import { cn } from "@/lib/utils";
 import type { Listing } from "@/types/api";
 
@@ -74,6 +75,7 @@ function CompareHeaderCell({
           href={listing.url}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={e => openExternalUrl(listing.url, e)}
           className="mt-2 inline-block text-[11px] font-semibold text-emerald-dark hover:underline"
         >
           Відкрити оголошення →

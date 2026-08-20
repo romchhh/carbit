@@ -5,12 +5,13 @@ export type ListingSourceKey =
   | "olx"
   | "imperiya"
   | "car_market"
+  | "reono"
   | "udrive"
   | "telegram";
 
 /** Ключі API / listing.source з іконкою */
 const SOURCE_ICON_KEYS: Record<
-  Exclude<ListingSourceKey, "car_market">,
+  Exclude<ListingSourceKey, "car_market" | "reono">,
   string
 > = {
   auto_ria: SOURCE_LOGOS.autoRia,
@@ -26,6 +27,7 @@ const SOURCE_FILTER_LABEL_TO_KEY: Record<string, ListingSourceKey> = {
   OLX: "olx",
   "Імперія Авто": "imperiya",
   "Car Market": "car_market",
+  REONO: "reono",
   uDrive: "udrive",
   Telegram: "telegram",
 };
@@ -35,6 +37,7 @@ export function listingSourceLabel(source: string): string {
   if (source === "auto_ria") return "AUTO.RIA";
   if (source === "imperiya") return "Імперія Авто";
   if (source === "car_market") return "Car Market";
+  if (source === "reono") return "REONO";
   if (source === "udrive") return "uDrive";
   if (source === "telegram") return "Telegram";
   return source.toUpperCase();
@@ -69,7 +72,7 @@ export function listingIsNewCar(listing: {
 export function listingSourceIcon(source: string): string | null {
   const key = source as ListingSourceKey;
   if (key in SOURCE_ICON_KEYS) {
-    return SOURCE_ICON_KEYS[key as Exclude<ListingSourceKey, "car_market">];
+    return SOURCE_ICON_KEYS[key as Exclude<ListingSourceKey, "car_market" | "reono">];
   }
   return null;
 }
@@ -78,7 +81,7 @@ export function listingSourceIcon(source: string): string | null {
 export function sourceFilterIcon(sourceLabel: string): string | null {
   const key = SOURCE_FILTER_LABEL_TO_KEY[sourceLabel];
   if (!key || !(key in SOURCE_ICON_KEYS)) return null;
-  return SOURCE_ICON_KEYS[key as Exclude<ListingSourceKey, "car_market">];
+  return SOURCE_ICON_KEYS[key as Exclude<ListingSourceKey, "car_market" | "reono">];
 }
 
 export function listingSourceSiteName(source: string): string {
@@ -96,6 +99,7 @@ export function listingAttributionUrl(source: string, listingUrl?: string): stri
   if (source === "auto_ria") return "https://auto.ria.com";
   if (source === "imperiya") return "https://imperiya-auto.com.ua";
   if (source === "car_market") return "https://car-market.net";
+  if (source === "reono") return "https://reono.ua";
   if (source === "udrive") return "https://udrive.com.ua";
   if (source === "telegram") return "https://t.me";
   return "#";

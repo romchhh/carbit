@@ -136,7 +136,7 @@ def parse_catalog_page(html: str) -> tuple[list[CarMarketCar], int]:
     body = soup.find("body") or soup
     cars: list[CarMarketCar] = []
     current_badges: list[str] = []
-    seen_urls: set[str] = set()
+    parsed_urls: set[str] = set()
 
     for element in body.descendants:
         if not hasattr(element, "get"):
@@ -153,16 +153,15 @@ def parse_catalog_page(html: str) -> tuple[list[CarMarketCar], int]:
             continue
 
         url = href if href.startswith("http") else CAR_MARKET_BASE_URL + href
-        raw_text = element.get_text(" ", strip=True)
-        if not raw_text or url in seen_urls:
+        if url in parsed_urls:
             continue
 
         car = _parse_card(element, list(current_badges))
         if car:
             car.date_added = _find_date_near(element)
             cars.append(car)
-            seen_urls.add(url)
-        current_badges = []
+            parsed_urls.add(url)
+            current_badges = []
 
     return cars, total
 

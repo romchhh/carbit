@@ -23,6 +23,7 @@ function sourceLabel(source: string): string {
   if (source === "auto_ria" || source === "AUTO.RIA") return "AUTO.RIA";
   if (source === "imperiya" || source === "Імперія Авто") return "Імперія Авто";
   if (source === "car_market" || source === "Car Market") return "Car Market";
+  if (source === "reono" || source === "REONO") return "REONO";
   if (source === "udrive" || source === "uDrive") return "uDrive";
   if (source === "telegram" || source === "Telegram") return "Telegram";
   return source.toUpperCase();

@@ -8,6 +8,7 @@ import {
   resolveSellerContact,
   sellerTelegramUrl,
 } from "@/lib/seller-contact";
+import { openExternalUrl } from "@/lib/open-external";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -43,6 +44,7 @@ function ContactRow({
       href={href}
       target={external ? "_blank" : undefined}
       rel={external ? "noopener noreferrer" : undefined}
+      onClick={external ? e => openExternalUrl(href, e) : undefined}
       className="flex items-start gap-2.5 text-[14px] font-medium text-emerald-dark transition-colors hover:text-emerald"
     >
       {content}

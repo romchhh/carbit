@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { Button } from "@/components/ui/Button";
 import { IconGlobe } from "@/components/icons";
 import { buildAutoRiaDetailSections } from "@/lib/auto-ria-details";
+import { openExternalUrl } from "@/lib/open-external";
 import type { Listing } from "@/types/api";
 
 type Props = {
@@ -43,12 +42,16 @@ export function AutoRiaListingDetails({ listing, omitDescription = false }: Prop
                   <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">{row.label}</dt>
                   <dd className="mt-1">
                     {row.kind === "link" && row.href ? (
-                      <Link href={row.href} target="_blank" rel="noopener noreferrer">
-                        <Button variant="secondary" size="sm" className="gap-1.5">
-                          <IconGlobe size={14} />
-                          {row.value}
-                        </Button>
-                      </Link>
+                      <a
+                        href={row.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => openExternalUrl(row.href!, e)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-2.5 py-1.5 text-[12px] font-medium text-ink shadow-sm transition-colors hover:bg-surface"
+                      >
+                        <IconGlobe size={14} />
+                        {row.value}
+                      </a>
                     ) : row.kind === "color" ? (
                       <span className="inline-flex items-center gap-2 text-[13px] font-medium text-ink">
                         {row.colorHex && (

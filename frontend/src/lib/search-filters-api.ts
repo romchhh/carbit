@@ -71,6 +71,7 @@ const SOURCE_TO_BACKEND: Record<string, string> = {
   OLX: "olx",
   "Імперія Авто": "imperiya",
   "Car Market": "car_market",
+  REONO: "reono",
   uDrive: "udrive",
   Telegram: "telegram",
 };
@@ -206,6 +207,7 @@ const BACKEND_SOURCE_TO_UI: Record<string, string> = {
   olx: "OLX",
   imperiya: "Імперія Авто",
   car_market: "Car Market",
+  reono: "REONO",
   udrive: "uDrive",
   telegram: "Telegram",
 };

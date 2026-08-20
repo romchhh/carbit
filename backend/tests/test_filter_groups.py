@@ -85,6 +85,17 @@ class FilterGroupTests(unittest.TestCase):
         b = SearchFilters(brand="BMW", model="X5", year_from=2019, year_to=2022)
         self.assertNotEqual(filters_group_key(a), filters_group_key(b))
 
+    def test_default_sources_include_car_market(self):
+        merged = merge_filters_for_fetch(
+            [
+                SearchFilters(brand="BMW"),
+                SearchFilters(brand="BMW", model="X5"),
+            ]
+        )
+        self.assertIn("car_market", merged.sources or [])
+        self.assertIn("reono", merged.sources or [])
+        self.assertIn("udrive", merged.sources or [])
+
 
 if __name__ == "__main__":
     unittest.main()

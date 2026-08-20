@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+import json
+
+from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
+from app.services.auto_ria.cache import get_or_fetch
+from app.services.auto_ria.mapper import sort_listings
+from app.services.reono.client import ReonoClient
+from app.services.reono.constants import REONO_MAX_PAGES, REONO_PAGE_SIZE
+from app.services.reono.errors import ReonoError
+from app.services.reono.mapper import apply_client_filters, car_to_listing
+from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+
+def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
+    payload = {
+        "source": "reono",
+        "reono_v": "car-card-v1",
+        "filters": filters.model_dump(mode="json"),
+        "page": page,
+        "per_page": per_page,
+        "sort_by": sort_by,
+    }
+    return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+
+
+async def _search_reono_body(
+    filters: SearchFilters,
+    *,
+    page: int = 1,
+    per_page: int = 20,
+    sort_by: str = "newest",
+) -> PaginatedListings:
+    client = ReonoClient()
+    try:
+        cars, total = await client.fetch_catalog(filters, page=page)
+    except ValueError as exc:
+        raise ReonoError(str(exc)) from exc
+
+    cars = apply_client_filters(cars, filters)
+    listings: list[ListingOut] = []
+    for car in cars:
+        listing = car_to_listing(car)
+        if listing_out_matches_filters(listing, filters):
+            listings.append(listing)
+
+    listings = sort_listings(listings, sort_by)
+    if per_page > 0:
+        listings = listings[:per_page]
+
+    pages = (total + REONO_PAGE_SIZE - 1) // REONO_PAGE_SIZE if total else 0
+    return PaginatedListings(
+        items=listings,
+        total=total,
+        page=page,
+        per_page=per_page,
+        pages=pages,
+        market_total=total,
+    )
+
+
+async def search_reono(
+    filters: SearchFilters,
+    *,
+    page: int = 1,
+    per_page: int = 20,
+    sort_by: str = "newest",
+    use_cache: bool = True,
+    cache_ttl_seconds: int = 120,
+) -> PaginatedListings:
+    if not use_cache:
+        return await _search_reono_body(filters, page=page, per_page=per_page, sort_by=sort_by)
+
+    return await get_or_fetch(
+        _cache_key(filters, page=page, per_page=per_page, sort_by=sort_by),
+        lambda: _search_reono_body(filters, page=page, per_page=per_page, sort_by=sort_by),
+        ttl_seconds=cache_ttl_seconds,
+    )
+
+
+async def fetch_reono_pool(
+    filters: SearchFilters,
+    *,
+    need: int,
+    sort_by: str,
+    use_cache: bool = True,
+    cache_ttl_seconds: int = 120,
+) -> PaginatedListings:
+    need = max(need, 1)
+    collected: list[ListingOut] = []
+    seen: set[str] = set()
+    total = 0
+    page = 1
+    max_pages = min(
+        REONO_MAX_PAGES,
+        max((need + REONO_PAGE_SIZE - 1) // REONO_PAGE_SIZE, 1),
+    )
+
+    while len(collected) < need and page <= max_pages:
+        chunk = await search_reono(
+            filters,
+            page=page,
+            per_page=REONO_PAGE_SIZE,
+            sort_by=sort_by,
+            use_cache=use_cache,
+            cache_ttl_seconds=cache_ttl_seconds,
+        )
+        total = max(total, chunk.total)
+        for item in chunk.items:
+            if item.id in seen:
+                continue
+            seen.add(item.id)
+            collected.append(item)
+            if len(collected) >= need:
+                break
+        if len(chunk.items) < REONO_PAGE_SIZE:
+            break
+        page += 1
+
+    collected = sort_listings(collected[:need], sort_by)
+    pages = (total + need - 1) // need if total else 0
+    return PaginatedListings(
+        items=collected,
+        total=max(total, len(collected)),
+        page=1,
+        per_page=need,
+        pages=pages,
+        market_total=total,
+    )

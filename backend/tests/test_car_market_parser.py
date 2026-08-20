@@ -55,3 +55,18 @@ def test_resolve_brand_id_and_filters():
     assert params["brands"] == "6560"
     assert params["min_price"] == "5000"
     assert params["fuels[]"] == "2"
+
+
+def test_parse_catalog_keeps_badges_after_failed_duplicate_anchor():
+    html = """
+    <html><body>
+    <span>На майданчику</span>
+    <a href="/auto/volkswagen-passat-2018-12345">Volkswagen Passat без року</a>
+    <a href="/auto/volkswagen-passat-2018-12345">
+      Volkswagen Passat 2018 12 500$ 180 тис.км Автомат Дизель 2.00 л Київ
+    </a>
+    </body></html>
+    """
+    cars, _ = parse_catalog_page(html)
+    assert len(cars) == 1
+    assert cars[0].listing_type == "На майданчику"

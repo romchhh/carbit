@@ -33,6 +33,7 @@ import {
   listingAttributionUrl,
   listingSourceSiteName,
 } from "@/lib/listing-source";
+import { openExternalUrl } from "@/lib/open-external";
 import { loadRecentListings } from "@/lib/recent-listings";
 import { normalizeListingIdParam } from "@/lib/listing-share";
 import { hasVinCheck } from "@/lib/vin-check";
@@ -391,6 +392,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   href={listingAttributionUrl(link.source, link.url)}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={e => openExternalUrl(listingAttributionUrl(link.source, link.url), e)}
                   className="text-emerald-dark hover:underline"
                 >
                   {listingSourceSiteName(link.source)}

@@ -24,6 +24,7 @@ import {
   listingIsNewCar,
   listingSourceSiteName,
 } from "@/lib/listing-source";
+import { openExternalUrl } from "@/lib/open-external";
 import {
   ensurePhotosDeduped,
   noteTelegramPhotosState,
@@ -695,6 +696,7 @@ export function ListingDetailModal({
                     href={listingAttributionUrl(link.source, link.url)}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={e => openExternalUrl(listingAttributionUrl(link.source, link.url), e)}
                     className="text-emerald-dark hover:underline"
                   >
                     {listingSourceSiteName(link.source)}

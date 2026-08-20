@@ -206,15 +206,17 @@ async def _process_group(
                     )
                     return len(upserted), new_total, notifications
 
-        # Live-pool: використовуємо якщо пул свіжий і не містить OLX/TG (AUTO.RIA-only).
-        # Для OLX/TG — завжди йдемо в API: пул може не мати нових оголошень.
-        has_olx_or_tg = bool({"olx", "telegram"} & set(parse_sources))
+        # Live-pool переважно AUTO.RIA — для інших джерел завжди live API.
+        needs_live_api = bool(
+            set(parse_sources)
+            & {"olx", "telegram", "car_market", "reono", "udrive", "imperiya"}
+        )
         pooled = await try_load_pool_listings(
             parse_filters,
             "published_desc",
             max_items=max_listings,
         )
-        if pooled and not sources_only and not has_olx_or_tg:
+        if pooled and not sources_only and not needs_live_api:
             log.append(f"  ↺ Live-pool ({len(pooled)} огол.) — без зовнішніх API")
             upserted.clear()
             for item in pooled:
