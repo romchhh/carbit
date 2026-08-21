@@ -56,7 +56,9 @@ export function PricingPlans({
       className={cn(
         "grid gap-4 sm:gap-5",
         isHome
-          ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"
+          ? isCabinet
+            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+            : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"
           : "grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4",
       )}
     >
@@ -80,7 +82,11 @@ export function PricingPlans({
 
         const ctaClass = cn(
           "group flex w-full items-center justify-center gap-1.5 rounded-full text-center font-semibold transition-all duration-300",
-          isHome ? "mt-5 py-2 text-[12px]" : "mb-8 py-3.5 text-[15px]",
+          isCabinet
+            ? "mt-5 py-3 text-[13px]"
+            : isHome
+              ? "mt-5 py-2 text-[12px]"
+              : "mb-8 py-3.5 text-[15px]",
           !disabled && !loading && "hover:-translate-y-0.5",
           disabled || loading
             ? accent
@@ -95,7 +101,7 @@ export function PricingPlans({
           <span
             className={cn(
               "flex items-center justify-center rounded-full transition-all group-hover:translate-x-0.5",
-              isHome ? "h-5 w-5 text-[10px]" : "h-7 w-7 text-[13px]",
+              isCabinet ? "h-6 w-6 text-[11px]" : isHome ? "h-5 w-5 text-[10px]" : "h-7 w-7 text-[13px]",
               accent ? "bg-white/20 group-hover:bg-ink/10" : "bg-white/20",
             )}
           >
@@ -108,7 +114,11 @@ export function PricingPlans({
             key={id}
             className={cn(
               "relative flex flex-col transition-all duration-300 hover:-translate-y-0.5",
-              isHome ? "rounded-2xl p-5 sm:p-6" : "rounded-3xl p-8",
+              isCabinet
+                ? "rounded-2xl p-6 sm:p-7"
+                : isHome
+                  ? "rounded-2xl p-5 sm:p-6"
+                  : "rounded-3xl p-8",
               accent
                 ? isHome
                   ? "bg-ink text-white shadow-xl shadow-ink/30 ring-2 ring-emerald/50 xl:scale-[1.02]"
@@ -121,7 +131,7 @@ export function PricingPlans({
               <span
                 className={cn(
                   "absolute left-1/2 -translate-x-1/2 rounded-full bg-emerald font-bold uppercase tracking-wider text-white shadow-lg shadow-emerald/30",
-                  isHome ? "-top-3.5 px-3 py-1 text-[10px]" : "-top-3.5 px-4 py-1.5 text-[11px]",
+                  isCabinet || !isHome ? "-top-3.5 px-4 py-1.5 text-[11px]" : "-top-3.5 px-3 py-1 text-[10px]",
                 )}
               >
                 {current ? "Поточний" : "Популярний"}
@@ -131,7 +141,7 @@ export function PricingPlans({
             <h3
               className={cn(
                 "font-semibold",
-                isHome ? "text-[20px]" : "text-[22px] font-bold",
+                isCabinet ? "text-[22px]" : isHome ? "text-[20px]" : "text-[22px] font-bold",
                 accent ? "text-white" : "text-ink",
               )}
             >
@@ -140,19 +150,23 @@ export function PricingPlans({
 
             <p
               className={cn(
-                "mt-2 text-[12px] leading-snug",
-                isHome ? "line-clamp-2" : "text-[13px]",
+                "mt-2 leading-snug",
+                isCabinet ? "text-[13px]" : isHome ? "line-clamp-2 text-[12px]" : "text-[13px]",
                 accent ? "text-white/55" : "text-muted",
               )}
             >
               {description}
             </p>
 
-            <div className={cn("flex items-end gap-1.5", isHome ? "mt-3" : "mt-5")}>
+            <div className={cn("flex items-end gap-1.5", isCabinet || !isHome ? "mt-4" : "mt-3")}>
               <span
                 className={cn(
                   "font-semibold leading-none tracking-tight",
-                  isHome ? "text-[32px] sm:text-[36px]" : "text-[52px] font-black",
+                  isCabinet
+                    ? "text-[40px]"
+                    : isHome
+                      ? "text-[32px] sm:text-[36px]"
+                      : "text-[52px] font-black",
                   accent ? "text-emerald" : "text-ink",
                 )}
               >
@@ -172,7 +186,11 @@ export function PricingPlans({
 
             <p
               className={cn(
-                isHome ? "mt-1 text-[12px]" : "mb-8 mt-1 text-[14px]",
+                isCabinet
+                  ? "mt-1.5 text-[13px]"
+                  : isHome
+                    ? "mt-1 text-[12px]"
+                    : "mb-8 mt-1 text-[14px]",
                 accent ? "text-white/45" : "text-muted",
               )}
             >
@@ -196,17 +214,21 @@ export function PricingPlans({
               </Link>
             )}
 
-            <div className={cn("flex-1 space-y-2.5", isHome ? "mt-5" : "space-y-3.5")}>
+            <div className={cn("flex-1 space-y-2.5", isCabinet ? "mt-5 space-y-3" : isHome ? "mt-5" : "space-y-3.5")}>
               {features.map(f => (
                 <div
                   key={f}
                   className={cn(
                     "flex gap-2",
-                    isHome ? "text-[12px]" : "gap-3 text-[14px]",
+                    isCabinet
+                      ? "gap-2.5 text-[13px]"
+                      : isHome
+                        ? "text-[12px]"
+                        : "gap-3 text-[14px]",
                     accent ? "text-white/80" : "text-ink",
                   )}
                 >
-                  <IconCheck size={isHome ? 14 : 16} className="mt-0.5 shrink-0 text-emerald" />
+                  <IconCheck size={isCabinet || !isHome ? 16 : 14} className="mt-0.5 shrink-0 text-emerald" />
                   {f}
                 </div>
               ))}
@@ -215,10 +237,14 @@ export function PricingPlans({
                   key={f}
                   className={cn(
                     "flex gap-2 opacity-50",
-                    isHome ? "text-[12px] text-muted" : "gap-3 text-[14px] text-muted/50",
+                    isCabinet
+                      ? "gap-2.5 text-[13px] text-muted"
+                      : isHome
+                        ? "text-[12px] text-muted"
+                        : "gap-3 text-[14px] text-muted/50",
                   )}
                 >
-                  <IconX size={isHome ? 14 : 16} className="mt-0.5 shrink-0" />
+                  <IconX size={isCabinet || !isHome ? 16 : 14} className="mt-0.5 shrink-0" />
                   {f}
                 </div>
               ))}

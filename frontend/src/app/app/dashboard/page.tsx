@@ -9,8 +9,12 @@ import { RecentListingsSection } from "@/components/listings/RecentListingsSecti
 import { FavoriteListingsSection } from "@/components/listings/FavoriteListingsSection";
 import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
+import { MobileSearchFiltersFab } from "@/components/search/MobileSearchFiltersFab";
+import { DesktopSearchMonitorFab } from "@/components/search/DesktopSearchMonitorFab";
+import { SearchDesktopSplit } from "@/components/search/SearchDesktopSplit";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
 import { RecentSearchesSection } from "@/components/search/RecentSearchesSection";
+import { TelegramConnectPrompt } from "@/components/search/TelegramConnectPrompt";
 import { MonitorSearchCard } from "@/components/search/MonitorSearchCard";
 import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
@@ -61,6 +65,7 @@ export default function DashboardPage() {
     clearError,
   } = usePreviewSearch();
   const filtersPanelRef = useRef<HTMLDivElement>(null);
+  const [tgPromptOpen, setTgPromptOpen] = useState(false);
   const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } =
     useSaveSearch(created => {
       setSearches(prev => [created, ...prev.filter(s => s.id !== created.id)]);
@@ -144,8 +149,69 @@ export default function DashboardPage() {
     void saveSearch(filters, results);
   };
 
+  const handleMonitorClick = () => {
+    if (saving || saveLimitReached) return;
+    if (matchingMonitor) {
+      router.push(`/app/monitors/${matchingMonitor.id}`);
+      return;
+    }
+    if (!user.telegram_connected) {
+      setTgPromptOpen(true);
+      return;
+    }
+    handleSave();
+  };
+
+  const filtersPanel = (
+    <SearchFiltersPanel
+      wide
+      variant="sidebar"
+      hideDesktopSave
+      filters={filters}
+      onChange={setFilters}
+      onReset={handleReset}
+      onSearch={handleSearch}
+      onSortChange={changeSort}
+      onSave={handleSave}
+      searching={searching}
+      searchError={error}
+      searchErrorRetryAfter={errorRetryAfter}
+      saving={saving}
+      saveSuccess={saveSuccess}
+      saveError={saveError}
+      saveLimitReached={saveLimitReached}
+      telegramConnected={user.telegram_connected}
+      monitorConnected={Boolean(matchingMonitor)}
+      connectedMonitorId={matchingMonitor?.id ?? null}
+      freshness={freshness}
+      onFreshnessChange={changeFreshness}
+    />
+  );
+
+  const resultsPanel = (
+    <SearchPreviewResults
+      resultsRef={resultsRef}
+      running={running}
+      searching={searching}
+      loadingMore={loadingMore}
+      hasMore={hasMore}
+      total={total}
+      marketTotal={marketTotal}
+      results={results}
+      sort={sort}
+      freshness={freshness}
+      error={error}
+      sourceStatuses={sourceStatuses}
+      partial={partial}
+      fromCache={fromCache}
+      onSortChange={changeSort}
+      onFreshnessChange={changeFreshness}
+      onLoadMore={loadMore}
+    />
+  );
+
   return (
-    <AppPage wide>
+    <AppPage wide className="lg:max-w-none">
       <DashboardWelcomeHero firstName={firstName} />
 
       {(user.plan === "free" || (remaining <= 2 && remaining > 0)) && (
@@ -161,49 +227,13 @@ export default function DashboardPage() {
 
       <div className="mb-8">
         <h2 className="text-[17px] font-bold text-ink">Новий моніторинг</h2>
-        <div ref={filtersPanelRef} className="mt-4 scroll-mt-4">
-          <SearchFiltersPanel
-            wide
-            filters={filters}
-            onChange={setFilters}
-            onReset={handleReset}
-            onSearch={handleSearch}
-            onSortChange={changeSort}
-            onSave={handleSave}
-            searching={searching}
-            searchError={error}
-            searchErrorRetryAfter={errorRetryAfter}
-            saving={saving}
-            saveSuccess={saveSuccess}
-            saveError={saveError}
-            saveLimitReached={saveLimitReached}
-            telegramConnected={user.telegram_connected}
-            monitorConnected={Boolean(matchingMonitor)}
-            connectedMonitorId={matchingMonitor?.id ?? null}
-            freshness={freshness}
-            onFreshnessChange={changeFreshness}
+        <div className="mt-4">
+          <SearchDesktopSplit
+            filtersRef={filtersPanelRef}
+            filters={filtersPanel}
+            results={resultsPanel}
           />
         </div>
-
-        <SearchPreviewResults
-          resultsRef={resultsRef}
-          running={running}
-          searching={searching}
-          loadingMore={loadingMore}
-          hasMore={hasMore}
-          total={total}
-          marketTotal={marketTotal}
-          results={results}
-          sort={sort}
-          freshness={freshness}
-          error={error}
-          sourceStatuses={sourceStatuses}
-          partial={partial}
-          fromCache={fromCache}
-          onSortChange={changeSort}
-          onFreshnessChange={changeFreshness}
-          onLoadMore={loadMore}
-        />
       </div>
 
       <div className="mt-8 flex items-end justify-between gap-3" data-tour="my-searches">
@@ -268,6 +298,34 @@ export default function DashboardPage() {
       <div className="mt-10">
         <FreshListingsCarousel variant="dashboard" />
       </div>
+
+      <MobileSearchFiltersFab
+        targetRef={filtersPanelRef}
+        monitor={{
+          visible: running,
+          connected: Boolean(matchingMonitor),
+          connectedMonitorId: matchingMonitor?.id ?? null,
+          saving,
+          limitReached: saveLimitReached,
+          onSave: handleMonitorClick,
+        }}
+      />
+
+      <DesktopSearchMonitorFab
+        visible={running}
+        connected={Boolean(matchingMonitor)}
+        connectedMonitorId={matchingMonitor?.id ?? null}
+        saving={saving}
+        limitReached={saveLimitReached}
+        onSave={handleMonitorClick}
+      />
+
+      <TelegramConnectPrompt
+        open={tgPromptOpen}
+        onClose={() => setTgPromptOpen(false)}
+        onContinueWithoutTelegram={handleSave}
+        onConnected={handleSave}
+      />
     </AppPage>
   );
 }

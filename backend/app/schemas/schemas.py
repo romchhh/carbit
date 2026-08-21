@@ -312,6 +312,9 @@ class ListingOut(BaseModel):
     vin_check_url: Optional[str] = None
     source_data: Optional[dict[str, Any]] = None
     price_history: list[dict]
+    previous_price: Optional[int] = None
+    price_drop_percent: Optional[float] = None
+    price_dropped_at: Optional[datetime] = None
     is_duplicate: bool
     duplicate_of: Optional[str] = None
     alternate_sources: list[ListingSourceLink] = Field(default_factory=list)

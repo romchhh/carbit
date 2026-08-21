@@ -22,7 +22,9 @@ import { useListingVinCheck } from "@/hooks/useVinCheckCache";
 import { useListingPhotoHydration } from "@/hooks/useListingPhotoHydration";
 import { hasVinCheck, resolveListingVin } from "@/lib/vin-check";
 import { cn, formatMileage, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
-import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
+import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
+import { resolveListingPriceDrop } from "@/lib/listing-price-drop";
+import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
 
@@ -62,13 +64,7 @@ export function ListingCard({
     displayCurrencyProp ?? user?.preferred_currency,
   );
   const { images, rootRef, photosPending } = useListingPhotoHydration(listing);
-  const price = Number(listing.price) || 0;
-  const priceLabel = formatListingPrice(
-    price,
-    listing.currency,
-    displayCurrency,
-    listing.source_data,
-  );
+  const priceDrop = resolveListingPriceDrop(listing);
   const fuel = typeof listing.fuel === "string" ? listing.fuel : "";
   const region = typeof listing.region === "string" ? listing.region : "";
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
@@ -121,7 +117,7 @@ export function ListingCard({
         "group cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-white text-left shadow-[0_2px_12px_-6px_rgba(10,12,14,0.12)] transition-all",
         "hover:border-emerald/30 hover:shadow-[0_8px_24px_-10px_rgba(10,12,14,0.16)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40",
-        "sm:flex sm:gap-4 sm:p-4",
+        "sm:flex sm:gap-5 sm:p-5 lg:gap-6 lg:p-6 lg:rounded-[1.35rem]",
         isNewForMonitor && "border-emerald/40 ring-1 ring-emerald/20",
         className,
       )}
@@ -159,6 +155,11 @@ export function ListingCard({
             {isNewCar && (
               <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
                 Новий
+              </span>
+            )}
+            {priceDrop && (
+              <span className="rounded-full bg-rose-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+                −{Math.round(priceDrop.dropPercent)}%
               </span>
             )}
           </div>
@@ -222,14 +223,14 @@ export function ListingCard({
       </div>
 
       {/* Desktop: thumbnail left with photo arrows */}
-      <div className="relative hidden h-36 w-52 shrink-0 overflow-hidden rounded-xl bg-surface sm:block">
+      <div className="relative hidden h-44 w-64 shrink-0 overflow-hidden rounded-xl bg-surface sm:block lg:h-56 lg:w-[22rem] lg:rounded-2xl">
         {currentPhoto ? (
           <Image
             src={currentPhoto}
             alt={listing.title}
             fill
             className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-            sizes="208px"
+            sizes="(min-width: 1024px) 352px, 256px"
             loading="lazy"
             decoding="async"
             unoptimized
@@ -270,7 +271,7 @@ export function ListingCard({
               aria-label="Попереднє фото"
               onClick={goPhoto(-1)}
               className={cn(
-                "absolute left-1.5 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center",
+                "absolute left-1.5 top-1/2 z-[1] flex h-8 w-8 -translate-y-1/2 items-center justify-center lg:h-9 lg:w-9",
                 "rounded-full bg-ink/70 text-white opacity-0 shadow-sm backdrop-blur-sm transition-opacity",
                 "hover:bg-ink/85 group-hover:opacity-100 focus:opacity-100 focus:outline-none",
               )}
@@ -282,7 +283,7 @@ export function ListingCard({
               aria-label="Наступне фото"
               onClick={goPhoto(1)}
               className={cn(
-                "absolute right-1.5 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center",
+                "absolute right-1.5 top-1/2 z-[1] flex h-8 w-8 -translate-y-1/2 items-center justify-center lg:h-9 lg:w-9",
                 "rounded-full bg-ink/70 text-white opacity-0 shadow-sm backdrop-blur-sm transition-opacity",
                 "hover:bg-ink/85 group-hover:opacity-100 focus:opacity-100 focus:outline-none",
               )}
@@ -299,7 +300,7 @@ export function ListingCard({
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col p-4 pt-3.5 sm:p-0">
+      <div className="flex min-w-0 flex-1 flex-col p-4 pt-3.5 sm:p-0 sm:justify-center">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -308,56 +309,68 @@ export function ListingCard({
                   Нове
                 </span>
               )}
-              {isNewCar && (
-                <span className="hidden rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:inline-flex">
-                  Новий
-                </span>
-              )}
-              <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[15px] sm:line-clamp-1">
+            {isNewCar && (
+              <span className="hidden rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:inline-flex">
+                Новий
+              </span>
+            )}
+            {priceDrop && (
+              <span className="hidden rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:inline-flex">
+                −{Math.round(priceDrop.dropPercent)}%
+              </span>
+            )}
+              <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[16px] sm:line-clamp-2 lg:text-[18px]">
                 {listing.title}
               </h3>
             </div>
-            <p className="mt-2 text-[22px] font-black leading-none tracking-tight text-ink sm:hidden">
-              {priceLabel}
-            </p>
+            <div className="mt-2 sm:hidden">
+              <ListingPriceDisplay
+                listing={listing}
+                displayCurrency={displayCurrency}
+                priceClassName="text-[22px]"
+              />
+            </div>
           </div>
           <div className="hidden shrink-0 text-right sm:block">
-            <div className="text-[20px] font-black leading-none text-ink">
-              {priceLabel}
-            </div>
+            <ListingPriceDisplay
+              listing={listing}
+              displayCurrency={displayCurrency}
+              priceClassName="text-[22px] lg:text-[26px]"
+              className="items-end"
+            />
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-2">
+        <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-3 lg:mt-4 lg:gap-2">
           {listing.year > 0 && (
-            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
               {listing.year}
             </span>
           )}
           {mileageKm != null && mileageKm > 0 && (
-            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
               {formatMileage(mileageKm)}
             </span>
           )}
           {engineVolume != null && (
-            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
               {formatEngineVolume(engineVolume)}
             </span>
           )}
           {listing.transmission && (
-            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
               {listing.transmission}
             </span>
           )}
           {fuel && (
-            <span className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
+            <span className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
               {fuel.split(",")[0]?.trim()}
             </span>
           )}
           {highlights.map((item, index) => (
             <span
               key={`${item}-${index}`}
-              className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink"
+              className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]"
             >
               {item}
             </span>

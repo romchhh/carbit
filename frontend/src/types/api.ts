@@ -99,6 +99,9 @@ export interface Listing {
   vin_check_url?: string | null;
   source_data?: Record<string, unknown> | null;
   price_history: Record<string, unknown>[];
+  previous_price?: number | null;
+  price_drop_percent?: number | null;
+  price_dropped_at?: string | null;
   is_duplicate: boolean;
   duplicate_of?: string | null;
   /** Інші джерела того самого авто (іконки-посилання в UI). */

@@ -66,6 +66,10 @@ type Props = {
   monitorConnected?: boolean;
   connectedMonitorId?: string | null;
   wide?: boolean;
+  /** Компактна ліва колонка на desktop (як AUTO.RIA). */
+  variant?: "default" | "sidebar";
+  /** На desktop моніторинг — fixed-кнопка, блок CTA ховаємо. */
+  hideDesktopSave?: boolean;
   freshness?: SearchFreshness;
   onFreshnessChange?: (freshness: SearchFreshness) => void;
   /** Плейсхолдери поля ціни (на лендінгу — без заготовленого діапазону). */
@@ -95,6 +99,8 @@ export function SearchFiltersPanel({
   monitorConnected,
   connectedMonitorId,
   wide,
+  variant = "default",
+  hideDesktopSave,
   freshness = "all",
   onFreshnessChange,
   pricePlaceholderFrom,
@@ -112,6 +118,8 @@ export function SearchFiltersPanel({
   const searchActionsRef = useRef<HTMLDivElement>(null);
   const syncedFilters = syncSearchFilterArrays(filters);
   const rateLimited = isSearchRateLimitMessage(searchError);
+  const sidebar = variant === "sidebar";
+  const compactFilters = sidebar;
 
   const applyFilters = (next: SearchFilterState) => {
     onChange(syncSearchFilterArrays(next));
@@ -190,22 +198,57 @@ export function SearchFiltersPanel({
 
   return (
     <>
-      <div className={cn("w-full", wide ? "max-w-none" : "max-w-[640px]")} data-tour="search-filters">
-        <div className="rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] transition-shadow duration-300">
-          <div className="overflow-hidden rounded-t-[1.35rem] border-b border-border/60 bg-surface/70 px-3 py-3.5 sm:px-5">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div className="min-w-0 pt-1">
-                <p className="text-[13px] font-semibold text-ink">Категорія</p>
-                <p className="mt-0.5 hidden text-[11px] text-muted sm:block">
+      <div
+        className={cn(
+          "w-full",
+          wide ? "max-w-none" : "max-w-[640px]",
+          variant === "sidebar" && "lg:max-w-none",
+        )}
+        data-tour="search-filters"
+      >
+        <div
+          className={cn(
+            "rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] transition-shadow duration-300",
+            variant === "sidebar" &&
+              "lg:rounded-2xl lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)]",
+          )}
+        >
+          <div
+            className={cn(
+              "overflow-hidden rounded-t-[1.35rem] border-b border-border/60 bg-surface/70 px-3 py-3.5 sm:px-5",
+              sidebar && "lg:rounded-t-2xl lg:px-3.5 lg:py-3",
+            )}
+          >
+            <div className={cn("mb-3 flex items-start justify-between gap-2", sidebar && "lg:mb-2")}>
+              <div className="min-w-0 pt-0.5">
+                <p className={cn("font-semibold text-ink", sidebar ? "text-[12px]" : "text-[13px]")}>
+                  Категорія
+                </p>
+                <p
+                  className={cn(
+                    "mt-0.5 hidden text-[11px] text-muted sm:block",
+                    sidebar && "lg:hidden",
+                  )}
+                >
                   {voiceSearchCabinetOnly
                     ? "Голосовий пошук — у кабінеті після входу"
                     : "Або скажіть голосом — AI заповнить фільтри"}
                 </p>
               </div>
-              <VoiceSearchTrigger onClick={handleVoiceClick} />
+              <VoiceSearchTrigger onClick={handleVoiceClick} compact={compactFilters} />
             </div>
-            <div className="overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex min-w-max gap-2">
+            <div
+              className={cn(
+                "overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                sidebar && "lg:overflow-visible",
+              )}
+            >
+              <div
+                className={cn(
+                  "flex min-w-max gap-2",
+                  sidebar && "lg:min-w-0 lg:flex-wrap lg:gap-1.5",
+                )}
+              >
                 {CATEGORY_OPTIONS.map(({ value, label }) => {
                   const active = filters.category === value;
                   return (
@@ -214,7 +257,10 @@ export function SearchFiltersPanel({
                       type="button"
                       onClick={() => update({ category: value })}
                       className={cn(
-                        "rounded-full border px-4 py-2 text-[14px] font-medium whitespace-nowrap transition-colors",
+                        "rounded-full border font-medium whitespace-nowrap transition-colors",
+                        sidebar
+                          ? "px-2.5 py-1.5 text-[12px] lg:px-3"
+                          : "px-4 py-2 text-[14px]",
                         active
                           ? "border-ink bg-ink text-white shadow-sm"
                           : "border-border bg-white text-ink hover:border-emerald/40",
@@ -228,7 +274,12 @@ export function SearchFiltersPanel({
             </div>
           </div>
 
-          <div className="relative z-20 space-y-2 bg-surface/40 px-3 py-3.5 sm:px-5 sm:py-5">
+          <div
+            className={cn(
+              "relative z-20 space-y-2 bg-surface/40 px-3 py-3.5 sm:px-5 sm:py-5",
+              sidebar && "lg:space-y-1.5 lg:px-3.5 lg:py-3",
+            )}
+          >
             {voiceHint && (
               <div className="flex items-start gap-3 rounded-2xl border border-emerald/20 bg-gradient-to-r from-emerald/10 to-cyan-500/5 px-3.5 py-3">
                 <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald/15 text-emerald-dark">
@@ -243,9 +294,15 @@ export function SearchFiltersPanel({
               value={filters.vehicleType}
               options={[...VEHICLE_TYPE_OPTIONS]}
               onChange={vehicleType => update({ vehicleType })}
+              compact={compactFilters}
             />
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div
+              className={cn(
+                "grid grid-cols-1 gap-2 sm:grid-cols-2",
+                sidebar && "lg:grid-cols-1 lg:gap-1.5",
+              )}
+            >
               <FilterOptionsPopover
                 label="Марка"
                 value={syncedFilters.brand}
@@ -264,6 +321,7 @@ export function SearchFiltersPanel({
                 getOptionIcon={getBrandIconUrl}
                 filterOptionsFn={(opts, q) => filterBrandOptions(opts, q)}
                 resolveQueryFn={q => resolveBrandQuery(q, BRANDS)}
+                compact={compactFilters}
               />
               <FilterOptionsPopover
                 label="Модель"
@@ -285,10 +343,16 @@ export function SearchFiltersPanel({
                 resolveQueryFn={q =>
                   resolveModelQuery(syncedFilters.brand, q, getModelsForBrand(syncedFilters.brand))
                 }
+                compact={compactFilters}
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div
+              className={cn(
+                "grid grid-cols-1 gap-2 sm:grid-cols-2",
+                sidebar && "lg:grid-cols-1 lg:gap-1.5",
+              )}
+            >
               <FilterRangePopover
                 label="Рік випуску"
                 from={filters.yearFrom}
@@ -299,6 +363,7 @@ export function SearchFiltersPanel({
                 hint={`Допустимо ${YEAR_MIN}–${yearMax()}.`}
                 placeholderFrom={YEAR_PLACEHOLDERS.from}
                 placeholderTo={YEAR_PLACEHOLDERS.to}
+                compact={compactFilters}
               />
               <FilterRangePopover
                 label="Ціна"
@@ -325,6 +390,7 @@ export function SearchFiltersPanel({
                     priceTo: "",
                   });
                 }}
+                compact={compactFilters}
               />
             </div>
 
@@ -341,15 +407,24 @@ export function SearchFiltersPanel({
               }
               searchable
               emptyLabel="Вся Україна"
+              compact={compactFilters}
             />
 
           </div>
 
-          <div className="relative z-10 space-y-2 overflow-hidden rounded-b-[1.35rem] border-t border-border/60 bg-white px-3 py-3.5 sm:px-5">
+          <div
+            className={cn(
+              "relative z-10 space-y-2 overflow-hidden rounded-b-[1.35rem] border-t border-border/60 bg-white px-3 py-3.5 sm:px-5",
+              sidebar && "lg:rounded-b-2xl lg:px-3.5 lg:py-3",
+            )}
+          >
             <button
               type="button"
               onClick={() => setAdvanced(v => !v)}
-              className="w-full rounded-full border border-border bg-surface py-3.5 text-[16px] font-semibold text-ink transition-colors hover:border-ink/20 hover:bg-surface/80"
+              className={cn(
+                "w-full rounded-full border border-border bg-surface font-semibold text-ink transition-colors hover:border-ink/20 hover:bg-surface/80",
+                sidebar ? "py-2.5 text-[13px]" : "py-3.5 text-[16px]",
+              )}
             >
               {advanced ? "Сховати розширений пошук" : "Розширений пошук"}
             </button>
@@ -362,7 +437,11 @@ export function SearchFiltersPanel({
 
         <div
           ref={searchActionsRef}
-          className="mt-4 scroll-mt-28 space-y-3 rounded-[1.35rem] border border-border/80 bg-white px-3 py-3.5 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:scroll-mt-8 sm:px-5 lg:scroll-mt-6"
+          className={cn(
+            "mt-4 scroll-mt-28 space-y-3 rounded-[1.35rem] border border-border/80 bg-white px-3 py-3.5 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:scroll-mt-8 sm:px-5 lg:scroll-mt-6",
+            sidebar &&
+              "lg:mt-3 lg:space-y-2 lg:rounded-2xl lg:px-3.5 lg:py-3 lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)]",
+          )}
         >
           {rateLimited ? (
             <SearchRateLimitNotice
@@ -382,7 +461,8 @@ export function SearchFiltersPanel({
             onClick={() => onSearch()}
             disabled={searching}
             className={cn(
-              "relative w-full overflow-hidden rounded-full bg-emerald py-3.5 text-[16px] font-semibold text-white shadow-md shadow-emerald/25 transition-all duration-300 hover:bg-emerald-dark disabled:cursor-wait",
+              "relative w-full overflow-hidden rounded-full bg-emerald font-semibold text-white shadow-md shadow-emerald/25 transition-all duration-300 hover:bg-emerald-dark disabled:cursor-wait",
+              sidebar ? "py-2.5 text-[14px]" : "py-3.5 text-[16px]",
               searching && "animate-pulse shadow-[0_0_0_4px_rgba(16,185,129,0.25)]",
             )}
           >
@@ -408,6 +488,7 @@ export function SearchFiltersPanel({
 
           {onSave && (
             <SaveSearchCTA
+              className={cn(hideDesktopSave && "lg:hidden")}
               onSave={onSave}
               saving={saving}
               successMessage={saveSuccess}

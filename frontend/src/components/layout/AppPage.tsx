@@ -5,16 +5,35 @@ type AppPageProps = {
   description?: string;
   action?: React.ReactNode;
   wide?: boolean;
+  /** Компактна колонка для форм (акаунт тощо) — не розтягується на всю ширину island. */
+  narrow?: boolean;
   tourId?: string;
   children: React.ReactNode;
   className?: string;
 };
 
-export function AppPage({ title, description, action, wide, tourId, children, className }: AppPageProps) {
+export function AppPage({
+  title,
+  description,
+  action,
+  wide,
+  narrow,
+  tourId,
+  children,
+  className,
+}: AppPageProps) {
   return (
     <div
       data-tour={tourId}
-      className={cn("mx-auto w-full", wide ? "max-w-[920px]" : "max-w-[760px]", className)}
+      className={cn(
+        "mx-auto w-full lg:mx-0",
+        narrow
+          ? "max-w-[760px] lg:max-w-[880px]"
+          : wide
+            ? "max-w-[920px] lg:max-w-none"
+            : "max-w-[760px] lg:max-w-[1100px]",
+        className,
+      )}
     >
       {(title || action) && (
         <header className="mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-start sm:justify-between">
@@ -23,7 +42,7 @@ export function AppPage({ title, description, action, wide, tourId, children, cl
               <h1 className="text-[22px] font-black tracking-tight text-ink sm:text-[26px]">{title}</h1>
             )}
             {description && (
-              <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{description}</p>
+              <p className="mt-1.5 max-w-3xl text-[13px] leading-relaxed text-muted">{description}</p>
             )}
           </div>
           {action && <div className="shrink-0">{action}</div>}

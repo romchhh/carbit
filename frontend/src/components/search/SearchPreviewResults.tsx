@@ -138,7 +138,7 @@ export function SearchPreviewResults({
 
   return (
     <>
-      <div ref={resultsRef} id="search-results" className="mt-6 scroll-mt-28 sm:mt-8 sm:scroll-mt-24">
+      <div ref={resultsRef} id="search-results" className="mt-6 scroll-mt-28 sm:mt-8 sm:scroll-mt-24 lg:mt-0 lg:scroll-mt-6">
         {running && (
           <SearchResultsToolbar
             running={running}
@@ -221,7 +221,7 @@ export function SearchPreviewResults({
           <>
             <div
               className={cn(
-                "relative -mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:gap-3 sm:px-0",
+                "relative -mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:gap-3 sm:px-0 lg:gap-4",
                 searching && "opacity-70",
               )}
               aria-busy={searching || loadingMore}
@@ -252,7 +252,7 @@ export function SearchPreviewResults({
                 type="button"
                 onClick={onLoadMore}
                 disabled={loadingMore || searching}
-                className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[14px] font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-60"
+                className="mt-6 w-full rounded-2xl bg-emerald py-3.5 text-[14px] font-semibold text-white shadow-md shadow-emerald/25 transition-colors hover:bg-emerald-dark disabled:opacity-60"
               >
                 {loadingMore ? (
                   "Завантаження…"
@@ -260,10 +260,10 @@ export function SearchPreviewResults({
                   <span className="inline-flex items-center justify-center gap-1.5">
                     <span>Показати ще</span>
                     {nextBatch > 0 && (
-                      <span className="font-bold text-ink">+{nextBatch}</span>
+                      <span className="font-bold text-white">+{nextBatch}</span>
                     )}
                     {total > 0 && (
-                      <span className="font-medium text-muted">
+                      <span className="font-medium text-white/80">
                         · {results.length} з {total.toLocaleString("uk-UA")}
                       </span>
                     )}

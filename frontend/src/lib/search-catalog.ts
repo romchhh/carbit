@@ -196,7 +196,7 @@ export function publishedWithinDaysFromLabel(label: string): PublishedWithinDays
 export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
   { value: "all", label: "Всі" },
   { value: "used", label: "Вживані" },
-  { value: "new", label: "Нові · до 1000 км" },
+  { value: "new", label: "Нові" },
   { value: "import", label: "Під пригон" },
 ];
 

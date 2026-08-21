@@ -3,7 +3,7 @@ export function formatSearchDesc(filters: Record<string, unknown>): string {
   const parts: string[] = [];
   const categoryLabels: Record<string, string> = {
     used: "Вживані",
-    new: "Нові · до 1000 км",
+    new: "Нові",
     import: "Під пригон",
   };
   if (filters.category && filters.category !== "all") {

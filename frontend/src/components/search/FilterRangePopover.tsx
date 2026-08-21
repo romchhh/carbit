@@ -23,6 +23,7 @@ type Props = {
   currencyOptions?: CurrencyOption[];
   onCurrencyChange?: (currency: string) => void;
   className?: string;
+  compact?: boolean;
 };
 
 function displayRange(from: string, to: string, suffix = ""): string {
@@ -47,6 +48,7 @@ export function FilterRangePopover({
   currencyOptions,
   onCurrencyChange,
   className,
+  compact,
 }: Props) {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -91,7 +93,7 @@ export function FilterRangePopover({
 
   return (
     <div ref={rootRef} className={cn("relative", open && "z-[80]", className)}>
-      <FilterRow label={label} value={display} onClick={() => setOpen(v => !v)} />
+      <FilterRow label={label} value={display} onClick={() => setOpen(v => !v)} compact={compact} />
       {open && (
         <div
           id={panelId}

@@ -255,7 +255,7 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
       <div className="relative z-20 space-y-4 overflow-visible px-4 py-4 sm:px-5">
         <ActiveSummary filters={filters} onClearOne={update} />
 
-        <FilterAccordionSection title="Дата публікації" badge={publishedBadge} defaultOpen>
+        <FilterAccordionSection title="Дата публікації" badge={publishedBadge} defaultOpen={false}>
           <FilterPublishedDateRange
             publishedWithinDays={filters.publishedWithinDays}
             publishedFrom={filters.publishedFrom}
@@ -264,7 +264,7 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
           />
         </FilterAccordionSection>
 
-        <FilterAccordionSection title="Кузов і техніка" badge={techBadge} defaultOpen>
+        <FilterAccordionSection title="Кузов і техніка" badge={techBadge} defaultOpen={false}>
           <FilterChipGroup
             label="Тип кузова"
             options={BODY_TYPE_OPTIONS}

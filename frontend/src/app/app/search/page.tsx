@@ -2,9 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
+import { MobileSearchFiltersFab } from "@/components/search/MobileSearchFiltersFab";
+import { DesktopSearchMonitorFab } from "@/components/search/DesktopSearchMonitorFab";
+import { SearchDesktopSplit } from "@/components/search/SearchDesktopSplit";
 import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
 import { RecentSearchesSection } from "@/components/search/RecentSearchesSection";
+import { TelegramConnectPrompt } from "@/components/search/TelegramConnectPrompt";
 import { useAuth } from "@/contexts/AuthProvider";
 import { usePreviewSearch } from "@/hooks/usePreviewSearch";
 import { useRecentSearches } from "@/hooks/useRecentSearches";
@@ -20,8 +25,10 @@ import {
 import type { SearchQuery } from "@/types/api";
 
 export default function SearchPage() {
+  const router = useRouter();
   const { user, loading: authLoading, initialized } = useAuth();
   const [searches, setSearches] = useState<SearchQuery[]>([]);
+  const [tgPromptOpen, setTgPromptOpen] = useState(false);
   const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } =
     useSaveSearch(created => {
       setSearches(prev => [created, ...prev.filter(s => s.id !== created.id)]);
@@ -110,10 +117,72 @@ export default function SearchPage() {
     void saveSearch(filters, results);
   };
 
+  const handleMonitorClick = () => {
+    if (saving || saveLimitReached) return;
+    if (matchingMonitor) {
+      router.push(`/app/monitors/${matchingMonitor.id}`);
+      return;
+    }
+    if (!user?.telegram_connected) {
+      setTgPromptOpen(true);
+      return;
+    }
+    handleSave();
+  };
+
+  const filtersPanel = (
+    <SearchFiltersPanel
+      wide
+      variant="sidebar"
+      hideDesktopSave
+      filters={filters}
+      onChange={setFilters}
+      onReset={handleReset}
+      onSearch={handleSearch}
+      onSortChange={changeSort}
+      onSave={handleSave}
+      searching={searching}
+      searchError={error}
+      searchErrorRetryAfter={errorRetryAfter}
+      saving={saving}
+      saveSuccess={saveSuccess}
+      saveError={saveError}
+      saveLimitReached={saveLimitReached}
+      telegramConnected={user?.telegram_connected}
+      monitorConnected={Boolean(matchingMonitor)}
+      connectedMonitorId={matchingMonitor?.id ?? null}
+      freshness={freshness}
+      onFreshnessChange={changeFreshness}
+    />
+  );
+
+  const resultsPanel = (
+    <SearchPreviewResults
+      resultsRef={resultsRef}
+      running={running}
+      searching={searching}
+      loadingMore={loadingMore}
+      hasMore={hasMore}
+      total={total}
+      marketTotal={marketTotal}
+      results={results}
+      sort={sort}
+      freshness={freshness}
+      error={error}
+      sourceStatuses={sourceStatuses}
+      partial={partial}
+      fromCache={fromCache}
+      onSortChange={changeSort}
+      onFreshnessChange={changeFreshness}
+      onLoadMore={loadMore}
+    />
+  );
+
   return (
-    <div className="max-w-[1100px]">
-      <RecentListingsSection className="mb-8" />
-      <div className="mb-5 flex flex-col gap-2 sm:mb-7 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+    <div className="lg:max-w-none">
+      <RecentListingsSection className="mb-8 lg:hidden" />
+
+      <div className="mb-5 flex flex-col gap-2 sm:mb-7 sm:flex-row sm:items-start sm:justify-between sm:gap-3 lg:mb-6">
         <div>
           <h1 className="text-[22px] font-black tracking-[-0.02em] text-ink sm:text-[26px]">
             Пошук авто
@@ -138,51 +207,40 @@ export default function SearchPage() {
         </span>
       </div>
 
-      <div ref={filtersPanelRef} className="mb-5 scroll-mt-4 sm:mb-6">
-        <SearchFiltersPanel
-          wide
-          filters={filters}
-          onChange={setFilters}
-          onReset={handleReset}
-          onSearch={handleSearch}
-          onSortChange={changeSort}
-          onSave={handleSave}
-          searching={searching}
-          searchError={error}
-          searchErrorRetryAfter={errorRetryAfter}
-          saving={saving}
-          saveSuccess={saveSuccess}
-          saveError={saveError}
-          saveLimitReached={saveLimitReached}
-          telegramConnected={user?.telegram_connected}
-          monitorConnected={Boolean(matchingMonitor)}
-          connectedMonitorId={matchingMonitor?.id ?? null}
-          freshness={freshness}
-          onFreshnessChange={changeFreshness}
-        />
-      </div>
-
-      <SearchPreviewResults
-        resultsRef={resultsRef}
-        running={running}
-        searching={searching}
-        loadingMore={loadingMore}
-        hasMore={hasMore}
-        total={total}
-        marketTotal={marketTotal}
-        results={results}
-        sort={sort}
-        freshness={freshness}
-        error={error}
-        sourceStatuses={sourceStatuses}
-        partial={partial}
-        fromCache={fromCache}
-        onSortChange={changeSort}
-        onFreshnessChange={changeFreshness}
-        onLoadMore={loadMore}
+      <SearchDesktopSplit
+        filtersRef={filtersPanelRef}
+        filters={filtersPanel}
+        results={resultsPanel}
+        footer={<RecentSearchesSection onSelect={handleRecentSelect} />}
       />
 
-      <RecentSearchesSection onSelect={handleRecentSelect} />
+      <MobileSearchFiltersFab
+        targetRef={filtersPanelRef}
+        monitor={{
+          visible: running,
+          connected: Boolean(matchingMonitor),
+          connectedMonitorId: matchingMonitor?.id ?? null,
+          saving,
+          limitReached: saveLimitReached,
+          onSave: handleMonitorClick,
+        }}
+      />
+
+      <DesktopSearchMonitorFab
+        visible={running}
+        connected={Boolean(matchingMonitor)}
+        connectedMonitorId={matchingMonitor?.id ?? null}
+        saving={saving}
+        limitReached={saveLimitReached}
+        onSave={handleMonitorClick}
+      />
+
+      <TelegramConnectPrompt
+        open={tgPromptOpen}
+        onClose={() => setTgPromptOpen(false)}
+        onContinueWithoutTelegram={handleSave}
+        onConnected={handleSave}
+      />
     </div>
   );
 }

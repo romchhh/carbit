@@ -115,6 +115,7 @@ export default function FavoritesPage() {
 
   return (
     <AppPage
+      wide
       title="Обране"
       description="Збережені авто для швидкого доступу"
       tourId="tour-section-favorites"
@@ -152,7 +153,7 @@ export default function FavoritesPage() {
           </Link>
         </AppEmpty>
       ) : (
-        <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:px-0">
+        <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:gap-3 sm:px-0 lg:gap-4">
           {listings.map(listing => (
             <ListingCard
               key={listing.id}

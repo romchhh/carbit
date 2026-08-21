@@ -26,6 +26,7 @@ type Props = {
   formatMultiDisplay?: (values: string[]) => string;
   /** Очистити всі обрані (multi). */
   onClearAll?: () => void;
+  compact?: boolean;
 };
 
 export function FilterOptionsPopover({
@@ -45,6 +46,7 @@ export function FilterOptionsPopover({
   resolveQueryFn,
   formatMultiDisplay,
   onClearAll,
+  compact,
 }: Props) {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -112,9 +114,10 @@ export function FilterOptionsPopover({
         value={hasSelection ? display : undefined}
         onClick={() => !disabled && setOpen(v => !v)}
         disabled={disabled}
+        compact={compact}
         leading={
           selectedIconUrl ? (
-            <BrandIcon src={selectedIconUrl} size={22} className="opacity-90" />
+            <BrandIcon src={selectedIconUrl} size={compact ? 18 : 22} className="opacity-90" />
           ) : undefined
         }
       />

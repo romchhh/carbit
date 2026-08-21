@@ -22,7 +22,7 @@ export function CompareBar() {
       className={cn(
         "fixed z-[45] left-0 right-0 px-2 sm:px-4",
         "bottom-[calc(var(--mobile-nav-height,72px)+8px)] lg:bottom-6",
-        "lg:left-[calc(252px+1.5rem)] lg:right-6 lg:max-w-[980px] lg:mx-auto",
+        "lg:left-3 lg:right-5 lg:max-w-none lg:mx-0 xl:left-4 xl:right-7",
       )}
     >
       <div className="rounded-2xl border border-emerald/30 bg-white/96 shadow-[0_10px_40px_-10px_rgba(10,12,14,0.28)] backdrop-blur-md">

@@ -126,6 +126,7 @@ export default function NotificationsPage() {
 
   return (
     <AppPage
+      wide
       tourId="tour-section-notifications"
       title="Сповіщення"
       description={unread > 0 ? `${unread} непрочитаних` : "Всі прочитані"}
@@ -153,9 +154,9 @@ export default function NotificationsPage() {
         </AppEmpty>
       ) : (
         <>
-          <div className="mb-4 rounded-2xl border border-border bg-white p-3.5 sm:px-5 sm:py-3.5">
+          <div className="mb-4 rounded-2xl border border-border bg-white p-3.5 sm:px-5 sm:py-3.5 lg:mb-5 lg:px-6 lg:py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-[13px] text-muted">
+              <div className="text-[13px] text-muted lg:text-[14px]">
                 {total} {total === 1 ? "сповіщення" : total < 5 ? "сповіщення" : "сповіщень"}
                 {items.length < total && (
                   <span className="ml-1.5 text-muted/80">
@@ -166,12 +167,12 @@ export default function NotificationsPage() {
                   <span className="ml-2 font-semibold text-emerald-dark">{unread} нових</span>
                 )}
               </div>
-              <label className="flex items-center gap-2 text-[13px]">
+              <label className="flex items-center gap-2 text-[13px] lg:text-[14px]">
                 <span className="text-muted">Сортування</span>
                 <select
                   value={sort}
                   onChange={e => setSort(e.target.value as SortOption)}
-                  className="rounded-lg border border-border bg-white px-3 py-2 text-[13px] font-medium text-ink"
+                  className="rounded-lg border border-border bg-white px-3 py-2 text-[13px] font-medium text-ink lg:px-3.5 lg:py-2.5 lg:text-[14px]"
                 >
                   {SORT_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
@@ -183,12 +184,12 @@ export default function NotificationsPage() {
             </div>
           </div>
 
-          <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:px-0">
+          <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:gap-3 sm:px-0 lg:gap-4">
             {listingItems.map(item => (
               <div key={item.id} className="relative">
                 {!item.is_read && (
                   <span
-                    className="absolute left-3 top-3 z-10 h-2.5 w-2.5 rounded-full bg-emerald ring-2 ring-white sm:left-[calc(13rem+1rem)]"
+                    className="absolute left-3 top-3 z-10 h-2.5 w-2.5 rounded-full bg-emerald ring-2 ring-white sm:left-[calc(13rem+1rem)] lg:left-[calc(22rem+1.5rem)] lg:h-3 lg:w-3"
                     aria-hidden
                   />
                 )}
@@ -200,8 +201,14 @@ export default function NotificationsPage() {
                   favoriteLoading={loadingIds.has(item.listing.id)}
                   onToggleFavorite={() => void toggleFavorite(item.listing)}
                 />
-                <div className="mt-1 flex flex-wrap items-center gap-2 px-1 text-[11px] text-muted">
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1 text-[11px] text-muted lg:mt-2 lg:gap-2.5 lg:text-[13px]">
+                  {item.type === "price_drop" && (
+                    <Badge variant="emerald">Зниження ціни</Badge>
+                  )}
                   {item.sent_telegram && <Badge variant="outline">Telegram</Badge>}
+                  {item.body && (
+                    <span className="text-rose-700">{item.body}</span>
+                  )}
                   <span>{timeAgo(item.created_at)}</span>
                 </div>
               </div>
@@ -211,27 +218,27 @@ export default function NotificationsPage() {
               <div
                 key={item.id}
                 className={cn(
-                  "rounded-2xl border bg-white p-4",
+                  "rounded-2xl border bg-white p-4 lg:rounded-[1.25rem] lg:p-6",
                   item.is_read ? "border-border opacity-80" : "border-emerald/20 bg-emerald-light/10",
                 )}
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-3 lg:gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-semibold text-ink">{item.title}</span>
-                      {!item.is_read && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald" />}
+                      <span className="text-[14px] font-semibold text-ink lg:text-[17px]">{item.title}</span>
+                      {!item.is_read && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald lg:h-2.5 lg:w-2.5" />}
                     </div>
-                    <p className="mt-1 text-[12px] leading-relaxed text-muted">{item.body}</p>
-                    <div className="mt-2 flex items-center gap-2">
+                    <p className="mt-1 text-[12px] leading-relaxed text-muted lg:mt-2 lg:text-[14px]">{item.body}</p>
+                    <div className="mt-2 flex items-center gap-2 lg:mt-3">
                       {item.sent_telegram && <Badge variant="outline">Telegram</Badge>}
-                      <span className="text-[11px] text-muted">{timeAgo(item.created_at)}</span>
+                      <span className="text-[11px] text-muted lg:text-[12px]">{timeAgo(item.created_at)}</span>
                     </div>
                   </div>
                   {!item.is_read && (
                     <button
                       type="button"
                       onClick={() => void markOne(item.id)}
-                      className="shrink-0 text-[12px] font-semibold text-emerald-dark hover:underline"
+                      className="shrink-0 text-[12px] font-semibold text-emerald-dark hover:underline lg:text-[13px]"
                     >
                       Прочитати
                     </button>
@@ -246,7 +253,7 @@ export default function NotificationsPage() {
               type="button"
               onClick={() => void loadMore()}
               disabled={loadingMore}
-              className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[13px] font-semibold text-muted transition-colors hover:border-ink/20 hover:text-ink disabled:opacity-60"
+              className="mt-6 w-full rounded-2xl bg-emerald py-3.5 text-[14px] font-semibold text-white shadow-md shadow-emerald/25 transition-colors hover:bg-emerald-dark disabled:opacity-60"
             >
               {loadingMore ? "Завантаження..." : `Показати ще (${Math.min(PAGE_SIZE, total - items.length)})`}
             </button>

@@ -274,7 +274,7 @@ export default function AccountPage() {
     });
 
   return (
-    <AppPage title="Акаунт">
+    <AppPage narrow title="Акаунт">
       <div className="space-y-4 sm:space-y-5">
         {/* Профіль */}
         <AppSection id="account-profile" className="!bg-white">

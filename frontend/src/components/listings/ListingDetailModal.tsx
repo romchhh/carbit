@@ -39,7 +39,8 @@ import {
   resolveListingMileage,
 } from "@/lib/listing-specs";
 import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
-import { formatListingPrice, resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
+import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
+import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { resolveListingImages } from "@/lib/listing-image-url";
 import { listings as listingsApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
@@ -157,15 +158,6 @@ export function ListingDetailModal({
       if (timer) window.clearTimeout(timer);
     };
   }, [listingProp?.id, listingProp?.source, listingProp?.images?.length, onListingUpdate]);
-
-  const priceLabel = listing
-    ? formatListingPrice(
-        listing.price,
-        listing.currency,
-        displayCurrency,
-        listing.source_data,
-      )
-    : "";
 
   const scrollToPhoto = useCallback((index: number) => {
     setPhotoIndex(index);
@@ -567,9 +559,14 @@ export function ListingDetailModal({
                     )}
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="text-[26px] font-black leading-none text-ink">
-                      {priceLabel}
-                    </div>
+                    {listing && (
+                      <ListingPriceDisplay
+                        listing={listing}
+                        displayCurrency={displayCurrency}
+                        priceClassName="text-[26px]"
+                        className="items-end"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -629,9 +626,13 @@ export function ListingDetailModal({
             {/* Mobile-only price block (desktop shows it in top row) */}
             <div className="flex flex-wrap items-end justify-between gap-3 sm:hidden">
               <div>
-                <div className="text-[28px] font-black leading-none text-ink">
-                  {priceLabel}
-                </div>
+                {listing && (
+                  <ListingPriceDisplay
+                    listing={listing}
+                    displayCurrency={displayCurrency}
+                    priceClassName="text-[28px]"
+                  />
+                )}
                 <p className="mt-1.5 text-[12px] text-muted">
                   {listing.brand} {listing.model}
                 </p>

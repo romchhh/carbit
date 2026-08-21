@@ -75,6 +75,7 @@ export default function SuggestSourcePage() {
 
   return (
     <AppPage
+      narrow
       title="Запропонувати джерело"
       description="Telegram-канал, сайт оголошень або інший ресурс — ми додамо його до моніторингу після перевірки."
     >

@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { DashboardSidebar, useDashboardBadges } from "@/components/layout/DashboardSidebar";
+import { useDashboardBadges } from "@/components/layout/DashboardSidebar";
+import { DashboardTopNav } from "@/components/layout/DashboardTopNav";
 import { DashboardMobileNav } from "@/components/layout/DashboardMobileNav";
 import { AppShellHeader } from "@/components/layout/AppShellHeader";
 import { PublicListingShell } from "@/components/layout/PublicListingShell";
@@ -38,7 +39,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading, initialized, refreshUser } = useAuth();
-  const [searchesUsed, setSearchesUsed] = useState(0);
   const [tourActive, setTourActive] = useState(false);
   const [instagramPromptOpen, setInstagramPromptOpen] = useState(false);
   const badges = useDashboardBadges();
@@ -69,9 +69,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user || isOnboardingRoute || isPublicListing) return;
-    api.searches.list()
-      .then(searches => setSearchesUsed(searches.filter(s => s.is_active).length))
-      .catch(() => setSearchesUsed(0));
+    void api.searches.list().catch(() => {});
   }, [user, isOnboardingRoute, isPublicListing]);
 
   useEffect(() => {
@@ -183,27 +181,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <AppShellHeader />
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden lg:px-6 lg:py-5">
-        <div className="flex min-h-0 flex-1 gap-4 overflow-hidden lg:items-start lg:gap-5">
-          <DashboardSidebar
-            searchesUsed={searchesUsed}
-            searchesLimit={user.searches_limit}
-            planId={user.plan}
-            isTrial={Boolean(user.is_trial_active)}
-          />
+        <DashboardTopNav />
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:h-[calc(100vh-2.5rem)]">
-            <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eef0f4] lg:rounded-[28px] lg:border lg:border-border/50 lg:bg-white lg:shadow-island">
-              <div
-                ref={mainScrollRef}
-                className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-4 lg:px-12 lg:pb-8 lg:pt-8"
-              >
-                <div className="app-mobile-content mx-auto flex w-full max-w-[980px] flex-col">
-                  {children}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:h-[calc(100vh-8.5rem)]">
+          <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eef0f4] lg:rounded-[28px] lg:border lg:border-border/50 lg:bg-white lg:shadow-island">
+            <div
+              ref={mainScrollRef}
+              className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-4 lg:pl-3 lg:pr-5 lg:pb-8 lg:pt-4 xl:pl-4 xl:pr-7"
+            >
+              <div className="app-mobile-content flex w-full max-w-[980px] flex-col lg:mx-0 lg:max-w-none">
+                {children}
 
                   <div className="mt-5 lg:mt-6">
                     <PwaInstallPrompt />
                   </div>
-                </div>
               </div>
             </div>
           </div>

@@ -31,7 +31,7 @@ def _append_price_history(listing: Listing, new_price: int, currency: str) -> li
             {
                 "price": int(listing.price),
                 "currency": listing.currency or currency,
-                "at": (listing.found_at or now_kyiv()).isoformat(),
+                "at": now_kyiv().isoformat(),
             }
         )
     return history[-30:]
@@ -114,21 +114,41 @@ async def upsert_listing(db: AsyncSession, data: ListingOut) -> Listing:
     # Порівнюємо в грн: сирі числа в різних валютах (UAH↔USD) давали хибні «зниження».
     if listing and (price_changed or vin_appeared):
         from app.services.currency import listing_price_uah
+        from app.services.listings.price_drop import (
+            compute_drop_percent,
+            is_significant_price_drop,
+        )
         from app.services.notifications.listing_events import notify_listing_events
 
         price_dropped = False
+        drop_percent: float | None = None
         if price_changed and old_price:
             old_uah = listing_price_uah(old_price, old_currency)
             new_uah = listing_price_uah(data.price, data.currency or listing.currency)
-            # Реальне падіння в еквіваленті грн (не шум від зміни валюти/курсу)
             price_dropped = old_uah > 0 and new_uah > 0 and new_uah < old_uah
+            if price_dropped:
+                drop_percent = compute_drop_percent(
+                    old_price,
+                    old_currency,
+                    data.price,
+                    data.currency or listing.currency,
+                )
 
         await notify_listing_events(
             db,
             listing,
-            price_dropped=price_dropped,
+            price_dropped=bool(
+                price_dropped
+                and is_significant_price_drop(
+                    old_price or 0,
+                    old_currency,
+                    data.price,
+                    data.currency or listing.currency,
+                )
+            ),
             old_price=old_price,
             old_currency=old_currency,
+            drop_percent=drop_percent,
             vin_appeared=vin_appeared,
         )
 

@@ -109,7 +109,7 @@ export default function MonitorDetailPage({
   };
 
   return (
-    <div className="max-w-[860px]">
+    <div className="max-w-[860px] lg:max-w-none">
       <div className="mb-5 flex items-center gap-2 text-[12px] text-muted sm:mb-6">
         <Link href="/app/monitors" className="hover:text-ink">
           Мої моніторинги
@@ -165,7 +165,7 @@ export default function MonitorDetailPage({
           </Link>
         </div>
       ) : (
-        <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:px-0">
+        <div className="-mx-1 flex flex-col gap-3 px-1 sm:mx-0 sm:gap-3 sm:px-0 lg:gap-4">
           {results.map(item => (
             <ListingCard
               key={item.id}
@@ -185,7 +185,7 @@ export default function MonitorDetailPage({
           type="button"
           onClick={handleLoadMore}
           disabled={loadingMore}
-          className="mt-6 w-full rounded-2xl border border-border bg-white py-3.5 text-[13px] font-semibold text-muted transition-colors hover:border-ink/20 hover:text-ink disabled:opacity-60"
+          className="mt-6 w-full rounded-2xl bg-emerald py-3.5 text-[14px] font-semibold text-white shadow-md shadow-emerald/25 transition-colors hover:bg-emerald-dark disabled:opacity-60"
         >
           {loadingMore ? "Завантаження..." : "Показати більше"}
         </button>
