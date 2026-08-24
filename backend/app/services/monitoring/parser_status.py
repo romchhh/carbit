@@ -29,6 +29,20 @@ def normalize_parser_source(name: str) -> str | None:
     return None
 
 
+def is_benign_parser_error(error: str | None) -> bool:
+    """Помилки, які не означають «парсер мертвий» (порожня видача, невірний шлях)."""
+    if not error:
+        return False
+    err = error.strip().lower()
+    if "404" in err:
+        return True
+    if "not found" in err:
+        return True
+    if "не знайдено" in err:
+        return True
+    return False
+
+
 async def record_parser_status(
     source: str,
     *,

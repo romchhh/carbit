@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
+from app.services.monitoring.catalog import CRITICAL_COMPONENT_IDS
+
 
 class HealthLevel(str, Enum):
     OK = "ok"
@@ -36,12 +38,31 @@ class SystemStatus:
 
     @property
     def overall(self) -> HealthLevel:
-        levels = {c.level for c in self.components}
-        if HealthLevel.DOWN in levels:
+        critical = [c for c in self.components if c.component_id in CRITICAL_COMPONENT_IDS]
+        parsers = [c for c in self.components if c.component_id.startswith("parser:")]
+        other = [
+            c
+            for c in self.components
+            if c.component_id not in CRITICAL_COMPONENT_IDS
+            and not c.component_id.startswith("parser:")
+        ]
+
+        critical_levels = {c.level for c in critical}
+        parser_levels = {c.level for c in parsers}
+        other_levels = {c.level for c in other}
+
+        if HealthLevel.DOWN in critical_levels:
             return HealthLevel.DOWN
-        if HealthLevel.DEGRADED in levels:
+        if HealthLevel.DEGRADED in critical_levels:
             return HealthLevel.DEGRADED
-        if HealthLevel.UNKNOWN in levels and HealthLevel.OK not in levels:
+        if HealthLevel.DOWN in parser_levels or HealthLevel.DEGRADED in parser_levels:
+            return HealthLevel.DEGRADED
+        if HealthLevel.DOWN in other_levels:
+            return HealthLevel.DOWN
+        if HealthLevel.DEGRADED in other_levels:
+            return HealthLevel.DEGRADED
+        all_levels = {c.level for c in self.components}
+        if HealthLevel.UNKNOWN in all_levels and HealthLevel.OK not in all_levels:
             return HealthLevel.UNKNOWN
         return HealthLevel.OK
 

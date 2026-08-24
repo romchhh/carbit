@@ -33,10 +33,11 @@ function isOlxSource(source: string): boolean {
   return source === "olx" || source === "OLX";
 }
 
-/** Зрозуміле повідомлення про збій джерела замість «креативних» текстів. */
+/** Повідомлення про збій джерела з текстом помилки та запитом. */
 function sourceFailureMessage(status: SourceStatus): string {
   const label = sourceLabel(status.source);
   const raw = (status.error || "").trim();
+  const request = (status.request || "").trim();
 
   if (isOlxSource(status.source)) {
     if (/обмежує|429|rate/i.test(raw)) {
@@ -45,13 +46,25 @@ function sourceFailureMessage(status: SourceStatus): string {
     if (/timeout|час очікування|timed?\s*out/i.test(raw)) {
       return "OLX не відповів вчасно. Показуємо результати з інших джерел.";
     }
+    if (raw && request) {
+      return `OLX: ${raw}\nЗапит: ${request}`;
+    }
     return "OLX тимчасово недоступний. Показуємо результати з інших джерел.";
   }
 
-  if (raw && raw.length < 120 && !/Error|Exception|Traceback|HTTP/i.test(raw)) {
-    return `${label}: ${raw}`;
+  const parts: string[] = [];
+  if (raw) {
+    parts.push(`${label}: ${raw}`);
+  } else {
+    parts.push(`${label} тимчасово недоступний.`);
   }
-  return `${label} тимчасово недоступний. Показуємо результати з інших джерел.`;
+  if (request) {
+    parts.push(`Запит: ${request}`);
+  }
+  if (!raw) {
+    parts.push("Показуємо результати з інших джерел.");
+  }
+  return parts.join("\n");
 }
 
 function buildPartialHint(
@@ -67,7 +80,7 @@ function buildPartialHint(
   if (fromCache) {
     lines.push("Частина результатів з кешу.");
   }
-  return lines.join(" ");
+  return lines.join("\n\n");
 }
 
 type Props = {
@@ -166,7 +179,7 @@ export function SearchPreviewResults({
         {partialHint && !error && (
           <div
             role="status"
-            className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900"
+            className="mb-4 whitespace-pre-wrap rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900"
           >
             {partialHint}
           </div>

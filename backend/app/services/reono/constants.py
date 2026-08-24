@@ -91,6 +91,40 @@ REGION_SLUGS: dict[str, str] = {
     "миколаївська": "nikolaevskaya-oblast",
 }
 
+# Сегменти шляху після legkovoe-avto (ключ — norm_text підпису з UI).
+REONO_REGION_SEGMENTS: dict[str, tuple[str, ...]] = {
+    "м. київ": ("kievskaya-oblast", "kiev"),
+    "київ": ("kievskaya-oblast", "kiev"),
+    "киев": ("kievskaya-oblast", "kiev"),
+    "kyiv": ("kievskaya-oblast", "kiev"),
+    "kiev": ("kievskaya-oblast", "kiev"),
+    "київська область": ("kievskaya-oblast",),
+    "киевская область": ("kievskaya-oblast",),
+    "вінницька область": ("vinnickaya-oblast",),
+    "волинська область": ("volynskaya-oblast",),
+    "дніпропетровська область": ("dnepropetrovskaya-oblast",),
+    "житомирська область": ("zhitomirskaya-oblast",),
+    "закарпатська область": ("zakarpatskaya-oblast",),
+    "запорізька область": ("zaporozhskaya-oblast",),
+    "івано-франківська область": ("ivano-frankovskaya-oblast",),
+    "львівська область": ("lvovskaya-oblast",),
+    "миколаївська область": ("nikolaevskaya-oblast",),
+    "одеська область": ("odesskaya-oblast",),
+    "полтавська область": ("poltavskaya-oblast",),
+    "рівненська область": ("rovenskaya-oblast",),
+    "сумська область": ("sumskaya-oblast",),
+    "тернопільська область": ("ternopolskaya-oblast",),
+    "харківська область": ("xarkovskaya-oblast",),
+    "херсонська область": ("xersonskaya-oblast",),
+    "черкаська область": ("cherkasskaya-oblast",),
+    "чернівецька область": ("chernovickaya-oblast",),
+    "чернігівська область": ("chernigovskaya-oblast",),
+    "донецька область": ("doneckaya-oblast",),
+    "кіровоградська область": ("kirovogradskaya-oblast",),
+    "луганська область": ("luganskaya-oblast",),
+    "хмельницька область": ("xmelnickaya-oblast",),
+}
+
 GEARBOX_LABELS: dict[str, str] = {
     "variator": "Варіатор",
     "automatic": "Автомат",

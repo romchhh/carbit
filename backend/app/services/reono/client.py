@@ -7,9 +7,10 @@ import httpx
 
 from app.services.reono.constants import HEADERS, REONO_BASE_URL
 from app.services.reono.errors import ReonoError
-from app.services.reono.mapper import filters_to_catalog_path
+from app.services.reono.mapper import catalog_path_fallbacks
 from app.services.reono.parser import parse_catalog_page
 from app.schemas.schemas import SearchFilters
+from app.services.search.source_error import http_request_label
 
 logger = logging.getLogger(__name__)
 
@@ -56,32 +57,47 @@ class ReonoClient:
     async def fetch_catalog(self, filters: SearchFilters, *, page: int = 1) -> tuple[list, int]:
         client = await get_shared_http_client()
         await _ensure_warmup(client)
-        path = filters_to_catalog_path(filters, page=page)
-        url = f"{REONO_BASE_URL}/{path}"
+        paths = catalog_path_fallbacks(filters, page=page)
         last_error: Exception | None = None
+        last_request: str | None = None
 
-        for attempt in range(_MAX_ATTEMPTS):
-            try:
-                response = await client.get(url)
-            except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
-                last_error = ReonoError(f"REONO: мережева помилка: {exc}")
-                if attempt + 1 >= _MAX_ATTEMPTS:
-                    break
-                await asyncio.sleep(_RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)])
-                continue
-
-            if response.status_code >= 400:
-                err = ReonoError(
-                    f"REONO: помилка {response.status_code}",
-                    status_code=response.status_code,
-                )
-                if response.status_code in (408, 425, 429, 500, 502, 503, 504) and attempt + 1 < _MAX_ATTEMPTS:
-                    last_error = err
+        for path_index, path in enumerate(paths):
+            url = f"{REONO_BASE_URL}/{path}"
+            request_label = http_request_label("GET", url)
+            last_request = request_label
+            for attempt in range(_MAX_ATTEMPTS):
+                try:
+                    response = await client.get(url)
+                except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
+                    last_error = ReonoError(
+                        f"REONO: мережева помилка: {exc}",
+                        request=request_label,
+                    )
+                    if attempt + 1 >= _MAX_ATTEMPTS:
+                        break
                     await asyncio.sleep(_RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)])
                     continue
-                raise err
 
-            cars, total = parse_catalog_page(response.text)
-            return cars, total
+                if response.status_code == 404:
+                    if path_index + 1 < len(paths):
+                        break
+                    return [], 0
 
-        raise last_error or ReonoError("REONO: невідома помилка")
+                if response.status_code >= 400:
+                    err = ReonoError(
+                        f"REONO: помилка {response.status_code}",
+                        status_code=response.status_code,
+                        request=request_label,
+                    )
+                    if response.status_code in (408, 425, 429, 500, 502, 503, 504) and attempt + 1 < _MAX_ATTEMPTS:
+                        last_error = err
+                        await asyncio.sleep(_RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)])
+                        continue
+                    raise err
+
+                cars, total = parse_catalog_page(response.text)
+                return cars, total
+
+        if last_error:
+            raise last_error
+        raise ReonoError("REONO: невідома помилка", request=last_request)

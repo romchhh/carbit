@@ -40,12 +40,28 @@ def test_car_to_listing_maps_listing_out():
     assert listing.region == "Рівне"
 
 
-def test_filters_to_catalog_path():
+def test_filters_to_catalog_path_kyiv_city():
+    path = filters_to_catalog_path(
+        SearchFilters(brand="Audi", model="A5", region="м. Київ"),
+        page=1,
+    )
+    assert path == "legkovoe-avto/kievskaya-oblast/kiev/audi/a5"
+
+
+def test_filters_to_catalog_path_kyiv_oblast():
+    path = filters_to_catalog_path(
+        SearchFilters(brand="Volkswagen", model="Passat", region="Київська область"),
+        page=2,
+    )
+    assert path == "legkovoe-avto/kievskaya-oblast/volkswagen/passat/page=2"
+
+
+def test_filters_to_catalog_path_legacy_kyiv_label():
     path = filters_to_catalog_path(
         SearchFilters(brand="Volkswagen", model="Passat", region="м. Київ"),
         page=2,
     )
-    assert path.startswith("legkovoe-avto/")
+    assert path.startswith("legkovoe-avto/kievskaya-oblast/kiev/")
     assert "volkswagen" in path
     assert "passat" in path
     assert path.endswith("page=2")

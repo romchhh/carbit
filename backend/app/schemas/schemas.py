@@ -331,6 +331,7 @@ class SourceStatusOut(BaseModel):
     source: str
     item_count: int = 0
     error: Optional[str] = None
+    request: Optional[str] = None
     pending: bool = False
 
 

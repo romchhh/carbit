@@ -172,9 +172,12 @@ async def resolve_model_id(
     return None
 
 
+_CITY_PREFIX_RE = re.compile(r"^м\.\s*", re.IGNORECASE)
+
+
 def _carbit_region_key(region: str) -> str:
     text = norm_text(region)
-    text = text.removeprefix("м ").strip()
+    text = _CITY_PREFIX_RE.sub("", text).strip()
     text = text.replace(" область", "").strip()
     return text
 

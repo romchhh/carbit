@@ -8,6 +8,7 @@ import httpx
 
 from app.services.udrive.constants import UDRIVE_API_BASE_URL
 from app.services.udrive.errors import UdriveError
+from app.services.search.source_error import http_request_label
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,11 @@ class UdriveClient:
         clean_path = path.lstrip("/")
 
         for attempt in range(_MAX_ATTEMPTS):
+            request_label = http_request_label(
+                method,
+                f"{UDRIVE_API_BASE_URL}/{clean_path}",
+                params=params,
+            )
             try:
                 client = await get_shared_http_client()
                 response = await client.request(
@@ -66,7 +72,10 @@ class UdriveClient:
                     json=json_body,
                 )
             except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
-                last_error = UdriveError(f"uDrive: мережева помилка: {exc}")
+                last_error = UdriveError(
+                    f"uDrive: мережева помилка: {exc}",
+                    request=request_label,
+                )
                 if attempt + 1 >= _MAX_ATTEMPTS:
                     break
                 await asyncio.sleep(_RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)])
@@ -77,6 +86,7 @@ class UdriveClient:
                 err = UdriveError(
                     f"uDrive: помилка {response.status_code}: {body}",
                     status_code=response.status_code,
+                    request=request_label,
                 )
                 if response.status_code in (408, 425, 429, 500, 502, 503, 504) and attempt + 1 < _MAX_ATTEMPTS:
                     await asyncio.sleep(_RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)])

@@ -13,6 +13,7 @@ from app.services.car_market.constants import (
 )
 from app.services.car_market.errors import CarMarketError
 from app.services.car_market.parser import parse_catalog_page
+from app.services.search.source_error import http_request_label
 
 logger = logging.getLogger(__name__)
 
@@ -65,16 +66,22 @@ class CarMarketClient:
             try:
                 response = await client.get(CAR_MARKET_CATALOG_URL, params=params)
             except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
-                last_error = CarMarketError(f"Car Market: мережева помилка: {exc}")
+                request_label = http_request_label("GET", CAR_MARKET_CATALOG_URL, params=params)
+                last_error = CarMarketError(
+                    f"Car Market: мережева помилка: {exc}",
+                    request=request_label,
+                )
                 if attempt + 1 >= _MAX_ATTEMPTS:
                     break
                 await asyncio.sleep(_RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)])
                 continue
 
+            request_label = http_request_label("GET", str(response.url))
             if response.status_code >= 400:
                 err = CarMarketError(
                     f"Car Market: помилка {response.status_code}",
                     status_code=response.status_code,
+                    request=request_label,
                 )
                 if response.status_code in (408, 425, 429, 500, 502, 503, 504) and attempt + 1 < _MAX_ATTEMPTS:
                     last_error = err
@@ -85,4 +92,7 @@ class CarMarketClient:
             cars, total = parse_catalog_page(response.text)
             return cars, total
 
-        raise last_error or CarMarketError("Car Market: невідома помилка")
+        raise last_error or CarMarketError(
+            "Car Market: невідома помилка",
+            request=http_request_label("GET", CAR_MARKET_CATALOG_URL, params=params),
+        )

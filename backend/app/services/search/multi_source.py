@@ -66,6 +66,21 @@ class SourceSearchStatus:
     source: str
     item_count: int
     error: str | None = None
+    request: str | None = None
+
+
+def _failed_source_status(
+    source: str,
+    err: BaseException | str,
+    *,
+    item_count: int = 0,
+) -> SourceSearchStatus:
+    from app.services.search.source_error import error_parts
+
+    if isinstance(err, BaseException):
+        msg, req = error_parts(err)
+        return SourceSearchStatus(source=source, item_count=item_count, error=msg, request=req)
+    return SourceSearchStatus(source=source, item_count=item_count, error=str(err))
 
 
 @dataclass(frozen=True)
@@ -817,6 +832,7 @@ async def _notify_partial_source_failures(
             source=status.source,
             error=err,
             details=details,
+            url=status.request,
         )
 
 
@@ -915,9 +931,7 @@ async def search_listings_outcome(
                     telegram_found_after=telegram_found_after,
                 )
         except Exception as exc:
-            source_statuses.append(
-                SourceSearchStatus(source=_source_label(source), item_count=0, error=str(exc))
-            )
+            source_statuses.append(_failed_source_status(_source_label(source), exc))
             raise _pick_primary_error([exc]) from exc
 
         source_statuses.append(
@@ -1102,13 +1116,7 @@ async def search_listings_outcome(
         result_index += 1
         if isinstance(auto_ria_out, Exception):
             errors.append(auto_ria_out)
-            source_statuses.append(
-                SourceSearchStatus(
-                    source="AUTO.RIA",
-                    item_count=0,
-                    error=str(auto_ria_out),
-                )
-            )
+            source_statuses.append(_failed_source_status("AUTO.RIA", auto_ria_out))
         else:
             successful.append(("auto_ria", auto_ria_out))
             source_statuses.append(
@@ -1132,13 +1140,7 @@ async def search_listings_outcome(
         result_index += 1
         if isinstance(imperiya_out, Exception):
             errors.append(imperiya_out)
-            source_statuses.append(
-                SourceSearchStatus(
-                    source="Імперія Авто",
-                    item_count=0,
-                    error=str(imperiya_out),
-                )
-            )
+            source_statuses.append(_failed_source_status("Імперія Авто", imperiya_out))
         else:
             successful.append(("imperiya", imperiya_out))
             source_statuses.append(
@@ -1150,13 +1152,7 @@ async def search_listings_outcome(
         result_index += 1
         if isinstance(udrive_out, Exception):
             errors.append(udrive_out)
-            source_statuses.append(
-                SourceSearchStatus(
-                    source="uDrive",
-                    item_count=0,
-                    error=str(udrive_out),
-                )
-            )
+            source_statuses.append(_failed_source_status("uDrive", udrive_out))
         else:
             successful.append(("udrive", udrive_out))
             source_statuses.append(
@@ -1168,13 +1164,7 @@ async def search_listings_outcome(
         result_index += 1
         if isinstance(car_market_out, Exception):
             errors.append(car_market_out)
-            source_statuses.append(
-                SourceSearchStatus(
-                    source="Car Market",
-                    item_count=0,
-                    error=str(car_market_out),
-                )
-            )
+            source_statuses.append(_failed_source_status("Car Market", car_market_out))
         else:
             successful.append(("car_market", car_market_out))
             source_statuses.append(
@@ -1186,13 +1176,7 @@ async def search_listings_outcome(
         result_index += 1
         if isinstance(reono_out, Exception):
             errors.append(reono_out)
-            source_statuses.append(
-                SourceSearchStatus(
-                    source="REONO",
-                    item_count=0,
-                    error=str(reono_out),
-                )
-            )
+            source_statuses.append(_failed_source_status("REONO", reono_out))
         else:
             successful.append(("reono", reono_out))
             source_statuses.append(
@@ -1203,13 +1187,7 @@ async def search_listings_outcome(
         telegram_out = raw_results[result_index]
         if isinstance(telegram_out, Exception):
             errors.append(telegram_out)
-            source_statuses.append(
-                SourceSearchStatus(
-                    source="Telegram",
-                    item_count=0,
-                    error=str(telegram_out),
-                )
-            )
+            source_statuses.append(_failed_source_status("Telegram", telegram_out))
         else:
             successful.append(("telegram", telegram_out))
             source_statuses.append(
@@ -1887,7 +1865,7 @@ async def build_live_search_pool(
         result_index += 1
         if isinstance(res, BaseException):
             errors.append(res)
-            source_statuses.append(SourceSearchStatus(source="AUTO.RIA", item_count=0, error=str(res)))
+            source_statuses.append(_failed_source_status("AUTO.RIA", res))
         else:
             auto_ria_ids, auto_ria_market_total = res
             source_statuses.append(SourceSearchStatus(source="AUTO.RIA", item_count=len(auto_ria_ids)))
@@ -1897,11 +1875,19 @@ async def build_live_search_pool(
         result_index += 1
         if isinstance(res, BaseException):
             olx_result = _empty_page(1, max_ids)
-            olx_error = str(res)
+            failed = _failed_source_status("OLX", res)
+            olx_error = failed.error
+            olx_request = failed.request
         else:
             olx_result, olx_error = res
+            olx_request = None
         source_statuses.append(
-            SourceSearchStatus(source="OLX", item_count=len(olx_result.items), error=olx_error)
+            SourceSearchStatus(
+                source="OLX",
+                item_count=len(olx_result.items),
+                error=olx_error,
+                request=olx_request,
+            )
         )
 
     if "imperiya" in task_order:
@@ -1909,9 +1895,7 @@ async def build_live_search_pool(
         result_index += 1
         if isinstance(res, BaseException):
             imperiya_result = _empty_page(1, max_ids)
-            source_statuses.append(
-                SourceSearchStatus(source="Імперія Авто", item_count=0, error=str(res))
-            )
+            source_statuses.append(_failed_source_status("Імперія Авто", res))
         else:
             imperiya_result = res
             source_statuses.append(
@@ -1923,9 +1907,7 @@ async def build_live_search_pool(
         result_index += 1
         if isinstance(res, BaseException):
             udrive_result = _empty_page(1, max_ids)
-            source_statuses.append(
-                SourceSearchStatus(source="uDrive", item_count=0, error=str(res))
-            )
+            source_statuses.append(_failed_source_status("uDrive", res))
         else:
             udrive_result = res
             source_statuses.append(
@@ -1937,9 +1919,7 @@ async def build_live_search_pool(
         result_index += 1
         if isinstance(res, BaseException):
             car_market_result = _empty_page(1, max_ids)
-            source_statuses.append(
-                SourceSearchStatus(source="Car Market", item_count=0, error=str(res))
-            )
+            source_statuses.append(_failed_source_status("Car Market", res))
         else:
             car_market_result = res
             source_statuses.append(
@@ -1951,9 +1931,7 @@ async def build_live_search_pool(
         result_index += 1
         if isinstance(res, BaseException):
             reono_result = _empty_page(1, max_ids)
-            source_statuses.append(
-                SourceSearchStatus(source="REONO", item_count=0, error=str(res))
-            )
+            source_statuses.append(_failed_source_status("REONO", res))
         else:
             reono_result = res
             source_statuses.append(
@@ -1964,11 +1942,12 @@ async def build_live_search_pool(
         res = raw_results[result_index]
         if isinstance(res, BaseException):
             telegram_result = _empty_page(1, TELEGRAM_POOL_CAP)
+            source_statuses.append(_failed_source_status("Telegram", res))
         else:
             telegram_result = res
-        source_statuses.append(
-            SourceSearchStatus(source="Telegram", item_count=len(telegram_result.items))
-        )
+            source_statuses.append(
+                SourceSearchStatus(source="Telegram", item_count=len(telegram_result.items))
+            )
 
     # Raise if AUTO.RIA failed and it was the only source
     if errors and "auto_ria" in sources and len(sources) == 1:
@@ -2112,6 +2091,7 @@ async def build_live_search_pool(
                     else row.item_count
                 ),
                 error=row.error,
+                request=row.request,
             )
             for row in source_statuses
         ]

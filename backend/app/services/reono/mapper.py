@@ -1,55 +1,17 @@
 from __future__ import annotations
 
-import re
-
-from app.core.text import norm_text
 from app.core.timezone import now_kyiv
 from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.listings.engine_volume import parse_engine_volume_from_text
-from app.services.reono.constants import REGION_SLUGS, REONO_CATALOG_PATH
 from app.services.reono.parser import ReonoCar
-from app.services.search.filter_multi import effective_brands
-from app.services.search.subbrand_split import split_huawei_subbrand
+from app.services.reono.region_paths import catalog_path_fallbacks, filters_to_catalog_path
 
-
-def _slugify(text: str) -> str:
-    text = text.strip().lower()
-    text = re.sub(r"[^\w\s-]", "", text)
-    return re.sub(r"\s+", "-", text)
-
-
-def _resolve_region(region: str | None) -> str | None:
-    if not region:
-        return None
-    raw = region.strip()
-    if not raw:
-        return None
-    key = norm_text(raw.removeprefix("м.").removeprefix("М."))
-    if key in REGION_SLUGS:
-        return REGION_SLUGS[key]
-    latin = _slugify(raw)
-    return REGION_SLUGS.get(latin, latin)
-
-
-def filters_to_catalog_path(filters: SearchFilters, *, page: int) -> str:
-    segments = [REONO_CATALOG_PATH]
-
-    region = _resolve_region(filters.region)
-    if region:
-        segments.append(region)
-
-    brands = effective_brands(filters)
-    if brands:
-        brand, _model = split_huawei_subbrand(brands[0], (filters.model or "").strip())
-        segments.append(_slugify(brand))
-        model = (filters.model or "").strip()
-        if model:
-            segments.append(_slugify(model))
-
-    path = "/".join(segments)
-    if page > 1:
-        path = f"{path}/page={page}"
-    return path
+__all__ = [
+    "apply_client_filters",
+    "car_to_listing",
+    "catalog_path_fallbacks",
+    "filters_to_catalog_path",
+]
 
 
 def car_to_listing(car: ReonoCar) -> ListingOut:

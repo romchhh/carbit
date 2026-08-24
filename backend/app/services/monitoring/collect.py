@@ -25,7 +25,7 @@ from app.services.monitoring.catalog import (
     WEB_PARSER_SOURCES,
 )
 from app.services.monitoring.models import ComponentStatus, HealthLevel, SystemStatus
-from app.services.monitoring.parser_status import get_parser_status
+from app.services.monitoring.parser_status import get_parser_status, is_benign_parser_error
 
 logger = logging.getLogger(__name__)
 
@@ -160,10 +160,19 @@ async def _check_parser(source: str) -> ComponentStatus:
                 age_seconds=age,
             )
         err = (status.get("error") or "помилка")[:120]
+        count = int(status.get("count") or 0)
+        if is_benign_parser_error(err):
+            return ComponentStatus(
+                f"parser:{source}",
+                label,
+                HealthLevel.OK,
+                f"OK · {count} огол. · {int(age // 60)} хв тому",
+                age_seconds=age,
+            )
         return ComponentStatus(
             f"parser:{source}",
             label,
-            HealthLevel.DOWN,
+            HealthLevel.DEGRADED,
             err,
             age_seconds=age,
         )

@@ -93,6 +93,7 @@ def _outcome_sources(statuses: list[SourceSearchStatus]) -> list[SourceStatusOut
             source=row.source,
             item_count=int(row.item_count or 0),
             error=row.error,
+            request=row.request,
             pending=False,
         )
         for row in (statuses or [])

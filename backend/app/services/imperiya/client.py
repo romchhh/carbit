@@ -9,6 +9,7 @@ import httpx
 from app.core.config import settings
 from app.services.imperiya.constants import IMPERIYA_API_BASE_URL
 from app.services.imperiya.errors import ImperiyaError
+from app.services.search.source_error import http_request_label
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +46,19 @@ class ImperiyaClient:
         last_error: Exception | None = None
 
         for attempt in range(_MAX_ATTEMPTS):
+            request_label = http_request_label(
+                "GET",
+                f"{IMPERIYA_API_BASE_URL}{path}",
+                params=params,
+            )
             try:
                 client = await get_shared_http_client()
                 response = await client.get(path, params=params, headers=headers)
             except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
-                last_error = ImperiyaError(f"Імперія Авто: мережева помилка: {exc}")
+                last_error = ImperiyaError(
+                    f"Імперія Авто: мережева помилка: {exc}",
+                    request=request_label,
+                )
                 if attempt + 1 >= _MAX_ATTEMPTS:
                     break
                 await asyncio.sleep(_RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)])
@@ -59,7 +68,8 @@ class ImperiyaClient:
                 body = response.text[:200]
                 err = ImperiyaError(
                     f"Імперія Авто: помилка {response.status_code}: {body}",
-                    status_code=response.status_code,
+                    response.status_code,
+                    request=request_label,
                 )
                 if response.status_code in (408, 425, 429, 500, 502, 503, 504) and attempt + 1 < _MAX_ATTEMPTS:
                     await asyncio.sleep(_RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)])

@@ -42,3 +42,14 @@ INFRA_COMPONENTS: tuple[str, ...] = (
     "worker",
     "telegram_worker",
 )
+
+# Загальний статус DOWN лише якщо падає інфраструктура, не окремий парсер.
+CRITICAL_COMPONENT_IDS: frozenset[str] = frozenset(
+    {
+        "backend",
+        "frontend",
+        "bot",
+        "worker",
+        "telegram_parser",
+    }
+)

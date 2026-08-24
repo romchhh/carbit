@@ -117,6 +117,7 @@ export interface SourceStatus {
   source: string;
   item_count: number;
   error?: string | null;
+  request?: string | null;
   pending?: boolean;
 }
 

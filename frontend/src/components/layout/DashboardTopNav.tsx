@@ -83,13 +83,13 @@ export function DashboardTopNav() {
   return (
     <header className="mb-4 hidden shrink-0 lg:block">
       <div className="rounded-[22px] border border-border/50 bg-white px-4 py-3 shadow-island">
-        <div className="flex items-center gap-4">
-          <Link href="/app/dashboard" className="flex shrink-0 items-center pr-1">
+        <div className="relative flex items-center justify-between gap-4">
+          <Link href="/app/dashboard" className="relative z-10 flex shrink-0 items-center pr-1">
             <CarbitLogo variant="full" height={28} />
           </Link>
 
           <nav
-            className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="absolute left-1/2 top-1/2 z-0 flex max-w-[min(100%,52rem)] -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-1.5 overflow-x-auto px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             aria-label="Навігація кабінету"
           >
             {mainNav.map(({ href, icon: Icon, label, badgeKey, badgeAccent, tourId }) => {
@@ -146,7 +146,7 @@ export function DashboardTopNav() {
             })}
           </nav>
 
-          <div className="flex shrink-0 items-center gap-1.5 pl-2">
+          <div className="relative z-10 flex shrink-0 items-center gap-1.5 pl-2">
             <HeaderIconLink
               href="/app/notifications"
               label="Сповіщення"
