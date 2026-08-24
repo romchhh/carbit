@@ -25,7 +25,12 @@ class SqliteToPostgresHelpersTests(unittest.TestCase):
     def test_normalize_row_parses_json(self):
         row = {"filters": json.dumps({"brand": "BMW"})}
         out = _normalize_row(row, "search_queries")
-        self.assertEqual(out["filters"], {"brand": "BMW"})
+        self.assertEqual(json.loads(out["filters"]), {"brand": "BMW"})
+
+    def test_normalize_row_json_list_for_postgres(self):
+        row = {"log": ["line one", "line two"]}
+        out = _normalize_row(row, "parse_runs")
+        self.assertEqual(json.loads(out["log"]), ["line one", "line two"])
 
     def test_normalize_row_bool_from_int(self):
         row = {"is_active": 1}

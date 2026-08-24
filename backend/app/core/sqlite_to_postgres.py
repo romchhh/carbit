@@ -116,16 +116,24 @@ def _parse_datetime(value: str) -> datetime:
     return as_kyiv(datetime.fromisoformat(text_value))
 
 
+def _json_for_postgres(value: object) -> str | None:
+    """PostgreSQL + asyncpg через raw SQL потребує JSON як рядок + CAST."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return json.dumps(parsed, ensure_ascii=False)
+        except json.JSONDecodeError:
+            return value
+    return json.dumps(value, ensure_ascii=False)
+
+
 def _normalize_value(column: str, value: object, table: str) -> object:
     if value is None:
         return None
     if column in JSON_COLUMNS.get(table, frozenset()):
-        if isinstance(value, str):
-            try:
-                return json.loads(value)
-            except json.JSONDecodeError:
-                return value
-        return value
+        return _json_for_postgres(value)
     if column in BOOLEAN_COLUMNS and isinstance(value, int):
         return bool(value)
     if _is_datetime_column(column) and isinstance(value, str):
@@ -189,8 +197,12 @@ async def _copy_table(
     if skip_duplicate_of and "duplicate_of" in columns:
         columns = [c for c in columns if c != "duplicate_of"]
 
+    json_cols = JSON_COLUMNS.get(table, frozenset())
     cols_sql = ", ".join(columns)
-    placeholders = ", ".join(f":{c}" for c in columns)
+    placeholders = ", ".join(
+        f"CAST(:{c} AS JSON)" if c in json_cols else f":{c}"
+        for c in columns
+    )
     stmt = text(
         f"INSERT INTO {table} ({cols_sql}) VALUES ({placeholders}) "
         "ON CONFLICT DO NOTHING"
