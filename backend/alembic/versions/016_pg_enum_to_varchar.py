@@ -32,17 +32,47 @@ def _pg_enum_column(table: str, column: str, enum_name: str) -> bool:
     return bool(row and row[0] == enum_name)
 
 
+def _pg_type_exists(type_name: str) -> bool:
+    bind = op.get_bind()
+    if bind.dialect.name != "postgresql":
+        return False
+    row = bind.execute(
+        sa.text("SELECT 1 FROM pg_type WHERE typname = :name"),
+        {"name": type_name},
+    ).fetchone()
+    return bool(row)
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "postgresql":
         return
 
-    if _pg_enum_column("monitoring_source_requests", "status", "sourcerequeststatus"):
+    table = "monitoring_source_requests"
+    column = "status"
+    enum_name = "sourcerequeststatus"
+
+    if not (
+        _pg_enum_column(table, column, enum_name)
+        or _pg_type_exists(enum_name)
+    ):
+        return
+
+    # Default `'pending'::sourcerequeststatus` blocks DROP TYPE — знімаємо спочатку.
+    op.execute(f"ALTER TABLE {table} ALTER COLUMN {column} DROP DEFAULT")
+
+    if _pg_enum_column(table, column, enum_name):
         op.execute(
-            "ALTER TABLE monitoring_source_requests "
-            "ALTER COLUMN status TYPE VARCHAR(32) USING status::text"
+            f"ALTER TABLE {table} "
+            f"ALTER COLUMN {column} TYPE VARCHAR(32) USING {column}::text"
         )
-        op.execute("DROP TYPE IF EXISTS sourcerequeststatus")
+
+    op.execute(
+        f"ALTER TABLE {table} ALTER COLUMN {column} SET DEFAULT 'pending'"
+    )
+
+    if _pg_type_exists(enum_name):
+        op.execute(f"DROP TYPE {enum_name}")
 
 
 def downgrade() -> None:
@@ -50,26 +80,38 @@ def downgrade() -> None:
     if bind.dialect.name != "postgresql":
         return
 
+    table = "monitoring_source_requests"
+    column = "status"
+    enum_name = "sourcerequeststatus"
+
     row = bind.execute(
         sa.text(
             """
             SELECT data_type
             FROM information_schema.columns
             WHERE table_schema = 'public'
-              AND table_name = 'monitoring_source_requests'
-              AND column_name = 'status'
+              AND table_name = :table
+              AND column_name = :column
             """
-        )
+        ),
+        {"table": table, "column": column},
     ).fetchone()
     if not row or row[0] != "character varying":
         return
 
+    if not _pg_type_exists(enum_name):
+        op.execute(
+            f"CREATE TYPE {enum_name} AS ENUM "
+            "('pending', 'in_review', 'approved', 'rejected')"
+        )
+
+    op.execute(f"ALTER TABLE {table} ALTER COLUMN {column} DROP DEFAULT")
     op.execute(
-        "CREATE TYPE sourcerequeststatus AS ENUM "
-        "('pending', 'in_review', 'approved', 'rejected')"
+        f"ALTER TABLE {table} "
+        f"ALTER COLUMN {column} TYPE {enum_name} "
+        f"USING {column}::{enum_name}"
     )
     op.execute(
-        "ALTER TABLE monitoring_source_requests "
-        "ALTER COLUMN status TYPE sourcerequeststatus "
-        "USING status::sourcerequeststatus"
+        f"ALTER TABLE {table} "
+        f"ALTER COLUMN {column} SET DEFAULT 'pending'::{enum_name}"
     )
