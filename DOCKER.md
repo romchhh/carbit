@@ -150,14 +150,30 @@ docker compose up
    ```env
    DATABASE_URL=postgresql+asyncpg://carbit:carbit@postgres:5432/carbit
    ```
-3. Перезберіть і підніміть стек (додасться `carbit-postgres`):
+3. Перезберіть і підніміть стек:
    ```bash
    docker compose up -d --build
    ```
-4. У логах backend має з’явитись `Importing SQLite data from ... → PostgreSQL`.
-5. Після успіху створюється `database/.postgres_imported_from_sqlite` — повторний імпорт не запускається.
+4. У логах backend має з’явитись `[sqlite→postgres] OK: finished ...` або `SKIP: ...` з причиною.
 
-Примусовий повторний імпорт (merge, `ON CONFLICT DO NOTHING`):
+**Діагностика та ручний імпорт (на VPS, без venv):**
+
+```bash
+# Статус: шляхи, кількість рядків у sqlite vs postgres
+./scripts/migrate-sqlite-to-postgres.sh --status
+
+# Імпорт / merge (якщо в sqlite більше даних — запуститься автоматично)
+./scripts/migrate-sqlite-to-postgres.sh --force
+```
+
+Або напряму:
+
+```bash
+docker compose exec backend python /app/backend/scripts/migrate_sqlite_to_postgres.py --status
+docker compose exec backend python /app/backend/scripts/migrate_sqlite_to_postgres.py --force
+```
+
+5. Після успіху створюється `database/.postgres_imported_from_sqlite`.
 
 ```bash
 SQLITE_MIGRATE_FORCE=1 docker compose up -d --build backend

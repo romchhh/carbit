@@ -13,9 +13,11 @@ import asyncio
 import sys
 
 sys.path.insert(0, "/app/backend")
-from app.core.sqlite_to_postgres import run_startup_migration
+from app.core.sqlite_to_postgres import MigrationStatus, run_startup_migration
 
-asyncio.run(run_startup_migration())
+result = asyncio.run(run_startup_migration())
+if result.status == MigrationStatus.FAILED:
+    raise SystemExit(1)
 PY
 
 echo "→ Checking production secrets..."

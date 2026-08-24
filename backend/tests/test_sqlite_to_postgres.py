@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.core.sqlite_to_postgres import (
     MARKER_FILE,
+    MigrationStatus,
     _normalize_row,
     migrate_sqlite_to_postgres,
     resolve_sqlite_source,
@@ -34,18 +35,18 @@ class SqliteToPostgresHelpersTests(unittest.TestCase):
 
 class SqliteToPostgresSkipTests(unittest.IsolatedAsyncioTestCase):
     async def test_skips_when_target_not_postgres(self):
-        stats = await migrate_sqlite_to_postgres(
+        result = await migrate_sqlite_to_postgres(
             postgres_url="sqlite+aiosqlite:///database/test.db",
             sqlite_path=Path("/tmp/missing.db"),
         )
-        self.assertEqual(stats, {})
+        self.assertEqual(result.status, MigrationStatus.SKIPPED)
 
     async def test_skips_when_source_missing(self):
-        stats = await migrate_sqlite_to_postgres(
+        result = await migrate_sqlite_to_postgres(
             postgres_url="postgresql+asyncpg://carbit:carbit@localhost:5432/carbit",
             sqlite_path=Path("/tmp/definitely-missing-carbit-sqlite.db"),
         )
-        self.assertEqual(stats, {})
+        self.assertEqual(result.status, MigrationStatus.SKIPPED)
 
 
 @unittest.skipUnless(
@@ -95,12 +96,13 @@ class SqliteToPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await conn.run_sync(Base.metadata.create_all)
 
             try:
-                stats = await migrate_sqlite_to_postgres(
+                result = await migrate_sqlite_to_postgres(
                     postgres_url=postgres_url,
                     sqlite_path=sqlite_path,
                     force=True,
                 )
-                self.assertGreaterEqual(stats.get("users", 0), 1)
+                self.assertEqual(result.status, MigrationStatus.IMPORTED)
+                self.assertGreaterEqual(result.stats.get("users", 0), 1)
 
                 async with dst_engine.connect() as conn:
                     count = await conn.scalar(text("SELECT COUNT(*) FROM users"))
