@@ -37,8 +37,12 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
 
-    # Database (локально: SQLite у database/autoradar.db)
+    # Database (Docker: PostgreSQL; локально можна SQLite у database/autoradar.db)
     DATABASE_URL: str = "sqlite+aiosqlite:///database/autoradar.db"
+    # Шлях до legacy SQLite для одноразового імпорту при переході на PostgreSQL
+    SQLITE_MIGRATE_SOURCE: str = "database/autoradar.db"
+    SQLITE_MIGRATE_ENABLED: bool = True
+    SQLITE_MIGRATE_FORCE: bool = False
 
     # KV store (локально: SQLite у database/kv.db, без окремого Redis)
     REDIS_URL: str = "sqlite://database/kv.db"
@@ -124,6 +128,15 @@ class Settings(BaseSettings):
             return ""
         text = str(value).strip().strip('"').strip("'")
         return text
+
+    @field_validator("SQLITE_MIGRATE_ENABLED", "SQLITE_MIGRATE_FORCE", mode="before")
+    @classmethod
+    def parse_bool_flag(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
     @model_validator(mode="after")
     def resolve_paths(self) -> "Settings":

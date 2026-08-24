@@ -6,11 +6,12 @@
 
 | Сервіс   | Контейнер         | Порт (за замовч.) |
 |----------|-------------------|-------------------|
+| Postgres | `carbit-postgres` | 5432 (внутрішній) |
 | Backend  | `carbit-backend`  | 8000              |
 | Frontend | `carbit-frontend` | 3000              |
 | Bot      | `carbit-bot`      | —                 |
 
-База SQLite зберігається на хості в папці `./database/`.
+Основна БД — **PostgreSQL**. Legacy-файл `database/autoradar.db` (SQLite) зберігається на хості; при першому старті backend **автоматично імпортує** дані в Postgres (позначка `database/.postgres_imported_from_sqlite`).
 
 ---
 
@@ -136,6 +137,30 @@ docker compose up -d
 
 ```bash
 docker compose up
+```
+
+---
+
+## Перехід з SQLite на PostgreSQL
+
+Після оновлення коду:
+
+1. Переконайтесь, що `database/autoradar.db` на хості **не видалений** (з нього імпорт).
+2. У `.env` вкажіть:
+   ```env
+   DATABASE_URL=postgresql+asyncpg://carbit:carbit@postgres:5432/carbit
+   ```
+3. Перезберіть і підніміть стек (додасться `carbit-postgres`):
+   ```bash
+   docker compose up -d --build
+   ```
+4. У логах backend має з’явитись `Importing SQLite data from ... → PostgreSQL`.
+5. Після успіху створюється `database/.postgres_imported_from_sqlite` — повторний імпорт не запускається.
+
+Примусовий повторний імпорт (merge, `ON CONFLICT DO NOTHING`):
+
+```bash
+SQLITE_MIGRATE_FORCE=1 docker compose up -d --build backend
 ```
 
 ---

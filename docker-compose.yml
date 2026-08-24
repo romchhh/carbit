@@ -27,7 +27,6 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: carbit-postgres
-    profiles: ["scale"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-carbit}
@@ -55,9 +54,12 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
-      # Стабільно: SQLite KV. Redis — profile cache + KV_URL=redis://redis:6379/0
-      # Postgres — profile scale + DATABASE_URL=postgresql+asyncpg://carbit:carbit@postgres:5432/carbit
-      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///database/autoradar.db}
+      # PostgreSQL (основна БД). Legacy SQLite імпортується автоматично при першому старті.
+      # Локально без Docker: DATABASE_URL=sqlite+aiosqlite:///database/autoradar.db
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://carbit:carbit@postgres:5432/carbit}
+      SQLITE_MIGRATE_SOURCE: ${SQLITE_MIGRATE_SOURCE:-/app/database/autoradar.db}
+      SQLITE_MIGRATE_ENABLED: ${SQLITE_MIGRATE_ENABLED:-1}
+      SQLITE_MIGRATE_FORCE: ${SQLITE_MIGRATE_FORCE:-0}
       REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
       TELEGRAM_MEDIA_DIR: /app/media
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
@@ -71,6 +73,9 @@ services:
     volumes:
       - ./database:/app/database
       - ./media:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "5", "http://localhost:8000/health/live"]
       interval: 10s
@@ -87,12 +92,15 @@ services:
     environment:
       TZ: Europe/Kyiv
       BACKEND_URL: http://backend:8000/api/v1
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://carbit:carbit@postgres:5432/carbit}
       REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
     entrypoint: ["python", "main.py"]
     working_dir: /app/bot
     volumes:
       - ./database:/app/database
     depends_on:
+      postgres:
+        condition: service_healthy
       backend:
         condition: service_healthy
 
@@ -104,6 +112,7 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://carbit:carbit@postgres:5432/carbit}
       REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
       TELEGRAM_MEDIA_DIR: /app/media
     entrypoint: ["python", "main.py"]
@@ -112,6 +121,8 @@ services:
       - ./database:/app/database
       - ./media:/app/media
     depends_on:
+      postgres:
+        condition: service_healthy
       backend:
         condition: service_healthy
 
@@ -123,6 +134,7 @@ services:
       - .env
     environment:
       TZ: Europe/Kyiv
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://carbit:carbit@postgres:5432/carbit}
       REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
       TELEGRAM_MEDIA_DIR: /app/media
     entrypoint: ["python", "main.py"]
@@ -131,6 +143,8 @@ services:
       - ./database:/app/database
       - ./media:/app/media
     depends_on:
+      postgres:
+        condition: service_healthy
       backend:
         condition: service_healthy
 

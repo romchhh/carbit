@@ -3,3 +3,4 @@
 *.sqlite3
 *.session
 *.session-journal
+.postgres_imported_from_sqlite

@@ -7,6 +7,17 @@ cd /app/backend
 echo "→ Running database migrations..."
 alembic upgrade head
 
+echo "→ Importing legacy SQLite data into PostgreSQL (if needed)..."
+python - <<'PY'
+import asyncio
+import sys
+
+sys.path.insert(0, "/app/backend")
+from app.core.sqlite_to_postgres import run_startup_migration
+
+asyncio.run(run_startup_migration())
+PY
+
 echo "→ Checking production secrets..."
 python - <<'PY'
 import os
