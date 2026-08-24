@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.core.config import ROOT_DIR, settings
+from app.core.timezone import as_kyiv
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +43,16 @@ JSON_COLUMNS: dict[str, frozenset[str]] = {
     "saved_comparisons": frozenset({"listing_ids"}),
 }
 
-BATCH_SIZE = 200
+BOOLEAN_COLUMNS = frozenset({
+    "is_active",
+    "onboarding_completed",
+    "telegram_connected",
+    "is_duplicate",
+    "is_new",
+    "is_read",
+    "sent_telegram",
+    "enabled",
+})
 
 
 class MigrationStatus(str, Enum):
@@ -92,25 +103,35 @@ def resolve_sqlite_source(path: str) -> Path:
     return (ROOT_DIR / raw).resolve()
 
 
+def _is_datetime_column(column: str) -> bool:
+    return column.endswith("_at") or column in {"published_at", "paid_at"}
+
+
+def _parse_datetime(value: str) -> datetime:
+    text_value = value.strip()
+    if text_value.endswith("Z"):
+        text_value = f"{text_value[:-1]}+00:00"
+    if " " in text_value and "T" not in text_value and "+" not in text_value:
+        text_value = text_value.replace(" ", "T", 1)
+    return as_kyiv(datetime.fromisoformat(text_value))
+
+
 def _normalize_value(column: str, value: object, table: str) -> object:
     if value is None:
         return None
-    if column in JSON_COLUMNS.get(table, frozenset()) and isinstance(value, str):
-        try:
-            return json.loads(value)
-        except json.JSONDecodeError:
-            return value
-    if isinstance(value, int) and column in {
-        "is_active",
-        "onboarding_completed",
-        "telegram_connected",
-        "is_duplicate",
-        "is_new",
-        "is_read",
-        "sent_telegram",
-        "enabled",
-    }:
+    if column in JSON_COLUMNS.get(table, frozenset()):
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return value
+        return value
+    if column in BOOLEAN_COLUMNS and isinstance(value, int):
         return bool(value)
+    if _is_datetime_column(column) and isinstance(value, str):
+        return _parse_datetime(value)
+    if isinstance(value, datetime):
+        return as_kyiv(value)
     return value
 
 
@@ -180,7 +201,11 @@ async def _copy_table(
         for raw in rows:
             row = _normalize_row(raw, table)
             params = {c: row.get(c) for c in columns}
-            await dst_conn.execute(stmt, params)
+            try:
+                await dst_conn.execute(stmt, params)
+            except Exception as exc:
+                row_id = row.get("id", row.get("email", "?"))
+                raise RuntimeError(f"{table} row {row_id!r}: {exc}") from exc
             copied += 1
     return copied
 
@@ -212,12 +237,18 @@ async def _apply_listing_duplicate_of(src: AsyncEngine, dst: AsyncEngine) -> int
     return updated
 
 
-def _should_merge(*, src_users: int, dst_users: int, src_listings: int, dst_listings: int, force: bool) -> bool:
+def _should_merge(
+    *,
+    src_users: int,
+    dst_users: int,
+    src_listings: int,
+    dst_listings: int,
+    force: bool,
+) -> bool:
     if force:
         return True
     if dst_users == 0:
         return True
-    # SQLite має більше даних — джерело правди для legacy-імпорту.
     if src_users > dst_users or src_listings > dst_listings:
         return True
     return False
@@ -319,6 +350,13 @@ async def migrate_sqlite_to_postgres(
             if dup_updates:
                 stats["listings_duplicate_of"] = dup_updates
                 print(f"  listings.duplicate_of: {dup_updates} updates", flush=True)
+        except Exception as exc:
+            return MigrationResult(
+                MigrationStatus.FAILED,
+                "import failed during table copy",
+                stats=stats,
+                error=str(exc),
+            )
         finally:
             async with dst_engine.connect() as conn:
                 await conn.execute(text("SET session_replication_role = 'origin'"))

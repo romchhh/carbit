@@ -32,6 +32,19 @@ class SqliteToPostgresHelpersTests(unittest.TestCase):
         out = _normalize_row(row, "users")
         self.assertTrue(out["is_active"])
 
+    def test_normalize_row_parses_datetime(self):
+        from datetime import datetime
+
+        row = {
+            "plan_expires_at": "2027-04-14 17:08:48.874799",
+            "created_at": "2026-08-07 15:22:12.304228",
+        }
+        out = _normalize_row(row, "users")
+        self.assertIsInstance(out["plan_expires_at"], datetime)
+        self.assertIsInstance(out["created_at"], datetime)
+        self.assertIsNotNone(out["plan_expires_at"].tzinfo)
+        self.assertIsNotNone(out["created_at"].tzinfo)
+
 
 class SqliteToPostgresSkipTests(unittest.IsolatedAsyncioTestCase):
     async def test_skips_when_target_not_postgres(self):
@@ -85,9 +98,13 @@ class SqliteToPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await conn.execute(
                     text(
                         "INSERT INTO users (id, email, name, plan, preferred_currency, "
-                        "telegram_connected, onboarding_completed, is_active, created_at) "
+                        "telegram_connected, onboarding_completed, is_active, created_at, "
+                        "plan_expires_at, trial_ends_at, phone_verified_at) "
                         "VALUES ('u1', 'test@example.com', 'Test', 'free', 'USD', 0, 0, 1, "
-                        "'2026-01-01 00:00:00+00:00')"
+                        "'2026-08-07 15:22:12.304228', "
+                        "'2027-04-14 17:08:48.874799', "
+                        "'2026-08-10 15:22:12.300767', "
+                        "'2026-08-07 15:22:12.300629')"
                     )
                 )
 
