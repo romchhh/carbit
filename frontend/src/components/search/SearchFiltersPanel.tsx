@@ -216,7 +216,7 @@ export function SearchFiltersPanel({
           <div
             className={cn(
               "overflow-hidden rounded-t-[1.35rem] border-b border-border/60 bg-surface/70 px-3 py-3.5 sm:px-5",
-              sidebar && "lg:rounded-t-2xl lg:px-3.5 lg:py-3",
+              sidebar && "lg:rounded-t-2xl lg:px-3 lg:py-2.5",
             )}
           >
             <div className={cn("mb-3 flex items-start justify-between gap-2", sidebar && "lg:mb-2")}>
@@ -259,7 +259,7 @@ export function SearchFiltersPanel({
                       className={cn(
                         "rounded-full border font-medium whitespace-nowrap transition-colors",
                         sidebar
-                          ? "px-2.5 py-1.5 text-[12px] lg:px-3"
+                          ? "px-2.5 py-1.5 text-[12px] lg:px-2 lg:py-1 lg:text-[11px]"
                           : "px-4 py-2 text-[14px]",
                         active
                           ? "border-ink bg-ink text-white shadow-sm"
@@ -277,7 +277,7 @@ export function SearchFiltersPanel({
           <div
             className={cn(
               "relative z-20 space-y-2 bg-surface/40 px-3 py-3.5 sm:px-5 sm:py-5",
-              sidebar && "lg:space-y-1.5 lg:px-3.5 lg:py-3",
+              sidebar && "lg:space-y-1.5 lg:px-3 lg:py-2.5",
             )}
           >
             {voiceHint && (
@@ -415,7 +415,7 @@ export function SearchFiltersPanel({
           <div
             className={cn(
               "relative z-10 space-y-2 overflow-hidden rounded-b-[1.35rem] border-t border-border/60 bg-white px-3 py-3.5 sm:px-5",
-              sidebar && "lg:rounded-b-2xl lg:px-3.5 lg:py-3",
+              sidebar && "lg:rounded-b-2xl lg:px-3 lg:py-2.5",
             )}
           >
             <button
@@ -440,7 +440,7 @@ export function SearchFiltersPanel({
           className={cn(
             "mt-4 scroll-mt-28 space-y-3 rounded-[1.35rem] border border-border/80 bg-white px-3 py-3.5 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:scroll-mt-8 sm:px-5 lg:scroll-mt-6",
             sidebar &&
-              "lg:mt-3 lg:space-y-2 lg:rounded-2xl lg:px-3.5 lg:py-3 lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)]",
+              "lg:mt-3 lg:space-y-2 lg:rounded-2xl lg:px-3 lg:py-2.5 lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)]",
           )}
         >
           {rateLimited ? (

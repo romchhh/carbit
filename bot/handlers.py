@@ -10,6 +10,7 @@ from backend_api import (
     deactivate_monitor,
     get_monitor_info,
     get_subscription_status,
+    get_system_status,
     init_telegram_login,
     init_telegram_register,
     link_telegram_account,
@@ -58,7 +59,25 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     await _handle_register(message, telegram_id, username)
 
 
-@router.message(Command("subscription", "status", "pidpiska"))
+def _is_monitor_admin(telegram_id: str) -> bool:
+    return telegram_id in settings.monitor_admin_ids()
+
+
+@router.message(Command("status"))
+async def cmd_admin_status(message: Message) -> None:
+    telegram_id, _ = _user_meta(message)
+    if not _is_monitor_admin(telegram_id):
+        await message.answer("⛔️ Команда доступна лише адміністраторам.")
+        return
+
+    result = await get_system_status()
+    if not result:
+        await message.answer("⚠️ Не вдалося отримати статус систем. Спробуйте пізніше.")
+        return
+    await message.answer(result.get("text") or "Статус недоступний")
+
+
+@router.message(Command("subscription", "pidpiska"))
 async def cmd_subscription(message: Message) -> None:
     telegram_id, _ = _user_meta(message)
     result = await get_subscription_status(telegram_id)

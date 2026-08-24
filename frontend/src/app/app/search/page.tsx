@@ -11,7 +11,7 @@ import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
 import { RecentSearchesSection } from "@/components/search/RecentSearchesSection";
 import { TelegramConnectPrompt } from "@/components/search/TelegramConnectPrompt";
 import { useAuth } from "@/contexts/AuthProvider";
-import { usePreviewSearch } from "@/hooks/usePreviewSearch";
+import { useSearchSession } from "@/contexts/SearchSessionProvider";
 import { useRecentSearches } from "@/hooks/useRecentSearches";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
 import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
@@ -39,6 +39,8 @@ export default function SearchPage() {
     results,
     total,
     marketTotal,
+    page,
+    pages,
     sort,
     freshness,
     running,
@@ -57,16 +59,23 @@ export default function SearchPage() {
     loadMore,
     reset,
     clearError,
-  } = usePreviewSearch();
+    restoreFromRecentCache,
+  } = useSearchSession();
 
   const filtersPanelRef = useRef<HTMLDivElement>(null);
   const { trackSearchStart, handleRecentSelect } = useRecentSearches({
     filters,
     freshness,
+    sort,
+    pages,
+    total,
+    marketTotal,
     searching,
     results,
     setFilters,
     changeFreshness,
+    runSearch,
+    restoreFromRecentCache,
     scrollTargetRef: filtersPanelRef,
     onBeforeSelect: () => {
       clearSaveMessages();

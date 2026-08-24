@@ -26,7 +26,7 @@ export function FilterRow({ label, value, onClick, className, disabled, leading,
         "flex w-full items-center justify-between border border-border bg-white text-left transition-colors",
         "hover:border-emerald/30 focus:outline-none focus:border-emerald/50 focus:ring-2 focus:ring-emerald/10",
         compact
-          ? "gap-2 rounded-lg px-3 py-2.5"
+          ? "gap-2 rounded-lg px-2.5 py-2 lg:px-2.5 lg:py-2"
           : "gap-3 rounded-xl px-4 py-3.5",
         disabled && "cursor-not-allowed opacity-50",
         className,

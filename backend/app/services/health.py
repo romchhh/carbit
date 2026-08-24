@@ -12,6 +12,13 @@ from app.core.redis import get_redis
 
 HEARTBEAT_TTL = 300
 HEARTBEAT_PREFIX = "heartbeat:"
+WORKER_HEARTBEAT_MAX_AGE = 1200.0
+BOT_HEARTBEAT_MAX_AGE = 180.0
+TELEGRAM_WORKER_HEARTBEAT_MAX_AGE = 60.0
+
+
+def is_heartbeat_online(age: float | None, *, max_age: float) -> bool:
+    return age is not None and age <= max_age
 
 
 async def beat(service: str) -> None:

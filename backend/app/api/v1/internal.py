@@ -313,3 +313,15 @@ async def bot_unsubscribe(
         ),
         "billing_url": f"{settings.FRONTEND_URL.rstrip('/')}/app/billing",
     }
+
+
+@router.get("/monitoring/status")
+async def bot_monitoring_status(_: None = Depends(verify_internal_secret)):
+    from app.services.monitoring.collect import collect_system_status, format_status_message
+
+    status = await collect_system_status(touch_backend_heartbeat=True)
+    return {
+        "text": format_status_message(status),
+        "overall": status.overall.value,
+        "components": [c.to_dict() for c in status.components],
+    }

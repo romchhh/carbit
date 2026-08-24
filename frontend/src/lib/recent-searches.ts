@@ -5,6 +5,7 @@ import {
   toBackendSearchFilters,
 } from "@/lib/search-filters-api";
 import { syncSearchFilterArrays } from "@/lib/search-filter-multi";
+import type { RecentSearchResultCache } from "@/lib/recent-search-cache";
 import type { SearchFreshness } from "@/lib/search-preview";
 
 const KEY = "carbit:recent-searches";
@@ -19,6 +20,8 @@ export type RecentSearchEntry = {
   at: string;
   /** Фото першого авто з останнього запуску цього пошуку */
   previewImage?: string | null;
+  /** Кеш результатів для миттєвого відкриття */
+  cache?: RecentSearchResultCache;
 };
 
 function normalizeFilters(raw: unknown): SearchFilterState | null {
@@ -49,8 +52,14 @@ function normalizeEntry(raw: unknown): RecentSearchEntry | null {
     typeof item.previewImage === "string" && item.previewImage.trim()
       ? item.previewImage.trim()
       : null;
+  const cache =
+    item.cache &&
+    typeof item.cache === "object" &&
+    Array.isArray((item.cache as RecentSearchResultCache).results)
+      ? (item.cache as RecentSearchResultCache)
+      : undefined;
 
-  return { id, name, filters, freshness, at, previewImage };
+  return { id, name, filters, freshness, at, previewImage, cache };
 }
 
 function notifyChanged() {
@@ -108,6 +117,7 @@ export function saveRecentSearch(
     freshness: freshnessNorm,
     at: new Date().toISOString(),
     previewImage,
+    cache: previous?.cache,
   };
 
   if (typeof window === "undefined") return entry;
@@ -119,6 +129,32 @@ export function saveRecentSearch(
   localStorage.setItem(KEY, JSON.stringify(next));
   notifyChanged();
   return entry;
+}
+
+export function updateRecentSearchCache(
+  filters: SearchFilterState,
+  freshness: SearchFreshness,
+  cache: RecentSearchResultCache,
+  previewImage?: string | null,
+): void {
+  if (typeof window === "undefined") return;
+  const freshnessNorm: SearchFreshness = freshness === "new" ? "new" : "all";
+  const current = loadRecentSearches();
+  const idx = current.findIndex(item => matchesEntry(item, filters, freshnessNorm));
+  if (idx < 0) return;
+
+  const prev = current[idx];
+  const nextEntry: RecentSearchEntry = {
+    ...prev,
+    previewImage:
+      previewImage?.trim() || prev.previewImage || cache.results[0]?.images?.[0] || null,
+    cache,
+    at: new Date().toISOString(),
+  };
+  const next = [...current];
+  next[idx] = nextEntry;
+  localStorage.setItem(KEY, JSON.stringify(next));
+  notifyChanged();
 }
 
 export function clearRecentSearches() {

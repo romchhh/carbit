@@ -39,7 +39,7 @@ def upgrade() -> None:
         sa.Column("comment", sa.String(length=2000), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("pending", "in_review", "approved", "rejected", name="sourcerequeststatus"),
+            sa.String(length=32),
             nullable=False,
             server_default="pending",
         ),

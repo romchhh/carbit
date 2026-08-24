@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     BACKEND_URL: str = "http://localhost:8000/api/v1"
     INTERNAL_API_SECRET: str = "change-me-internal"
+    MONITOR_ADMIN_IDS: str = "1734355788,7119952932"
+
+    def monitor_admin_ids(self) -> set[str]:
+        raw = (self.MONITOR_ADMIN_IDS or "").replace(";", ",")
+        return {part.strip() for part in raw.split(",") if part.strip()}
 
 
 settings = Settings()

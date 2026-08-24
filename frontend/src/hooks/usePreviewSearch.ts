@@ -19,7 +19,14 @@ import {
   type SearchFreshness,
 } from "@/lib/search-preview";
 import { toBackendSearchFilters } from "@/lib/search-filters-api";
+import { clearSearchSession, type SearchSessionSnapshot } from "@/lib/search-session";
+import type { RecentSearchResultCache } from "@/lib/recent-search-cache";
 import type { Listing, SourceStatus } from "@/types/api";
+
+type RunSearchOptions = {
+  /** Оновити результати без очищення поточного екрану (для кешу недавніх пошуків). */
+  background?: boolean;
+};
 
 type PageResult = {
   items: Listing[];
@@ -291,7 +298,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       nextFilters: SearchFilterState,
       nextSort: SortOption,
       nextFreshness: SearchFreshness,
+      options?: RunSearchOptions,
     ) => {
+      const background = Boolean(options?.background);
       // Скасовуємо попередній пошук, щоб звільнити backend-слоти і з'єднання.
       searchAbortRef.current?.abort();
       const controller = new AbortController();
@@ -302,14 +311,16 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       setSearching(true);
       setError(null);
       setErrorRetryAfter(null);
-      fullPoolRef.current = [];
-      displayPoolRef.current = [];
-      displayCountRef.current = 0;
-      lastApiPageRef.current = 0;
-      setPoolSize(0);
-      setLoadedApiPage(0);
+      if (!background) {
+        fullPoolRef.current = [];
+        displayPoolRef.current = [];
+        displayCountRef.current = 0;
+        lastApiPageRef.current = 0;
+        setPoolSize(0);
+        setLoadedApiPage(0);
+        scrollToProgress();
+      }
       poolApiSortRef.current = nextSort;
-      scrollToProgress();
 
       try {
         void fx.rates();
@@ -353,19 +364,21 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         // AbortError — новий пошук вже запущений; мовчки ігноруємо.
         if (err instanceof DOMException && err.name === "AbortError") return;
         if (gen !== searchGen.current) return;
-        fullPoolRef.current = [];
-        displayPoolRef.current = [];
-        displayCountRef.current = 0;
-        setResults([]);
-        setTotal(0);
-        setPage(1);
-        setPages(0);
-        setPoolSize(0);
-        setLoadedApiPage(0);
-        setSourceStatuses([]);
-        setPartial(false);
-        setFromCache(false);
-        setRunning(false);
+        if (!background) {
+          fullPoolRef.current = [];
+          displayPoolRef.current = [];
+          displayCountRef.current = 0;
+          setResults([]);
+          setTotal(0);
+          setPage(1);
+          setPages(0);
+          setPoolSize(0);
+          setLoadedApiPage(0);
+          setSourceStatuses([]);
+          setPartial(false);
+          setFromCache(false);
+          setRunning(false);
+        }
         setError(getApiErrorMessage(err, "Не вдалось виконати пошук. Спробуйте ще раз."));
         if (isSearchRateLimitError(err) && err instanceof ApiError) {
           setErrorRetryAfter(err.retryAfter ?? 3600);
@@ -481,6 +494,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       nextFilters: SearchFilterState,
       nextFreshness: SearchFreshness = freshness,
       nextSort: SortOption = sort,
+      options?: RunSearchOptions,
     ) => {
       const years = normalizeYearRange(nextFilters.yearFrom, nextFilters.yearTo);
       const prices = normalizePriceRange(nextFilters.priceFrom, nextFilters.priceTo);
@@ -493,7 +507,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       };
       setFilters(sanitized);
       setSort(nextSort);
-      await fetchInitial(sanitized, nextSort, nextFreshness);
+      setFreshness(nextFreshness);
+      await fetchInitial(sanitized, nextSort, nextFreshness, options);
     },
     [fetchInitial, freshness, sort],
   );
@@ -536,7 +551,111 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     setRunning(false);
     setError(null);
     setErrorRetryAfter(null);
+    clearSearchSession();
   }, [user?.preferred_currency]);
+
+  const createSnapshot = useCallback((): SearchSessionSnapshot => {
+    return {
+      filters,
+      freshness,
+      sort,
+      running,
+      results: displayPoolRef.current.length > 0 ? [...displayPoolRef.current] : [...results],
+      total,
+      marketTotal,
+      page,
+      pages,
+      poolSize: fullPoolRef.current.length,
+      loadedApiPage: lastApiPageRef.current,
+      sourceStatuses,
+      partial,
+      fromCache,
+      savedAt: Date.now(),
+    };
+  }, [
+    filters,
+    freshness,
+    sort,
+    running,
+    results,
+    total,
+    marketTotal,
+    page,
+    pages,
+    sourceStatuses,
+    partial,
+    fromCache,
+  ]);
+
+  const restoreSnapshot = useCallback((snapshot: SearchSessionSnapshot) => {
+    searchGen.current += 1;
+    searchAbortRef.current?.abort();
+
+    const items = [...snapshot.results];
+    fullPoolRef.current = items;
+    displayPoolRef.current = items;
+    displayCountRef.current = items.length;
+    lastApiPageRef.current = snapshot.loadedApiPage;
+    poolApiSortRef.current = snapshot.sort;
+
+    setFilters({ ...snapshot.filters });
+    setFreshness(snapshot.freshness);
+    setSort(snapshot.sort);
+    setResults(items);
+    setTotal(snapshot.total);
+    setMarketTotal(snapshot.marketTotal);
+    setPage(snapshot.page);
+    setPages(snapshot.pages);
+    setPoolSize(snapshot.poolSize);
+    setLoadedApiPage(snapshot.loadedApiPage);
+    setSourceStatuses(snapshot.sourceStatuses);
+    setPartial(snapshot.partial);
+    setFromCache(snapshot.fromCache);
+    setRunning(snapshot.running);
+    setSearching(false);
+    setLoadingMore(false);
+    setError(null);
+    setErrorRetryAfter(null);
+  }, []);
+
+  const restoreFromRecentCache = useCallback(
+    (
+      nextFilters: SearchFilterState,
+      nextFreshness: SearchFreshness,
+      cache: RecentSearchResultCache,
+      nextSort: SortOption = cache.sort,
+    ) => {
+      searchGen.current += 1;
+      searchAbortRef.current?.abort();
+
+      const items = [...cache.results];
+      fullPoolRef.current = items;
+      displayPoolRef.current = items;
+      displayCountRef.current = items.length;
+      lastApiPageRef.current = Math.min(2, Math.max(1, cache.pages));
+      poolApiSortRef.current = nextSort;
+
+      setFilters({ ...nextFilters });
+      setFreshness(nextFreshness);
+      setSort(nextSort);
+      setResults(items);
+      setTotal(cache.total);
+      setMarketTotal(cache.marketTotal);
+      setPage(Math.max(1, Math.ceil(items.length / SEARCH_PAGE_SIZE)));
+      setPages(cache.pages);
+      setPoolSize(items.length);
+      setLoadedApiPage(lastApiPageRef.current);
+      setSourceStatuses([]);
+      setPartial(false);
+      setFromCache(true);
+      setRunning(true);
+      setSearching(false);
+      setLoadingMore(false);
+      setError(null);
+      setErrorRetryAfter(null);
+    },
+    [],
+  );
 
   return {
     filters,
@@ -565,6 +684,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
     changeFreshness,
     loadMore,
     reset,
+    createSnapshot,
+    restoreSnapshot,
+    restoreFromRecentCache,
     clearError: () => {
       setError(null);
       setErrorRetryAfter(null);

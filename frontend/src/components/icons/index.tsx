@@ -1,5 +1,5 @@
 import { SVGProps } from "react";
-import { Car, Pencil, Scale, Trash2, User, type LucideIcon } from "lucide-react";
+import { Car, Coins, Pencil, Scale, Trash2, User, type LucideIcon } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 
@@ -160,6 +160,8 @@ export const IconZap = icon(
     <path d="M13 2L4 14h8l-1 8 9-12h-8l1-8Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
   </>
 );
+
+export const IconCoin = lucideIcon(Coins);
 
 export const IconUser = lucideIcon(User);
 

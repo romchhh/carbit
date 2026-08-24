@@ -115,3 +115,14 @@ async def deactivate_monitor(telegram_id: str, search_id: str) -> dict | None:
             logger.error("Backend monitor deactivate failed: %s", res.text)
             return None
         return res.json()
+
+
+async def get_system_status() -> dict | None:
+    url = f"{settings.BACKEND_URL}/internal/bot/monitoring/status"
+    headers = {"X-Internal-Secret": settings.INTERNAL_API_SECRET}
+    async with httpx.AsyncClient(timeout=20) as client:
+        res = await client.get(url, headers=headers)
+        if res.status_code >= 400:
+            logger.error("Backend monitoring status failed: %s", res.text)
+            return None
+        return res.json()

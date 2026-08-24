@@ -5,7 +5,7 @@ import html
 import logging
 import time
 
-from app.core.config import settings
+from app.core.config import monitor_admin_chat_ids
 from app.services.telegram.client import telegram_client
 
 logger = logging.getLogger(__name__)
@@ -42,9 +42,9 @@ async def notify_admin_parsing_error(
     url: str | None = None,
 ) -> None:
     """Надсилає адміну повідомлення про проблему парсингу (з cooldown, щоб не спамити)."""
-    chat_id = (settings.TELEGRAM_ADMIN_CHAT_ID or "").strip()
-    if not chat_id:
-        logger.warning("TELEGRAM_ADMIN_CHAT_ID not configured; skipping admin alert")
+    chat_ids = monitor_admin_chat_ids()
+    if not chat_ids:
+        logger.warning("MONITOR_ADMIN_IDS not configured; skipping admin alert")
         return
     if not telegram_client.enabled:
         logger.warning("Telegram bot token not configured; skipping admin alert")
@@ -72,9 +72,10 @@ async def notify_admin_parsing_error(
     text = "\n".join(lines)
 
     try:
-        result = await telegram_client.send_message(chat_id, text)
-        if not result or not result.get("ok"):
-            logger.error("Failed to send admin parsing alert to Telegram")
+        for chat_id in chat_ids:
+            result = await telegram_client.send_message(chat_id, text)
+            if not result or not result.get("ok"):
+                logger.error("Failed to send admin parsing alert to Telegram chat %s", chat_id)
     except Exception:
         logger.exception("Exception while sending admin parsing alert")
 

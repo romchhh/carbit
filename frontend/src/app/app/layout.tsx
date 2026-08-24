@@ -13,6 +13,7 @@ import { PwaLoadingScreen } from "@/components/pwa/PwaLoadingScreen";
 import { CompareBar } from "@/components/listings/CompareBar";
 import { InstagramFollowModal } from "@/components/social/InstagramFollowModal";
 import { useAuth } from "@/contexts/AuthProvider";
+import { SearchSessionProvider } from "@/contexts/SearchSessionProvider";
 import {
   markInstagramFollowPromptShown,
   shouldShowInstagramFollowPrompt,
@@ -190,7 +191,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-4 lg:pl-3 lg:pr-5 lg:pb-8 lg:pt-4 xl:pl-4 xl:pr-7"
             >
               <div className="app-mobile-content flex w-full max-w-[980px] flex-col lg:mx-0 lg:max-w-none">
-                {children}
+                <SearchSessionProvider>{children}</SearchSessionProvider>
 
                   <div className="mt-5 lg:mt-6">
                     <PwaInstallPrompt />

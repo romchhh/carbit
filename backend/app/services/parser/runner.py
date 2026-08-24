@@ -266,8 +266,23 @@ async def _process_group(
     for status in outcome.sources:
         if status.error:
             log.append(f"  ⚠ {status.source}: {status.error}")
+            from app.services.monitoring.parser_status import record_parser_status
+
+            await record_parser_status(
+                status.source,
+                ok=False,
+                error=status.error,
+                count=status.item_count,
+            )
         else:
             log.append(f"  ✓ {status.source}: {status.item_count} оголошень")
+            from app.services.monitoring.parser_status import record_parser_status
+
+            await record_parser_status(
+                status.source,
+                ok=True,
+                count=status.item_count,
+            )
 
     results = outcome.result
     found = len(results.items)
@@ -372,9 +387,15 @@ async def run_parser_cycle(
             try:
                 tg_saved = await run_telegram_channels_cycle(db, settings, log)
                 total_found += tg_saved
+                from app.services.monitoring.parser_status import record_parser_status
+
+                await record_parser_status("telegram", ok=True, count=tg_saved)
             except Exception as exc:
                 had_errors = True
                 log.append(f"Telegram ingest: {exc}")
+                from app.services.monitoring.parser_status import record_parser_status
+
+                await record_parser_status("telegram", ok=False, error=str(exc))
                 logger.exception("Telegram channels cycle failed")
 
         from app.models.models import User

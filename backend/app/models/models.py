@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import String, Boolean, DateTime, Integer, JSON, ForeignKey, Enum as SAEnum, UniqueConstraint
+from sqlalchemy import String, Boolean, DateTime, Integer, JSON, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.core.timezone import as_kyiv, now_kyiv
+from app.models.db_types import StrEnum
 import enum
 
 
@@ -20,6 +21,10 @@ class Source(str, enum.Enum):
     auto_ria = "auto_ria"
     olx = "olx"
     telegram = "telegram"
+    imperiya = "imperiya"
+    udrive = "udrive"
+    car_market = "car_market"
+    reono = "reono"
 
 
 class NotificationType(str, enum.Enum):
@@ -68,7 +73,7 @@ class User(Base):
     telegram_avatar_path: Mapped[str | None] = mapped_column(String, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
     phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    plan: Mapped[PlanTier] = mapped_column(SAEnum(PlanTier), default=PlanTier.free)
+    plan: Mapped[PlanTier] = mapped_column(StrEnum(PlanTier), default=PlanTier.free)
     plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     preferred_currency: Mapped[str] = mapped_column(String, default="USD")
@@ -148,7 +153,7 @@ class ParseRun(Base):
     __tablename__ = "parse_runs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
-    status: Mapped[ParseRunStatus] = mapped_column(SAEnum(ParseRunStatus), default=ParseRunStatus.running)
+    status: Mapped[ParseRunStatus] = mapped_column(StrEnum(ParseRunStatus), default=ParseRunStatus.running)
     triggered_by: Mapped[str] = mapped_column(String, default="scheduler")
     filter_groups: Mapped[int] = mapped_column(Integer, default=0)
     searches_processed: Mapped[int] = mapped_column(Integer, default=0)
@@ -166,7 +171,7 @@ class Listing(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
     external_id: Mapped[str] = mapped_column(String, index=True)
-    source: Mapped[Source] = mapped_column(SAEnum(Source))
+    source: Mapped[Source] = mapped_column(StrEnum(Source))
     title: Mapped[str] = mapped_column(String)
     brand: Mapped[str] = mapped_column(String, index=True)
     model: Mapped[str] = mapped_column(String, index=True)
@@ -215,7 +220,7 @@ class Notification(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    type: Mapped[NotificationType] = mapped_column(SAEnum(NotificationType))
+    type: Mapped[NotificationType] = mapped_column(StrEnum(NotificationType))
     title: Mapped[str] = mapped_column(String)
     body: Mapped[str] = mapped_column(String)
     listing_id: Mapped[str | None] = mapped_column(String, ForeignKey("listings.id", ondelete="SET NULL"), nullable=True)
@@ -251,7 +256,7 @@ class MonitoringSourceRequest(Base):
     url: Mapped[str] = mapped_column(String(2048))
     comment: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     status: Mapped[SourceRequestStatus] = mapped_column(
-        SAEnum(SourceRequestStatus),
+        StrEnum(SourceRequestStatus),
         default=SourceRequestStatus.pending,
         index=True,
     )
@@ -299,7 +304,7 @@ class BillingSubscription(Base):
     currency: Mapped[str] = mapped_column(String, default="UAH")
     periodicity: Mapped[str] = mapped_column(String, default="month")
     status: Mapped[SubscriptionStatus] = mapped_column(
-        SAEnum(SubscriptionStatus),
+        StrEnum(SubscriptionStatus),
         default=SubscriptionStatus.pending,
     )
     card_token: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -16,7 +16,7 @@ export function SearchDesktopSplit({ filtersRef, filters, results, footer, class
   return (
     <div
       className={cn(
-        "lg:grid lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-4 xl:grid-cols-[minmax(0,380px)_minmax(0,1fr)] xl:gap-5",
+        "lg:grid lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] lg:items-start lg:gap-4 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] xl:gap-5",
         className,
       )}
     >

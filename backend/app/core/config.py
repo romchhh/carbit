@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_USERNAME: str = ""
     TELEGRAM_BOT_URL: str = ""
     TELEGRAM_ADMIN_CHAT_ID: str = "585621771"
+    # Моніторинг: алерти + /status у боті (через кому)
+    MONITOR_ADMIN_IDS: str = "1734355788,7119952932"
+    MONITOR_CHECK_INTERVAL_SECONDS: int = 120
+    MONITOR_DAILY_REPORT_HOUR: int = 22
+    # Docker: http://frontend:3000
+    FRONTEND_INTERNAL_URL: str = ""
 
     # OpenAI (голосовий пошук)
     OPENAI_API_KEY: str = ""
@@ -161,3 +167,16 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def monitor_admin_chat_ids() -> list[str]:
+    raw = (settings.MONITOR_ADMIN_IDS or settings.TELEGRAM_ADMIN_CHAT_ID or "").strip()
+    ids = [part.strip() for part in raw.replace(";", ",").split(",") if part.strip()]
+    # Унікальні, порядок збережено
+    seen: set[str] = set()
+    out: list[str] = []
+    for chat_id in ids:
+        if chat_id not in seen:
+            seen.add(chat_id)
+            out.append(chat_id)
+    return out

@@ -19,7 +19,7 @@ import { MonitorSearchCard } from "@/components/search/MonitorSearchCard";
 import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { SubscriptionPitch } from "@/components/billing/SubscriptionPitch";
 import { useAuth } from "@/contexts/AuthProvider";
-import { usePreviewSearch } from "@/hooks/usePreviewSearch";
+import { useSearchSession } from "@/contexts/SearchSessionProvider";
 import { useRecentSearches } from "@/hooks/useRecentSearches";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
 import { searches as searchesApi, users as usersApi } from "@/lib/api";
@@ -45,6 +45,8 @@ export default function DashboardPage() {
     results,
     total,
     marketTotal,
+    page,
+    pages,
     sort,
     freshness,
     running,
@@ -63,7 +65,8 @@ export default function DashboardPage() {
     loadMore,
     reset,
     clearError,
-  } = usePreviewSearch();
+    restoreFromRecentCache,
+  } = useSearchSession();
   const filtersPanelRef = useRef<HTMLDivElement>(null);
   const [tgPromptOpen, setTgPromptOpen] = useState(false);
   const { saveSearch, saving, saveSuccess, saveError, saveLimitReached, clearSaveMessages } =
@@ -73,10 +76,16 @@ export default function DashboardPage() {
   const { trackSearchStart, handleRecentSelect } = useRecentSearches({
     filters,
     freshness,
+    sort,
+    pages,
+    total,
+    marketTotal,
     searching,
     results,
     setFilters,
     changeFreshness,
+    runSearch,
+    restoreFromRecentCache,
     scrollTargetRef: filtersPanelRef,
     onBeforeSelect: () => {
       clearSaveMessages();
@@ -226,14 +235,11 @@ export default function DashboardPage() {
       )}
 
       <div className="mb-8">
-        <h2 className="text-[17px] font-bold text-ink">Новий моніторинг</h2>
-        <div className="mt-4">
-          <SearchDesktopSplit
-            filtersRef={filtersPanelRef}
-            filters={filtersPanel}
-            results={resultsPanel}
-          />
-        </div>
+        <SearchDesktopSplit
+          filtersRef={filtersPanelRef}
+          filters={filtersPanel}
+          results={resultsPanel}
+        />
       </div>
 
       <div className="mt-8 flex items-end justify-between gap-3" data-tour="my-searches">

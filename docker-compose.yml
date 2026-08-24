@@ -61,6 +61,8 @@ services:
       SQLITE_MIGRATE_ENABLED: ${SQLITE_MIGRATE_ENABLED:-1}
       SQLITE_MIGRATE_FORCE: ${SQLITE_MIGRATE_FORCE:-0}
       REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
+      MONITOR_ADMIN_IDS: ${MONITOR_ADMIN_IDS:-1734355788,7119952932}
+      FRONTEND_INTERNAL_URL: http://frontend:3000
       TELEGRAM_MEDIA_DIR: /app/media
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -94,6 +96,7 @@ services:
       BACKEND_URL: http://backend:8000/api/v1
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://carbit:carbit@postgres:5432/carbit}
       REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
+      MONITOR_ADMIN_IDS: ${MONITOR_ADMIN_IDS:-1734355788,7119952932}
     entrypoint: ["python", "main.py"]
     working_dir: /app/bot
     volumes:
@@ -115,6 +118,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://carbit:carbit@postgres:5432/carbit}
       REDIS_URL: ${KV_URL:-sqlite://database/kv.db}
       TELEGRAM_MEDIA_DIR: /app/media
+      FRONTEND_INTERNAL_URL: http://frontend:3000
+      MONITOR_ADMIN_IDS: ${MONITOR_ADMIN_IDS:-1734355788,7119952932}
     entrypoint: ["python", "main.py"]
     working_dir: /app/worker
     volumes:

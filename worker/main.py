@@ -114,6 +114,20 @@ async def run_once() -> None:
 
 async def main() -> None:
     logger.info("Carbit parser worker started")
+
+    async def heartbeat_loop() -> None:
+        while True:
+            try:
+                await beat("worker")
+            except Exception:
+                logger.exception("Worker heartbeat failed")
+            await asyncio.sleep(60)
+
+    from app.services.monitoring.runner import monitoring_loop
+
+    asyncio.create_task(heartbeat_loop())
+    asyncio.create_task(monitoring_loop())
+
     while True:
         await beat("worker")
         settings = await get_parser_settings()
