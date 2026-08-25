@@ -22,6 +22,8 @@ export function SearchDesktopSplit({
   footer,
   className,
 }: Props) {
+  const hasFooter = Boolean(filtersFooter);
+
   return (
     <div
       className={cn(
@@ -32,13 +34,24 @@ export function SearchDesktopSplit({
       <aside
         ref={filtersRef}
         className={cn(
-          "mb-5 scroll-mt-4 sm:mb-6",
-          "lg:sticky lg:top-3 lg:mb-0 lg:flex lg:max-h-[calc(100vh-7rem)] lg:flex-col",
+          "mb-5 scroll-mt-4 sm:mb-6 lg:sticky lg:top-3 lg:mb-0",
+          hasFooter
+            ? // З кнопкою моніторингу: колонка = висота екрана, фільтри скроляться, кнопка завжди внизу.
+              "lg:flex lg:h-[calc(100vh-7rem)] lg:max-h-[calc(100vh-7rem)] lg:flex-col lg:overflow-hidden"
+            : "lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain",
         )}
       >
-        <div className="min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">{filters}</div>
-        {filtersFooter ? (
-          <div className="mt-3 hidden shrink-0 lg:block">{filtersFooter}</div>
+        <div
+          className={cn(
+            hasFooter && "min-h-0 flex-1 overflow-y-auto overscroll-contain",
+          )}
+        >
+          {filters}
+        </div>
+        {hasFooter ? (
+          <div className="hidden shrink-0 border-t border-border/50 bg-surface/95 pt-3 backdrop-blur-sm lg:block">
+            {filtersFooter}
+          </div>
         ) : null}
       </aside>
 
