@@ -134,6 +134,7 @@ function ListingCompareDesktopTable({
                   const listing = listings[index];
                   const isPrice = row.key === "price";
                   const highlighted = row.highlightIndexes?.includes(index);
+                  const danger = row.dangerIndexes?.includes(index);
                   return (
                     <td
                       key={`${row.key}-${listing?.id ?? index}`}
@@ -142,6 +143,7 @@ function ListingCompareDesktopTable({
                         isPrice ? "font-black text-ink" : "text-ink/90",
                         row.key === "vin" && "font-mono text-[11px]",
                         highlighted && "bg-emerald/10 font-semibold text-emerald-dark",
+                        danger && "bg-red-50 font-semibold text-red-700",
                       )}
                     >
                       {value}
@@ -153,6 +155,11 @@ function ListingCompareDesktopTable({
                       {highlighted && row.key === "mileage" && (
                         <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-emerald-dark">
                           Менший пробіг
+                        </span>
+                      )}
+                      {danger && row.key === "accident" && (
+                        <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-red-600">
+                          Увага
                         </span>
                       )}
                     </td>

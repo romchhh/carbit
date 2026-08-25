@@ -97,14 +97,16 @@ def _from_structured_sources(item: ListingOut) -> float | None:
     sd = item.source_data if isinstance(item.source_data, dict) else {}
     auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
     specs = sd.get("specs") if isinstance(sd.get("specs"), dict) else {}
+    # AUTO.RIA newauto: mainParams.volume у см³.
+    main_params = sd.get("mainParams") if isinstance(sd.get("mainParams"), dict) else {}
 
-    for source in (auto, specs, sd):
+    for source in (auto, specs, main_params, sd):
         for key in _STRUCTURED_KEYS:
             parsed = _parse_structured_value(source.get(key))
             if parsed is not None:
                 return parsed
 
-    for source in (specs, auto):
+    for source in (specs, auto, main_params):
         for spec_key, spec_value in source.items():
             if not _key_is_engine_spec(str(spec_key)):
                 continue
@@ -113,7 +115,7 @@ def _from_structured_sources(item: ListingOut) -> float | None:
                 return parsed
 
     # AUTO.RIA: fuelName = «Бензин, 3 л.» / «Дизель, 2.99 л.» (engineVolume часто None).
-    for source in (auto, sd):
+    for source in (auto, main_params, sd):
         for fuel_key in ("fuelName", "fuel"):
             raw = source.get(fuel_key)
             if not isinstance(raw, str) or not raw.strip():

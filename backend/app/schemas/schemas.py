@@ -268,6 +268,7 @@ class SearchQueryOut(BaseModel):
     is_active: bool
     new_count: int
     total_count: int
+    price_drop_count: int = 0
     last_checked_at: Optional[datetime]
     created_at: datetime
     # Перше фото найновішого авто в моніторингу (для прев’ю в списку).

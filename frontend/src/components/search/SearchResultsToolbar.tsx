@@ -8,6 +8,7 @@ import { ukPlural } from "@/lib/utils";
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "newest", label: "Спочатку нові" },
   { value: "published_asc", label: "Спочатку старі" },
+  { value: "price_drop_desc", label: "За зниженням ціни" },
   { value: "price_asc", label: "Спочатку дешеві" },
   { value: "price_desc", label: "Спочатку дорогі" },
   { value: "year_desc", label: "За роком випуску" },
@@ -24,6 +25,7 @@ type Props = {
   exportName: string;
   isActive?: boolean;
   newCount?: number;
+  priceDropCount?: number;
   idleLabel?: string;
   /** Сирі пропозиції до склеювання дублів. */
   offerCount?: number;
@@ -41,6 +43,7 @@ export function SearchResultsToolbar({
   exportName,
   isActive,
   newCount,
+  priceDropCount,
   idleLabel = "Натисніть «Шукати»",
   offerCount,
   duplicateCount,
@@ -90,6 +93,12 @@ export function SearchResultsToolbar({
                 <>
                   <span className="text-border">·</span>
                   <span className="font-semibold text-emerald-dark">{newCount} нових</span>
+                </>
+              )}
+              {typeof priceDropCount === "number" && priceDropCount > 0 && (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="font-semibold text-rose-700">{priceDropCount} зі зниженням</span>
                 </>
               )}
               {hasMore && shown < total && (

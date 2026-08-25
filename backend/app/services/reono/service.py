@@ -6,10 +6,31 @@ from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.mapper import sort_listings
 from app.services.reono.client import ReonoClient
-from app.services.reono.constants import REONO_MAX_PAGES, REONO_PAGE_SIZE
+from app.services.reono.constants import HEADERS, REONO_MAX_PAGES, REONO_PAGE_SIZE
 from app.services.reono.errors import ReonoError
 from app.services.reono.mapper import apply_client_filters, car_to_listing
 from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+
+async def _enrich_accident_descriptions(listings: list[ListingOut], filters: SearchFilters) -> list[ListingOut]:
+    if not filters.accident or not listings:
+        return listings
+
+    from app.services.listings.scraped_description import apply_descriptions, fetch_descriptions_by_url
+    from app.services.reono.detail import parse_detail_description
+
+    async def _fetch_html(client, url: str) -> str:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.text
+
+    descriptions = await fetch_descriptions_by_url(
+        [item.url for item in listings],
+        fetch_html=_fetch_html,
+        parse_description=parse_detail_description,
+        headers=HEADERS,
+    )
+    return apply_descriptions(listings, descriptions, source_key="reono")
 
 
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
@@ -41,8 +62,10 @@ async def _search_reono_body(
     listings: list[ListingOut] = []
     for car in cars:
         listing = car_to_listing(car)
-        if listing_out_matches_filters(listing, filters):
-            listings.append(listing)
+        listings.append(listing)
+
+    listings = await _enrich_accident_descriptions(listings, filters)
+    listings = [item for item in listings if listing_out_matches_filters(item, filters)]
 
     listings = sort_listings(listings, sort_by)
     if per_page > 0:

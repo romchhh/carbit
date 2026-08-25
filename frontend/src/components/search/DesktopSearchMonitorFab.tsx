@@ -11,10 +11,10 @@ type Props = {
   saving?: boolean;
   limitReached?: boolean;
   onSave: () => void;
-  /** Desktop-only fixed FAB (default). Mobile uses MobileSearchFiltersFab cluster. */
   className?: string;
 };
 
+/** Desktop: кнопка моніторингу під колонкою фільтрів (не floating FAB). */
 export function DesktopSearchMonitorFab({
   visible,
   connected,
@@ -44,8 +44,8 @@ export function DesktopSearchMonitorFab({
       onClick={handleClick}
       disabled={saving || limitReached}
       className={cn(
-        "fixed bottom-6 right-6 z-[46] hidden items-center gap-2.5 rounded-full border-2 px-5 py-3.5",
-        "text-[14px] font-bold shadow-[0_12px_32px_-8px_rgba(10,12,14,0.35)] transition-all lg:inline-flex",
+        "flex w-full items-center justify-center gap-2 rounded-2xl border-2 px-4 py-3",
+        "text-[13px] font-bold shadow-[0_8px_24px_-10px_rgba(10,12,14,0.28)] transition-all",
         "disabled:cursor-not-allowed disabled:opacity-60",
         connected
           ? "border-emerald/50 bg-white text-emerald-dark hover:bg-emerald/5"

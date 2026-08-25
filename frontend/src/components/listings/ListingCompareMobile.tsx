@@ -188,6 +188,7 @@ export function ListingCompareMobile({
                   {row.values.map((value, index) => {
                     const listing = listings[index];
                     const highlighted = row.highlightIndexes?.includes(index);
+                    const danger = row.dangerIndexes?.includes(index);
                     return (
                       <td
                         key={`${row.key}-${listing?.id ?? index}`}
@@ -197,6 +198,7 @@ export function ListingCompareMobile({
                           row.key === "price" ? "font-black text-ink" : "text-ink/90",
                           row.key === "vin" && "break-all font-mono text-[9px]",
                           highlighted && "bg-emerald/10 font-semibold text-emerald-dark",
+                          danger && "bg-red-50 font-semibold text-red-700",
                         )}
                       >
                         {value}
@@ -208,6 +210,11 @@ export function ListingCompareMobile({
                         {highlighted && row.key === "mileage" && (
                           <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-wide text-emerald-dark">
                             Менший пробіг
+                          </span>
+                        )}
+                        {danger && row.key === "accident" && (
+                          <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-wide text-red-600">
+                            Увага
                           </span>
                         )}
                       </td>

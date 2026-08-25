@@ -500,6 +500,20 @@ def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
     url = str(info.get("linkAuto") or f"https://auto.ria.com/newauto/auto-{auto_id}.html")
     description = str(info.get("note") or "").strip() or None
 
+    from app.services.listings.engine_volume import (
+        normalize_engine_litres,
+        parse_engine_volume_from_text,
+    )
+
+    # /auto/new/auto/{id}: mainParams.volume — см³ (1998 → 2.0 л).
+    engine_volume_l = normalize_engine_litres(main_params.get("volume"))
+    if engine_volume_l is None:
+        fuel_raw = str(main_params.get("fuel") or "")
+        if fuel_raw:
+            engine_volume_l = parse_engine_volume_from_text(fuel_raw)
+    if engine_volume_l is None and description:
+        engine_volume_l = parse_engine_volume_from_text(description)
+
     return apply_seller_contact_fields(
         ListingOut(
         id=f"new_auto_ria_{auto_id}",
@@ -521,7 +535,12 @@ def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
         vin=None,
         vin_checked=None,
         vin_check_url=None,
-        source_data={},
+        engine_volume_l=engine_volume_l,
+        source_data={
+            "autoId": auto_id,
+            "mainParams": main_params if isinstance(main_params, dict) else {},
+            "otherParams": info.get("otherParams") if isinstance(info.get("otherParams"), dict) else {},
+        },
         price_history=[],
         is_duplicate=False,
         published_at=_parse_datetime(info.get("updatedDate")),

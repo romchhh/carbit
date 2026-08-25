@@ -230,17 +230,14 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
   const publishedBadge = countAdvancedFilterFields(filters, "published");
   const conditionBadge = countAdvancedFilterFields(filters, "condition");
   const originBadge = countAdvancedFilterFields(filters, "origin");
-  const totalActive = techBadge + publishedBadge + conditionBadge + originBadge;
+  const sourcesBadge =
+    filters.sources.length === SOURCE_OPTIONS.length ? 0 : filters.sources.length;
+  const totalActive = techBadge + publishedBadge + conditionBadge + originBadge + (sourcesBadge > 0 ? 1 : 0);
 
   return (
     <div className="mt-4 overflow-hidden rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04]">
-      <div className="flex items-start justify-between gap-3 border-b border-border/60 bg-surface/50 px-4 py-3.5 sm:px-5">
-        <div>
-          <h2 className="text-[17px] font-bold text-ink">Розширений пошук</h2>
-          <p className="mt-0.5 text-[12px] text-muted">
-            Чіпи та діапазони — без зайвих поповерів. Параметри йдуть у AUTO.RIA API.
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-surface/50 px-4 py-3.5 sm:px-5">
+        <h2 className="text-[17px] font-bold text-ink">Розширений пошук</h2>
         {totalActive > 0 ? (
           <button
             type="button"
@@ -502,6 +499,47 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
           </div>
         </FilterAccordionSection>
 
+        <FilterAccordionSection title="Джерела" badge={sourcesBadge} defaultOpen={false}>
+          <div className="flex flex-wrap gap-2">
+            {SOURCE_OPTIONS.map(source => {
+              const active = filters.sources.includes(source);
+              const icon = sourceFilterIcon(source);
+              return (
+                <button
+                  key={source}
+                  type="button"
+                  onClick={() => update({ sources: toggleValue(filters.sources, source) })}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[12px] font-medium transition-colors sm:px-3",
+                    active
+                      ? "border-emerald bg-emerald text-white"
+                      : "border-border bg-white text-muted hover:border-emerald/40",
+                  )}
+                >
+                  {icon ? (
+                    <span
+                      className={cn(
+                        "relative inline-flex h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white ring-1",
+                        active ? "ring-white/30" : "ring-black/5",
+                      )}
+                    >
+                      <Image
+                        src={icon}
+                        alt=""
+                        width={20}
+                        height={20}
+                        className="h-full w-full object-cover"
+                        unoptimized
+                      />
+                    </span>
+                  ) : null}
+                  {source}
+                </button>
+              );
+            })}
+          </div>
+        </FilterAccordionSection>
+
         <section className="space-y-3 border-t border-border/60 pt-4">
           <div>
             <label className="mb-1.5 block text-[12px] font-semibold text-muted">Назва запиту</label>
@@ -511,48 +549,6 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
               placeholder="Camry під перепродаж"
               className="input-field"
             />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-[12px] font-semibold text-muted">Джерела</label>
-            <div className="flex flex-wrap gap-2">
-              {SOURCE_OPTIONS.map(source => {
-                const active = filters.sources.includes(source);
-                const icon = sourceFilterIcon(source);
-                return (
-                  <button
-                    key={source}
-                    type="button"
-                    onClick={() => update({ sources: toggleValue(filters.sources, source) })}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[12px] font-medium transition-colors sm:px-3",
-                      active
-                        ? "border-emerald bg-emerald text-white"
-                        : "border-border bg-white text-muted hover:border-emerald/40",
-                    )}
-                  >
-                    {icon ? (
-                      <span
-                        className={cn(
-                          "relative inline-flex h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white ring-1",
-                          active ? "ring-white/30" : "ring-black/5",
-                        )}
-                      >
-                        <Image
-                          src={icon}
-                          alt=""
-                          width={20}
-                          height={20}
-                          className="h-full w-full object-cover"
-                          unoptimized
-                        />
-                      </span>
-                    ) : null}
-                    {source}
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
           <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">

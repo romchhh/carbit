@@ -7,6 +7,10 @@ import {
   type DisplayCurrency,
 } from "@/lib/display-currency";
 import {
+  formatListingAccident,
+  resolveListingAccidentHad,
+} from "@/lib/listing-accident";
+import {
   formatEngineVolume,
   resolveListingEngineVolume,
   resolveListingMileage,
@@ -21,6 +25,8 @@ export type CompareRow = {
   label: string;
   values: string[];
   highlightIndexes?: number[];
+  /** Індекси комірок з негативним акцентом (напр. був у ДТП). */
+  dangerIndexes?: number[];
 };
 
 function sourceLabel(source: string): string {
@@ -42,6 +48,11 @@ function normalizeCell(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function isEmptyCompareValue(value: string): boolean {
+  const normalized = normalizeCell(value === "—" ? "" : value);
+  return !normalized;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -51,13 +62,14 @@ function asRecord(value: unknown): Record<string, unknown> {
 function readAutoRiaText(listing: Listing, ...paths: string[]): string {
   const sd = asRecord(listing.source_data);
   const auto = asRecord(sd.autoData);
+  const mainParams = asRecord(sd.mainParams);
   const color = asRecord(sd.color);
   for (const path of paths) {
     if (path === "color.name") {
       const v = color.name;
       if (typeof v === "string" && v.trim()) return v.trim();
     }
-    const v = auto[path] ?? sd[path];
+    const v = auto[path] ?? mainParams[path] ?? sd[path];
     if (typeof v === "string" && v.trim()) return v.trim();
   }
   return "—";
@@ -81,8 +93,23 @@ function minValueIndexes(values: (number | null)[], positiveOnly = false): numbe
   return entries.filter(entry => entry.value === min).map(entry => entry.index);
 }
 
-function withHighlights(row: Omit<CompareRow, "highlightIndexes">, indexes: number[]): CompareRow {
+function withHighlights(
+  row: Omit<CompareRow, "highlightIndexes" | "dangerIndexes">,
+  indexes: number[],
+): CompareRow {
   return indexes.length ? { ...row, highlightIndexes: indexes } : row;
+}
+
+function withDanger(
+  row: Omit<CompareRow, "highlightIndexes" | "dangerIndexes">,
+  indexes: number[],
+): CompareRow {
+  return indexes.length ? { ...row, dangerIndexes: indexes } : row;
+}
+
+/** Ховає рядки, де в усіх авто значення порожні («—»). */
+export function filterEmptyRows(rows: CompareRow[]): CompareRow[] {
+  return rows.filter(row => !row.values.every(isEmptyCompareValue));
 }
 
 export function buildCompareRows(
@@ -107,6 +134,7 @@ export function buildCompareRows(
     const km = resolveListingMileage(l);
     return km != null && km > 0 ? km : null;
   });
+  const accidentFlags = listings.map(resolveListingAccidentHad);
 
   const rows: CompareRow[] = [
     row(
@@ -150,6 +178,16 @@ export function buildCompareRows(
         return vol != null ? formatEngineVolume(vol) : "—";
       }),
     ),
+    withDanger(
+      {
+        key: "accident",
+        label: "ДТП",
+        values: accidentFlags.map(formatListingAccident),
+      },
+      accidentFlags
+        .map((had, index) => (had === true ? index : -1))
+        .filter(index => index >= 0),
+    ),
   ];
 
   if (includePremium) {
@@ -160,14 +198,25 @@ export function buildCompareRows(
         "Комплектація",
         listings.map(l => readAutoRiaText(l, "equipmentName")),
       ),
-      row("drive", "Привід", listings.map(l => readAutoRiaText(l, "driveName"))),
+      row(
+        "drive",
+        "Привід",
+        listings.map(l => {
+          const fromRia = readAutoRiaText(l, "driveName", "drive");
+          return fromRia !== "—" ? fromRia : "—";
+        }),
+      ),
       row(
         "body",
         "Кузов",
         listings.map(l => {
           const sd = asRecord(l.source_data);
-          const sub = sd.subCategoryName;
-          return typeof sub === "string" && sub.trim() ? sub.trim() : "—";
+          const auto = asRecord(sd.autoData);
+          const mainParams = asRecord(sd.mainParams);
+          for (const raw of [sd.subCategoryName, auto.bodyName, mainParams.body]) {
+            if (typeof raw === "string" && raw.trim()) return raw.trim();
+          }
+          return "—";
         }),
       ),
     );
@@ -205,7 +254,7 @@ export function buildCompareRows(
     ),
   );
 
-  return rows;
+  return filterEmptyRows(rows);
 }
 
 /** Лишає рядки, де значення відрізняються (як «Відмінні» на Hotline). */

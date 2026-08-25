@@ -7,12 +7,21 @@ type Props = {
   filtersRef: RefObject<HTMLDivElement | null>;
   filters: ReactNode;
   results: ReactNode;
+  /** Sticky під фільтрами на desktop (напр. «Підключити моніторинг»). */
+  filtersFooter?: ReactNode;
   footer?: ReactNode;
   className?: string;
 };
 
 /** Desktop: фільтри зліва (sticky), результати справа. Mobile: вертикальний stack. */
-export function SearchDesktopSplit({ filtersRef, filters, results, footer, className }: Props) {
+export function SearchDesktopSplit({
+  filtersRef,
+  filters,
+  filtersFooter,
+  results,
+  footer,
+  className,
+}: Props) {
   return (
     <div
       className={cn(
@@ -22,9 +31,15 @@ export function SearchDesktopSplit({ filtersRef, filters, results, footer, class
     >
       <aside
         ref={filtersRef}
-        className="mb-5 scroll-mt-4 sm:mb-6 lg:sticky lg:top-3 lg:mb-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain"
+        className={cn(
+          "mb-5 scroll-mt-4 sm:mb-6",
+          "lg:sticky lg:top-3 lg:mb-0 lg:flex lg:max-h-[calc(100vh-7rem)] lg:flex-col",
+        )}
       >
-        {filters}
+        <div className="min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">{filters}</div>
+        {filtersFooter ? (
+          <div className="mt-3 hidden shrink-0 lg:block">{filtersFooter}</div>
+        ) : null}
       </aside>
 
       <div className="min-w-0">

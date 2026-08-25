@@ -60,6 +60,8 @@ export interface SearchQuery {
   is_active: boolean;
   new_count: number;
   total_count: number;
+  /** Авто зі значним зниженням ціни (≥5%) за останні 14 днів. */
+  price_drop_count?: number;
   last_checked_at: string | null;
   created_at: string;
   /** Фото найновішого авто в моніторингу. */

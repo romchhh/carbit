@@ -14,6 +14,7 @@ import { saveRecentListing } from "@/lib/recent-listings";
 import type { SortOption } from "@/lib/search-catalog";
 import { listingsToExportItems } from "@/lib/export-listings";
 import type { Listing, SearchQuery } from "@/types/api";
+import { cn } from "@/lib/utils";
 
 export default function MonitorDetailPage({
   params,
@@ -27,6 +28,7 @@ export default function MonitorDetailPage({
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
   const [sort, setSort] = useState<SortOption>("newest");
+  const [priceDropsOnly, setPriceDropsOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +37,13 @@ export default function MonitorDetailPage({
   const markedSeen = useRef(false);
 
   const loadResults = useCallback(
-    async (id: string, nextPage: number, nextSort: SortOption, append: boolean) => {
+    async (
+      id: string,
+      nextPage: number,
+      nextSort: SortOption,
+      append: boolean,
+      dropsOnly: boolean,
+    ) => {
       if (append) {
         setLoadingMore(true);
       } else {
@@ -44,7 +52,9 @@ export default function MonitorDetailPage({
       }
 
       try {
-        const data = await searchesApi.results(id, nextPage, 20, nextSort);
+        const data = await searchesApi.results(id, nextPage, 20, nextSort, {
+          priceDropsOnly: dropsOnly,
+        });
         setSearch(data.search);
         setTotal(data.results.total);
         setPages(data.results.pages);
@@ -78,8 +88,8 @@ export default function MonitorDetailPage({
 
   useEffect(() => {
     markedSeen.current = false;
-    void loadResults(searchId, 1, sort, false);
-  }, [searchId, sort, loadResults]);
+    void loadResults(searchId, 1, sort, false, priceDropsOnly);
+  }, [searchId, sort, priceDropsOnly, loadResults]);
 
   const exportItems = useMemo(() => listingsToExportItems(results), [results]);
   const exportName = (search?.name || "monitoring").replace(/\s+/g, "-").toLowerCase();
@@ -103,9 +113,17 @@ export default function MonitorDetailPage({
     setPage(1);
   };
 
+  const handlePriceDropsToggle = () => {
+    setPriceDropsOnly(current => !current);
+    setPage(1);
+    if (!priceDropsOnly) {
+      setSort("price_drop_desc");
+    }
+  };
+
   const handleLoadMore = () => {
     if (!hasMore || loadingMore) return;
-    void loadResults(searchId, page + 1, sort, true);
+    void loadResults(searchId, page + 1, sort, true, priceDropsOnly);
   };
 
   return (
@@ -138,8 +156,34 @@ export default function MonitorDetailPage({
         exportName={exportName}
         isActive={search?.is_active}
         newCount={newSeenFlash || search?.new_count}
+        priceDropCount={search?.price_drop_count}
         idleLabel={loading ? "Завантаження..." : "Немає авто в цьому моніторингу"}
       />
+
+      {(search?.price_drop_count ?? 0) > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handlePriceDropsToggle}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors",
+              priceDropsOnly
+                ? "border-rose-300 bg-rose-50 text-rose-800"
+                : "border-border bg-white text-muted hover:border-rose-200 hover:text-ink",
+            )}
+          >
+            Зниження цін
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+                priceDropsOnly ? "bg-rose-600 text-white" : "bg-surface text-ink",
+              )}
+            >
+              {search?.price_drop_count}
+            </span>
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
@@ -153,9 +197,13 @@ export default function MonitorDetailPage({
         </div>
       ) : results.length === 0 && !error ? (
         <div className="rounded-2xl border border-border bg-white px-6 py-16 text-center">
-          <p className="text-[15px] font-semibold text-ink">Поки порожньо</p>
+          <p className="text-[15px] font-semibold text-ink">
+            {priceDropsOnly ? "Немає знижень ціни" : "Поки порожньо"}
+          </p>
           <p className="mt-2 text-[13px] text-muted">
-            Збережіть моніторинг після першого пошуку — сюди потраплять показані авто і всі нові.
+            {priceDropsOnly
+              ? "За вашими фільтрами поки немає авто зі значним зниженням (≥5%) за останні 14 днів."
+              : "Збережіть моніторинг після першого пошуку — сюди потраплять показані авто і всі нові."}
           </p>
           <Link
             href="/app/dashboard"

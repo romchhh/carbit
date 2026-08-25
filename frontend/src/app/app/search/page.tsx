@@ -219,6 +219,18 @@ export default function SearchPage() {
       <SearchDesktopSplit
         filtersRef={filtersPanelRef}
         filters={filtersPanel}
+        filtersFooter={
+          running ? (
+            <DesktopSearchMonitorFab
+              visible
+              connected={Boolean(matchingMonitor)}
+              connectedMonitorId={matchingMonitor?.id ?? null}
+              saving={saving}
+              limitReached={saveLimitReached}
+              onSave={handleMonitorClick}
+            />
+          ) : null
+        }
         results={resultsPanel}
         footer={<RecentSearchesSection onSelect={handleRecentSelect} />}
       />
@@ -233,15 +245,6 @@ export default function SearchPage() {
           limitReached: saveLimitReached,
           onSave: handleMonitorClick,
         }}
-      />
-
-      <DesktopSearchMonitorFab
-        visible={running}
-        connected={Boolean(matchingMonitor)}
-        connectedMonitorId={matchingMonitor?.id ?? null}
-        saving={saving}
-        limitReached={saveLimitReached}
-        onSave={handleMonitorClick}
       />
 
       <TelegramConnectPrompt

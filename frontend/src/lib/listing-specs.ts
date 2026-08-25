@@ -126,15 +126,16 @@ export function resolveListingEngineVolume(listing: Listing): number | null {
   const sd = asRecord(listing.source_data);
   const auto = asRecord(sd.autoData);
   const specs = asRecord(sd.specs);
+  const mainParams = asRecord(sd.mainParams);
 
-  const fromData = readEngineFromSources(auto, specs, sd);
+  const fromData = readEngineFromSources(auto, specs, mainParams, sd);
   if (fromData != null) return fromData;
 
-  const fromSpecs = readEngineFromSpecValues(specs);
+  const fromSpecs = readEngineFromSpecValues(specs) ?? readEngineFromSpecValues(mainParams);
   if (fromSpecs != null) return fromSpecs;
 
-  // AUTO.RIA fuelName: «Бензин, 3 л.»
-  for (const fuelRaw of [auto.fuelName, sd.fuelName, listing.fuel]) {
+  // AUTO.RIA fuelName: «Бензин, 3 л.» / newauto mainParams.fuel
+  for (const fuelRaw of [auto.fuelName, mainParams.fuel, sd.fuelName, listing.fuel]) {
     if (typeof fuelRaw === "string" && fuelRaw.trim()) {
       const fromFuel = readEngineFromText(fuelRaw);
       if (fromFuel != null) return fromFuel;

@@ -47,10 +47,37 @@ async def preview_images_for_searches(
     return previews
 
 
+async def price_drop_counts_for_searches(
+    db: AsyncSession,
+    search_ids: list[str],
+) -> dict[str, int]:
+    """Скільки авто в моніторингу зі значним зниженням ціни за останні 14 днів."""
+    if not search_ids:
+        return {}
+    from app.services.listings.price_drop import extract_recent_price_drop
+
+    rows = (
+        await db.execute(
+            select(SearchListing.search_id, Listing)
+            .join(Listing, Listing.id == SearchListing.listing_id)
+            .where(SearchListing.search_id.in_(search_ids))
+        )
+    ).all()
+    counts = dict.fromkeys(search_ids, 0)
+    for search_id, listing in rows:
+        if extract_recent_price_drop(listing):
+            counts[search_id] = counts.get(search_id, 0) + 1
+    return counts
+
+
 async def search_query_to_out(db: AsyncSession, search: SearchQuery) -> SearchQueryOut:
     previews = await preview_images_for_searches(db, [search.id])
+    drops = await price_drop_counts_for_searches(db, [search.id])
     return SearchQueryOut.model_validate(search).model_copy(
-        update={"preview_image": previews.get(search.id)}
+        update={
+            "preview_image": previews.get(search.id),
+            "price_drop_count": drops.get(search.id, 0),
+        }
     )
 
 
@@ -58,10 +85,15 @@ async def search_queries_to_out(
     db: AsyncSession,
     searches: list[SearchQuery],
 ) -> list[SearchQueryOut]:
-    previews = await preview_images_for_searches(db, [s.id for s in searches])
+    ids = [s.id for s in searches]
+    previews = await preview_images_for_searches(db, ids)
+    drops = await price_drop_counts_for_searches(db, ids)
     return [
         SearchQueryOut.model_validate(s).model_copy(
-            update={"preview_image": previews.get(s.id)}
+            update={
+                "preview_image": previews.get(s.id),
+                "price_drop_count": drops.get(s.id, 0),
+            }
         )
         for s in searches
     ]
@@ -115,6 +147,15 @@ def _sort_items(
             key=lambda row: (new_rank(row[0]), listing_sort_date(row[0]).timestamp()),
         )
         return [item for item, _ in ordered]
+    if sort_by == "price_drop_desc":
+        ordered = sorted(
+            items,
+            key=lambda row: (
+                new_rank(row[0]),
+                -(float(row[0].price_drop_percent or 0)),
+            ),
+        )
+        return [item for item, _ in ordered]
     ordered = sorted(items, key=lambda row: (new_rank(row[0]), -row[1].timestamp()))
     return [item for item, _ in ordered]
 
@@ -153,6 +194,7 @@ async def get_search_results_from_db(
     per_page: int = 20,
     sort_by: str = "newest",
     new_only: bool = False,
+    price_drops_only: bool = False,
 ) -> PaginatedListings:
     stmt = (
         select(Listing, SearchListing)
@@ -172,6 +214,14 @@ async def get_search_results_from_db(
         for listing, sl in rows
     ]
     paired = [pair for pair in paired if _result_matches_saved_model(pair[0], saved_filters)]
+    if price_drops_only:
+        from app.services.listings.price_drop import MIN_SIGNIFICANT_PRICE_DROP_PERCENT
+
+        paired = [
+            pair
+            for pair in paired
+            if (pair[0].price_drop_percent or 0) >= MIN_SIGNIFICANT_PRICE_DROP_PERCENT
+        ]
     from app.services.listings.duplicates import collapse_listings_with_db_mirrors
 
     collapsed = await collapse_listings_with_db_mirrors(db, [item for item, _ in paired])

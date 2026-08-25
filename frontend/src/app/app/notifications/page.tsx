@@ -205,9 +205,19 @@ export default function NotificationsPage() {
                   {item.type === "price_drop" && (
                     <Badge variant="emerald">Зниження ціни</Badge>
                   )}
+                  {item.type === "vin_found" && (
+                    <Badge variant="outline">VIN</Badge>
+                  )}
                   {item.sent_telegram && <Badge variant="outline">Telegram</Badge>}
-                  {item.body && (
-                    <span className="text-rose-700">{item.body}</span>
+                  {/* body лише для подій (зниження/VIN) — не дублюємо рік/пробіг/ціну з картки */}
+                  {item.body && item.type !== "listing_match" && (
+                    <span
+                      className={cn(
+                        item.type === "price_drop" ? "font-medium text-rose-700" : "text-muted",
+                      )}
+                    >
+                      {item.body}
+                    </span>
                   )}
                   <span>{timeAgo(item.created_at)}</span>
                 </div>

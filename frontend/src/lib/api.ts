@@ -248,10 +248,23 @@ export const users = {
 export const searches = {
   list: () => request<SearchQuery[]>("/searches"),
   get: (id: string) => request<SearchQuery>(`/searches/${id}`),
-  results: (id: string, page = 1, perPage = 20, sortBy: SortOption = "newest") =>
-    request<SearchLiveResults>(
-      `/searches/${id}/results?page=${page}&per_page=${perPage}&sort_by=${sortBy}`,
-    ),
+  results: (
+    id: string,
+    page = 1,
+    perPage = 20,
+    sortBy: SortOption = "newest",
+    options?: { priceDropsOnly?: boolean },
+  ) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      per_page: String(perPage),
+      sort_by: sortBy,
+    });
+    if (options?.priceDropsOnly) {
+      params.set("price_drops_only", "true");
+    }
+    return request<SearchLiveResults>(`/searches/${id}/results?${params.toString()}`);
+  },
   markSeen: (id: string) =>
     request<SearchQuery>(`/searches/${id}/seen`, { method: "POST" }),
   markAllSeen: () =>

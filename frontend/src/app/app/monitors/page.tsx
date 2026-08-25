@@ -63,6 +63,7 @@ export default function MonitorsPage() {
   const activeCount = searches.filter(s => s.is_active).length;
   const remaining = Math.max(0, user.searches_limit - activeCount);
   const totalNew = searches.reduce((sum, s) => sum + (s.new_count || 0), 0);
+  const totalPriceDrops = searches.reduce((sum, s) => sum + (s.price_drop_count || 0), 0);
   const limitReached = remaining <= 0;
 
   const setActive = async (search: SearchQuery, active: boolean) => {
@@ -118,6 +119,7 @@ export default function MonitorsPage() {
             {activeCount} активних
             {remaining > 0 ? ` · ще ${remaining} доступно` : " · ліміт використано"}
             {totalNew > 0 ? ` · ${totalNew} нових авто` : ""}
+            {totalPriceDrops > 0 ? ` · ${totalPriceDrops} зі зниженням ціни` : ""}
           </p>
         </div>
         <Link href="/app/dashboard" className="shrink-0">

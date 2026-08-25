@@ -109,8 +109,14 @@ class AdvancedSearchPostFilterTests(unittest.TestCase):
         )
 
     def test_accident_none_rejects_dtp_text(self):
-        item = _item(description="Після ДТП, потребує ремонту")
+        item = _item(source="olx", description="Після ДТП, потребує ремонту")
         self.assertFalse(
+            listing_matches_advanced_filters(item, SearchFilters(accident="none"))
+        )
+
+    def test_accident_auto_ria_skips_post_filter(self):
+        item = _item(description="Після ДТП, потребує ремонту")
+        self.assertTrue(
             listing_matches_advanced_filters(item, SearchFilters(accident="none"))
         )
 

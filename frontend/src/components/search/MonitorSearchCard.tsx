@@ -76,6 +76,14 @@ export function MonitorSearchCard({
                     <IconZap size={9} /> {alwaysLink ? `${s.new_count} нові` : s.new_count}
                   </Badge>
                 )}
+                {(s.price_drop_count ?? 0) > 0 && (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 border-rose-200 bg-rose-50 text-rose-700 lg:text-[12px] lg:px-2.5 lg:py-1"
+                  >
+                    −{s.price_drop_count} цін
+                  </Badge>
+                )}
               </div>
               <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted sm:mt-1 sm:text-[12px] lg:mt-1.5 lg:line-clamp-3 lg:text-[14px]">
                 {formatSearchDesc(s.filters)}

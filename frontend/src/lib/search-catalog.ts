@@ -87,6 +87,7 @@ export type SortOption =
   | "published_asc"
   | "price_asc"
   | "price_desc"
+  | "price_drop_desc"
   | "year_desc"
   | "mileage_asc";
 
@@ -484,6 +485,10 @@ export function sortListingItems(items: Listing[], sort: SortOption): Listing[] 
       return sorted.sort((a, b) => (a.mileage || 0) - (b.mileage || 0));
     case "published_asc":
       return sorted.sort((a, b) => publishedMs(a) - publishedMs(b));
+    case "price_drop_desc":
+      return sorted.sort(
+        (a, b) => (Number(b.price_drop_percent) || 0) - (Number(a.price_drop_percent) || 0),
+      );
     default:
       return sorted.sort((a, b) => publishedMs(b) - publishedMs(a));
   }

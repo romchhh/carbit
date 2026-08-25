@@ -107,10 +107,39 @@ class EngineVolumeExtractTests(unittest.TestCase):
         )
         self.assertEqual(extract_listing_engine_volume(item), 2.99)
 
+    def test_auto_ria_new_main_params_volume_cm3(self):
+        item = _item(
+            source="auto_ria",
+            source_data={"mainParams": {"volume": 2487, "fuel": "Гібрид (HEV)"}},
+        )
+        self.assertEqual(extract_listing_engine_volume(item), 2.49)
+
     def test_fuel_year_not_volume(self):
         item = _item(title="Volkswagen Passat бензин 2019", description="")
         self.assertIsNone(extract_listing_engine_volume(item))
 
 
-if __name__ == "__main__":
-    unittest.main()
+class NewAutoRiaEngineVolumeTests(unittest.TestCase):
+    def test_new_info_to_listing_sets_engine_volume_from_cm3(self):
+        from app.services.auto_ria.mapper import new_info_to_listing
+
+        listing = new_info_to_listing(
+            {
+                "autoId": 2082780,
+                "marka": "Toyota",
+                "model": "RAV4",
+                "year": 2025,
+                "priceUsd": 42000,
+                "priceUah": 0,
+                "mainParams": {
+                    "fuel": "Гібрид (HEV)",
+                    "gear": "Варіатор",
+                    "volume": 2487,
+                },
+                "salon": {"city": "Київ"},
+                "photos": [],
+                "note": "Новий RAV4",
+            }
+        )
+        self.assertEqual(listing.engine_volume_l, 2.49)
+        self.assertEqual(listing.source_data.get("mainParams", {}).get("volume"), 2487)

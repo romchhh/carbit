@@ -111,6 +111,7 @@ async def get_search_results(
     per_page: int = Query(20, ge=1, le=50),
     sort_by: str = Query("newest"),
     mark_seen: bool = Query(False),
+    price_drops_only: bool = Query(False),
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -124,6 +125,7 @@ async def get_search_results(
         page=page,
         per_page=per_page,
         sort_by=sort_by,
+        price_drops_only=price_drops_only,
     )
 
     if (sq.new_count or 0) > 0:

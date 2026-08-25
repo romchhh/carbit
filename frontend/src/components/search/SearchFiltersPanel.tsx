@@ -80,6 +80,9 @@ type Props = {
   onSortChange?: (sort: SortOption) => void;
 };
 
+/** Тимчасово приховано — увімкнути, коли голосовий пошук знову в UI. */
+const VOICE_SEARCH_UI_ENABLED = false;
+
 export function SearchFiltersPanel({
   filters,
   onChange,
@@ -224,18 +227,22 @@ export function SearchFiltersPanel({
                 <p className={cn("font-semibold text-ink", sidebar ? "text-[12px]" : "text-[13px]")}>
                   Категорія
                 </p>
-                <p
-                  className={cn(
-                    "mt-0.5 hidden text-[11px] text-muted sm:block",
-                    sidebar && "lg:hidden",
-                  )}
-                >
-                  {voiceSearchCabinetOnly
-                    ? "Голосовий пошук — у кабінеті після входу"
-                    : "Або скажіть голосом — AI заповнить фільтри"}
-                </p>
+                {VOICE_SEARCH_UI_ENABLED && (
+                  <p
+                    className={cn(
+                      "mt-0.5 hidden text-[11px] text-muted sm:block",
+                      sidebar && "lg:hidden",
+                    )}
+                  >
+                    {voiceSearchCabinetOnly
+                      ? "Голосовий пошук — у кабінеті після входу"
+                      : "Або скажіть голосом — AI заповнить фільтри"}
+                  </p>
+                )}
               </div>
-              <VoiceSearchTrigger onClick={handleVoiceClick} compact={compactFilters} />
+              {VOICE_SEARCH_UI_ENABLED && (
+                <VoiceSearchTrigger onClick={handleVoiceClick} compact={compactFilters} />
+              )}
             </div>
             <div
               className={cn(
@@ -503,18 +510,19 @@ export function SearchFiltersPanel({
         </div>
       </div>
 
-      {voiceSearchCabinetOnly ? (
-        <VoiceSearchCabinetOnlyOverlay
-          open={voiceCabinetOnlyOpen}
-          onClose={() => setVoiceCabinetOnlyOpen(false)}
-        />
-      ) : (
-        <VoiceSearchOverlay
-          open={voiceOpen}
-          onClose={() => setVoiceOpen(false)}
-          onApplied={handleVoiceApplied}
-        />
-      )}
+      {VOICE_SEARCH_UI_ENABLED &&
+        (voiceSearchCabinetOnly ? (
+          <VoiceSearchCabinetOnlyOverlay
+            open={voiceCabinetOnlyOpen}
+            onClose={() => setVoiceCabinetOnlyOpen(false)}
+          />
+        ) : (
+          <VoiceSearchOverlay
+            open={voiceOpen}
+            onClose={() => setVoiceOpen(false)}
+            onApplied={handleVoiceApplied}
+          />
+        ))}
     </>
   );
 }

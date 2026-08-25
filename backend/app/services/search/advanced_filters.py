@@ -367,21 +367,10 @@ def listing_matches_advanced_filters(item: ListingOut, filters: SearchFilters) -
 
     haystack = _listing_haystack(item)
 
-    if filters.accident == "none":
-        if re.search(r"\b(дтп|accident|after crash)\b", haystack):
-            return False
-        sd = item.source_data if isinstance(item.source_data, dict) else {}
-        auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
-        damage = norm_text(str(auto.get("damageName") or auto.get("damage") or ""))
-        if damage and any(x in damage for x in ("був", "after", "після")):
-            return False
-    elif filters.accident == "had":
-        if not re.search(r"\b(дтп|accident|після дтп|був у дтп)\b", haystack):
-            sd = item.source_data if isinstance(item.source_data, dict) else {}
-            auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
-            damage = norm_text(str(auto.get("damageName") or ""))
-            if "дтп" not in damage and "accident" not in damage:
-                return False
+    from app.services.listings.accident import listing_matches_accident_filter
+
+    if not listing_matches_accident_filter(item, filters.accident):
+        return False
 
     if filters.bargain:
         if "торг" not in haystack and "negotiable" not in haystack:

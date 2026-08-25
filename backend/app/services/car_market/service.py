@@ -6,11 +6,32 @@ from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.mapper import sort_listings
 from app.services.car_market.client import CarMarketClient
-from app.services.car_market.constants import CAR_MARKET_MAX_PAGES, CAR_MARKET_PAGE_SIZE
+from app.services.car_market.constants import CAR_MARKET_MAX_PAGES, CAR_MARKET_PAGE_SIZE, HEADERS
 from app.services.car_market.errors import CarMarketBrandNotFound, CarMarketError
 from app.services.car_market.mapper import car_to_listing, filters_to_search_params
 from app.services.search.filter_multi import effective_brands
 from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+
+async def _enrich_accident_descriptions(listings: list[ListingOut], filters: SearchFilters) -> list[ListingOut]:
+    if not filters.accident or not listings:
+        return listings
+
+    from app.services.car_market.detail import parse_detail_description
+    from app.services.listings.scraped_description import apply_descriptions, fetch_descriptions_by_url
+
+    async def _fetch_html(client, url: str) -> str:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.text
+
+    descriptions = await fetch_descriptions_by_url(
+        [item.url for item in listings],
+        fetch_html=_fetch_html,
+        parse_description=parse_detail_description,
+        headers=HEADERS,
+    )
+    return apply_descriptions(listings, descriptions, source_key="car_market")
 
 
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
@@ -62,9 +83,10 @@ async def _search_car_market_body(
     for car in cars:
         if car.is_sold:
             continue
-        listing = car_to_listing(car, brand_hint=brand_hint)
-        if listing_out_matches_filters(listing, filters):
-            listings.append(listing)
+        listings.append(car_to_listing(car, brand_hint=brand_hint))
+
+    listings = await _enrich_accident_descriptions(listings, filters)
+    listings = [item for item in listings if listing_out_matches_filters(item, filters)]
 
     listings = sort_listings(listings, sort_by)
     if per_page > 0:

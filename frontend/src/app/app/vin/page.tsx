@@ -27,50 +27,52 @@ function HistoryList({
       {items.length === 0 ? (
         <p className="mt-3 text-[13px] text-muted">{empty}</p>
       ) : (
-        <ul className="mt-3 divide-y divide-border/60">
-          {items.map((item, idx) => (
-            <li key={`${item.vin}-${item.checked_at || idx}`}>
-              <button
-                type="button"
-                onClick={() => onSelect(item.vin)}
-                className="flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-white/70"
-              >
-                {item.photo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.photo_url}
-                    alt=""
-                    className="h-12 w-14 shrink-0 rounded-lg object-cover"
-                  />
-                ) : (
-                  <div className="flex h-12 w-14 shrink-0 items-center justify-center rounded-lg bg-surface text-[11px] font-bold text-muted">
-                    VIN
+        <div className="-mx-1 mt-3 overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
+          <ul className="flex w-max min-w-full gap-2.5 px-1">
+            {items.map((item, idx) => (
+              <li key={`${item.vin}-${item.checked_at || idx}`} className="w-[220px] shrink-0 sm:w-[240px]">
+                <button
+                  type="button"
+                  onClick={() => onSelect(item.vin)}
+                  className="flex h-full w-full items-start gap-3 rounded-xl border border-border/70 bg-white px-3 py-3 text-left transition-colors hover:border-emerald/35 hover:bg-emerald/5"
+                >
+                  {item.photo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.photo_url}
+                      alt=""
+                      className="h-14 w-16 shrink-0 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-16 shrink-0 items-center justify-center rounded-lg bg-surface text-[11px] font-bold text-muted">
+                      VIN
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="line-clamp-2 text-[13px] font-semibold leading-snug text-ink">
+                      {item.title || "Авто за VIN"}
+                    </div>
+                    <div className="mt-0.5 truncate font-mono text-[11px] text-muted">{item.vin}</div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+                      {item.checked_at && <span>{formatKyivDateTime(item.checked_at)}</span>}
+                      {item.is_stolen && (
+                        <span className="rounded-md bg-red-50 px-1.5 py-0.5 font-semibold text-red-700">
+                          Розшук
+                        </span>
+                      )}
+                      {item.has_auction && (
+                        <span className="rounded-md bg-emerald/10 px-1.5 py-0.5 font-semibold text-emerald-dark">
+                          Аукціон
+                        </span>
+                      )}
+                      {item.color && <span>{item.color}</span>}
+                    </div>
                   </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-semibold text-ink">
-                    {item.title || "Авто за VIN"}
-                  </div>
-                  <div className="mt-0.5 font-mono text-[11px] text-muted">{item.vin}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted">
-                    {item.checked_at && <span>{formatKyivDateTime(item.checked_at)}</span>}
-                    {item.is_stolen && (
-                      <span className="rounded-md bg-red-50 px-1.5 py-0.5 font-semibold text-red-700">
-                        Розшук
-                      </span>
-                    )}
-                    {item.has_auction && (
-                      <span className="rounded-md bg-emerald/10 px-1.5 py-0.5 font-semibold text-emerald-dark">
-                        Аукціон
-                      </span>
-                    )}
-                    {item.color && <span>{item.color}</span>}
-                  </div>
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </AppSection>
   );
@@ -199,7 +201,7 @@ export default function VinCheckPage() {
         </form>
       </AppSection>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="flex flex-col gap-4">
         <HistoryList
           title="Ваші останні перевірки"
           empty={loadingHistory ? "Завантаження…" : "Ще немає перевірок — введіть VIN вище."}

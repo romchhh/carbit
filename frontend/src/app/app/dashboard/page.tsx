@@ -120,6 +120,7 @@ export default function DashboardPage() {
   const limit = user.searches_limit;
   const remaining = Math.max(0, limit - activeCount);
   const totalNew = searches.reduce((sum, s) => sum + s.new_count, 0);
+  const totalPriceDrops = searches.reduce((sum, s) => sum + (s.price_drop_count || 0), 0);
 
   const setActive = async (search: SearchQuery, active: boolean) => {
     if (search.is_active === active || togglingId) return;
@@ -238,6 +239,18 @@ export default function DashboardPage() {
         <SearchDesktopSplit
           filtersRef={filtersPanelRef}
           filters={filtersPanel}
+          filtersFooter={
+            running ? (
+              <DesktopSearchMonitorFab
+                visible
+                connected={Boolean(matchingMonitor)}
+                connectedMonitorId={matchingMonitor?.id ?? null}
+                saving={saving}
+                limitReached={saveLimitReached}
+                onSave={handleMonitorClick}
+              />
+            ) : null
+          }
           results={resultsPanel}
         />
       </div>
@@ -248,6 +261,7 @@ export default function DashboardPage() {
           <p className="mt-1 text-[13px] text-muted">
             {activeCount} активних · {remaining > 0 ? `ще ${remaining} доступно` : "ліміт використано"}
             {totalNew > 0 ? ` · ${totalNew} нових` : ""}
+            {totalPriceDrops > 0 ? ` · ${totalPriceDrops} зі зниженням` : ""}
           </p>
         </div>
         <Link href="/app/monitors" className="shrink-0">
@@ -315,15 +329,6 @@ export default function DashboardPage() {
           limitReached: saveLimitReached,
           onSave: handleMonitorClick,
         }}
-      />
-
-      <DesktopSearchMonitorFab
-        visible={running}
-        connected={Boolean(matchingMonitor)}
-        connectedMonitorId={matchingMonitor?.id ?? null}
-        saving={saving}
-        limitReached={saveLimitReached}
-        onSave={handleMonitorClick}
       />
 
       <TelegramConnectPrompt
