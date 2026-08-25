@@ -240,16 +240,13 @@ export default function DashboardPage() {
           filtersRef={filtersPanelRef}
           filters={filtersPanel}
           filtersFooter={
-            running ? (
-              <DesktopSearchMonitorFab
-                visible
-                connected={Boolean(matchingMonitor)}
-                connectedMonitorId={matchingMonitor?.id ?? null}
-                saving={saving}
-                limitReached={saveLimitReached}
-                onSave={handleMonitorClick}
-              />
-            ) : null
+            <DesktopSearchMonitorFab
+              connected={Boolean(matchingMonitor)}
+              connectedMonitorId={matchingMonitor?.id ?? null}
+              saving={saving}
+              limitReached={saveLimitReached}
+              onSave={handleMonitorClick}
+            />
           }
           results={resultsPanel}
         />
@@ -322,7 +319,7 @@ export default function DashboardPage() {
       <MobileSearchFiltersFab
         targetRef={filtersPanelRef}
         monitor={{
-          visible: running,
+          visible: true,
           connected: Boolean(matchingMonitor),
           connectedMonitorId: matchingMonitor?.id ?? null,
           saving,

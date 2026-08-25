@@ -5,7 +5,6 @@ import { IconCheck, IconTelegram } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 type Props = {
-  visible: boolean;
   connected: boolean;
   connectedMonitorId?: string | null;
   saving?: boolean;
@@ -14,9 +13,8 @@ type Props = {
   className?: string;
 };
 
-/** Desktop: кнопка моніторингу під колонкою фільтрів (не floating FAB). */
+/** Desktop: кнопка моніторингу завжди під колонкою фільтрів. */
 export function DesktopSearchMonitorFab({
-  visible,
   connected,
   connectedMonitorId,
   saving,
@@ -25,8 +23,6 @@ export function DesktopSearchMonitorFab({
   className,
 }: Props) {
   const router = useRouter();
-
-  if (!visible) return null;
 
   const handleClick = () => {
     if (saving || limitReached) return;
