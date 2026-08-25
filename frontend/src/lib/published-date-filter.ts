@@ -1,5 +1,6 @@
 import type { PublishedWithinDaysValue } from "@/lib/search-catalog";
 import { PUBLISHED_WITHIN_OPTIONS, publishedWithinDaysLabel } from "@/lib/search-catalog";
+import type { SearchFreshness } from "@/lib/search-preview";
 
 export function pad2(value: number): string {
   return String(value).padStart(2, "0");
@@ -57,7 +58,11 @@ export function formatPublishedFilterSummary(
   publishedWithinDays: PublishedWithinDaysValue,
   publishedFrom: string,
   publishedTo: string,
+  freshness: SearchFreshness = "all",
 ): string {
+  if (freshness === "new") {
+    return "Тільки свіжі";
+  }
   if (hasCustomPublishedRange(publishedFrom, publishedTo)) {
     const fromLabel = publishedFrom ? formatPublishedDateTimeLabel(publishedFrom) : "…";
     const toLabel = publishedTo ? formatPublishedDateTimeLabel(publishedTo) : "…";
@@ -67,6 +72,15 @@ export function formatPublishedFilterSummary(
     return publishedWithinDaysLabel(publishedWithinDays);
   }
   return "";
+}
+
+export function isListingAgeFilterActive(
+  publishedWithinDays: PublishedWithinDaysValue,
+  publishedFrom: string,
+  publishedTo: string,
+  freshness: SearchFreshness = "all",
+): boolean {
+  return freshness === "new" || isPublishedFilterActive(publishedWithinDays, publishedFrom, publishedTo);
 }
 
 export function getCalendarDays(year: number, month: number): (Date | null)[] {

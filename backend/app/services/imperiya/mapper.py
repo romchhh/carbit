@@ -67,14 +67,25 @@ def _pick_price(ad: dict[str, Any], currency: str) -> tuple[int, str]:
 
 def _extract_images(ad: dict[str, Any]) -> list[str]:
     images = ad.get("images") or []
-    urls: list[str] = []
-    for item in images:
+    ordered: list[tuple[int, str]] = []
+    seen: set[str] = set()
+
+    for idx, item in enumerate(images):
         if not isinstance(item, dict):
             continue
-        url = item.get("mediumUrl") or item.get("url") or item.get("smallUrl")
-        if url and str(url).startswith("http"):
-            urls.append(str(url))
-    return urls
+        url = item.get("url") or item.get("mediumUrl") or item.get("smallUrl")
+        if not url or not str(url).startswith("http"):
+            continue
+        url_str = str(url)
+        if url_str in seen:
+            continue
+        sort_raw = item.get("sortOrder")
+        sort_key = int(sort_raw) if isinstance(sort_raw, int) else idx
+        ordered.append((sort_key, url_str))
+        seen.add(url_str)
+
+    ordered.sort(key=lambda pair: pair[0])
+    return [url for _, url in ordered]
 
 
 def ad_to_listing(ad: dict[str, Any], *, currency: str = "USD") -> ListingOut:

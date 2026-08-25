@@ -1,5 +1,6 @@
 "use client";
 
+import { FilterSubsectionLabel } from "@/components/search/FilterSubsectionLabel";
 import { COLOR_SWATCHES } from "@/lib/search-catalog";
 import { cn } from "@/lib/utils";
 
@@ -12,13 +13,16 @@ type Props = {
 
 export function ColorSwatchPicker({ values, onToggle, metallic, onMetallicChange }: Props) {
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-semibold text-muted">Колір кузова</span>
-        {values.length > 0 ? (
-          <span className="text-[11px] font-medium text-emerald">{values.length} обрано</span>
-        ) : null}
-      </div>
+    <div className="space-y-2.5 border-t border-border/60 pt-4">
+      <FilterSubsectionLabel
+        trailing={
+          values.length > 0 ? (
+            <span className="text-[11px] font-medium text-emerald">{values.length} обрано</span>
+          ) : null
+        }
+      >
+        Колір кузова
+      </FilterSubsectionLabel>
 
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {COLOR_SWATCHES.map(swatch => {

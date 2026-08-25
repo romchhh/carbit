@@ -7,7 +7,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 const ACCIDENT_HAD =
-  /(?:^|(?<![\wа-яіїєґ]))(?:дтп|accident|after crash|після дтп|був у дтп|був в дтп|after an accident)(?:$|(?![\wа-яіїєґ]))/i;
+  /(?:^|(?<![\wа-яіїєґ]))(?:дтп|accident|after crash|після дтп|був у дтп|був в дтп|after an accident|легкий удар|сильний удар|після удару|був удар|бита|битий|битая|биті|після аварії|була в аварії)(?:$|(?![\wа-яіїєґ]))/i;
 const ACCIDENT_NONE =
   /(?:^|(?<![\wа-яіїєґ]))(?:без дтп|не в дтп|не був у дтп|не був в дтп|дтп не був|дтп небув|в дтп не був|в дтп небув|no accident|not damaged|не бита|не бит)(?:$|(?![\wа-яіїєґ]))/i;
 

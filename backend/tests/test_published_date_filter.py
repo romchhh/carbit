@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from app.core.timezone import KYIV_TZ
+from app.core.timezone import KYIV_TZ, now_kyiv
 from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.search.multi_source import _filter_listings_by_published_filters
 
@@ -49,7 +49,7 @@ def test_filter_listings_by_custom_published_range():
 
 
 def test_filter_listings_by_published_within_days():
-    now = datetime(2026, 8, 19, 12, 0, tzinfo=KYIV_TZ)
+    now = now_kyiv()
     items = [
         _listing("old", now - timedelta(days=10)),
         _listing("fresh", now - timedelta(days=1)),

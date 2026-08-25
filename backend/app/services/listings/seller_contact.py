@@ -106,10 +106,43 @@ def seller_contact_from_imperiya(ad: dict[str, Any]) -> dict[str, str | None]:
     name = str(dealer.get("name") or contact.get("name") or "").strip() or None
     slug = str(dealer.get("slug") or "").strip()
     seller_url = f"https://imperiya-auto.com.ua/dealer/{slug}" if slug else None
+    if not seller_url:
+        listing_url = str(ad.get("url") or "").strip()
+        seller_url = listing_url or None
+
+    phone = None
+    for key in ("phone", "telephone", "mobile"):
+        raw = contact.get(key) or dealer.get(key)
+        if isinstance(raw, str) and is_usable_phone(raw):
+            phone = normalize_phone(raw)
+            break
 
     return {
         "seller_name": name,
-        "seller_phone": None,
+        "seller_phone": phone,
+        "seller_telegram": None,
+        "seller_url": seller_url,
+    }
+
+
+def seller_contact_from_olx_details(details: dict[str, Any]) -> dict[str, str | None]:
+    if not details:
+        return {
+            "seller_name": None,
+            "seller_phone": None,
+            "seller_telegram": None,
+            "seller_url": None,
+        }
+    name = str(details.get("seller_name") or "").strip() or None
+    seller_url = str(details.get("seller_url") or "").strip() or None
+    phone = details.get("seller_phone")
+    if isinstance(phone, str) and is_usable_phone(phone):
+        phone = normalize_phone(phone)
+    else:
+        phone = None
+    return {
+        "seller_name": name,
+        "seller_phone": phone,
         "seller_telegram": None,
         "seller_url": seller_url,
     }
@@ -163,6 +196,23 @@ def seller_contact_from_source_data(source: str, source_data: dict[str, Any] | N
         if isinstance(imperiya, dict):
             return seller_contact_from_imperiya(imperiya)
         return seller_contact_from_imperiya(source_data)
+
+    if source == "olx":
+        olx = source_data.get("olx")
+        payload = olx if isinstance(olx, dict) else source_data
+        seller_name = payload.get("seller_name") if isinstance(payload.get("seller_name"), str) else None
+        seller_url = payload.get("seller_url") if isinstance(payload.get("seller_url"), str) else None
+        phone = payload.get("seller_phone") if isinstance(payload.get("seller_phone"), str) else None
+        if phone and is_usable_phone(phone):
+            phone = normalize_phone(phone)
+        else:
+            phone = None
+        return {
+            "seller_name": (seller_name or "").strip() or None,
+            "seller_phone": phone,
+            "seller_telegram": None,
+            "seller_url": (seller_url or "").strip() or None,
+        }
 
     if source == "udrive":
         udrive = source_data.get("udrive")

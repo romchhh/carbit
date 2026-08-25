@@ -18,6 +18,21 @@ SAMPLE_CARD = """
 <p>Найдено 19655 авто</p>
 """
 
+PICTURE_CARD = """
+<article data-announcement-id="63904" data-announcement-brand="BMW" data-announcement-model="X3">
+  <div class="car-card__slide swiper-slide">
+    <a href="https://reono.ua/bmw-x3-63904" data-announcement-link class="car-card__image-ibg">
+      <picture class="carPicture srcAdded">
+        <source srcset="https://reono.ua/dist/img/no_img.svg 1x, https://reono.ua/dist/img/no_img_large.svg 2x"
+          data-srcset="https://stx.reono.ua/791/593/bmw-slide-a.jpg 1x, https://stx.reono.ua/1582/1186/bmw-slide-a.jpg 2x">
+        <img loading="lazy" src="https://reono.ua/dist/img/no_img.svg"
+          data-src="https://stx.reono.ua/720/516/bmw-slide-a.jpg" alt="BMW X3 2015">
+      </picture>
+    </a>
+  </div>
+</article>
+"""
+
 LAZY_CARD = """
 <article data-announcement-id="35012" data-announcement-brand="Audi" data-announcement-model="A4">
   <a data-announcement-link href="https://reono.ua/audi-a4-avant-35012">
@@ -68,7 +83,7 @@ def test_lazy_card_extracts_data_image_urls():
     card = BeautifulSoup(LAZY_CARD, "html.parser").select_one("article")
     urls = extract_card_image_urls(card)
     assert len(urls) == 2
-    assert all("791/593" in url for url in urls)
+    assert all("stx.reono.ua" in url for url in urls)
     assert "token-a.jpg" in urls[0]
     assert "token-b.jpg" in urls[1]
 
@@ -88,13 +103,29 @@ def test_car_to_listing_includes_lazy_gallery_from_card():
     assert len(cars) == 1
     listing = car_to_listing(cars[0])
     assert len(listing.images) == 2
-    assert all("791/593" in url for url in listing.images)
+    assert all("stx.reono.ua" in url for url in listing.images)
+
+
+def test_picture_card_extracts_srcset_and_data_src():
+    from bs4 import BeautifulSoup
+
+    card = BeautifulSoup(PICTURE_CARD, "html.parser").select_one("article")
+    urls = extract_card_image_urls(card)
+    assert len(urls) == 1
+    assert "bmw-slide-a.jpg" in urls[0]
+    assert "1582/1186" in urls[0]
+
+    cars, _ = parse_catalog_page(PICTURE_CARD)
+    assert len(cars) == 1
+    listing = car_to_listing(cars[0])
+    assert len(listing.images) == 1
+    assert "stx.reono.ua" in listing.images[0]
 
 
 def test_parse_detail_images_from_data_src():
     images = parse_detail_images(DETAIL_GALLERY)
     assert len(images) == 2
-    assert all("791/593" in url for url in images)
+    assert all("stx.reono.ua" in url for url in images)
 
 
 def test_filters_to_catalog_path_kyiv_city():

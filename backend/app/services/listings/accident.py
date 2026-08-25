@@ -12,7 +12,10 @@ _CYR_BOUNDARY_END = r"(?:$|(?![\wа-яіїєґ]))"
 
 _ACCIDENT_HAD_TEXT = re.compile(
     _CYR_BOUNDARY_START
-    + r"(дтп|accident|after crash|після дтп|був у дтп|був в дтп|after an accident)"
+    + r"(дтп|accident|after crash|після дтп|був у дтп|був в дтп|after an accident|"
+    + r"легкий удар|сильний удар|після удару|був удар|"
+    + r"бита|битий|битая|биті|"
+    + r"після аварії|була в аварії)"
     + _CYR_BOUNDARY_END,
     re.IGNORECASE,
 )
@@ -96,11 +99,16 @@ def listing_matches_accident_filter(item: ListingOut, accident: str | None) -> b
         return True
 
     source = (item.source or "").strip().lower()
-    # AUTO.RIA: damage=1/2 уже в search API; у get_info поля damage немає.
+    had = extract_listing_accident_had(item)
+
+    # AUTO.RIA: damage=1/2 у search API + пост-фільтр по опису / damageName.
     if source == "auto_ria":
+        if value == "none":
+            return had is not True
+        if value == "had":
+            return had is not False
         return True
 
-    had = extract_listing_accident_had(item)
     if value == "none":
         return had is not True
     return had is True

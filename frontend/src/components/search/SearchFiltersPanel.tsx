@@ -12,7 +12,6 @@ import {
   SearchRateLimitNotice,
   isSearchRateLimitMessage,
 } from "@/components/search/SearchRateLimitNotice";
-import { IosToggle } from "@/components/ui/IosToggle";
 import { cn } from "@/lib/utils";
 import { getBrandIconUrl } from "@/lib/search-data/brand-icons";
 import { BRANDS, getModelsForBrand } from "@/lib/search-data/brands-models";
@@ -78,7 +77,7 @@ type Props = {
   /** На лендінгу — кнопка «Голосом» лише показує підказку про кабінет. */
   voiceSearchCabinetOnly?: boolean;
   onSortChange?: (sort: SortOption) => void;
-  /** Закріплений CTA моніторингу в desktop-sidebar (під «Тільки свіжі»). */
+  /** Закріплений CTA моніторингу в desktop-sidebar (під кнопкою «Шукати»). */
   monitorSlot?: ReactNode;
 };
 
@@ -453,7 +452,13 @@ export function SearchFiltersPanel({
         </div>
 
         {advanced && (
-          <AdvancedSearchPanel filters={filters} onChange={onChange} onReset={onReset} />
+          <AdvancedSearchPanel
+            filters={filters}
+            onChange={onChange}
+            onReset={onReset}
+            freshness={freshness}
+            onFreshnessChange={onFreshnessChange}
+          />
         )}
           </div>
 
@@ -496,18 +501,6 @@ export function SearchFiltersPanel({
               {searching ? searchingButtonLabel : searchButtonLabel}
             </span>
           </button>
-
-          {onFreshnessChange && (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white px-3.5 py-3">
-              <span className="text-[13px] font-semibold text-ink">Тільки свіжі оголошення</span>
-              <IosToggle
-                checked={freshness === "new"}
-                disabled={searching}
-                aria-label="Тільки свіжі оголошення"
-                onChange={checked => onFreshnessChange(checked ? "new" : "all")}
-              />
-            </div>
-          )}
 
           {monitorSlot ? <div className="hidden lg:block">{monitorSlot}</div> : null}
 

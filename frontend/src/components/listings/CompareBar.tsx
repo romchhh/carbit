@@ -2,9 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { IconCompare, IconTrash, IconX } from "@/components/icons";
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { cn } from "@/lib/utils";
+
+const COMPARE_BAR_GAP_ABOVE_NAV = 8;
+const COMPARE_BAR_GAP_BELOW = 8;
 
 function shortTitle(title: string, max = 22): string {
   const trimmed = title.trim();
@@ -14,13 +18,39 @@ function shortTitle(title: string, max = 22): string {
 
 export function CompareBar() {
   const { items, count, max, remove, clear } = useListingCompare();
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const bar = barRef.current;
+
+    if (!bar || count === 0) {
+      root.style.removeProperty("--compare-bar-inset");
+      return;
+    }
+
+    const syncInset = () => {
+      const height = Math.ceil(bar.getBoundingClientRect().height);
+      const inset = COMPARE_BAR_GAP_ABOVE_NAV + height + COMPARE_BAR_GAP_BELOW;
+      root.style.setProperty("--compare-bar-inset", `${inset}px`);
+    };
+
+    syncInset();
+    const observer = new ResizeObserver(syncInset);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--compare-bar-inset");
+    };
+  }, [count]);
 
   if (count === 0) return null;
 
   return (
     <div
+      ref={barRef}
       className={cn(
-        "fixed z-[45] left-0 right-0 px-2 sm:px-4",
+        "fixed z-[55] left-0 right-0 px-2 sm:px-4",
         "bottom-[calc(var(--mobile-nav-height,72px)+8px)] lg:bottom-6",
         "lg:left-3 lg:right-5 lg:max-w-none lg:mx-0 xl:left-4 xl:right-7",
       )}

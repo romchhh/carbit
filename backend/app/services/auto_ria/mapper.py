@@ -366,7 +366,7 @@ def _new_auto_photo_urls(photos: Any) -> list[str]:
     urls: list[str] = []
     if not isinstance(photos, list):
         return urls
-    for raw in photos[:10]:
+    for raw in photos[:30]:
         if not isinstance(raw, str):
             continue
         base = raw.strip()

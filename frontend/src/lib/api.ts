@@ -345,6 +345,22 @@ export const listings = {
       method: "POST",
       body: JSON.stringify({ url }),
     }),
+  fetchGallery: (body: {
+    source: string;
+    listing_id?: string;
+    url?: string;
+    images?: string[];
+  }) =>
+    request<{
+      images: string[];
+      seller_name?: string | null;
+      seller_phone?: string | null;
+      seller_telegram?: string | null;
+      seller_url?: string | null;
+    }>("/listings/gallery", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 // ── Live search (AUTO.RIA + OLX) ──────────────────────

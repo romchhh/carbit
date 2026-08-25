@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { FormattedNumberInput } from "@/components/search/FormattedNumberInput";
+import { FilterSubsectionLabel } from "@/components/search/FilterSubsectionLabel";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -32,14 +33,11 @@ export function FilterInlineRange({
   trailing,
 }: Props) {
   return (
-    <div className={cn("space-y-2", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-semibold text-muted">
-          {label}
-          {suffix ? <span className="font-normal text-muted/70"> · {suffix}</span> : null}
-        </span>
-        {trailing}
-      </div>
+    <div className={cn("space-y-2.5", className)}>
+      <FilterSubsectionLabel trailing={trailing}>
+        {label}
+        {suffix ? <span className="font-normal text-muted"> · {suffix}</span> : null}
+      </FilterSubsectionLabel>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <FormattedNumberInput
           value={from}

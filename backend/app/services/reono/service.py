@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 
 from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
@@ -9,7 +11,10 @@ from app.services.reono.client import ReonoClient
 from app.services.reono.constants import HEADERS, REONO_MAX_PAGES, REONO_PAGE_SIZE
 from app.services.reono.errors import ReonoError
 from app.services.reono.mapper import apply_client_filters, car_to_listing
+from app.services.reono.images import valid_reono_cdn_urls
 from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+logger = logging.getLogger(__name__)
 
 
 async def _enrich_accident_descriptions(listings: list[ListingOut], filters: SearchFilters) -> list[ListingOut]:
@@ -36,13 +41,40 @@ async def _enrich_accident_descriptions(listings: list[ListingOut], filters: Sea
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
     payload = {
         "source": "reono",
-        "reono_v": "car-card-v1",
+        "reono_v": "car-card-v2",
         "filters": filters.model_dump(mode="json"),
         "page": page,
         "per_page": per_page,
         "sort_by": sort_by,
     }
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+
+
+async def _enrich_listing_images(listings: list[ListingOut]) -> list[ListingOut]:
+    """Підтягує галерею зі сторінки оголошення, якщо в картці каталогу немає фото."""
+    from app.services.reono.lazy_photos import fetch_reono_listing_images
+
+    async def enrich_one(item: ListingOut) -> ListingOut:
+        if len(valid_reono_cdn_urls(item.images or [])) >= 2:
+            return item
+        if not item.url:
+            return item
+        try:
+            images = await fetch_reono_listing_images(item.url)
+        except Exception:
+            logger.debug("REONO image enrich failed for %s", item.id, exc_info=True)
+            return item
+        if images:
+            return item.model_copy(update={"images": images})
+        return item
+
+    sem = asyncio.Semaphore(5)
+
+    async def limited(item: ListingOut) -> ListingOut:
+        async with sem:
+            return await enrich_one(item)
+
+    return list(await asyncio.gather(*(limited(item) for item in listings)))
 
 
 async def _search_reono_body(
@@ -65,6 +97,7 @@ async def _search_reono_body(
         listings.append(listing)
 
     listings = await _enrich_accident_descriptions(listings, filters)
+    listings = await _enrich_listing_images(listings)
     listings = [item for item in listings if listing_out_matches_filters(item, filters)]
 
     listings = sort_listings(listings, sort_by)

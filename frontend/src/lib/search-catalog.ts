@@ -177,8 +177,8 @@ export const PUBLISHED_WITHIN_OPTIONS = [
   { value: "1" as PublishedWithinDaysValue, label: "За 1 день" },
   { value: "3" as PublishedWithinDaysValue, label: "За 3 дні" },
   { value: "7" as PublishedWithinDaysValue, label: "За 7 днів" },
-  { value: "15" as PublishedWithinDaysValue, label: "До 15 днів" },
-  { value: "30" as PublishedWithinDaysValue, label: "До 30 днів" },
+  { value: "15" as PublishedWithinDaysValue, label: "Від 15 днів" },
+  { value: "30" as PublishedWithinDaysValue, label: "Від 30 днів" },
 ] as const;
 
 export const PUBLISHED_WITHIN_LABELS = PUBLISHED_WITHIN_OPTIONS.filter(o => o.value).map(

@@ -4,22 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { listings as listingsApi } from "@/lib/api";
 import { resolveListingImages } from "@/lib/listing-image-url";
 import {
+  ensureListingGallery,
+  listingNeedsGalleryHydration,
+} from "@/lib/listing-gallery";
+import {
   ensurePhotosDeduped,
   noteTelegramPhotosState,
   telegramPhotosUnavailable,
 } from "@/lib/telegram-photos";
-import {
-  ensureReonoPhotosDeduped,
-  listingNeedsReonoPhotos,
-} from "@/lib/reono-photos";
 import type { Listing } from "@/types/api";
-
-function listingNeedsPhotoHydration(listing: Listing): boolean {
-  if (listingNeedsReonoPhotos(listing)) return true;
-  if ((listing.source || "").toLowerCase() !== "telegram") return false;
-  if (listing.images?.length) return false;
-  return !telegramPhotosUnavailable();
-}
 
 /** Retry: швидко на старті, потім рідше (ensure-photos може чекати worker до ~30s). */
 const RETRY_INTERVALS = [400, 800, 1500, 2500, 4000, 6000];
@@ -33,7 +26,14 @@ function applyImages(raw: string[] | null | undefined): string[] {
   return resolveListingImages(raw);
 }
 
-/** Підвантажує мінімум 1 фото для Telegram-карток у каталозі (лише видимі). */
+function listingNeedsPhotoHydration(listing: Listing): boolean {
+  if (listingNeedsGalleryHydration(listing)) return true;
+  if ((listing.source || "").toLowerCase() !== "telegram") return false;
+  if (listing.images?.length) return false;
+  return !telegramPhotosUnavailable();
+}
+
+/** Підвантажує галерею для видимих карток (AUTO.RIA, OLX, Імперія, REONO, Telegram). */
 export function useListingPhotoHydration(listing: Listing) {
   const rootRef = useRef<HTMLElement | null>(null);
   const [visible, setVisible] = useState(false);
@@ -45,11 +45,11 @@ export function useListingPhotoHydration(listing: Listing) {
   }, [listing.id]);
 
   useEffect(() => {
-    if (listing.images?.length) {
+    if (listing.images?.length && !listingNeedsGalleryHydration(listing)) {
       setImages(applyImages(listing.images));
       setPhotosPending(false);
     }
-  }, [listing.id, listing.images]);
+  }, [listing.id, listing.images, listing.source, listing.url]);
 
   useEffect(() => {
     const node = rootRef.current;
@@ -81,11 +81,11 @@ export function useListingPhotoHydration(listing: Listing) {
 
     const poll = async () => {
       try {
-        if (listingNeedsReonoPhotos(listing)) {
-          const reonoImages = await ensureReonoPhotosDeduped(listing);
+        if (listingNeedsGalleryHydration(listing)) {
+          const enriched = await ensureListingGallery(listing);
           if (cancelled) return;
-          if (reonoImages.length) {
-            setImages(reonoImages);
+          if (enriched.images?.length) {
+            setImages(applyImages(enriched.images));
           }
           setPhotosPending(false);
           return;
@@ -107,8 +107,6 @@ export function useListingPhotoHydration(listing: Listing) {
           return;
         }
 
-        // Бекенд знає, що завантажити нічим (сесія Telethon лежить) —
-        // тримати спінер до кінця спроб немає сенсу.
         if (fresh.source_data?.photos_unavailable) {
           setPhotosPending(false);
           return;

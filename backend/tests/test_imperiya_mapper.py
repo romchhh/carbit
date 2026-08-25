@@ -43,7 +43,7 @@ def test_ad_to_listing_maps_core_fields():
     assert listing.seller_type == "dealer"
     assert listing.seller_name == "Стиль-Авто"
     assert listing.seller_url == "https://imperiya-auto.com.ua/dealer/styl-avto"
-    assert listing.images == ["https://cdn.example/medium.avif"]
+    assert listing.images == ["https://cdn.example/photo.avif"]
 
 
 def test_ad_to_listing_empty_engine_volume_electric():

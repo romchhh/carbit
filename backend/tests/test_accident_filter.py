@@ -52,6 +52,10 @@ class AccidentExtractTests(unittest.TestCase):
         item = _item(description="Після ДТП, потребує ремонту")
         self.assertTrue(extract_listing_accident_had(item))
 
+    def test_text_fallback_light_impact(self):
+        item = _item(description="легкий удар, хороша комплектація")
+        self.assertTrue(extract_listing_accident_had(item))
+
     def test_imperiya_condition_was_accident(self):
         item = _item(
             source_data={
@@ -68,10 +72,26 @@ class AccidentExtractTests(unittest.TestCase):
 
 
 class AccidentFilterTests(unittest.TestCase):
-    def test_auto_ria_trusts_api_filter(self):
-        item = _item(source="auto_ria", source_data={"autoData": {}})
+    def test_auto_ria_none_rejects_accident_text(self):
+        item = _item(
+            source="auto_ria",
+            description="Брали авто для себе, легкий удар, хороша комплектація.",
+            source_data={"autoData": {}},
+        )
+        self.assertFalse(listing_matches_accident_filter(item, "none"))
         self.assertTrue(listing_matches_accident_filter(item, "had"))
+
+    def test_auto_ria_none_trusts_api_when_unknown(self):
+        item = _item(source="auto_ria", source_data={"autoData": {}})
         self.assertTrue(listing_matches_accident_filter(item, "none"))
+
+    def test_auto_ria_had_rejects_explicit_none_text(self):
+        item = _item(
+            source="auto_ria",
+            description="Один власник, без ДТП",
+            source_data={"autoData": {}},
+        )
+        self.assertFalse(listing_matches_accident_filter(item, "had"))
 
     def test_imperiya_had_requires_flag(self):
         ok = _item(source_data={"imperiya": {"wasAccident": True}})

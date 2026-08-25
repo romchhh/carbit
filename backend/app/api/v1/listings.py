@@ -19,16 +19,33 @@ from app.services.telegram_channels.lazy_photos import (
 from app.services.auto_ria.lazy_photos import attach_auto_ria_gallery, auto_ria_needs_gallery
 from app.services.reono.errors import ReonoError
 from app.services.reono.lazy_photos import fetch_reono_listing_images
+from app.services.listings.gallery_fetch import fetch_listing_gallery, gallery_needs_fetch
+from app.services.listings.seller_contact import apply_seller_contact_fields
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
 
 class ReonoPhotosRequest(BaseModel):
-    url: str = Field(..., min_length=8, max_length=2048)
+    url: str = Field(..., min_length=8, max_length=4096)
 
 
 class ReonoPhotosResponse(BaseModel):
     images: list[str]
+
+
+class ListingGalleryRequest(BaseModel):
+    source: str = Field(..., min_length=2, max_length=32)
+    listing_id: str | None = Field(default=None, max_length=128)
+    url: str | None = Field(default=None, max_length=4096)
+    images: list[str] = Field(default_factory=list)
+
+
+class ListingGalleryResponse(BaseModel):
+    images: list[str]
+    seller_name: str | None = None
+    seller_phone: str | None = None
+    seller_telegram: str | None = None
+    seller_url: str | None = None
 
 
 @router.get("/search/{search_id}", response_model=PaginatedListings)
@@ -77,6 +94,49 @@ async def reono_listing_photos(body: ReonoPhotosRequest):
     return ReonoPhotosResponse(images=images)
 
 
+async def _apply_gallery_to_listing(db: AsyncSession, listing: Listing) -> ListingOut:
+    source = (listing.source or "").strip().lower()
+    if gallery_needs_fetch(source, list(listing.images or [])):
+        result = await fetch_listing_gallery(
+            source,
+            listing_id=listing.id,
+            url=listing.url,
+            images=list(listing.images or []),
+        )
+        if result.images:
+            listing.images = result.images
+        contact = {
+            "seller_name": result.seller_name,
+            "seller_phone": result.seller_phone,
+            "seller_telegram": result.seller_telegram,
+            "seller_url": result.seller_url,
+        }
+        out = await listing_out_with_mirrors(db, listing)
+        return apply_seller_contact_fields(out, contact)
+    return await listing_out_with_mirrors(db, listing)
+
+
+@router.post("/gallery", response_model=ListingGalleryResponse)
+async def listing_gallery(body: ListingGalleryRequest):
+    """Повна галерея + контакти продавця для live-пошуку (без запису в БД)."""
+    source = body.source.strip().lower()
+    if source not in ("auto_ria", "olx", "imperiya"):
+        raise HTTPException(status_code=400, detail="Джерело не підтримується")
+    result = await fetch_listing_gallery(
+        source,
+        listing_id=body.listing_id,
+        url=body.url,
+        images=body.images,
+    )
+    return ListingGalleryResponse(
+        images=result.images,
+        seller_name=result.seller_name,
+        seller_phone=result.seller_phone,
+        seller_telegram=result.seller_telegram,
+        seller_url=result.seller_url,
+    )
+
+
 @router.get("/{listing_id}", response_model=ListingOut)
 async def get_listing(
     listing_id: str,
@@ -97,6 +157,8 @@ async def get_listing(
             )
     elif auto_ria_needs_gallery(listing):
         await attach_auto_ria_gallery(db, listing)
+    elif gallery_needs_fetch((listing.source or "").lower(), list(listing.images or [])):
+        return await _apply_gallery_to_listing(db, listing)
     return await listing_out_with_mirrors(db, listing)
 
 
@@ -118,6 +180,9 @@ async def ensure_listing_photos(
         )
     elif auto_ria_needs_gallery(listing):
         await attach_auto_ria_gallery(db, listing)
+    elif gallery_needs_fetch((listing.source or "").lower(), list(listing.images or [])):
+        return await _apply_gallery_to_listing(db, listing)
+
     out = await listing_out_with_mirrors(db, listing)
     if not out.images:
         # Якщо Telethon недоступний (розлогінена сесія) — кажемо це прямо,

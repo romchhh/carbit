@@ -1,5 +1,6 @@
 "use client";
 
+import { FilterSubsectionLabel } from "@/components/search/FilterSubsectionLabel";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -12,13 +13,21 @@ type Props = {
 
 export function FilterChipGroup({ label, options, values, onToggle, className }: Props) {
   return (
-    <div className={cn("space-y-2", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-semibold text-muted">{label}</span>
-        {values.length > 0 ? (
-          <span className="text-[11px] font-medium text-emerald">{values.length} обрано</span>
-        ) : null}
-      </div>
+    <div
+      className={cn(
+        "space-y-2.5 border-t border-border/60 pt-4 first:border-t-0 first:pt-0",
+        className,
+      )}
+    >
+      <FilterSubsectionLabel
+        trailing={
+          values.length > 0 ? (
+            <span className="text-[11px] font-medium text-emerald">{values.length} обрано</span>
+          ) : null
+        }
+      >
+        {label}
+      </FilterSubsectionLabel>
       <div className="flex flex-wrap gap-1.5">
         {options.map(option => {
           const active = values.includes(option);

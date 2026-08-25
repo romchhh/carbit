@@ -16,6 +16,18 @@ class AlreadyNotifiedTests(unittest.IsolatedAsyncioTestCase):
         from app.services.notifications.service import user_already_notified_for_car
 
         vin = "WBA8E9C50HK123456"
+        parent = SimpleNamespace(
+            id="auto_ria_1",
+            brand="BMW",
+            model="X5",
+            year=2022,
+            mileage=15000,
+            vin=vin,
+            duplicate_of=None,
+            is_duplicate=False,
+            title="BMW X5",
+            description=None,
+        )
         listing = SimpleNamespace(
             id="olx_1",
             brand="BMW",
@@ -25,11 +37,13 @@ class AlreadyNotifiedTests(unittest.IsolatedAsyncioTestCase):
             vin=vin,
             duplicate_of="auto_ria_1",
             is_duplicate=True,
+            title="BMW X5",
+            description=None,
         )
         db = AsyncMock()
-        # _duplicate_family_ids → scalar list, then Notification scalar
+        db.get = AsyncMock(return_value=parent)
         db.scalars = AsyncMock(
-            return_value=SimpleNamespace(all=lambda: ["olx_1", "auto_ria_1"])
+            return_value=SimpleNamespace(all=lambda: [listing, parent])
         )
         db.scalar = AsyncMock(return_value="notif-1")
 
@@ -111,6 +125,7 @@ class AlreadyNotifiedTests(unittest.IsolatedAsyncioTestCase):
 
 class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
     async def test_sends_telegram_for_vin_mirror_with_cross_source_alert(self):
+        from app.core.timezone import now_kyiv
         from app.services.notifications.service import create_listing_notification
 
         listing = SimpleNamespace(
@@ -127,7 +142,7 @@ class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
             description=None,
             images=[],
             url="https://olx.ua/1",
-            published_at=datetime(2026, 7, 15, 10, 0, tzinfo=KYIV_TZ),
+            published_at=now_kyiv(),
             is_duplicate=True,
             duplicate_of="auto_ria_1",
             vin="WBA8E9C50HK123456",
@@ -185,10 +200,7 @@ class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
             fuel="Бензин",
             transmission="Автомат",
             description=None,
-            images=[
-                "/api/v1/telegram-media/ua_autobazar/1.jpg",
-                "/api/v1/telegram-media/ua_autobazar/2.jpg",
-            ],
+            images=["https://cdn.example.com/telegram/1.jpg", "https://cdn.example.com/telegram/2.jpg"],
             url="https://t.me/test/1",
             published_at=now_kyiv(),
             is_duplicate=False,
@@ -229,7 +241,7 @@ class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
         send.assert_awaited_once()
         payload = send.await_args.args[1]
         self.assertEqual(len(payload["images"]), 1)
-        self.assertIn("/api/v1/telegram-media/", payload["images"][0])
+        self.assertIn("https://cdn.example.com/telegram/", payload["images"][0])
         self.assertTrue(notif.sent_telegram)
 
 

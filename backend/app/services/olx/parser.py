@@ -1206,7 +1206,10 @@ def parse_listing_details(html: str) -> dict:
     description = description_tag.get_text("\n", strip=True) if description_tag else None
 
     photos: list[str] = []
-    gallery = soup.select('[data-testid="ad-photo"] img, [data-testid="swiper-wrapper"] img')
+    gallery = soup.select(
+        '[data-testid="ad-photo"] img, [data-testid="swiper-wrapper"] img, '
+        '[data-cy="adPhotos-swiperContainer"] img, .swiper-slide img'
+    )
     for img in gallery:
         for attr in ("src", "data-src", "data-lazy-src"):
             src = img.get(attr)
@@ -1281,6 +1284,32 @@ def parse_listing_details(html: str) -> dict:
         if last_refresh_time or created_time:
             break
 
+    seller_name = None
+    seller_url = None
+    profile = soup.select_one('a[data-testid="user-profile-link"]') or soup.select_one(
+        'a[href*="/list/user/"]'
+    )
+    if profile:
+        seller_name = profile.get_text(" ", strip=True) or None
+        href = profile.get("href")
+        if href:
+            seller_url = urljoin(BASE_URL, href) if str(href).startswith("/") else str(href)
+
+    for raw in _try_extract_embedded_json(html):
+        user = raw.get("user") or raw.get("seller")
+        if isinstance(user, dict):
+            seller_name = seller_name or str(user.get("name") or user.get("username") or "").strip() or None
+            if not seller_url:
+                link = user.get("url") or user.get("link")
+                if isinstance(link, str) and link.strip():
+                    seller_url = urljoin(BASE_URL, link) if link.startswith("/") else link
+        if seller_name and seller_url:
+            break
+
+    from app.services.listings.seller_contact import extract_phone_from_text
+
+    seller_phone = extract_phone_from_text(description) if description else None
+
     return {
         "description": description,
         "photos": photos,
@@ -1291,6 +1320,9 @@ def parse_listing_details(html: str) -> dict:
         "published": published,
         "lastRefreshTime": last_refresh_time,
         "createdTime": created_time,
+        "seller_name": seller_name,
+        "seller_url": seller_url,
+        "seller_phone": seller_phone,
     }
 
 

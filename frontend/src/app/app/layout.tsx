@@ -188,7 +188,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="app-mobile-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eef0f4] lg:rounded-[28px] lg:border lg:border-border/50 lg:bg-white lg:shadow-island">
             <div
               ref={mainScrollRef}
-              className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-[var(--mobile-nav-height)] pt-[var(--mobile-header-offset)] sm:px-4 lg:pl-3 lg:pr-5 lg:pb-8 lg:pt-4 xl:pl-4 xl:pr-7"
+              className="app-mobile-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-[calc(var(--mobile-nav-height)+var(--compare-bar-inset,0px))] pt-[var(--mobile-header-offset)] sm:px-4 lg:pl-3 lg:pr-5 lg:pb-8 lg:pt-4 xl:pl-4 xl:pr-7"
             >
               <div className="app-mobile-content flex w-full max-w-[980px] flex-col lg:mx-0 lg:max-w-none">
                 <SearchSessionProvider>{children}</SearchSessionProvider>

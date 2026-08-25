@@ -31,8 +31,12 @@ import {
   telegramPhotosUnavailable,
 } from "@/lib/telegram-photos";
 import {
+  ensureListingGallery,
+  listingShouldFetchGallery,
+} from "@/lib/listing-gallery";
+import {
   ensureReonoPhotosDeduped,
-  listingNeedsReonoPhotos,
+  listingShouldFetchReonoGallery,
 } from "@/lib/reono-photos";
 import { hasVinCheck } from "@/lib/vin-check";
 import { hasSellerContact } from "@/lib/seller-contact";
@@ -98,11 +102,9 @@ export function ListingDetailModal({
   useEffect(() => {
     if (!listingProp) return;
     const needsPhotos =
-      listingNeedsReonoPhotos(listingProp) ||
+      listingShouldFetchGallery(listingProp) ||
       (listingProp.source === "telegram" &&
-        (!listingProp.images || listingProp.images.length === 0)) ||
-      (listingProp.source === "auto_ria" &&
-        (listingProp.images?.length ?? 0) < 2);
+        (!listingProp.images || listingProp.images.length === 0));
 
     if (
       !needsPhotos ||
@@ -119,7 +121,7 @@ export function ListingDetailModal({
 
     const poll = async () => {
       try {
-        if (listingNeedsReonoPhotos(listingProp)) {
+        if (listingShouldFetchReonoGallery(listingProp)) {
           const reonoImages = await ensureReonoPhotosDeduped(listingProp);
           if (cancelled) return;
           if (reonoImages.length) {
@@ -127,6 +129,18 @@ export function ListingDetailModal({
               { ...listingProp, images: reonoImages },
               listingProp,
             );
+            setLiveListing(merged);
+            onListingUpdate?.(merged);
+          }
+          setPhotosLoading(false);
+          return;
+        }
+
+        if (listingShouldFetchGallery(listingProp)) {
+          const enriched = await ensureListingGallery(listingProp);
+          if (cancelled) return;
+          if (enriched.images?.length) {
+            const merged = keepListingMirrors(enriched, listingProp);
             setLiveListing(merged);
             onListingUpdate?.(merged);
           }

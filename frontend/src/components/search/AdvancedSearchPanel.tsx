@@ -30,19 +30,26 @@ import {
 import { resetAdvancedFilters } from "@/lib/search-filters-api";
 import { sourceFilterIcon } from "@/lib/listing-source";
 import { formatPublishedFilterSummary } from "@/lib/published-date-filter";
+import type { SearchFreshness } from "@/lib/search-preview";
 
 type Props = {
   filters: SearchFilterState;
   onChange: (filters: SearchFilterState) => void;
   onReset: () => void;
+  freshness?: SearchFreshness;
+  onFreshnessChange?: (freshness: SearchFreshness) => void;
 };
 
 function ActiveSummary({
   filters,
+  freshness = "all",
   onClearOne,
+  onFreshnessChange,
 }: {
   filters: SearchFilterState;
+  freshness?: SearchFreshness;
   onClearOne: (patch: Partial<SearchFilterState>) => void;
+  onFreshnessChange?: (freshness: SearchFreshness) => void;
 }) {
   const chips: { key: string; label: string; clear: () => void; swatch?: string }[] = [];
 
@@ -179,13 +186,16 @@ function ActiveSummary({
     filters.publishedWithinDays,
     filters.publishedFrom,
     filters.publishedTo,
+    freshness,
   );
   if (publishedSummary) {
     chips.push({
       key: "published",
-      label: `Публікація: ${publishedSummary}`,
-      clear: () =>
-        onClearOne({ publishedWithinDays: "", publishedFrom: "", publishedTo: "" }),
+      label: `Вік: ${publishedSummary}`,
+      clear: () => {
+        onFreshnessChange?.("all");
+        onClearOne({ publishedWithinDays: "", publishedFrom: "", publishedTo: "" });
+      },
     });
   }
 
@@ -221,13 +231,25 @@ function ActiveSummary({
   );
 }
 
-export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
+export function AdvancedSearchPanel({
+  filters,
+  onChange,
+  onReset,
+  freshness = "all",
+  onFreshnessChange,
+}: Props) {
   const update = (patch: Partial<SearchFilterState>) => {
     onChange({ ...filters, ...patch });
   };
 
+  const resetAdvanced = () => {
+    onChange(resetAdvancedFilters(filters));
+    onFreshnessChange?.("all");
+  };
+
   const techBadge = countAdvancedFilterFields(filters, "technical");
-  const publishedBadge = countAdvancedFilterFields(filters, "published");
+  const publishedBadge =
+    countAdvancedFilterFields(filters, "published") + (freshness === "new" ? 1 : 0);
   const conditionBadge = countAdvancedFilterFields(filters, "condition");
   const originBadge = countAdvancedFilterFields(filters, "origin");
   const sourcesBadge =
@@ -241,7 +263,7 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
         {totalActive > 0 ? (
           <button
             type="button"
-            onClick={() => onChange(resetAdvancedFilters(filters))}
+            onClick={resetAdvanced}
             className="shrink-0 rounded-full border border-border px-3 py-1.5 text-[12px] font-medium text-muted transition-colors hover:border-emerald/40 hover:text-ink"
           >
             Скинути ({totalActive})
@@ -250,15 +272,24 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
       </div>
 
       <div className="relative z-20 space-y-4 overflow-visible px-4 py-4 sm:px-5">
-        <ActiveSummary filters={filters} onClearOne={update} />
+        <ActiveSummary
+          filters={filters}
+          freshness={freshness}
+          onClearOne={update}
+          onFreshnessChange={onFreshnessChange}
+        />
 
-        <FilterAccordionSection title="Дата публікації" badge={publishedBadge} defaultOpen={false}>
-          <FilterPublishedDateRange
-            publishedWithinDays={filters.publishedWithinDays}
-            publishedFrom={filters.publishedFrom}
-            publishedTo={filters.publishedTo}
-            onChange={update}
-          />
+        <FilterAccordionSection title="Вік оголошення" badge={publishedBadge} defaultOpen={false}>
+          {onFreshnessChange ? (
+            <FilterPublishedDateRange
+              freshness={freshness}
+              publishedWithinDays={filters.publishedWithinDays}
+              publishedFrom={filters.publishedFrom}
+              publishedTo={filters.publishedTo}
+              onFreshnessChange={onFreshnessChange}
+              onChange={update}
+            />
+          ) : null}
         </FilterAccordionSection>
 
         <FilterAccordionSection title="Кузов і техніка" badge={techBadge} defaultOpen={false}>
@@ -290,7 +321,7 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
             onToggle={drive => update({ driveTypes: toggleValue(filters.driveTypes, drive) })}
           />
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 border-t border-border/60 pt-4 sm:grid-cols-2">
             <FilterInlineRange
               label="Пробіг"
               suffix="тис. км"
@@ -335,7 +366,7 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-1">
+          <div className="grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-1">
             <FilterInlineRange
               label="Потужність"
               suffix={filters.powerUnit === "kw" ? "кВт" : "к.с."}
@@ -554,7 +585,7 @@ export function AdvancedSearchPanel({ filters, onChange, onReset }: Props) {
           <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
             <button
               type="button"
-              onClick={() => onChange(resetAdvancedFilters(filters))}
+              onClick={resetAdvanced}
               className="text-[12px] text-muted underline underline-offset-2 hover:text-ink"
             >
               Скинути розширені

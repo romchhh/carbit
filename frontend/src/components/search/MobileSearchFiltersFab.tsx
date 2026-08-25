@@ -65,7 +65,7 @@ export function MobileSearchFiltersFab({ targetRef, className, monitor }: Props)
     <div
       className={cn(
         "fixed right-3 z-[46] flex flex-row-reverse items-center gap-2 lg:hidden",
-        "bottom-[calc(var(--mobile-nav-height,72px)+12px)]",
+        "bottom-[calc(var(--mobile-nav-height,72px)+var(--compare-bar-inset,12px))]",
         "transition-all duration-300",
         showCluster
           ? "pointer-events-auto translate-y-0 opacity-100"

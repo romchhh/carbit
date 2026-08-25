@@ -50,9 +50,28 @@ def reono_photo_token(url: str) -> str | None:
 def reono_preferred_image_url(url: str) -> str:
     """Повертає URL найбільшого доступного розміру для того самого фото."""
     token = reono_photo_token(url)
-    if not token:
+    if not token or not _TOKEN_RE.search(url):
         return url
-    return f"https://{_STX_HOST}/791/593/{token}"
+    return f"https://{_STX_HOST}/{_PREFERRED_SIZES[0]}/{token}"
+
+
+def reono_fallback_urls(url: str) -> list[str]:
+    """Варіанти розмірів одного фото на CDN REONO (для retry проксі)."""
+    token = reono_photo_token(url)
+    if not token or not _TOKEN_RE.search(url):
+        return [url]
+    candidates = [f"https://{_STX_HOST}/{size}/{token}" for size in _PREFERRED_SIZES]
+    if url not in candidates:
+        candidates.insert(0, url)
+    seen: list[str] = []
+    for item in candidates:
+        if item not in seen:
+            seen.append(item)
+    return seen
+
+
+def valid_reono_cdn_urls(urls: Iterable[str]) -> list[str]:
+    return [url for url in urls if is_reono_cdn_url(url) and not _is_placeholder(url)]
 
 
 def _add_url(urls: dict[str, str], raw: object, *, size_hint: str | None = None) -> None:
@@ -63,7 +82,7 @@ def _add_url(urls: dict[str, str], raw: object, *, size_hint: str | None = None)
     if not token:
         return
     preferred = (
-        f"https://{_STX_HOST}/791/593/{token}"
+        f"https://{_STX_HOST}/{_PREFERRED_SIZES[0]}/{token}"
         if _TOKEN_RE.search(normalized)
         else normalized
     )
@@ -84,13 +103,17 @@ def _collect_from_srcset(raw: object, urls: dict[str, str]) -> None:
         chunk = part.strip().split()
         if not chunk:
             continue
+        candidate = chunk[0]
+        if _is_placeholder(candidate):
+            continue
         size_hint = chunk[1] if len(chunk) > 1 else None
-        _add_url(urls, chunk[0], size_hint=size_hint)
+        _add_url(urls, candidate, size_hint=size_hint)
 
 
 def _collect_from_tag(tag: Tag, urls: dict[str, str]) -> None:
     for attr in ("data-image-large", "data-image-normal", "data-src", "src"):
         _add_url(urls, tag.get(attr))
+    # data-srcset містить повнорозмірні URL; srcset часто — placeholder до lazy-load.
     _collect_from_srcset(tag.get("data-srcset"), urls)
     _collect_from_srcset(tag.get("srcset"), urls)
     style = tag.get("style") or ""
@@ -98,13 +121,25 @@ def _collect_from_tag(tag: Tag, urls: dict[str, str]) -> None:
         _add_url(urls, match.group(2))
 
 
+def _merge_urls(urls: dict[str, str], found: Iterable[str]) -> None:
+    for url in found:
+        token = reono_photo_token(url)
+        if token:
+            urls[token] = reono_preferred_image_url(url)
+
+
 def extract_image_urls_from_node(node: Tag) -> list[str]:
     urls: dict[str, str] = {}
-    for el in node.select("[data-image-large], [data-image-normal], [data-card-lazy-picture]"):
+    for el in node.select(
+        ".car-card__lazy-picture, [data-image-large], [data-image-normal], [data-card-lazy-picture]"
+    ):
         _collect_from_tag(el, urls)
-    for el in node.select("source[srcset], source[data-srcset]"):
-        _collect_from_srcset(el.get("data-srcset"), urls)
-        _collect_from_srcset(el.get("srcset"), urls)
+    for el in node.select("picture, source[data-srcset], source[srcset]"):
+        if el.name == "picture":
+            for child in el.select("source[data-srcset], source[srcset], img"):
+                _collect_from_tag(child, urls)
+        else:
+            _collect_from_tag(el, urls)
     for el in node.select("img"):
         _collect_from_tag(el, urls)
     for el in node.select('[style*="background-image"]'):
@@ -115,7 +150,12 @@ def extract_image_urls_from_node(node: Tag) -> list[str]:
 
 
 def extract_card_image_urls(card: Tag) -> list[str]:
-    return extract_image_urls_from_node(card)
+    urls: dict[str, str] = {}
+    for slide in card.select(".car-card__slide"):
+        _merge_urls(urls, extract_image_urls_from_node(slide))
+    if not urls:
+        _merge_urls(urls, extract_image_urls_from_node(card))
+    return list(urls.values())
 
 
 def extract_card_cover_image(card: Tag) -> str | None:
@@ -127,20 +167,15 @@ def parse_detail_images(html: str) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     urls: dict[str, str] = {}
 
-    gallery = soup.select_one(".description-car-main-big__wrapper") or soup.select_one(
-        ".description-car-main-big__slider"
+    gallery_roots = soup.select(
+        ".description-car-main-big__wrapper, .description-car-main-big__slider, "
+        ".description-car-main__sliders"
     )
-    if gallery is not None:
-        for url in extract_image_urls_from_node(gallery):
-            token = reono_photo_token(url)
-            if token:
-                urls[token] = reono_preferred_image_url(url)
+    for gallery in gallery_roots:
+        _merge_urls(urls, extract_image_urls_from_node(gallery))
 
     if not urls:
-        for url in extract_image_urls_from_node(soup):
-            token = reono_photo_token(url)
-            if token:
-                urls[token] = reono_preferred_image_url(url)
+        _merge_urls(urls, extract_image_urls_from_node(soup))
 
     for script in soup.find_all("script", type="application/ld+json"):
         raw = script.get_text(strip=True)
