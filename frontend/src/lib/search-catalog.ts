@@ -21,7 +21,7 @@ export type TriFilterValue = "" | "show" | "hide";
 export type SellerFilterValue = "" | "private" | "dealer";
 export type AccidentFilterValue = "" | "none" | "had";
 export type OwnersFilterValue = "" | "1" | "2" | "3" | "4";
-export type PublishedWithinDaysValue = "" | "1" | "3" | "7" | "14" | "30";
+export type PublishedWithinDaysValue = "" | "1" | "3" | "7" | "15" | "30";
 
 export type SearchFilterState = {
   name: string;
@@ -177,8 +177,8 @@ export const PUBLISHED_WITHIN_OPTIONS = [
   { value: "1" as PublishedWithinDaysValue, label: "За 1 день" },
   { value: "3" as PublishedWithinDaysValue, label: "За 3 дні" },
   { value: "7" as PublishedWithinDaysValue, label: "За 7 днів" },
-  { value: "14" as PublishedWithinDaysValue, label: "За 14 днів" },
-  { value: "30" as PublishedWithinDaysValue, label: "За 30 днів" },
+  { value: "15" as PublishedWithinDaysValue, label: "До 15 днів" },
+  { value: "30" as PublishedWithinDaysValue, label: "До 30 днів" },
 ] as const;
 
 export const PUBLISHED_WITHIN_LABELS = PUBLISHED_WITHIN_OPTIONS.filter(o => o.value).map(

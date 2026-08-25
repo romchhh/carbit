@@ -13,6 +13,7 @@ from app.services.reono.constants import (
     GEARBOX_LABELS,
     REONO_BASE_URL,
 )
+from app.services.reono.images import extract_card_cover_image, extract_card_image_urls, normalize_reono_image_url
 
 _YEAR_RE = re.compile(r"\b(19[5-9]\d|20[0-2]\d)\b")
 _TOTAL_RES = (
@@ -37,8 +38,9 @@ class ReonoCar:
     location: Optional[str]
     is_premium: bool
     url: str
-    image_url: Optional[str]
     car_id: Optional[int]
+    image_url: Optional[str]
+    image_urls: list[str] = field(default_factory=list)
     details: dict = field(default_factory=dict)
 
 
@@ -173,13 +175,8 @@ def _parse_car_card(card: Tag) -> Optional[ReonoCar]:
         if loc_el:
             location = loc_el.get_text(" ", strip=True) or None
 
-    image_url = None
-    for img in card.select("img[src]"):
-        src = (img.get("src") or "").strip()
-        if not src or "no_img" in src:
-            continue
-        image_url = src if src.startswith("http") else REONO_BASE_URL + src
-        break
+    image_urls = extract_card_image_urls(card)
+    image_url = image_urls[0] if image_urls else extract_card_cover_image(card)
 
     is_premium = bool(card.find(string=re.compile(r"^\s*Преміум\s*$")))
 
@@ -199,6 +196,7 @@ def _parse_car_card(card: Tag) -> Optional[ReonoCar]:
         is_premium=is_premium,
         url=url,
         image_url=image_url,
+        image_urls=image_urls,
         car_id=car_id,
     )
 
@@ -258,11 +256,14 @@ def parse_catalog_page(html: str) -> tuple[list[ReonoCar], int]:
         year = int(year_match.group())
         url = _normalize_url(element.get("href", ""))
         img = element.find("img")
-        image_url = None
+        image_urls: list[str] = []
         if img:
-            src = img.get("src") or img.get("data-src")
-            if src and "no_img" not in src:
-                image_url = src if str(src).startswith("http") else REONO_BASE_URL + str(src)
+            for attr in ("data-src", "src"):
+                url_candidate = normalize_reono_image_url(img.get(attr))
+                if url_candidate:
+                    image_urls.append(url_candidate)
+                    break
+        image_url = image_urls[0] if image_urls else None
         words = title_text.split(str(year))[0].strip().split()
         brand = words[0] if words else None
         model = " ".join(words[1:]) if len(words) > 1 else None
@@ -282,6 +283,7 @@ def parse_catalog_page(html: str) -> tuple[list[ReonoCar], int]:
             is_premium=pending_premium,
             url=url,
             image_url=image_url,
+            image_urls=image_urls,
             car_id=car_id,
         )
         seen_ids.add(car_id)

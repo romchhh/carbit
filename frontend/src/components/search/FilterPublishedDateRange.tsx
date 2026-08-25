@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { IosToggle } from "@/components/ui/IosToggle";
 import { cn } from "@/lib/utils";
 import type { PublishedWithinDaysValue } from "@/lib/search-catalog";
 import {
@@ -96,8 +97,41 @@ export function FilterPublishedDateRange({
     updateCustom(formatLocalDateTime(start), formatLocalDateTime(end));
   };
 
+  const setWithinDaysToggle = (days: "15" | "30", enabled: boolean) => {
+    if (customActive) return;
+    if (enabled) {
+      selectPreset(days);
+      return;
+    }
+    if (publishedWithinDays === days) {
+      selectPreset("");
+    }
+  };
+
   return (
     <div className="space-y-3 rounded-xl border border-border/60 bg-surface/20 p-3">
+      <div className="space-y-2 rounded-xl border border-border/70 bg-white p-3">
+        <p className="text-[12px] font-semibold text-ink">Вік оголошення</p>
+        <div className="flex items-center justify-between gap-3 rounded-lg px-0.5 py-1">
+          <span className="text-[13px] font-medium text-ink">Показувати до 15 днів</span>
+          <IosToggle
+            checked={!customActive && publishedWithinDays === "15"}
+            disabled={customActive}
+            aria-label="Показувати оголошення до 15 днів"
+            onChange={checked => setWithinDaysToggle("15", checked)}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-3 rounded-lg px-0.5 py-1">
+          <span className="text-[13px] font-medium text-ink">Показувати до 30 днів</span>
+          <IosToggle
+            checked={!customActive && publishedWithinDays === "30"}
+            disabled={customActive}
+            aria-label="Показувати оголошення до 30 днів"
+            onChange={checked => setWithinDaysToggle("30", checked)}
+          />
+        </div>
+      </div>
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[13px] font-medium text-ink">Дата публікації</p>

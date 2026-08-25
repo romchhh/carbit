@@ -11,9 +11,11 @@ type Props = {
   limitReached?: boolean;
   onSave: () => void;
   className?: string;
+  /** Компактніший варіант у мобільному FAB. */
+  compact?: boolean;
 };
 
-/** Desktop: кнопка моніторингу завжди під колонкою фільтрів. */
+/** Кнопка підключення моніторингу — помітний primary CTA. */
 export function DesktopSearchMonitorFab({
   connected,
   connectedMonitorId,
@@ -21,6 +23,7 @@ export function DesktopSearchMonitorFab({
   limitReached,
   onSave,
   className,
+  compact = false,
 }: Props) {
   const router = useRouter();
 
@@ -33,6 +36,24 @@ export function DesktopSearchMonitorFab({
     onSave();
   };
 
+  if (connected) {
+    return (
+      <button
+        type="button"
+        data-tour="save-search"
+        onClick={handleClick}
+        className={cn(
+          "flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-emerald/45 bg-emerald/10 px-4 font-bold text-emerald-dark transition-colors hover:bg-emerald/15",
+          compact ? "py-2.5 text-[12px]" : "py-3.5 text-[14px]",
+          className,
+        )}
+      >
+        <IconCheck size={compact ? 16 : 20} strokeWidth={2.5} className="text-emerald" />
+        Моніторинг підключено
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -40,25 +61,26 @@ export function DesktopSearchMonitorFab({
       onClick={handleClick}
       disabled={saving || limitReached}
       className={cn(
-        "flex w-full items-center justify-center gap-2 rounded-2xl border-2 px-4 py-3",
-        "text-[13px] font-bold shadow-[0_8px_24px_-10px_rgba(10,12,14,0.28)] transition-all",
-        "disabled:cursor-not-allowed disabled:opacity-60",
-        connected
-          ? "border-emerald/50 bg-white text-emerald-dark hover:bg-emerald/5"
-          : "border-emerald bg-white text-ink hover:bg-emerald/5",
+        "group relative flex w-full flex-col items-center justify-center gap-0.5 overflow-hidden rounded-2xl px-4 font-bold text-white transition-all",
+        "bg-gradient-to-br from-emerald via-emerald to-emerald-dark shadow-[0_10px_28px_-8px_rgba(16,185,129,0.65)]",
+        "hover:brightness-105 active:scale-[0.99]",
+        "disabled:cursor-not-allowed disabled:opacity-65 disabled:shadow-none",
+        compact ? "py-2.5" : "py-3.5",
         className,
       )}
     >
-      {connected ? (
-        <>
-          <IconCheck size={18} strokeWidth={2.5} className="text-emerald" />
-          Моніторинг підключено
-        </>
-      ) : (
-        <>
-          <IconTelegram size={18} className="text-emerald" />
-          {saving ? "Підключаємо…" : "Підключити моніторинг"}
-        </>
+      <span
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.28),transparent_55%)]"
+        aria-hidden
+      />
+      <span className={cn("relative inline-flex items-center gap-2", compact ? "text-[12px]" : "text-[15px]")}>
+        <IconTelegram size={compact ? 16 : 20} className="text-white" />
+        {saving ? "Підключаємо…" : "Підключити моніторинг"}
+      </span>
+      {!compact && (
+        <span className="relative text-[11px] font-medium text-white/90">
+          Нові авто — одразу в Telegram
+        </span>
       )}
     </button>
   );

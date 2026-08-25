@@ -8,9 +8,14 @@ import {
   noteTelegramPhotosState,
   telegramPhotosUnavailable,
 } from "@/lib/telegram-photos";
+import {
+  ensureReonoPhotosDeduped,
+  listingNeedsReonoPhotos,
+} from "@/lib/reono-photos";
 import type { Listing } from "@/types/api";
 
 function listingNeedsPhotoHydration(listing: Listing): boolean {
+  if (listingNeedsReonoPhotos(listing)) return true;
   if ((listing.source || "").toLowerCase() !== "telegram") return false;
   if (listing.images?.length) return false;
   return !telegramPhotosUnavailable();
@@ -76,6 +81,16 @@ export function useListingPhotoHydration(listing: Listing) {
 
     const poll = async () => {
       try {
+        if (listingNeedsReonoPhotos(listing)) {
+          const reonoImages = await ensureReonoPhotosDeduped(listing);
+          if (cancelled) return;
+          if (reonoImages.length) {
+            setImages(reonoImages);
+          }
+          setPhotosPending(false);
+          return;
+        }
+
         const useEnsure = attempts === 0 || attempts % 3 === 0;
         const fresh = useEnsure
           ? await ensurePhotosDeduped(listing.id)
@@ -121,7 +136,7 @@ export function useListingPhotoHydration(listing: Listing) {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [listing.id, listing.source, listing.images?.length, visible]);
+  }, [listing.id, listing.source, listing.url, listing.images?.length, visible]);
 
   return { images, rootRef, photosPending };
 }

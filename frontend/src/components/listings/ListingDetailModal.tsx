@@ -30,6 +30,10 @@ import {
   noteTelegramPhotosState,
   telegramPhotosUnavailable,
 } from "@/lib/telegram-photos";
+import {
+  ensureReonoPhotosDeduped,
+  listingNeedsReonoPhotos,
+} from "@/lib/reono-photos";
 import { hasVinCheck } from "@/lib/vin-check";
 import { hasSellerContact } from "@/lib/seller-contact";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
@@ -94,12 +98,16 @@ export function ListingDetailModal({
   useEffect(() => {
     if (!listingProp) return;
     const needsPhotos =
+      listingNeedsReonoPhotos(listingProp) ||
       (listingProp.source === "telegram" &&
         (!listingProp.images || listingProp.images.length === 0)) ||
       (listingProp.source === "auto_ria" &&
         (listingProp.images?.length ?? 0) < 2);
 
-    if (!needsPhotos || telegramPhotosUnavailable()) {
+    if (
+      !needsPhotos ||
+      (listingProp.source === "telegram" && telegramPhotosUnavailable())
+    ) {
       setPhotosLoading(false);
       return;
     }
@@ -111,6 +119,21 @@ export function ListingDetailModal({
 
     const poll = async () => {
       try {
+        if (listingNeedsReonoPhotos(listingProp)) {
+          const reonoImages = await ensureReonoPhotosDeduped(listingProp);
+          if (cancelled) return;
+          if (reonoImages.length) {
+            const merged = keepListingMirrors(
+              { ...listingProp, images: reonoImages },
+              listingProp,
+            );
+            setLiveListing(merged);
+            onListingUpdate?.(merged);
+          }
+          setPhotosLoading(false);
+          return;
+        }
+
         const useEnsure = attempts === 0 || attempts % 3 === 0;
         const fresh = useEnsure
           ? await ensurePhotosDeduped(listingProp.id)
@@ -157,7 +180,7 @@ export function ListingDetailModal({
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [listingProp?.id, listingProp?.source, listingProp?.images?.length, onListingUpdate]);
+  }, [listingProp?.id, listingProp?.source, listingProp?.url, listingProp?.images?.length, onListingUpdate]);
 
   const scrollToPhoto = useCallback((index: number) => {
     setPhotoIndex(index);

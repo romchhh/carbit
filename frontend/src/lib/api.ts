@@ -340,6 +340,11 @@ export const listings = {
     request<Listing[]>(`/listings/batch?ids=${encodeURIComponent(ids.join(","))}`),
   ensurePhotos: (id: string) =>
     request<Listing>(`/listings/${id}/ensure-photos`, { method: "POST" }),
+  reonoPhotos: (url: string) =>
+    request<{ images: string[] }>("/listings/reono/photos", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
 };
 
 // ── Live search (AUTO.RIA + OLX) ──────────────────────

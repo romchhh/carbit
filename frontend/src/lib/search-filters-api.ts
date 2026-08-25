@@ -470,7 +470,8 @@ export function fromBackendSearchFilters(
       const days = raw.published_within_days;
       if (days == null || days === "") return "" as PublishedWithinDaysValue;
       const text = String(days);
-      if (text === "1" || text === "3" || text === "7" || text === "14" || text === "30") {
+      if (text === "14") return "15" as PublishedWithinDaysValue;
+      if (text === "1" || text === "3" || text === "7" || text === "15" || text === "30") {
         return text as PublishedWithinDaysValue;
       }
       return "" as PublishedWithinDaysValue;

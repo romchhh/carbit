@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
@@ -78,6 +78,8 @@ type Props = {
   /** На лендінгу — кнопка «Голосом» лише показує підказку про кабінет. */
   voiceSearchCabinetOnly?: boolean;
   onSortChange?: (sort: SortOption) => void;
+  /** Закріплений CTA моніторингу в desktop-sidebar (під «Тільки свіжі»). */
+  monitorSlot?: ReactNode;
 };
 
 /** Тимчасово приховано — увімкнути, коли голосовий пошук знову в UI. */
@@ -110,6 +112,7 @@ export function SearchFiltersPanel({
   pricePlaceholderTo,
   voiceSearchCabinetOnly,
   onSortChange,
+  monitorSlot,
 }: Props) {
   const priceDefaults = DEFAULT_PRICE_BY_CURRENCY[filters.currency];
   const priceFromPlaceholder = pricePlaceholderFrom ?? priceDefaults.from;
@@ -211,9 +214,20 @@ export function SearchFiltersPanel({
       >
         <div
           className={cn(
+            sidebar &&
+              "lg:flex lg:max-h-[calc(100dvh-10rem)] lg:flex-col lg:overflow-hidden",
+          )}
+        >
+          <div
+            className={cn(
+              sidebar && "lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-0.5",
+            )}
+          >
+        <div
+          className={cn(
             "rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] transition-shadow duration-300",
             variant === "sidebar" &&
-              "lg:rounded-2xl lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)]",
+              "lg:rounded-2xl lg:rounded-b-none lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)]",
           )}
         >
           <div
@@ -422,7 +436,7 @@ export function SearchFiltersPanel({
           <div
             className={cn(
               "relative z-10 space-y-2 overflow-hidden rounded-b-[1.35rem] border-t border-border/60 bg-white px-3 py-3.5 sm:px-5",
-              sidebar && "lg:rounded-b-2xl lg:px-3 lg:py-2.5",
+              sidebar && "lg:rounded-b-none lg:px-3 lg:py-2.5",
             )}
           >
             <button
@@ -441,13 +455,14 @@ export function SearchFiltersPanel({
         {advanced && (
           <AdvancedSearchPanel filters={filters} onChange={onChange} onReset={onReset} />
         )}
+          </div>
 
         <div
           ref={searchActionsRef}
           className={cn(
             "mt-4 scroll-mt-28 space-y-3 rounded-[1.35rem] border border-border/80 bg-white px-3 py-3.5 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:scroll-mt-8 sm:px-5 lg:scroll-mt-6",
             sidebar &&
-              "lg:mt-3 lg:space-y-2 lg:rounded-2xl lg:px-3 lg:py-2.5 lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)]",
+              "lg:mt-0 lg:shrink-0 lg:space-y-2.5 lg:rounded-b-2xl lg:border lg:border-t-0 lg:border-border/80 lg:bg-gradient-to-b lg:from-white lg:to-emerald/[0.06] lg:px-3 lg:py-3 lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)] lg:ring-1 lg:ring-black/[0.04]",
           )}
         >
           {rateLimited ? (
@@ -463,6 +478,7 @@ export function SearchFiltersPanel({
               <span className="font-medium text-ink/80">{searchError}</span>
             </div>
           ) : null}
+
           <button
             type="button"
             onClick={() => onSearch()}
@@ -493,6 +509,8 @@ export function SearchFiltersPanel({
             </div>
           )}
 
+          {monitorSlot ? <div className="hidden lg:block">{monitorSlot}</div> : null}
+
           {onSave && (
             <SaveSearchCTA
               className={cn(hideDesktopSave && "lg:hidden")}
@@ -507,6 +525,7 @@ export function SearchFiltersPanel({
               hideSubscriptionPitch={rateLimited}
             />
           )}
+        </div>
         </div>
       </div>
 

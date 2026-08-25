@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user_id
@@ -16,8 +17,18 @@ from app.services.telegram_channels.lazy_photos import (
     telethon_unavailable_reason,
 )
 from app.services.auto_ria.lazy_photos import attach_auto_ria_gallery, auto_ria_needs_gallery
+from app.services.reono.errors import ReonoError
+from app.services.reono.lazy_photos import fetch_reono_listing_images
 
 router = APIRouter(prefix="/listings", tags=["listings"])
+
+
+class ReonoPhotosRequest(BaseModel):
+    url: str = Field(..., min_length=8, max_length=2048)
+
+
+class ReonoPhotosResponse(BaseModel):
+    images: list[str]
 
 
 @router.get("/search/{search_id}", response_model=PaginatedListings)
@@ -54,6 +65,16 @@ async def batch_listings(
     if len(id_list) > 4:
         raise HTTPException(400, "Максимум 4 оголошення")
     return await resolve_listings_for_ids(db, id_list)
+
+
+@router.post("/reono/photos", response_model=ReonoPhotosResponse)
+async def reono_listing_photos(body: ReonoPhotosRequest):
+    """Завантажує галерею REONO зі сторінки оголошення (пошук без БД)."""
+    try:
+        images = await fetch_reono_listing_images(body.url)
+    except ReonoError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return ReonoPhotosResponse(images=images)
 
 
 @router.get("/{listing_id}", response_model=ListingOut)

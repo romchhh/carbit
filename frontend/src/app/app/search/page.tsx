@@ -162,6 +162,15 @@ export default function SearchPage() {
       connectedMonitorId={matchingMonitor?.id ?? null}
       freshness={freshness}
       onFreshnessChange={changeFreshness}
+      monitorSlot={
+        <DesktopSearchMonitorFab
+          connected={Boolean(matchingMonitor)}
+          connectedMonitorId={matchingMonitor?.id ?? null}
+          saving={saving}
+          limitReached={saveLimitReached}
+          onSave={handleMonitorClick}
+        />
+      }
     />
   );
 
@@ -219,15 +228,6 @@ export default function SearchPage() {
       <SearchDesktopSplit
         filtersRef={filtersPanelRef}
         filters={filtersPanel}
-        filtersFooter={
-          <DesktopSearchMonitorFab
-            connected={Boolean(matchingMonitor)}
-            connectedMonitorId={matchingMonitor?.id ?? null}
-            saving={saving}
-            limitReached={saveLimitReached}
-            onSave={handleMonitorClick}
-          />
-        }
         results={resultsPanel}
         footer={<RecentSearchesSection onSelect={handleRecentSelect} />}
       />

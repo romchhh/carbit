@@ -18,7 +18,9 @@ def car_to_listing(car: ReonoCar) -> ListingOut:
     brand = (car.brand or "").strip()
     model = (car.model or "").strip()
     listing_id = f"reono_{car.car_id}" if car.car_id else f"reono_{abs(hash(car.url))}"
-    images = [car.image_url] if car.image_url else []
+    images = list(car.image_urls or [])
+    if not images and car.image_url:
+        images = [car.image_url]
     engine_volume_l = parse_engine_volume_from_text(car.engine or "")
 
     return ListingOut(
