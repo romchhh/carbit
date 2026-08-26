@@ -1,10 +1,8 @@
 "use client";
 
 import { ListingCard } from "@/components/listings/ListingCard";
-import { formatDropPercent } from "@/lib/listing-price-drop";
 import {
   enrichNotificationListing,
-  notificationDropPercent,
 } from "@/lib/notification-listing";
 import type { Listing, Notification } from "@/types/api";
 import { cn, timeAgo } from "@/lib/utils";
@@ -18,6 +16,7 @@ type Props = {
   className?: string;
 };
 
+/** Картка сповіщення про зниження — той самий ListingCard, що в моніторингу. */
 export function PriceDropNotificationCard({
   notification,
   onOpen,
@@ -27,41 +26,27 @@ export function PriceDropNotificationCard({
   className,
 }: Props) {
   const listing = enrichNotificationListing(notification) ?? notification.listing;
-  const dropPercent = notificationDropPercent(notification);
 
   return (
-    <div className={cn("overflow-hidden rounded-2xl border border-rose-200/80 bg-white shadow-sm", className)}>
-      <div className="flex flex-wrap items-center gap-2 border-b border-rose-100 bg-gradient-to-r from-rose-50 to-orange-50/60 px-4 py-3">
-        <span className="text-[15px]" aria-hidden>
-          📉
+    <div className={cn("relative", className)}>
+      <div className="mb-1.5 flex flex-wrap items-center gap-2 px-1 text-[11px] text-muted lg:mb-2 lg:text-[13px]">
+        <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-700">
+          Зниження ціни
         </span>
-        <div className="min-w-0 flex-1 text-[13px] font-bold text-rose-900">Зниження ціни</div>
-        {dropPercent ? (
-          <span className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-bold text-white">
-            −{formatDropPercent(dropPercent)}%
+        {notification.sent_telegram ? (
+          <span className="rounded-full border border-border bg-white px-2 py-0.5 font-medium">
+            Telegram
           </span>
         ) : null}
-        <div className="flex w-full flex-wrap items-center gap-2 text-[11px] text-rose-800/70 sm:ml-auto sm:w-auto">
-          {notification.sent_telegram ? (
-            <span className="rounded-full border border-rose-200 bg-white/80 px-2 py-0.5 font-medium">
-              Telegram
-            </span>
-          ) : null}
-          <span>{timeAgo(notification.created_at)}</span>
-        </div>
+        <span>{timeAgo(notification.created_at)}</span>
       </div>
-
-      <div className="p-1">
-        <ListingCard
-          listing={listing}
-          onClick={onOpen}
-          isFavorite={isFavorite}
-          favoriteLoading={favoriteLoading}
-          onToggleFavorite={onToggleFavorite}
-          hidePriceDrop
-          className="border-0 shadow-none"
-        />
-      </div>
+      <ListingCard
+        listing={listing}
+        onClick={onOpen}
+        isFavorite={isFavorite}
+        favoriteLoading={favoriteLoading}
+        onToggleFavorite={onToggleFavorite}
+      />
     </div>
   );
 }

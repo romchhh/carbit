@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { IconCompare, IconTrash, IconX } from "@/components/icons";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { cn } from "@/lib/utils";
 
@@ -77,20 +77,12 @@ export function CompareBar() {
                   title="Прибрати з порівняння"
                 >
                   <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-white sm:h-7 sm:w-7 sm:rounded-full">
-                    {image ? (
-                      <Image
-                        src={image}
-                        alt=""
-                        fill
-                        className="object-cover"
-                        sizes="36px"
-                        unoptimized
-                      />
-                    ) : (
-                      <span className="flex h-full items-center justify-center text-[9px] text-muted">
-                        —
-                      </span>
-                    )}
+                    <ListingPhoto
+                      src={image}
+                      alt=""
+                      sizes="36px"
+                      logoClassName="h-3.5 sm:h-3"
+                    />
                   </span>
                   <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-ink sm:max-w-[140px]">
                     {shortTitle(item.title)}

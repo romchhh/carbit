@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
+import { PriceDropBadge } from "@/components/listings/PriceDropBadge";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
   formatEngineVolume,
@@ -22,7 +24,6 @@ import { useListingVinCheck } from "@/hooks/useVinCheckCache";
 import { useListingPhotoHydration } from "@/hooks/useListingPhotoHydration";
 import { hasVinCheck, resolveListingVin } from "@/lib/vin-check";
 import { cn, formatMileage, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
-import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
 import { resolveListingPriceDrop } from "@/lib/listing-price-drop";
 import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -128,27 +129,13 @@ export function ListingCard({
     >
       {/* Mobile: full-width photo on top */}
       <div className="relative aspect-[16/10] w-full bg-surface sm:hidden">
-        {currentPhoto ? (
-          <Image
-            src={currentPhoto}
-            alt={listing.title}
-            fill
-            className="object-cover"
-            sizes="100vw"
-            loading="lazy"
-            decoding="async"
-            unoptimized
-          />
-        ) : photosPending ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-surface to-border/40">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-muted/50" />
-            <span className="text-[11px] text-muted/70">Завантаження фото…</span>
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center text-[13px] text-muted">
-            Без фото
-          </div>
-        )}
+        <ListingPhoto
+          src={currentPhoto}
+          alt={listing.title}
+          pending={photosPending && !currentPhoto}
+          sizes="100vw"
+          pendingLabel="Завантаження фото…"
+        />
         <div className="absolute inset-x-0 top-0 z-[1] flex items-start justify-between gap-2 p-3">
           <div className="flex flex-wrap items-center gap-1.5">
             {isNewForMonitor && (
@@ -162,9 +149,7 @@ export function ListingCard({
               </span>
             )}
             {showPriceDropBadge && (
-              <span className="rounded-full bg-rose-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
-                −{Math.round(priceDrop!.dropPercent)}%
-              </span>
+              <PriceDropBadge dropPercent={priceDrop!.dropPercent} variant="overlay" />
             )}
           </div>
           <div className="flex items-center gap-1.5">
@@ -228,27 +213,15 @@ export function ListingCard({
 
       {/* Desktop: thumbnail left with photo arrows */}
       <div className="relative hidden h-44 w-64 shrink-0 overflow-hidden rounded-xl bg-surface sm:block lg:h-56 lg:w-[22rem] lg:rounded-2xl">
-        {currentPhoto ? (
-          <Image
-            src={currentPhoto}
-            alt={listing.title}
-            fill
-            className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-            sizes="(min-width: 1024px) 352px, 256px"
-            loading="lazy"
-            decoding="async"
-            unoptimized
-          />
-        ) : photosPending ? (
-          <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-surface to-border/40">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-muted/50" />
-            <span className="text-[10px] text-muted/60">фото…</span>
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center text-[13px] text-muted">
-            Без фото
-          </div>
-        )}
+        <ListingPhoto
+          src={currentPhoto}
+          alt={listing.title}
+          pending={photosPending && !currentPhoto}
+          sizes="(min-width: 1024px) 352px, 256px"
+          imageClassName="transition-transform duration-300 group-hover:scale-[1.02]"
+          pendingLabel="фото…"
+          logoClassName="h-10 sm:h-11"
+        />
         <div className="absolute right-2 top-2 z-[1] flex items-center gap-1.5">
           <ListingShareButton listing={listing} variant="overlay" />
           {onToggleCompare && (
@@ -319,9 +292,11 @@ export function ListingCard({
               </span>
             )}
             {showPriceDropBadge && (
-              <span className="hidden rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:inline-flex">
-                −{Math.round(priceDrop!.dropPercent)}%
-              </span>
+              <PriceDropBadge
+                dropPercent={priceDrop!.dropPercent}
+                variant="overlay"
+                className="hidden sm:inline-flex"
+              />
             )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[16px] sm:line-clamp-2 lg:text-[18px]">
                 {listing.title}

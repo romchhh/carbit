@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { IconArrowRight, IconEdit, IconTrash, IconZap } from "@/components/icons";
 import { Badge } from "@/components/ui/Badge";
 import { IosToggle } from "@/components/ui/IosToggle";
 import { AppSection } from "@/components/layout/AppPage";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { formatSearchDesc } from "@/lib/format-search-desc";
 import { cn } from "@/lib/utils";
 import type { SearchQuery } from "@/types/api";
@@ -49,20 +49,12 @@ export function MonitorSearchCard({
         )}
       >
         <Link href={href} className="relative block h-[120px] w-full bg-surface">
-          {s.preview_image ? (
-            <Image
-              src={s.preview_image}
-              alt=""
-              fill
-              className="object-cover"
-              sizes="288px"
-              unoptimized
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-[11px] font-medium text-muted">
-              Немає фото
-            </div>
-          )}
+          <ListingPhoto
+            src={s.preview_image}
+            alt=""
+            sizes="288px"
+            logoClassName="h-7"
+          />
           {s.new_count > 0 ? (
             <span className="absolute left-2 top-2 rounded-full bg-ink px-2 py-0.5 text-[10px] font-bold text-white">
               {s.new_count} нові
@@ -138,20 +130,12 @@ export function MonitorSearchCard({
           href={href}
           className="relative h-14 w-[4.25rem] shrink-0 overflow-hidden rounded-xl bg-surface ring-1 ring-border/70 sm:h-[4.5rem] sm:w-28 lg:h-28 lg:w-40 lg:rounded-2xl"
         >
-          {s.preview_image ? (
-            <Image
-              src={s.preview_image}
-              alt=""
-              fill
-              className="object-cover"
-              sizes="(min-width: 1024px) 160px, 112px"
-              unoptimized
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-[10px] font-medium text-muted lg:text-[12px]">
-              Немає фото
-            </div>
-          )}
+          <ListingPhoto
+            src={s.preview_image}
+            alt=""
+            sizes="(min-width: 1024px) 160px, 112px"
+            logoClassName="h-4 lg:h-7"
+          />
         </Link>
 
         <div className="min-w-0 flex-1">

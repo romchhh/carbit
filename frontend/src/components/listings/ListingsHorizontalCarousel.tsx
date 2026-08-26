@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
@@ -200,20 +200,12 @@ export function ListingsHorizontalCarousel({
                     className="w-[272px] shrink-0 snap-start overflow-hidden rounded-2xl border border-border/70 bg-white text-left transition-all hover:border-emerald/30 hover:shadow-[0_8px_24px_-10px_rgba(10,12,14,0.16)] sm:w-[300px]"
                   >
                     <div className="relative h-[152px] bg-surface sm:h-[168px]">
-                      {listing.images[0] ? (
-                        <Image
-                          src={listing.images[0]}
-                          alt={listing.title}
-                          fill
-                          className="object-cover"
-                          sizes="300px"
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-[13px] text-muted">
-                          Без фото
-                        </div>
-                      )}
+                      <ListingPhoto
+                        src={listing.images[0]}
+                        alt={listing.title}
+                        sizes="300px"
+                        logoClassName="h-7 sm:h-8"
+                      />
                       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2.5">
                         <div className="flex flex-wrap gap-1">
                           {showNewBadge && isRecentListing(listing) && (

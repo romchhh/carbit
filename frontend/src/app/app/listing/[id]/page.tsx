@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { listings as listingsApi, favorites as favoritesApi } from "@/lib/api";
@@ -28,7 +27,9 @@ import {
   cn,
   publishedAgoLabel,
 } from "@/lib/utils";
-import { formatListingPrice, resolveDisplayCurrency } from "@/lib/display-currency";
+import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { resolveDisplayCurrency } from "@/lib/display-currency";
 import {
   listingAttributionUrl,
   listingSourceSiteName,
@@ -247,22 +248,23 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       key={`${src}-${index}`}
                       className="relative h-full w-full shrink-0 snap-start snap-always"
                     >
-                      <Image
+                      <ListingPhoto
                         src={src}
                         alt={`${listing.title} — фото ${index + 1}`}
-                        fill
-                        className="object-cover"
                         sizes="(max-width: 1024px) 100vw, 640px"
-                        unoptimized
                         priority={index === 0}
+                        logoClassName="h-12 sm:h-14"
                       />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="flex h-full items-center justify-center text-[13px] text-muted">
-                  Без фото
-                </div>
+                <ListingPhoto
+                  src={null}
+                  alt={listing.title}
+                  className="h-full"
+                  logoClassName="h-12 sm:h-14"
+                />
               )}
 
               {images.length > 1 && (
@@ -315,7 +317,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       index === photoIndex ? "border-emerald" : "border-transparent opacity-70",
                     )}
                   >
-                    <Image src={src} alt="" fill className="object-cover" sizes="80px" unoptimized />
+                    <ListingPhoto src={src} alt="" sizes="80px" logoClassName="h-4" />
                   </button>
                 ))}
               </div>
@@ -331,13 +333,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             {publishedLabel && (
               <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
             )}
-            <div className="mt-3 text-[28px] font-black leading-none tracking-tight text-ink">
-              {formatListingPrice(
-                listing.price,
-                listing.currency,
-                resolveDisplayCurrency(user?.preferred_currency),
-                listing.source_data,
-              )}
+            <div className="mt-3">
+              <ListingPriceDisplay
+                listing={listing}
+                displayCurrency={resolveDisplayCurrency(user?.preferred_currency)}
+                priceClassName="text-[28px]"
+              />
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <ListingOpenCta listing={listing} />
@@ -428,13 +429,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             {publishedLabel && (
               <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
             )}
-            <div className="mt-4 text-[32px] font-black leading-none text-ink">
-              {formatListingPrice(
-                listing.price,
-                listing.currency,
-                resolveDisplayCurrency(user?.preferred_currency),
-                listing.source_data,
-              )}
+            <div className="mt-4">
+              <ListingPriceDisplay
+                listing={listing}
+                displayCurrency={resolveDisplayCurrency(user?.preferred_currency)}
+                priceClassName="text-[32px]"
+              />
             </div>
             <div className="mt-5 space-y-2">
               <ListingOpenCta listing={listing} />

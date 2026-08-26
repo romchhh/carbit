@@ -111,3 +111,45 @@ def format_drop_percent(percent: float) -> str:
     if abs(percent - rounded) < 0.05:
         return str(int(rounded))
     return f"{percent:.1f}".rstrip("0").rstrip(".")
+
+
+async def attach_price_drops_from_db(db, items: list) -> list:
+    """Підтягує зафіксоване зниження ціни з БД до live-результатів пошуку."""
+    if not items or db is None:
+        return items
+
+    from sqlalchemy import select
+
+    from app.models.models import Listing
+    from app.schemas.schemas import ListingOut
+
+    ids = [item.id for item in items if getattr(item, "id", None)]
+    if not ids:
+        return items
+
+    rows = (await db.scalars(select(Listing).where(Listing.id.in_(ids)))).all()
+    by_id = {row.id: row for row in rows}
+    if not by_id:
+        return items
+
+    enriched: list[ListingOut] = []
+    for item in items:
+        row = by_id.get(item.id)
+        if row is None:
+            enriched.append(item)
+            continue
+        drop = extract_recent_price_drop(row)
+        if drop is None:
+            enriched.append(item)
+            continue
+        enriched.append(
+            item.model_copy(
+                update={
+                    "previous_price": drop.previous_price,
+                    "price_drop_percent": drop.drop_percent,
+                    "price_dropped_at": drop.dropped_at,
+                    "price_history": row.price_history or getattr(item, "price_history", []) or [],
+                }
+            )
+        )
+    return enriched

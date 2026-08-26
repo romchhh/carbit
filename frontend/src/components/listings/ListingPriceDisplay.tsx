@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils";
 import {
-  formatDropPercent,
   resolveListingPriceDrop,
   type ListingPriceDrop,
 } from "@/lib/listing-price-drop";
+import { PriceDropBadge } from "@/components/listings/PriceDropBadge";
 import {
   formatListingPrice,
   type DisplayCurrency,
@@ -65,14 +65,7 @@ export function ListingPriceDisplay({
         </span>
       </div>
       {showBadge && (
-        <span
-          className={cn(
-            "inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-700",
-            badgeClassName,
-          )}
-        >
-          Ціну знижено −{formatDropPercent(drop.dropPercent)}%
-        </span>
+        <PriceDropBadge dropPercent={drop.dropPercent} variant="label" className={badgeClassName} />
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { IconHeart, IconX, IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
@@ -414,29 +415,25 @@ export function ListingDetailModal({
                     key={`${src}-${index}`}
                     className="relative h-full w-full shrink-0 snap-start snap-always"
                   >
-                    <Image
+                    <ListingPhoto
                       src={src}
                       alt={`${listing.title} — фото ${index + 1}`}
-                      fill
-                      className="object-cover"
                       sizes="100vw"
-                      unoptimized
                       priority={index === 0}
+                      logoClassName="h-12"
                     />
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted">
-                {photosLoading ? (
-                  <>
-                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-emerald/30 border-t-emerald" />
-                    <span>Підвантажуємо фото…</span>
-                  </>
-                ) : (
-                  "Фото відсутнє"
-                )}
-              </div>
+              <ListingPhoto
+                src={null}
+                alt={listing.title}
+                pending={photosLoading}
+                pendingLabel="Підвантажуємо фото…"
+                className="h-full"
+                logoClassName="h-12"
+              />
             )}
 
             {photos.length > 1 && (
@@ -501,26 +498,22 @@ export function ListingDetailModal({
               <div className="w-1/2 min-w-0">
                 <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-surface">
                   {photos.length > 0 ? (
-                    <Image
+                    <ListingPhoto
                       src={photos[photoIndex] ?? photos[0]}
                       alt={listing.title}
-                      fill
-                      className="object-cover"
                       sizes="50vw"
-                      unoptimized
                       priority
+                      logoClassName="h-14"
                     />
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted">
-                      {photosLoading ? (
-                        <>
-                          <span className="h-5 w-5 animate-spin rounded-full border-2 border-emerald/30 border-t-emerald" />
-                          <span>Підвантажуємо фото…</span>
-                        </>
-                      ) : (
-                        "Фото відсутнє"
-                      )}
-                    </div>
+                    <ListingPhoto
+                      src={null}
+                      alt={listing.title}
+                      pending={photosLoading}
+                      pendingLabel="Підвантажуємо фото…"
+                      className="h-full"
+                      logoClassName="h-14"
+                    />
                   )}
                   {photos.length > 1 && (
                     <>

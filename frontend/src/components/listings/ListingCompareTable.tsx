@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { IconCompare, IconX } from "@/components/icons";
 import { CompareToolbar, ListingCompareMobile } from "@/components/listings/ListingCompareMobile";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
   buildCompareRows,
@@ -43,18 +43,12 @@ function CompareHeaderCell({
   return (
     <th className="min-w-[160px] max-w-[220px] border-b border-border/60 bg-white px-3 py-4 align-top font-normal sm:min-w-[180px]">
       <div className="relative mx-auto aspect-[4/3] w-full max-w-[200px] overflow-hidden rounded-xl bg-surface">
-        {image ? (
-          <Image
-            src={image}
-            alt={listing.title}
-            fill
-            className="object-cover"
-            sizes="200px"
-            unoptimized
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-[11px] text-muted">Без фото</div>
-        )}
+        <ListingPhoto
+          src={image}
+          alt={listing.title}
+          sizes="200px"
+          logoClassName="h-7"
+        />
         {onRemove && (
           <button
             type="button"

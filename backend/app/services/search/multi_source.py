@@ -1304,6 +1304,9 @@ async def search_listings_outcome(
 
     if db is not None and page_items:
         page_items = await collapse_listings_with_db_mirrors(db, page_items)
+        from app.services.listings.price_drop import attach_price_drops_from_db
+
+        page_items = await attach_price_drops_from_db(db, page_items)
 
     if not page_items:
         if errors and not successful:

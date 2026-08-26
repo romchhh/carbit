@@ -3,18 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
-import { MobileSearchFiltersFab } from "@/components/search/MobileSearchFiltersFab";
+import { FavoriteListingsSection } from "@/components/listings/FavoriteListingsSection";
+import { FreshListingsCarousel } from "@/components/listings/FreshListingsCarousel";
+import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
 import { DesktopSearchMonitorFab } from "@/components/search/DesktopSearchMonitorFab";
-import { SearchDesktopSplit } from "@/components/search/SearchDesktopSplit";
-import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
+import { MobileSearchFiltersFab } from "@/components/search/MobileSearchFiltersFab";
 import { RecentSearchesSection } from "@/components/search/RecentSearchesSection";
+import { SearchDesktopSplit } from "@/components/search/SearchDesktopSplit";
+import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
+import { SearchPreviewResults } from "@/components/search/SearchPreviewResults";
 import { TelegramConnectPrompt } from "@/components/search/TelegramConnectPrompt";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useSearchSession } from "@/contexts/SearchSessionProvider";
 import { useRecentSearches } from "@/hooks/useRecentSearches";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
-import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
 import { searches as searchesApi } from "@/lib/api";
 import { findMatchingSearch } from "@/lib/search-filters-api";
 import {
@@ -166,15 +168,13 @@ export default function SearchPage() {
       freshness={freshness}
       onFreshnessChange={changeFreshness}
       monitorSlot={
-        options?.inModal ? null : (
-          <DesktopSearchMonitorFab
-            connected={Boolean(matchingMonitor)}
-            connectedMonitorId={matchingMonitor?.id ?? null}
-            saving={saving}
-            limitReached={saveLimitReached}
-            onSave={handleMonitorClick}
-          />
-        )
+        <DesktopSearchMonitorFab
+          connected={Boolean(matchingMonitor)}
+          connectedMonitorId={matchingMonitor?.id ?? null}
+          saving={saving}
+          limitReached={saveLimitReached}
+          onSave={handleMonitorClick}
+        />
       }
     />
   );
@@ -205,8 +205,6 @@ export default function SearchPage() {
 
   return (
     <div className="lg:max-w-none">
-      <RecentListingsSection className="mb-8 lg:hidden" />
-
       <div className="mb-5 flex flex-col gap-2 sm:mb-7 sm:flex-row sm:items-start sm:justify-between sm:gap-3 lg:mb-6">
         <div>
           <h1 className="text-[22px] font-black tracking-[-0.02em] text-ink sm:text-[26px]">
@@ -236,13 +234,17 @@ export default function SearchPage() {
         filtersRef={filtersPanelRef}
         filters={filtersPanel}
         results={resultsPanel}
-        filtersMobileHidden
         footer={<RecentSearchesSection onSelect={handleRecentSelect} />}
       />
 
+      <div className="mt-10 space-y-10">
+        <RecentListingsSection />
+        <FavoriteListingsSection />
+        <FreshListingsCarousel variant="dashboard" />
+      </div>
+
       <MobileSearchFiltersFab
         targetRef={filtersPanelRef}
-        pinned
         renderFilters={close => renderFiltersPanel({ inModal: true, onClose: close })}
         monitor={{
           onClick: handleMonitorClick,

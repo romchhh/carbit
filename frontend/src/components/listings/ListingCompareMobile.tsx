@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo } from "react";
 import { IconCompare, IconX } from "@/components/icons";
+import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
   buildCompareRows,
@@ -57,18 +57,12 @@ function MobileHeaderCell({
   return (
     <th className={cn(MOBILE_COL, "border-b border-border/60 bg-white px-1.5 py-2.5 align-top font-normal")}>
       <div className="relative mx-auto aspect-[4/3] w-full overflow-hidden rounded-lg bg-surface">
-        {image ? (
-          <Image
-            src={image}
-            alt={listing.title}
-            fill
-            className="object-cover"
-            sizes="110px"
-            unoptimized
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-[10px] text-muted">Без фото</div>
-        )}
+        <ListingPhoto
+          src={image}
+          alt={listing.title}
+          sizes="110px"
+          logoClassName="h-5"
+        />
         {onRemove && (
           <button
             type="button"
