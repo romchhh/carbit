@@ -38,6 +38,124 @@ function isRecentListing(listing: Listing) {
   return Date.now() - published < 24 * 60 * 60 * 1000;
 }
 
+type CarouselListingCardProps = {
+  listing: Listing;
+  showNewBadge: boolean;
+  canFavorite: boolean;
+  isFavorite: boolean;
+  favoriteLoading: boolean;
+  onOpen: () => void;
+  onToggleFavorite: () => void;
+};
+
+function CarouselListingCard({
+  listing,
+  showNewBadge,
+  canFavorite,
+  isFavorite,
+  favoriteLoading,
+  onOpen,
+  onToggleFavorite,
+}: CarouselListingCardProps) {
+  const { user } = useAuth();
+  const images = (listing.images ?? []).filter(Boolean);
+  const photoCount = images.length;
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const safeIndex = photoCount > 0 ? ((photoIndex % photoCount) + photoCount) % photoCount : 0;
+  const city = listing.region.split(",")[0]?.trim() || listing.region;
+  const fuel = listing.fuel.split(",")[0]?.trim();
+
+  useEffect(() => {
+    setPhotoIndex(0);
+  }, [listing.id, photoCount]);
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="w-[272px] shrink-0 snap-start overflow-hidden rounded-2xl border border-border/70 bg-white text-left transition-all hover:border-emerald/30 hover:shadow-[0_8px_24px_-10px_rgba(10,12,14,0.16)] sm:w-[300px]"
+      onMouseEnter={() => {
+        if (photoCount <= 1) return;
+        setPhotoIndex(prev => (prev + 1) % photoCount);
+      }}
+      onMouseLeave={() => setPhotoIndex(0)}
+    >
+      <div className="relative h-[152px] bg-surface sm:h-[168px]">
+        <ListingPhoto
+          src={photoCount > 0 ? images[safeIndex] : null}
+          alt={listing.title}
+          sizes="300px"
+          logoClassName="h-7 sm:h-8"
+        />
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2.5">
+          <div className="flex flex-wrap gap-1">
+            {showNewBadge && isRecentListing(listing) && (
+              <Badge variant="emerald" className="px-2 py-0.5 text-[10px]">
+                Нове
+              </Badge>
+            )}
+          </div>
+          {canFavorite && (
+            <ListingFavoriteButton
+              active={isFavorite}
+              loading={favoriteLoading}
+              onToggle={onToggleFavorite}
+              variant="overlay"
+            />
+          )}
+        </div>
+        <div className="absolute bottom-2 left-2">
+          <PublishedTimeBadge date={listing.published_at} short />
+        </div>
+      </div>
+
+      <div className="p-4">
+        <h3 className="truncate text-[15px] font-semibold leading-tight text-ink">{listing.title}</h3>
+        <p className="mt-2 text-[20px] font-semibold tracking-tight text-ink">
+          {formatListingPrice(
+            listing.price,
+            listing.currency,
+            resolveDisplayCurrency(user?.preferred_currency),
+            listing.source_data,
+          )}
+        </p>
+        <p className="mt-1.5 text-[12px] leading-snug text-muted">
+          {[
+            listing.year > 0 ? String(listing.year) : null,
+            listing.mileage > 0 ? formatMileage(listing.mileage) : null,
+            listing.transmission || null,
+            fuel || null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <span className="block truncate text-[12px] text-muted">{city}</span>
+            {publishedAgoLabel(listing.published_at) && (
+              <span className="mt-0.5 block truncate text-[11px] text-muted/80">
+                {publishedAgoLabel(listing.published_at)}
+              </span>
+            )}
+          </div>
+          {(listing.alternate_sources?.length ?? 0) > 0 ? (
+            <SourceLinks listing={listing} iconOnly className="shrink-0" />
+          ) : (
+            <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" />
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function ListingsHorizontalCarousel({
   listings,
   loading = false,
@@ -52,7 +170,6 @@ export function ListingsHorizontalCarousel({
   className,
   id,
 }: Props) {
-  const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -181,94 +298,18 @@ export function ListingsHorizontalCarousel({
                 trackPad,
               )}
             >
-              {listings.map(listing => {
-                const city = listing.region.split(",")[0]?.trim() || listing.region;
-                const fuel = listing.fuel.split(",")[0]?.trim();
-
-                return (
-                  <article
-                    key={listing.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openListing(listing)}
-                    onKeyDown={e => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openListing(listing);
-                      }
-                    }}
-                    className="w-[272px] shrink-0 snap-start overflow-hidden rounded-2xl border border-border/70 bg-white text-left transition-all hover:border-emerald/30 hover:shadow-[0_8px_24px_-10px_rgba(10,12,14,0.16)] sm:w-[300px]"
-                  >
-                    <div className="relative h-[152px] bg-surface sm:h-[168px]">
-                      <ListingPhoto
-                        src={listing.images[0]}
-                        alt={listing.title}
-                        sizes="300px"
-                        logoClassName="h-7 sm:h-8"
-                      />
-                      <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2.5">
-                        <div className="flex flex-wrap gap-1">
-                          {showNewBadge && isRecentListing(listing) && (
-                            <Badge variant="emerald" className="px-2 py-0.5 text-[10px]">
-                              Нове
-                            </Badge>
-                          )}
-                        </div>
-                        {canFavorite && (
-                          <ListingFavoriteButton
-                            active={favoriteIds.has(listing.id)}
-                            loading={loadingIds.has(listing.id)}
-                            onToggle={() => toggleFavorite(listing)}
-                            variant="overlay"
-                          />
-                        )}
-                      </div>
-                      <div className="absolute bottom-2 left-2">
-                        <PublishedTimeBadge date={listing.published_at} short />
-                      </div>
-                    </div>
-
-                    <div className="p-4">
-                      <h3 className="truncate text-[15px] font-semibold leading-tight text-ink">
-                        {listing.title}
-                      </h3>
-                      <p className="mt-2 text-[20px] font-semibold tracking-tight text-ink">
-                        {formatListingPrice(
-                          listing.price,
-                          listing.currency,
-                          resolveDisplayCurrency(user?.preferred_currency),
-                          listing.source_data,
-                        )}
-                      </p>
-                      <p className="mt-1.5 text-[12px] leading-snug text-muted">
-                        {[
-                          listing.year > 0 ? String(listing.year) : null,
-                          listing.mileage > 0 ? formatMileage(listing.mileage) : null,
-                          listing.transmission || null,
-                          fuel || null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <span className="block truncate text-[12px] text-muted">{city}</span>
-                          {publishedAgoLabel(listing.published_at) && (
-                            <span className="mt-0.5 block truncate text-[11px] text-muted/80">
-                              {publishedAgoLabel(listing.published_at)}
-                            </span>
-                          )}
-                        </div>
-                        {(listing.alternate_sources?.length ?? 0) > 0 ? (
-                          <SourceLinks listing={listing} iconOnly className="shrink-0" />
-                        ) : (
-                          <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" />
-                        )}
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+              {listings.map(listing => (
+                <CarouselListingCard
+                  key={listing.id}
+                  listing={listing}
+                  showNewBadge={showNewBadge}
+                  canFavorite={canFavorite}
+                  isFavorite={favoriteIds.has(listing.id)}
+                  favoriteLoading={loadingIds.has(listing.id)}
+                  onOpen={() => openListing(listing)}
+                  onToggleFavorite={() => toggleFavorite(listing)}
+                />
+              ))}
             </div>
 
             {showControls && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight } from "@/components/icons";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
@@ -106,6 +106,19 @@ export function ListingCard({
     });
   };
 
+  useEffect(() => {
+    setPhotoIndex(0);
+  }, [listing.id, photoCount]);
+
+  const handlePhotoAreaEnter = () => {
+    if (photoCount <= 1) return;
+    setPhotoIndex(prev => (prev + 1) % photoCount);
+  };
+
+  const handlePhotoAreaLeave = () => {
+    setPhotoIndex(0);
+  };
+
   return (
     <article
       ref={rootRef as React.RefObject<HTMLElement>}
@@ -126,6 +139,8 @@ export function ListingCard({
         isNewForMonitor && "border-emerald/40 ring-1 ring-emerald/20",
         className,
       )}
+      onMouseEnter={handlePhotoAreaEnter}
+      onMouseLeave={handlePhotoAreaLeave}
     >
       {/* Mobile: full-width photo on top */}
       <div className="relative aspect-[16/10] w-full bg-surface sm:hidden">

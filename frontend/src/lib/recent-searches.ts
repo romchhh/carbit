@@ -147,7 +147,10 @@ export function updateRecentSearchCache(
   const nextEntry: RecentSearchEntry = {
     ...prev,
     previewImage:
-      previewImage?.trim() || prev.previewImage || cache.results[0]?.images?.[0] || null,
+      previewImage?.trim() ||
+      prev.previewImage ||
+      cache.results.find(item => item.images?.[0])?.images?.[0] ||
+      null,
     cache,
     at: new Date().toISOString(),
   };

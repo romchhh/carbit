@@ -96,7 +96,8 @@ export function useRecentSearches({
     if (!pending) return;
     pendingRecentPreviewRef.current = null;
 
-    const previewImage = results[0]?.images?.[0] ?? null;
+    const previewImage =
+      results.find(item => item.images?.[0])?.images?.[0] ?? null;
     const cache = buildRecentSearchCache(results, total, marketTotal, sort, pages);
     updateRecentSearchCache(pending.filters, pending.freshness, cache, previewImage);
   }, [searching, results, total, marketTotal, sort, pages]);

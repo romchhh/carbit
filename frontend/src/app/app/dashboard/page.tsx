@@ -254,9 +254,10 @@ export default function DashboardPage() {
           filtersRef={filtersPanelRef}
           filters={filtersPanel}
           results={resultsPanel}
-          resultsHeader={<RecentSearchesSection onSelect={handleRecentSelect} />}
         />
       </div>
+
+      <RecentSearchesSection className="mb-8" onSelect={handleRecentSelect} />
 
       <div className="mb-8 space-y-5">
         <DashboardScrollRow

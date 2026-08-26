@@ -316,8 +316,6 @@ export default function PublicSearchPage() {
         <div className="mx-auto w-full max-w-[1440px] px-2.5 py-4 sm:px-4 sm:py-6 lg:px-6 lg:py-8">
           <div className="lg:rounded-[28px] lg:border lg:border-border/50 lg:bg-white lg:p-5 lg:shadow-island xl:p-6">
             <div className="lg:max-w-none pb-24 lg:pb-0">
-              <RecentListingsSection className="mb-8 lg:hidden" />
-
               <div className="mb-5 flex flex-col gap-2 sm:mb-7 sm:flex-row sm:items-start sm:justify-between sm:gap-3 lg:mb-6">
                 <div>
                   <h1 className="text-[22px] font-black tracking-[-0.02em] text-ink sm:text-[26px]">
@@ -370,8 +368,12 @@ export default function PublicSearchPage() {
                 filters={renderFiltersPanel()}
                 results={resultsPanel}
                 filtersMobileHidden
-                resultsHeader={<RecentSearchesSection onSelect={handleRecentSelect} />}
               />
+
+              <div className="mt-10 space-y-10">
+                <RecentSearchesSection onSelect={handleRecentSelect} />
+                <RecentListingsSection />
+              </div>
 
               <MobileSearchFiltersFab
                 targetRef={filtersPanelRef}

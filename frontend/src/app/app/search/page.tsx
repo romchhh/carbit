@@ -234,10 +234,10 @@ export default function SearchPage() {
         filtersRef={filtersPanelRef}
         filters={filtersPanel}
         results={resultsPanel}
-        resultsHeader={<RecentSearchesSection onSelect={handleRecentSelect} />}
       />
 
       <div className="mt-10 space-y-10">
+        <RecentSearchesSection onSelect={handleRecentSelect} />
         <RecentListingsSection />
         <FavoriteListingsSection />
         <FreshListingsCarousel variant="dashboard" />
