@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { BrandIcon } from "@/components/search/BrandIcon";
+import { FilterDropdownPortal } from "@/components/search/FilterDropdownPortal";
 import { FilterRow } from "@/components/search/FilterRow";
 import { cn } from "@/lib/utils";
 
@@ -55,14 +56,15 @@ export function FilterOptionsPopover({
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
+      const target = e.target as Node;
+      const panel = document.getElementById(panelId);
+      if (rootRef.current?.contains(target) || panel?.contains(target)) return;
+      setOpen(false);
+      setQuery("");
     };
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
+  }, [panelId]);
 
   const normalizedQuery = query.trim();
   const filtered = normalizedQuery
@@ -108,7 +110,7 @@ export function FilterOptionsPopover({
         : null;
 
   return (
-    <div ref={rootRef} className={cn("relative", open && "z-[80]", className)}>
+    <div ref={rootRef} className={cn("relative", className)}>
       <FilterRow
         label={label}
         value={hasSelection ? display : undefined}
@@ -121,12 +123,8 @@ export function FilterOptionsPopover({
           ) : undefined
         }
       />
-      {open && !disabled && (
-        <div
-          id={panelId}
-          className="absolute left-0 right-0 top-[calc(100%+6px)] z-[90] max-h-72 overflow-hidden rounded-xl border border-border bg-white shadow-card"
-        >
-          {searchable && (
+      <FilterDropdownPortal open={open && !disabled} anchorRef={rootRef} id={panelId} className="max-h-72">
+        {searchable && (
             <div className="border-b border-border/60 p-3">
               <input
                 value={query}
@@ -240,8 +238,7 @@ export function FilterOptionsPopover({
               </button>
             </div>
           )}
-        </div>
-      )}
+      </FilterDropdownPortal>
     </div>
   );
 }

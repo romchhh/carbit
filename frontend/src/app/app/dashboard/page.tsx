@@ -24,9 +24,9 @@ import { useRecentSearches } from "@/hooks/useRecentSearches";
 import { useSaveSearch } from "@/hooks/useSaveSearch";
 import { searches as searchesApi, users as usersApi } from "@/lib/api";
 import { findMatchingSearch } from "@/lib/search-filters-api";
+import { DashboardScrollRow } from "@/components/layout/DashboardScrollRow";
 import {
   AppEmpty,
-  AppLoading,
   AppPage,
 } from "@/components/layout/AppPage";
 import { DashboardWelcomeHero } from "@/components/layout/DashboardWelcomeHero";
@@ -252,65 +252,63 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="mt-8 flex items-end justify-between gap-3" data-tour="my-searches">
-        <div>
-          <h2 className="text-[17px] font-bold text-ink">Мої моніторинги</h2>
-          <p className="mt-1 text-[13px] text-muted">
-            {activeCount} активних · {remaining > 0 ? `ще ${remaining} доступно` : "ліміт використано"}
-            {totalNew > 0 ? ` · ${totalNew} нових` : ""}
-            {totalPriceDrops > 0 ? ` · ${totalPriceDrops} зі зниженням` : ""}
-          </p>
-        </div>
-        <Link href="/app/monitors" className="shrink-0">
-          <Button variant="secondary" size="sm" className="gap-1.5">
-            Усі <IconArrowRight size={13} />
-          </Button>
-        </Link>
-      </div>
+      <div className="mb-8 space-y-5">
+        <RecentSearchesSection layout="row" onSelect={handleRecentSelect} />
 
-      {remaining <= 0 && (
-        <UpgradeOffer className="mb-5 mt-4" title="Ліміт моніторингів вичерпано" compact />
-      )}
-
-      <div className="mt-4">
-        {loading ? (
-          <AppLoading />
-        ) : searches.length === 0 ? (
-          <AppEmpty>
-            <p className="text-[15px] font-medium text-ink">Поки немає збережених моніторингів</p>
-            <p className="mx-auto mt-2 max-w-sm text-[13px] text-muted">
-              Налаштуйте фільтри вище і натисніть «Зберегти» — поточні й нові авто з’являться в
-              розділі «Мої моніторинги».
-            </p>
-          </AppEmpty>
-        ) : (
-          <div className="space-y-3">
-            {searches.slice(0, 3).map(s => (
+        <DashboardScrollRow
+          tourId="my-searches"
+          title="Мої моніторинги"
+          description={[
+            `${activeCount} активних`,
+            remaining > 0 ? `ще ${remaining} доступно` : "ліміт використано",
+            totalNew > 0 ? `${totalNew} нових` : "",
+            totalPriceDrops > 0 ? `${totalPriceDrops} зі зниженням` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          action={
+            <Link href="/app/monitors">
+              <Button variant="secondary" size="sm" className="gap-1.5">
+                Усі <IconArrowRight size={13} />
+              </Button>
+            </Link>
+          }
+          isEmpty={!loading && searches.length === 0}
+          empty={
+            <AppEmpty className="!py-8">
+              <p className="text-[14px] font-medium text-ink">Поки немає збережених моніторингів</p>
+              <p className="mx-auto mt-2 max-w-sm text-[12px] text-muted">
+                Налаштуйте фільтри вище і натисніть «Зберегти» — поточні й нові авто з&apos;являться тут.
+              </p>
+            </AppEmpty>
+          }
+        >
+          {loading ? (
+            <div className="flex h-[220px] w-full items-center justify-center">
+              <div className="h-7 w-7 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
+            </div>
+          ) : (
+            searches.map(s => (
               <MonitorSearchCard
                 key={s.id}
                 search={s}
+                variant="compact"
                 alwaysLink={false}
                 toggling={togglingId === s.id}
                 onActiveChange={active => void setActive(s, active)}
               />
-            ))}
-            {searches.length > 3 && (
-              <Link
-                href="/app/monitors"
-                className="block rounded-2xl border border-dashed border-border bg-white px-4 py-3 text-center text-[13px] font-semibold text-emerald-dark hover:border-emerald/40"
-              >
-                Ще {searches.length - 3} моніторингів →
-              </Link>
-            )}
-          </div>
+            ))
+          )}
+        </DashboardScrollRow>
+
+        {remaining <= 0 && (
+          <UpgradeOffer title="Ліміт моніторингів вичерпано" compact />
         )}
       </div>
 
       <RecentListingsSection className="mb-10" />
 
       <FavoriteListingsSection className="mb-10" />
-
-      <RecentSearchesSection onSelect={handleRecentSelect} />
 
       <div className="mt-10">
         <FreshListingsCarousel variant="dashboard" />

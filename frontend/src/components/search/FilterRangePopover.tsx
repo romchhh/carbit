@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { FilterDropdownPortal } from "@/components/search/FilterDropdownPortal";
 import { FilterRow } from "@/components/search/FilterRow";
 import { FormattedNumberInput } from "@/components/search/FormattedNumberInput";
 import { cn } from "@/lib/utils";
@@ -80,25 +81,23 @@ export function FilterRangePopover({
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        if (open) close();
-      }
+      const target = e.target as Node;
+      const panel = document.getElementById(panelId);
+      if (rootRef.current?.contains(target) || panel?.contains(target)) return;
+      if (open) close();
     };
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, draftFrom, draftTo, normalize]);
+  }, [open, draftFrom, draftTo, normalize, panelId]);
 
   const display = displayRange(from, to, suffix);
 
   return (
-    <div ref={rootRef} className={cn("relative", open && "z-[80]", className)}>
+    <div ref={rootRef} className={cn("relative", className)}>
       <FilterRow label={label} value={display} onClick={() => setOpen(v => !v)} compact={compact} />
-      {open && (
-        <div
-          id={panelId}
-          className="absolute left-0 right-0 top-[calc(100%+6px)] z-[90] rounded-xl border border-border bg-white p-4 shadow-card"
-        >
+      <FilterDropdownPortal open={open} anchorRef={rootRef} id={panelId}>
+        <div className="p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="text-[12px] font-semibold text-ink">{label}</div>
             {currencyOptions && onCurrencyChange && (
@@ -150,7 +149,7 @@ export function FilterRangePopover({
             Готово
           </button>
         </div>
-      )}
+      </FilterDropdownPortal>
     </div>
   );
 }

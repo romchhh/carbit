@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { IconArrowRight, IconClock, IconSearch } from "@/components/icons";
-import { AppSection } from "@/components/layout/AppPage";
+import { IconClock, IconSearch } from "@/components/icons";
+import { DashboardScrollRow } from "@/components/layout/DashboardScrollRow";
 import { formatSearchDesc } from "@/lib/format-search-desc";
 import {
   loadRecentSearches,
@@ -17,6 +17,7 @@ type Props = {
   limit?: number;
   className?: string;
   onSelect: (entry: RecentSearchEntry) => void;
+  layout?: "list" | "row";
 };
 
 function formatRelativeAt(iso: string): string {
@@ -36,7 +37,113 @@ function formatRelativeAt(iso: string): string {
   });
 }
 
-export function RecentSearchesSection({ limit = 8, className, onSelect }: Props) {
+function RecentSearchCard({
+  entry,
+  onSelect,
+  compact,
+}: {
+  entry: RecentSearchEntry;
+  onSelect: (entry: RecentSearchEntry) => void;
+  compact?: boolean;
+}) {
+  const desc = formatSearchDesc(toBackendSearchFilters(entry.filters));
+  const when = formatRelativeAt(entry.at);
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={() => onSelect(entry)}
+        className="flex w-[252px] shrink-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-white text-left transition-all hover:border-emerald/35 hover:shadow-md hover:shadow-emerald/5"
+      >
+        <span className="relative h-[108px] w-full bg-surface">
+          {entry.previewImage ? (
+            <Image
+              src={entry.previewImage}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="252px"
+              unoptimized
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-muted">
+              <IconSearch size={20} />
+            </span>
+          )}
+        </span>
+        <span className="flex min-h-[88px] flex-col gap-1 p-3">
+          <span className="line-clamp-1 text-[14px] font-semibold text-ink">{entry.name}</span>
+          <span className="line-clamp-2 text-[11px] leading-snug text-muted">{desc}</span>
+          <span className="mt-auto flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+            {entry.freshness === "new" ? (
+              <span className="rounded-md bg-emerald-light/70 px-1.5 py-0.5 font-semibold text-emerald-dark">
+                Свіжі
+              </span>
+            ) : null}
+            {when ? (
+              <span className="inline-flex items-center gap-1">
+                <IconClock size={10} />
+                {when}
+              </span>
+            ) : null}
+          </span>
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(entry)}
+      className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-white px-3 py-3 text-left transition-colors hover:border-emerald/35 sm:gap-4 sm:px-4 sm:py-3.5"
+    >
+      <span className="relative h-12 w-[4.25rem] shrink-0 overflow-hidden rounded-xl bg-surface ring-1 ring-border/70 sm:h-14 sm:w-24">
+        {entry.previewImage ? (
+          <Image
+            src={entry.previewImage}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="96px"
+            unoptimized
+          />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center text-muted">
+            <IconSearch size={16} />
+          </span>
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-semibold text-ink sm:text-[15px]">
+          {entry.name}
+        </span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted sm:text-[12px]">
+          <span className="line-clamp-1">{desc}</span>
+          {entry.freshness === "new" && (
+            <span className="rounded-md bg-emerald-light/60 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-dark">
+              Свіжі
+            </span>
+          )}
+          {when && (
+            <span className="inline-flex items-center gap-1 text-muted/80">
+              <IconClock size={11} />
+              {when}
+            </span>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+export function RecentSearchesSection({
+  limit = 8,
+  className,
+  onSelect,
+  layout = "list",
+}: Props) {
   const [items, setItems] = useState<RecentSearchEntry[]>([]);
 
   useEffect(() => {
@@ -48,6 +155,20 @@ export function RecentSearchesSection({ limit = 8, className, onSelect }: Props)
   }, [limit]);
 
   if (items.length === 0) return null;
+
+  if (layout === "row") {
+    return (
+      <DashboardScrollRow
+        title="Останні пошуки"
+        description="Натисніть, щоб знову підставити фільтри"
+        className={className}
+      >
+        {items.map(entry => (
+          <RecentSearchCard key={entry.id} entry={entry} onSelect={onSelect} compact />
+        ))}
+      </DashboardScrollRow>
+    );
+  }
 
   return (
     <section className={cn("mt-10", className)}>
@@ -63,59 +184,9 @@ export function RecentSearchesSection({ limit = 8, className, onSelect }: Props)
       </div>
 
       <div className="space-y-2.5">
-        {items.map(entry => {
-          const desc = formatSearchDesc(toBackendSearchFilters(entry.filters));
-          const when = formatRelativeAt(entry.at);
-          return (
-            <AppSection
-              key={entry.id}
-              className="!bg-white p-0 transition-colors hover:border-emerald/35"
-            >
-              <button
-                type="button"
-                onClick={() => onSelect(entry)}
-                className="flex w-full items-center gap-3 px-3 py-3 text-left sm:gap-4 sm:px-4 sm:py-3.5"
-              >
-                <span className="relative h-12 w-[4.25rem] shrink-0 overflow-hidden rounded-xl bg-surface ring-1 ring-border/70 sm:h-14 sm:w-24">
-                  {entry.previewImage ? (
-                    <Image
-                      src={entry.previewImage}
-                      alt=""
-                      fill
-                      className="object-cover"
-                      sizes="96px"
-                      unoptimized
-                    />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center text-muted">
-                      <IconSearch size={16} />
-                    </span>
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-semibold text-ink sm:text-[15px]">
-                    {entry.name}
-                  </span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted sm:text-[12px]">
-                    <span className="line-clamp-1">{desc}</span>
-                    {entry.freshness === "new" && (
-                      <span className="rounded-md bg-emerald-light/60 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-dark">
-                        Свіжі
-                      </span>
-                    )}
-                    {when && (
-                      <span className="inline-flex items-center gap-1 text-muted/80">
-                        <IconClock size={11} />
-                        {when}
-                      </span>
-                    )}
-                  </span>
-                </span>
-                <IconArrowRight size={16} className="shrink-0 text-muted" />
-              </button>
-            </AppSection>
-          );
-        })}
+        {items.map(entry => (
+          <RecentSearchCard key={entry.id} entry={entry} onSelect={onSelect} />
+        ))}
       </div>
     </section>
   );

@@ -14,6 +14,8 @@ type Props = {
   search: SearchQuery;
   /** Якщо false — кнопка «Відкрити» лише для активних (дашборд). */
   alwaysLink?: boolean;
+  /** Компактна картка для горизонтального скролу на дашборді. */
+  variant?: "default" | "compact";
   toggling?: boolean;
   deleting?: boolean;
   onActiveChange?: (active: boolean) => void;
@@ -25,6 +27,7 @@ type Props = {
 export function MonitorSearchCard({
   search: s,
   alwaysLink = true,
+  variant = "default",
   toggling = false,
   deleting = false,
   onActiveChange,
@@ -34,6 +37,93 @@ export function MonitorSearchCard({
 }: Props) {
   const href = `/app/monitors/${s.id}`;
   const showOpen = alwaysLink || s.is_active;
+  const compact = variant === "compact";
+
+  if (compact) {
+    return (
+      <article
+        className={cn(
+          "flex w-[288px] shrink-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-white transition-all hover:border-emerald/35 hover:shadow-md hover:shadow-emerald/5",
+          !s.is_active && "opacity-80",
+          className,
+        )}
+      >
+        <Link href={href} className="relative block h-[120px] w-full bg-surface">
+          {s.preview_image ? (
+            <Image
+              src={s.preview_image}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="288px"
+              unoptimized
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-[11px] font-medium text-muted">
+              Немає фото
+            </div>
+          )}
+          {s.new_count > 0 ? (
+            <span className="absolute left-2 top-2 rounded-full bg-ink px-2 py-0.5 text-[10px] font-bold text-white">
+              {s.new_count} нові
+            </span>
+          ) : null}
+          {(s.price_drop_count ?? 0) > 0 ? (
+            <span className="absolute right-2 top-2 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+              −{s.price_drop_count}
+            </span>
+          ) : null}
+        </Link>
+
+        <div className="flex min-h-0 flex-1 flex-col p-3">
+          <Link href={href} className="min-w-0">
+            <div className="line-clamp-1 text-[14px] font-semibold text-ink">{s.name}</div>
+            <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted">
+              {formatSearchDesc(s.filters)}
+            </p>
+          </Link>
+
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+            <div className="flex items-center gap-2">
+              {onActiveChange ? (
+                <>
+                  <IosToggle
+                    checked={s.is_active}
+                    disabled={toggling}
+                    aria-label={s.is_active ? "Вимкнути моніторинг" : "Увімкнути моніторинг"}
+                    onChange={onActiveChange}
+                  />
+                  <span className="text-[11px] font-medium text-muted">
+                    {s.is_active ? "Активний" : "Пауза"}
+                  </span>
+                </>
+              ) : null}
+            </div>
+            <div className="text-right">
+              <div
+                className={cn(
+                  "text-[20px] font-black leading-none tabular-nums",
+                  s.is_active ? "text-emerald-dark" : "text-muted",
+                )}
+              >
+                {s.total_count}
+              </div>
+              <div className="text-[9px] uppercase tracking-wide text-muted">авто</div>
+            </div>
+          </div>
+
+          {showOpen ? (
+            <Link
+              href={href}
+              className="mt-3 inline-flex items-center justify-center gap-1 rounded-lg bg-emerald/10 py-2 text-[12px] font-semibold text-emerald-dark transition-colors hover:bg-emerald/15"
+            >
+              Відкрити <IconArrowRight size={11} />
+            </Link>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
 
   return (
     <AppSection

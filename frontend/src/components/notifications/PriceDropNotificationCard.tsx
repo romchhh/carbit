@@ -4,7 +4,6 @@ import { ListingCard } from "@/components/listings/ListingCard";
 import { formatDropPercent } from "@/lib/listing-price-drop";
 import {
   enrichNotificationListing,
-  notificationDropLabel,
   notificationDropPercent,
 } from "@/lib/notification-listing";
 import type { Listing, Notification } from "@/types/api";
@@ -29,7 +28,6 @@ export function PriceDropNotificationCard({
 }: Props) {
   const listing = enrichNotificationListing(notification) ?? notification.listing;
   const dropPercent = notificationDropPercent(notification);
-  const dropLabel = notificationDropLabel(notification);
 
   return (
     <div className={cn("overflow-hidden rounded-2xl border border-rose-200/80 bg-white shadow-sm", className)}>
@@ -37,18 +35,13 @@ export function PriceDropNotificationCard({
         <span className="text-[15px]" aria-hidden>
           📉
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-bold text-rose-900">Зниження ціни</div>
-          {dropLabel ? (
-            <div className="truncate text-[12px] font-medium text-rose-700/90">{dropLabel}</div>
-          ) : null}
-        </div>
+        <div className="min-w-0 flex-1 text-[13px] font-bold text-rose-900">Зниження ціни</div>
         {dropPercent ? (
           <span className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-bold text-white">
             −{formatDropPercent(dropPercent)}%
           </span>
         ) : null}
-        <div className="flex w-full flex-wrap items-center gap-2 text-[11px] text-rose-800/70 sm:w-auto sm:justify-end">
+        <div className="flex w-full flex-wrap items-center gap-2 text-[11px] text-rose-800/70 sm:ml-auto sm:w-auto">
           {notification.sent_telegram ? (
             <span className="rounded-full border border-rose-200 bg-white/80 px-2 py-0.5 font-medium">
               Telegram
@@ -65,6 +58,7 @@ export function PriceDropNotificationCard({
           isFavorite={isFavorite}
           favoriteLoading={favoriteLoading}
           onToggleFavorite={onToggleFavorite}
+          hidePriceDrop
           className="border-0 shadow-none"
         />
       </div>

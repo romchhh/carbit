@@ -40,6 +40,8 @@ type Props = {
   onToggleCompare?: () => void;
   /** Валюта відображення ($ за замовчуванням). */
   displayCurrency?: DisplayCurrency;
+  /** Приховати бейджі зниження (напр. у сповіщеннях — вже є банер зверху). */
+  hidePriceDrop?: boolean;
 };
 
 function shortRegion(region: string) {
@@ -58,6 +60,7 @@ export function ListingCard({
   compareDisabled = false,
   onToggleCompare,
   displayCurrency: displayCurrencyProp,
+  hidePriceDrop = false,
 }: Props) {
   const { user } = useAuth();
   const displayCurrency = resolveDisplayCurrency(
@@ -65,6 +68,7 @@ export function ListingCard({
   );
   const { images, rootRef, photosPending } = useListingPhotoHydration(listing);
   const priceDrop = resolveListingPriceDrop(listing);
+  const showPriceDropBadge = Boolean(priceDrop) && !hidePriceDrop;
   const fuel = typeof listing.fuel === "string" ? listing.fuel : "";
   const region = typeof listing.region === "string" ? listing.region : "";
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
@@ -157,9 +161,9 @@ export function ListingCard({
                 Новий
               </span>
             )}
-            {priceDrop && (
+            {showPriceDropBadge && (
               <span className="rounded-full bg-rose-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
-                −{Math.round(priceDrop.dropPercent)}%
+                −{Math.round(priceDrop!.dropPercent)}%
               </span>
             )}
           </div>
@@ -314,9 +318,9 @@ export function ListingCard({
                 Новий
               </span>
             )}
-            {priceDrop && (
+            {showPriceDropBadge && (
               <span className="hidden rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:inline-flex">
-                −{Math.round(priceDrop.dropPercent)}%
+                −{Math.round(priceDrop!.dropPercent)}%
               </span>
             )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[16px] sm:line-clamp-2 lg:text-[18px]">
@@ -328,6 +332,7 @@ export function ListingCard({
                 listing={listing}
                 displayCurrency={displayCurrency}
                 priceClassName="text-[22px]"
+                showBadge={!hidePriceDrop}
               />
             </div>
           </div>
@@ -337,6 +342,7 @@ export function ListingCard({
               displayCurrency={displayCurrency}
               priceClassName="text-[22px] lg:text-[26px]"
               className="items-end"
+              showBadge={!hidePriceDrop}
             />
           </div>
         </div>
