@@ -109,7 +109,7 @@ export const LANDING_SAMPLE_PRESETS: LandingSamplePreset[] = [
       currency: "USD",
       brand: "BMW",
       model: "X5",
-      fuel: "Дизель",
+      fuels: ["Дизель"],
       yearFrom: "2014",
       priceTo: "25000",
     },
