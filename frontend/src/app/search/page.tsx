@@ -370,9 +370,7 @@ export default function PublicSearchPage() {
                 filters={renderFiltersPanel()}
                 results={resultsPanel}
                 filtersMobileHidden
-                footer={
-                  user ? <RecentSearchesSection onSelect={handleRecentSelect} /> : undefined
-                }
+                resultsHeader={<RecentSearchesSection onSelect={handleRecentSelect} />}
               />
 
               <MobileSearchFiltersFab

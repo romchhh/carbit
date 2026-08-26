@@ -142,7 +142,7 @@ export function RecentSearchesSection({
   limit = 8,
   className,
   onSelect,
-  layout = "list",
+  layout = "row",
 }: Props) {
   const [items, setItems] = useState<RecentSearchEntry[]>([]);
 

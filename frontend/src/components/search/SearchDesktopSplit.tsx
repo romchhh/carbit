@@ -4,9 +4,11 @@ import type { ReactNode, RefObject } from "react";
 import { cn } from "@/lib/utils";
 
 type Props = {
-  filtersRef: RefObject<HTMLDivElement | null>;
+  filtersRef: RefObject<HTMLElement | null>;
   filters: ReactNode;
   results: ReactNode;
+  /** Над результатами пошуку (напр. «Останні пошуки»). */
+  resultsHeader?: ReactNode;
   footer?: ReactNode;
   className?: string;
   /** На mobile фільтри лише в модалці (aside ховається до lg). */
@@ -18,6 +20,7 @@ export function SearchDesktopSplit({
   filtersRef,
   filters,
   results,
+  resultsHeader,
   footer,
   className,
   filtersMobileHidden = false,
@@ -40,6 +43,7 @@ export function SearchDesktopSplit({
       </aside>
 
       <div className="min-w-0">
+        {resultsHeader ? <div className="mb-4 sm:mb-5">{resultsHeader}</div> : null}
         {results}
         {footer}
       </div>

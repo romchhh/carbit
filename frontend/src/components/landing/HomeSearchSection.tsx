@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchFiltersPanel } from "@/components/search/SearchFiltersPanel";
+import { RecentSearchesSection } from "@/components/search/RecentSearchesSection";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
   DEFAULT_FILTERS,
@@ -13,6 +14,7 @@ import {
 import { saveSearchDraft } from "@/lib/search-draft";
 import type { SearchFreshness } from "@/lib/search-preview";
 import { GUEST_SEARCH_LIMIT } from "@/lib/guest-search";
+import type { RecentSearchEntry } from "@/lib/recent-searches";
 
 /** Дефолти для лендінгу: вся Україна, без попередньо заданої ціни. */
 const HOME_DEFAULT_FILTERS: SearchFilterState = {
@@ -48,6 +50,13 @@ export function HomeSearchSection() {
     router.push("/search");
   };
 
+  const handleRecentSelect = (entry: RecentSearchEntry) => {
+    setFilters({ ...entry.filters });
+    setFreshness(entry.freshness);
+    saveSearchDraft(entry.filters, { freshness: entry.freshness });
+    router.push("/search");
+  };
+
   return (
     <section id="search" className="scroll-mt-[72px] bg-white section-y sm:scroll-mt-[80px]">
       <div className="section-wrap">
@@ -77,6 +86,8 @@ export function HomeSearchSection() {
           pricePlaceholderFrom="Від"
           pricePlaceholderTo="До"
         />
+
+        <RecentSearchesSection className="mt-6 sm:mt-8" onSelect={handleRecentSelect} />
       </div>
     </section>
   );

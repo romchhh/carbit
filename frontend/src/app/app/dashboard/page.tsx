@@ -254,12 +254,11 @@ export default function DashboardPage() {
           filtersRef={filtersPanelRef}
           filters={filtersPanel}
           results={resultsPanel}
+          resultsHeader={<RecentSearchesSection onSelect={handleRecentSelect} />}
         />
       </div>
 
       <div className="mb-8 space-y-5">
-        <RecentSearchesSection layout="row" onSelect={handleRecentSelect} />
-
         <DashboardScrollRow
           tourId="my-searches"
           title="Мої моніторинги"

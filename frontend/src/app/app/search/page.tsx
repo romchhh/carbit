@@ -234,7 +234,7 @@ export default function SearchPage() {
         filtersRef={filtersPanelRef}
         filters={filtersPanel}
         results={resultsPanel}
-        footer={<RecentSearchesSection onSelect={handleRecentSelect} />}
+        resultsHeader={<RecentSearchesSection onSelect={handleRecentSelect} />}
       />
 
       <div className="mt-10 space-y-10">
