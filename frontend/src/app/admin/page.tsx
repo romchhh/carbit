@@ -116,7 +116,7 @@ export default function AdminDashboardPage() {
             Частка оголошень з валідним published_at, VIN і ціною
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-[13px]">
+            <table className="w-full min-w-[560px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-border text-muted">
                   <th className="py-2 pr-4 font-medium">Джерело</th>

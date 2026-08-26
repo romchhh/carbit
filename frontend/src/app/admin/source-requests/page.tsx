@@ -111,8 +111,8 @@ export default function AdminSourceRequestsPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        <div className="bg-white border border-border rounded-xl overflow-hidden">
-          <table className="w-full text-[13px]">
+        <div className="overflow-x-auto rounded-xl border border-border bg-white">
+          <table className="w-full min-w-[720px] text-[13px]">
             <thead>
               <tr className="border-b border-border bg-surface text-left text-[11px] uppercase tracking-wide text-muted">
                 <th className="px-4 py-3 font-semibold">Користувач</th>

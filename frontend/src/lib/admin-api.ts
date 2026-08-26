@@ -255,8 +255,12 @@ export const adminApi = {
   analytics: () => request<AdminAnalytics>("/admin/analytics"),
   apiUsage: (hours = 24, days = 7) =>
     request<AdminApiUsage>(`/admin/api-usage?hours=${hours}&days=${days}`),
-  traffic: (hours = 24, days = 7) =>
-    request<AdminTraffic>(`/admin/traffic?hours=${hours}&days=${days}`),
+  traffic: (hours = 24, days = 7, opts?: { date?: string | null; month?: string | null }) => {
+    const params = new URLSearchParams({ hours: String(hours), days: String(days) });
+    if (opts?.date) params.set("date", opts.date);
+    if (opts?.month) params.set("month", opts.month);
+    return request<AdminTraffic>(`/admin/traffic?${params}`);
+  },
   system: () => request<AdminSystem>("/admin/system"),
   listingsBrowse: (page = 1, opts: { source?: string; search?: string; duplicates_only?: boolean } = {}) => {
     const params = new URLSearchParams({ page: String(page), per_page: "30" });
@@ -473,6 +477,16 @@ export interface AdminTrafficChartPoint {
   label: string;
   total: number;
   unique?: number;
+  date?: string;
+}
+
+export interface AdminTrafficCalendarDay {
+  date: string;
+  label: string;
+  total: number;
+  unique: number;
+  selectable: boolean;
+  is_future: boolean;
 }
 
 export interface AdminTrafficCountry {
@@ -504,6 +518,9 @@ export interface AdminTraffic {
   generated_at: string;
   hours_window: number;
   days_window: number;
+  selected_date?: string | null;
+  selected_day_total?: number | null;
+  selected_day_unique?: number | null;
   online_now: number;
   today_total: number;
   today_unique: number;
@@ -514,6 +531,8 @@ export interface AdminTraffic {
   avg_per_hour: number;
   hourly_chart: AdminTrafficChartPoint[];
   daily_chart: AdminTrafficChartPoint[];
+  calendar?: AdminTrafficCalendarDay[];
+  calendar_month?: string | null;
   countries: AdminTrafficCountry[];
   top_pages: AdminTrafficPage[];
   time_of_day: AdminTrafficHour[];

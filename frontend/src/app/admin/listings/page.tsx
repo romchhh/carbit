@@ -125,7 +125,7 @@ export default function AdminListingsPage() {
           <p className="py-16 text-center text-[13px] text-muted">Нічого не знайдено</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-[13px]">
+            <table className="w-full min-w-[780px] text-left text-[13px]">
               <thead className="border-b border-border bg-surface/50 text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-4 py-3 font-semibold w-[72px]" />

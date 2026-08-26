@@ -249,6 +249,7 @@ export default function PublicSearchPage() {
     <SearchFiltersPanel
       wide
       variant="sidebar"
+      hideDesktopSave={Boolean(user)}
       inModal={options?.inModal}
       filters={filters}
       onChange={setFilters}
@@ -273,17 +274,6 @@ export default function PublicSearchPage() {
       onFreshnessChange={changeFreshness}
       pricePlaceholderFrom="Від"
       pricePlaceholderTo="До"
-      monitorSlot={
-        options?.inModal ? null : (
-          <DesktopSearchMonitorFab
-            connected={Boolean(matchingMonitor)}
-            connectedMonitorId={matchingMonitor?.id ?? null}
-            saving={saving}
-            limitReached={saveLimitReached}
-            onSave={handleMonitorClick}
-          />
-        )
-      }
     />
   );
 
@@ -380,14 +370,30 @@ export default function PublicSearchPage() {
                 pinned
                 bottomInset="public"
                 renderFilters={close => renderFiltersPanel({ inModal: true, onClose: close })}
-                monitor={{
-                  onClick: handleMonitorClick,
-                  saving,
-                  disabled: saveLimitReached,
-                  connected: Boolean(matchingMonitor),
-                  label: "Підключити моніторинг",
-                }}
+                monitor={
+                  user
+                    ? {
+                        visible: running,
+                        connected: Boolean(matchingMonitor),
+                        connectedMonitorId: matchingMonitor?.id ?? null,
+                        saving,
+                        limitReached: saveLimitReached,
+                        onSave: handleMonitorClick,
+                      }
+                    : undefined
+                }
               />
+
+              {user ? (
+                <DesktopSearchMonitorFab
+                  visible={running}
+                  connected={Boolean(matchingMonitor)}
+                  connectedMonitorId={matchingMonitor?.id ?? null}
+                  saving={saving}
+                  limitReached={saveLimitReached}
+                  onSave={handleMonitorClick}
+                />
+              ) : null}
             </div>
           </div>
         </div>

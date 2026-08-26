@@ -78,6 +78,12 @@ export const IconCheck = icon(
   </>
 );
 
+export const IconMenu = icon(
+  <>
+    <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </>
+);
+
 export const IconX = icon(
   <>
     <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>

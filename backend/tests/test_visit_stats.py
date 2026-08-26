@@ -89,6 +89,8 @@ class VisitStatsRecordTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(report["period_total"], 1)
         self.assertTrue(any(row["code"] == "UA" for row in report["countries"]))
         self.assertTrue(any(row["path"] == "/pricing" for row in report["top_pages"]))
+        self.assertTrue(report["calendar"])
+        self.assertRegex(report["calendar_month"], r"^\d{4}-\d{2}$")
 
     async def test_record_visit_skips_admin_and_bots(self):
         redis = AsyncMock()

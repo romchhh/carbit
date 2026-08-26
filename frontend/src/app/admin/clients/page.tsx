@@ -36,15 +36,15 @@ export default function AdminClientsPage() {
       <h1 className="text-[28px] font-black text-ink mb-1">Клієнти</h1>
       <p className="text-[13px] text-muted mb-6">{total} користувачів</p>
 
-      <div className="flex gap-3 mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <input
-          className="auth-input flex-1 max-w-[280px]"
+          className="auth-input w-full flex-1 sm:max-w-[280px]"
           placeholder="Пошук email або ім'я..."
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
         />
         <select
-          className="auth-input w-[140px]"
+          className="auth-input w-full sm:w-[140px]"
           value={plan}
           onChange={e => { setPlan(e.target.value); setPage(1); }}
         >
@@ -55,8 +55,8 @@ export default function AdminClientsPage() {
         </select>
       </div>
 
-      <div className="bg-white border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-[13px]">
+      <div className="overflow-x-auto rounded-xl border border-border bg-white">
+        <table className="w-full min-w-[720px] text-[13px]">
           <thead>
             <tr className="border-b border-border bg-surface text-left text-[11px] uppercase tracking-wide text-muted">
               <th className="px-4 py-3 font-semibold">Клієнт</th>

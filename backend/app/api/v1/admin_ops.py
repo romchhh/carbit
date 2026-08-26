@@ -277,10 +277,22 @@ class TrafficDeviceRow(BaseModel):
     count: int
 
 
+class TrafficCalendarDay(BaseModel):
+    date: str
+    label: str
+    total: int
+    unique: int
+    selectable: bool
+    is_future: bool
+
+
 class AdminTrafficOut(BaseModel):
     generated_at: str
     hours_window: int
     days_window: int
+    selected_date: str | None = None
+    selected_day_total: int | None = None
+    selected_day_unique: int | None = None
     online_now: int
     today_total: int
     today_unique: int
@@ -291,6 +303,8 @@ class AdminTrafficOut(BaseModel):
     avg_per_hour: float
     hourly_chart: list[TrafficChartPoint]
     daily_chart: list[TrafficChartPoint]
+    calendar: list[TrafficCalendarDay] = []
+    calendar_month: str | None = None
     countries: list[TrafficCountryRow]
     top_pages: list[TrafficPageRow]
     time_of_day: list[TrafficHourRow]
@@ -300,10 +314,21 @@ class AdminTrafficOut(BaseModel):
 @router.get("/traffic", response_model=AdminTrafficOut)
 async def admin_traffic(
     hours: int = Query(24, ge=6, le=168),
-    days: int = Query(7, ge=3, le=30),
+    days: int = Query(7, ge=3, le=93),
+    date: str | None = Query(None, description="YYYY-MM-DD — деталі за конкретний день"),
+    month: str | None = Query(None, description="YYYY-MM — місяць календаря"),
     _: str = Depends(get_current_admin),
 ):
+    from datetime import date as date_cls
+
     from app.services.admin.visit_stats import build_traffic_report
 
-    data = await build_traffic_report(hours=hours, days=days)
+    focus_day = None
+    if date:
+        try:
+            focus_day = date_cls.fromisoformat(date)
+        except ValueError:
+            focus_day = None
+
+    data = await build_traffic_report(hours=hours, days=days, day=focus_day, month=month)
     return AdminTrafficOut(**data)

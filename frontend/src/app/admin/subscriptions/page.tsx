@@ -48,8 +48,8 @@ export default function AdminSubscriptionsPage() {
         </div>
       )}
 
-      <div className="bg-white border border-border rounded-xl overflow-hidden mb-6">
-        <table className="w-full text-[13px]">
+      <div className="mb-6 overflow-x-auto rounded-xl border border-border bg-white">
+        <table className="w-full min-w-[720px] text-[13px]">
           <thead>
             <tr className="border-b border-border bg-surface text-left text-[11px] uppercase tracking-wide text-muted">
               <th className="px-4 py-3 font-semibold">Тариф</th>

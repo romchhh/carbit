@@ -7,18 +7,20 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 
 function AdminShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex bg-surface">
+    <div className="flex min-h-screen flex-col bg-surface lg:flex-row">
       <AdminSidebar />
-      <main className="flex-1 p-8 overflow-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-x-auto overflow-y-auto p-4 sm:p-6 lg:p-8">
+        {children}
+      </main>
     </div>
   );
 }
 
 function AdminLoadingShell() {
   return (
-    <div className="min-h-screen flex bg-surface">
-      <div className="w-[220px] shrink-0 bg-ink" aria-hidden />
-      <main className="flex flex-1 items-center justify-center p-8">
+    <div className="flex min-h-screen flex-col bg-surface lg:flex-row">
+      <div className="hidden w-[220px] shrink-0 bg-ink lg:block" aria-hidden />
+      <main className="flex flex-1 items-center justify-center p-6 sm:p-8">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald border-t-transparent" />
       </main>
     </div>

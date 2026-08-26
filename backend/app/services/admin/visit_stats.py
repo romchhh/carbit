@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import Request
 
 from app.core.redis import get_redis
-from app.core.timezone import now_kyiv
+from app.core.timezone import KYIV_TZ, now_kyiv, start_of_kyiv_day
 
 logger = logging.getLogger(__name__)
 
@@ -257,35 +257,34 @@ def _top_rows(data: dict[str, int], *, limit: int = 12, prefix: str | None = Non
     return [{"key": key, "count": count} for key, count in items[:limit]]
 
 
-async def build_traffic_report(*, hours: int = 24, days: int = 7) -> dict[str, Any]:
-    now = now_kyiv()
-    hours = max(6, min(int(hours), 168))
-    days = max(3, min(int(days), 30))
+def _clamp_focus_day(day: date | None, *, now: datetime) -> date | None:
+    if day is None:
+        return None
+    today = now.date()
+    oldest = (now - timedelta(days=92)).date()
+    if day > today:
+        return today
+    if day < oldest:
+        return oldest
+    return day
 
-    hourly: list[dict[str, Any]] = []
-    for offset in range(hours - 1, -1, -1):
-        dt = now - timedelta(hours=offset)
-        bucket = await _read_hash_ints(_hour_key(dt))
-        hourly.append(
-            {
-                "label": dt.strftime("%H:00") if hours <= 24 else dt.strftime("%d.%m %H:00"),
-                "total": bucket.get("total", 0),
-                "unique": 0,
-            }
-        )
 
+async def _aggregate_days(
+    day_dates: list[date],
+) -> tuple[list[dict[str, Any]], dict[str, int], dict[str, int], dict[str, int], dict[str, int]]:
     daily: list[dict[str, Any]] = []
     geo_period: dict[str, int] = {}
     paths_period: dict[str, int] = {}
     hod_period: dict[str, int] = {str(h): 0 for h in range(24)}
     device_period: dict[str, int] = {}
 
-    for offset in range(days - 1, -1, -1):
-        dt = now - timedelta(days=offset)
+    for day_date in day_dates:
+        dt = datetime(day_date.year, day_date.month, day_date.day, tzinfo=KYIV_TZ)
         day_bucket = await _read_hash_ints(_day_key(dt))
         daily.append(
             {
                 "label": dt.strftime("%d.%m"),
+                "date": day_date.isoformat(),
                 "total": day_bucket.get("total", 0),
                 "unique": day_bucket.get("unique", 0),
             }
@@ -299,10 +298,112 @@ async def build_traffic_report(*, hours: int = 24, days: int = 7) -> dict[str, A
                 hod_period[str(int(hour))] = hod_period.get(str(int(hour)), 0) + count
             except ValueError:
                 continue
-        for field, count in (await _read_hash_ints(_day_key(dt))).items():
+        for field, count in day_bucket.items():
             if field.startswith("device:"):
                 name = field[7:]
                 device_period[name] = device_period.get(name, 0) + count
+
+    return daily, geo_period, paths_period, hod_period, device_period
+
+
+async def build_traffic_report(
+    *,
+    hours: int = 24,
+    days: int = 7,
+    day: date | None = None,
+    month: str | None = None,
+) -> dict[str, Any]:
+    now = now_kyiv()
+    hours = max(6, min(int(hours), 168))
+    days = max(3, min(int(days), 93))
+    focus = _clamp_focus_day(day, now=now)
+
+    hourly: list[dict[str, Any]] = []
+    if focus is not None:
+        day_start = start_of_kyiv_day(
+            datetime(focus.year, focus.month, focus.day, tzinfo=KYIV_TZ)
+        )
+        for hour in range(24):
+            dt = day_start + timedelta(hours=hour)
+            bucket = await _read_hash_ints(_hour_key(dt))
+            hourly.append(
+                {
+                    "label": dt.strftime("%H:00"),
+                    "total": bucket.get("total", 0),
+                    "unique": 0,
+                }
+            )
+    else:
+        for offset in range(hours - 1, -1, -1):
+            dt = now - timedelta(hours=offset)
+            bucket = await _read_hash_ints(_hour_key(dt))
+            hourly.append(
+                {
+                    "label": dt.strftime("%H:00") if hours <= 24 else dt.strftime("%d.%m %H:00"),
+                    "total": bucket.get("total", 0),
+                    "unique": 0,
+                }
+            )
+
+    period_dates = [(now - timedelta(days=offset)).date() for offset in range(days - 1, -1, -1)]
+    daily, geo_period, paths_period, hod_period, device_period = await _aggregate_days(period_dates)
+
+    calendar_anchor = focus or now.date()
+    if month:
+        try:
+            year_s, month_s = month.split("-", 1)
+            calendar_anchor = date(int(year_s), int(month_s), 1)
+        except (TypeError, ValueError):
+            pass
+
+    month_start = calendar_anchor.replace(day=1)
+    if month_start.month == 12:
+        next_month = month_start.replace(year=month_start.year + 1, month=1, day=1)
+    else:
+        next_month = month_start.replace(month=month_start.month + 1, day=1)
+
+    oldest = (now - timedelta(days=92)).date()
+    calendar_dates = [
+        month_start + timedelta(days=offset) for offset in range((next_month - month_start).days)
+    ]
+    readable_dates = [d for d in calendar_dates if oldest <= d <= now.date()]
+    calendar_daily, _, _, _, _ = await _aggregate_days(readable_dates)
+    calendar_by_date = {row["date"]: row for row in calendar_daily}
+    calendar = []
+    for d in calendar_dates:
+        iso = d.isoformat()
+        row = calendar_by_date.get(iso)
+        calendar.append(
+            {
+                "date": iso,
+                "label": d.strftime("%d.%m"),
+                "total": row["total"] if row else 0,
+                "unique": row["unique"] if row else 0,
+                "selectable": oldest <= d <= now.date(),
+                "is_future": d > now.date(),
+            }
+        )
+
+    focus_total = 0
+    focus_unique = 0
+    if focus is not None:
+        focus_dt = datetime(focus.year, focus.month, focus.day, tzinfo=KYIV_TZ)
+        focus_bucket = await _read_hash_ints(_day_key(focus_dt))
+        focus_total = focus_bucket.get("total", 0)
+        focus_unique = focus_bucket.get("unique", 0)
+        geo_period = await _read_hash_ints(_geo_day_key(focus_dt))
+        paths_period = await _read_hash_ints(_paths_day_key(focus_dt))
+        hod_raw = await _read_hash_ints(_hour_of_day_key(focus_dt))
+        hod_period = {str(h): 0 for h in range(24)}
+        for hour, count in hod_raw.items():
+            try:
+                hod_period[str(int(hour))] = count
+            except ValueError:
+                continue
+        device_period = {}
+        for field, count in focus_bucket.items():
+            if field.startswith("device:"):
+                device_period[field[7:]] = count
 
     today_bucket = await _read_hash_ints(_day_key(now))
     last_hour_bucket = await _read_hash_ints(_hour_key(now))
@@ -310,12 +411,14 @@ async def build_traffic_report(*, hours: int = 24, days: int = 7) -> dict[str, A
     period_unique = sum(row["unique"] for row in daily)
     online_now = await _count_online()
 
+    share_base = focus_total if focus is not None else period_total
+
     countries = [
         {
             "code": code,
             "name": country_label(code),
             "count": count,
-            "share": round(count / max(period_total, 1) * 100, 1),
+            "share": round(count / max(share_base, 1) * 100, 1),
         }
         for code, count in sorted(geo_period.items(), key=lambda row: -row[1])[:15]
     ]
@@ -325,7 +428,7 @@ async def build_traffic_report(*, hours: int = 24, days: int = 7) -> dict[str, A
             "path": path,
             "label": path_label(path),
             "count": count,
-            "share": round(count / max(period_total, 1) * 100, 1),
+            "share": round(count / max(share_base, 1) * 100, 1),
         }
         for path, count in sorted(paths_period.items(), key=lambda row: -row[1])[:15]
     ]
@@ -342,8 +445,11 @@ async def build_traffic_report(*, hours: int = 24, days: int = 7) -> dict[str, A
 
     return {
         "generated_at": now.isoformat(),
-        "hours_window": hours,
+        "hours_window": hours if focus is None else 24,
         "days_window": days,
+        "selected_date": focus.isoformat() if focus else None,
+        "selected_day_total": focus_total if focus else None,
+        "selected_day_unique": focus_unique if focus else None,
         "online_now": online_now,
         "today_total": today_bucket.get("total", 0),
         "today_unique": today_bucket.get("unique", 0),
@@ -351,9 +457,14 @@ async def build_traffic_report(*, hours: int = 24, days: int = 7) -> dict[str, A
         "period_total": period_total,
         "period_unique": period_unique,
         "avg_per_day": round(period_total / max(days, 1), 1),
-        "avg_per_hour": round(period_total / max(days * 24, 1), 1),
+        "avg_per_hour": round(
+            (focus_total / 24 if focus is not None else period_total / max(days * 24, 1)),
+            1,
+        ),
         "hourly_chart": hourly,
         "daily_chart": daily,
+        "calendar": calendar,
+        "calendar_month": month_start.strftime("%Y-%m"),
         "countries": countries,
         "top_pages": top_pages,
         "time_of_day": time_of_day,

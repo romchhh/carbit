@@ -1,11 +1,10 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
-import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { VoiceSearchCabinetOnlyOverlay } from "@/components/search/VoiceSearchCabinetOnlyOverlay";
 import { VoiceSearchOverlay } from "@/components/search/VoiceSearchOverlay";
 import { VoiceSearchTrigger } from "@/components/search/VoiceSearchTrigger";
@@ -76,8 +75,8 @@ type Props = {
   /** На лендінгу — кнопка «Голосом» лише показує підказку про кабінет. */
   voiceSearchCabinetOnly?: boolean;
   onSortChange?: (sort: SortOption) => void;
-  /** Закріплений CTA моніторингу в desktop-sidebar (під кнопкою «Шукати»). */
-  monitorSlot?: ReactNode;
+  /** Ховає CTA моніторингу в sidebar на desktop (там окремий FAB). */
+  hideDesktopSave?: boolean;
   /** Повноекранна мобільна модалка з фільтрами. */
   inModal?: boolean;
 };
@@ -111,7 +110,7 @@ export function SearchFiltersPanel({
   pricePlaceholderTo,
   voiceSearchCabinetOnly,
   onSortChange,
-  monitorSlot,
+  hideDesktopSave,
   inModal,
 }: Props) {
   const priceDefaults = DEFAULT_PRICE_BY_CURRENCY[filters.currency];
@@ -505,21 +504,9 @@ export function SearchFiltersPanel({
             </span>
           </button>
 
-          {monitorSlot ? (
-            <div className="space-y-2">
-              {monitorSlot}
-              {saveSuccess && !monitorConnected && (
-                <p className="text-[12px] font-medium text-emerald-dark">{saveSuccess}</p>
-              )}
-              {saveError && !saveLimitReached && (
-                <p className="text-[12px] font-medium text-red-600">{saveError}</p>
-              )}
-              {saveLimitReached && <UpgradeOffer title="Ліміт моніторингів вичерпано" compact />}
-            </div>
-          ) : null}
-
-          {onSave && !monitorSlot && (
+          {onSave && (
             <SaveSearchCTA
+              className={cn(hideDesktopSave && "lg:hidden")}
               onSave={onSave}
               saving={saving}
               successMessage={saveSuccess}

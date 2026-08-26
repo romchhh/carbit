@@ -145,6 +145,7 @@ export default function SearchPage() {
     <SearchFiltersPanel
       wide
       variant="sidebar"
+      hideDesktopSave
       inModal={options?.inModal}
       filters={filters}
       onChange={setFilters}
@@ -167,15 +168,6 @@ export default function SearchPage() {
       connectedMonitorId={matchingMonitor?.id ?? null}
       freshness={freshness}
       onFreshnessChange={changeFreshness}
-      monitorSlot={
-        <DesktopSearchMonitorFab
-          connected={Boolean(matchingMonitor)}
-          connectedMonitorId={matchingMonitor?.id ?? null}
-          saving={saving}
-          limitReached={saveLimitReached}
-          onSave={handleMonitorClick}
-        />
-      }
     />
   );
 
@@ -245,14 +237,23 @@ export default function SearchPage() {
 
       <MobileSearchFiltersFab
         targetRef={filtersPanelRef}
-        renderFilters={close => renderFiltersPanel({ inModal: true, onClose: close })}
         monitor={{
-          onClick: handleMonitorClick,
-          saving,
-          disabled: saveLimitReached,
+          visible: running,
           connected: Boolean(matchingMonitor),
-          label: "Підключити моніторинг",
+          connectedMonitorId: matchingMonitor?.id ?? null,
+          saving,
+          limitReached: saveLimitReached,
+          onSave: handleMonitorClick,
         }}
+      />
+
+      <DesktopSearchMonitorFab
+        visible={running}
+        connected={Boolean(matchingMonitor)}
+        connectedMonitorId={matchingMonitor?.id ?? null}
+        saving={saving}
+        limitReached={saveLimitReached}
+        onSave={handleMonitorClick}
       />
 
       <TelegramConnectPrompt
