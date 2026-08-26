@@ -84,26 +84,29 @@ export default function HomePage() {
                 <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
                   Джерела оголошень
                 </p>
-                <div className="mt-4 inline-flex items-center sm:mt-5">
-                  {PARTNER_LOGOS.map(({ src, alt }, index) => (
-                    <span
-                      key={alt}
-                      className={cn(
-                        "relative inline-flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-full bg-white shadow-md ring-2 ring-white/20",
-                        index > 0 && "-ml-3.5 sm:-ml-4",
-                      )}
-                      style={{ zIndex: index + 1 }}
-                      title={alt}
-                    >
-                      <Image
-                        src={src}
-                        alt={alt}
-                        width={56}
-                        height={56}
-                        className="h-full w-full object-cover"
-                      />
-                    </span>
-                  ))}
+                <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-5 sm:gap-3">
+                  <div className="inline-flex items-center">
+                    {PARTNER_LOGOS.map(({ src, alt }, index) => (
+                      <span
+                        key={alt}
+                        className={cn(
+                          "relative inline-flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-full bg-white shadow-md ring-2 ring-white/20",
+                          index > 0 && "-ml-3.5 sm:-ml-4",
+                        )}
+                        style={{ zIndex: index + 1 }}
+                        title={alt}
+                      >
+                        <Image
+                          src={src}
+                          alt={alt}
+                          width={56}
+                          height={56}
+                          className="h-full w-full object-cover"
+                        />
+                      </span>
+                    ))}
+                  </div>
+                  <span className="text-[12px] font-medium text-white/45 sm:text-[13px]">та інші</span>
                 </div>
 
                 <div className="mt-6 border-t border-white/10 pt-5 sm:mt-7 sm:pt-7">

@@ -183,7 +183,7 @@ function ActiveSummary({
     });
   }
   const publishedSummary = formatPublishedFilterSummary(
-    filters.publishedWithinDays,
+    filters.publishedOlderThanDays,
     filters.publishedFrom,
     filters.publishedTo,
     freshness,
@@ -194,7 +194,7 @@ function ActiveSummary({
       label: `Вік: ${publishedSummary}`,
       clear: () => {
         onFreshnessChange?.("all");
-        onClearOne({ publishedWithinDays: "", publishedFrom: "", publishedTo: "" });
+        onClearOne({ publishedOlderThanDays: "", publishedFrom: "", publishedTo: "" });
       },
     });
   }
@@ -283,7 +283,7 @@ export function AdvancedSearchPanel({
           {onFreshnessChange ? (
             <FilterPublishedDateRange
               freshness={freshness}
-              publishedWithinDays={filters.publishedWithinDays}
+              publishedOlderThanDays={filters.publishedOlderThanDays}
               publishedFrom={filters.publishedFrom}
               publishedTo={filters.publishedTo}
               onFreshnessChange={onFreshnessChange}
@@ -571,18 +571,8 @@ export function AdvancedSearchPanel({
           </div>
         </FilterAccordionSection>
 
-        <section className="space-y-3 border-t border-border/60 pt-4">
-          <div>
-            <label className="mb-1.5 block text-[12px] font-semibold text-muted">Назва запиту</label>
-            <input
-              value={filters.name}
-              onChange={e => update({ name: e.target.value })}
-              placeholder="Camry під перепродаж"
-              className="input-field"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+        <section className="border-t border-border/60 pt-4">
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
             <button
               type="button"
               onClick={resetAdvanced}

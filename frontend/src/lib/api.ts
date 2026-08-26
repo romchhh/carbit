@@ -65,6 +65,16 @@ export function isSearchRateLimitError(err: unknown): boolean {
   return false;
 }
 
+export function isGuestSearchLimitError(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    return err.status === 429 && (err.code === "guest_search_limit" || /безкоштовні пошуки/i.test(err.message));
+  }
+  if (typeof err === "string") {
+    return /безкоштовні пошуки/i.test(err);
+  }
+  return false;
+}
+
 type ParsedApiError = {
   message: string;
   code?: string;
@@ -109,6 +119,30 @@ async function parseError(res: Response): Promise<ParsedApiError> {
     /* ignore */
   }
   return { message: "Помилка запиту", retryAfter };
+}
+
+async function requestAppRoute<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
+
+  const method = (options.method ?? "GET").toUpperCase();
+  const res = await fetch(path, {
+    ...options,
+    headers,
+    credentials: "include",
+    redirect: method === "GET" || method === "HEAD" ? "follow" : "manual",
+  });
+
+  if (res.status >= 300 && res.status < 400) {
+    throw new ApiError(res.status, "Некоректне перенаправлення API.");
+  }
+
+  if (!res.ok) {
+    const parsed = await parseError(res);
+    throw new ApiError(res.status, parsed.message, parsed.code, parsed.retryAfter);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -383,6 +417,17 @@ export const listingSearch = {
           { method: "POST", body: JSON.stringify(filters), signal },
         ),
       signal,
+    ),
+  guestSearch: (
+    filters: BackendSearchFilters,
+    page = 1,
+    perPage = 20,
+    sortBy: SortOption = "newest",
+    signal?: AbortSignal,
+  ) =>
+    requestAppRoute<PaginatedListings>(
+      `/api/guest-search?page=${page}&per_page=${perPage}&sort_by=${sortBy}`,
+      { method: "POST", body: JSON.stringify(filters), signal },
     ),
 };
 

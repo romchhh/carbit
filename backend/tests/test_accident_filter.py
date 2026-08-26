@@ -8,6 +8,7 @@ from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.listings.accident import (
     extract_listing_accident_had,
     listing_matches_accident_filter,
+    search_needs_olx_detail_enrich,
 )
 from app.services.search.advanced_filters import listing_matches_advanced_filters
 
@@ -56,6 +57,29 @@ class AccidentExtractTests(unittest.TestCase):
         item = _item(description="легкий удар, хороша комплектація")
         self.assertTrue(extract_listing_accident_had(item))
 
+    def test_text_fallback_krashena(self):
+        item = _item(description="Toyota Camry, крашена, торг")
+        self.assertTrue(extract_listing_accident_had(item))
+
+    def test_text_fallback_needs_repair(self):
+        item = _item(description="Потребує ремонту, ціна низька")
+        self.assertTrue(extract_listing_accident_had(item))
+
+    def test_condition_flags_damaged(self):
+        item = _item(source_data={"condition_flags": {"damaged": True}})
+        self.assertTrue(extract_listing_accident_had(item))
+
+    def test_condition_flags_not_damaged(self):
+        item = _item(source_data={"condition_flags": {"not_damaged": True}})
+        self.assertFalse(extract_listing_accident_had(item))
+
+    def test_auto_ria_state_damage_id(self):
+        item = _item(
+            source="auto_ria",
+            source_data={"autoData": {}, "stateData": {"damageId": 2}},
+        )
+        self.assertTrue(extract_listing_accident_had(item))
+
     def test_imperiya_condition_was_accident(self):
         item = _item(
             source_data={
@@ -72,6 +96,10 @@ class AccidentExtractTests(unittest.TestCase):
 
 
 class AccidentFilterTests(unittest.TestCase):
+    def test_search_needs_olx_enrich_for_accident_filter(self):
+        self.assertTrue(search_needs_olx_detail_enrich(SearchFilters(accident="none")))
+        self.assertFalse(search_needs_olx_detail_enrich(SearchFilters(accident=None)))
+
     def test_auto_ria_none_rejects_accident_text(self):
         item = _item(
             source="auto_ria",
@@ -119,6 +147,10 @@ class AccidentFilterTests(unittest.TestCase):
         self.assertTrue(
             listing_matches_advanced_filters(item, SearchFilters(accident="had"))
         )
+
+    def test_none_rejects_krashena_in_title(self):
+        item = _item(title="Volkswagen Passat крашена")
+        self.assertFalse(listing_matches_accident_filter(item, "none"))
 
 
 if __name__ == "__main__":

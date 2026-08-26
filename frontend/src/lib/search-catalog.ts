@@ -21,7 +21,8 @@ export type TriFilterValue = "" | "show" | "hide";
 export type SellerFilterValue = "" | "private" | "dealer";
 export type AccidentFilterValue = "" | "none" | "had";
 export type OwnersFilterValue = "" | "1" | "2" | "3" | "4";
-export type PublishedWithinDaysValue = "" | "1" | "3" | "7" | "15" | "30";
+export type PublishedWithinDaysValue = "" | "1" | "3" | "7";
+export type PublishedOlderThanDaysValue = "" | "15" | "30";
 
 export type SearchFilterState = {
   name: string;
@@ -77,6 +78,8 @@ export type SearchFilterState = {
   powerUnit: "hp" | "kw";
   /** Оголошення, додані за останні N днів (порожньо = без обмеження). */
   publishedWithinDays: PublishedWithinDaysValue;
+  /** Оголошення на ринку щонайменше N днів (старіші за N днів). */
+  publishedOlderThanDays: PublishedOlderThanDaysValue;
   /** Кастомний діапазон публікації (datetime-local). */
   publishedFrom: string;
   publishedTo: string;
@@ -177,8 +180,11 @@ export const PUBLISHED_WITHIN_OPTIONS = [
   { value: "1" as PublishedWithinDaysValue, label: "За 1 день" },
   { value: "3" as PublishedWithinDaysValue, label: "За 3 дні" },
   { value: "7" as PublishedWithinDaysValue, label: "За 7 днів" },
-  { value: "15" as PublishedWithinDaysValue, label: "Від 15 днів" },
-  { value: "30" as PublishedWithinDaysValue, label: "Від 30 днів" },
+] as const;
+
+export const PUBLISHED_OLDER_THAN_OPTIONS = [
+  { value: "15" as PublishedOlderThanDaysValue, label: "Від 15 днів" },
+  { value: "30" as PublishedOlderThanDaysValue, label: "Від 30 днів" },
 ] as const;
 
 export const PUBLISHED_WITHIN_LABELS = PUBLISHED_WITHIN_OPTIONS.filter(o => o.value).map(
@@ -191,7 +197,31 @@ export function publishedWithinDaysLabel(value: PublishedWithinDaysValue): strin
 
 export function publishedWithinDaysFromLabel(label: string): PublishedWithinDaysValue {
   if (!label || label === "Будь-коли") return "";
-  return PUBLISHED_WITHIN_OPTIONS.find(o => o.label === label)?.value ?? "";
+  const normalized = label.trim();
+  return PUBLISHED_WITHIN_OPTIONS.find(o => o.label === normalized)?.value ?? "";
+}
+
+export function publishedOlderThanDaysLabel(value: PublishedOlderThanDaysValue): string {
+  return PUBLISHED_OLDER_THAN_OPTIONS.find(o => o.value === value)?.label ?? "";
+}
+
+export function publishedOlderThanDaysFromLabel(label: string): PublishedOlderThanDaysValue {
+  if (!label) return "";
+  const normalized = label.trim();
+  const legacy: Record<string, PublishedOlderThanDaysValue> = {
+    "Від 15 днів": "15",
+    "Від 30 днів": "30",
+    "Показувати від 15 днів": "15",
+    "Показувати від 30 днів": "30",
+    "За останні 15 днів": "15",
+    "За останні 30 днів": "30",
+    "За 15 днів": "15",
+    "За 30 днів": "30",
+    "Більше 15 днів": "15",
+    "Більше 30 днів": "30",
+  };
+  if (legacy[normalized]) return legacy[normalized];
+  return PUBLISHED_OLDER_THAN_OPTIONS.find(o => o.label === normalized)?.value ?? "";
 }
 
 export const CATEGORY_OPTIONS: { value: VehicleCategory; label: string }[] = [
@@ -270,6 +300,7 @@ export const DEFAULT_FILTERS: SearchFilterState = {
   metallic: false,
   powerUnit: "hp",
   publishedWithinDays: "",
+  publishedOlderThanDays: "",
   publishedFrom: "",
   publishedTo: "",
 };
@@ -537,6 +568,7 @@ export function countAdvancedFilterFields(
   if (section === "published") {
     return [
       fieldActive(filters.publishedWithinDays),
+      fieldActive(filters.publishedOlderThanDays),
       fieldActive(filters.publishedFrom),
       fieldActive(filters.publishedTo),
     ].filter(Boolean).length;

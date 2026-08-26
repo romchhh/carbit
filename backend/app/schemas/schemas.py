@@ -226,6 +226,8 @@ class SearchFilters(BaseModel):
     power_unit: Optional[str] = None  # hp | kw
     # Тільки оголошення, опубліковані за останні N днів (напр. 7 = «тільки нові»)
     published_within_days: Optional[int] = Field(default=None, ge=1, le=90)
+    # Оголошення на ринку щонайменше N днів (старіші за N днів)
+    published_older_than_days: Optional[int] = Field(default=None, ge=1, le=365)
     # Кастомний діапазон дати публікації (ISO datetime, Europe/Kyiv на бекенді)
     published_from: Optional[datetime] = None
     published_to: Optional[datetime] = None
@@ -352,6 +354,11 @@ class PaginatedListings(BaseModel):
     offer_count: int | None = None
     # Скільки пропозицій згорнули в картки-дублі. None — невідомо (пул більший за сторінку).
     duplicate_count: int | None = None
+
+
+class GuestLiveSearchOut(PaginatedListings):
+    guest_searches_remaining: int = 0
+    guest_searches_limit: int = 3
 
 
 class SearchLiveResultsOut(BaseModel):

@@ -29,6 +29,10 @@ class ApiSmokeTests(unittest.TestCase):
         res = self.client.post("/api/v1/searches/live", json={})
         self.assertEqual(res.status_code, 401)
 
+    def test_guest_live_search_no_auth(self):
+        res = self.client.post("/api/v1/searches/live/guest", json={"brand": "Toyota"})
+        self.assertEqual(res.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()

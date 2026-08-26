@@ -95,7 +95,10 @@ async def filters_to_search_params(
             params["raceTo"] = max(filters.mileage_to // 1000, 0)
 
     # Свіжі оголошення: top=1 (година), 8 (3г), 14 (12г), 11 (доба)…
-    if filters.published_within_hours:
+    # Для «старіших за N днів» не звужуємо AUTO.RIA до свіжих — фільтр на нашому боці.
+    if filters.published_older_than_days:
+        pass
+    elif filters.published_within_hours:
         top = auto_ria_top_for_max_hours(filters.published_within_hours)
         if top is not None:
             params["top"] = top

@@ -122,13 +122,15 @@ async def run_live_search(
     sort_by: str,
     mode: str,
     hourly_limit: int = 30,
+    skip_rate_limit: bool = False,
 ) -> PaginatedListings:
-    await _safe_rate_limits(
-        user_id=user_id,
-        mode=mode,
-        page=page,
-        hourly_limit=hourly_limit,
-    )
+    if not skip_rate_limit:
+        await _safe_rate_limits(
+            user_id=user_id,
+            mode=mode,
+            page=page,
+            hourly_limit=hourly_limit,
+        )
     page, per_page = clamp_preview_request(page=page, per_page=per_page, mode=mode)
 
     # 1) Пул у KV — «Показати ще» без повторних запитів до OLX/AUTO.RIA
@@ -154,12 +156,14 @@ async def run_live_search(
         market_total = 0
         source_statuses: list[SourceSearchStatus] = []
         try:
+            from app.services.listings.accident import search_needs_olx_detail_enrich
+
             slots, nav_total, market_total, source_statuses = await build_live_search_pool(
                 filters,
                 sort_by=sort_by,
                 max_ids=LIVE_POOL_SIZE,
                 keyword_refresh=False,
-                olx_enrich_details=False,
+                olx_enrich_details=search_needs_olx_detail_enrich(filters),
             )
         except AutoRiaError as exc:
             logger.warning("live_search auto_ria_error user=%s page=%s detail=%s", user_id, page, exc)

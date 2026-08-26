@@ -57,3 +57,15 @@ def test_filter_listings_by_published_within_days():
     filters = SearchFilters(published_within_days=3)
     result = _filter_listings_by_published_filters(items, filters)
     assert [item.id for item in result] == ["fresh"]
+
+
+def test_filter_listings_by_published_older_than_days():
+    now = now_kyiv()
+    items = [
+        _listing("very_old", now - timedelta(days=45)),
+        _listing("old_enough", now - timedelta(days=16)),
+        _listing("fresh", now - timedelta(days=5)),
+    ]
+    filters = SearchFilters(published_older_than_days=15)
+    result = _filter_listings_by_published_filters(items, filters)
+    assert [item.id for item in result] == ["very_old", "old_enough"]

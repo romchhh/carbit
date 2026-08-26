@@ -172,15 +172,18 @@ export default function DashboardPage() {
     handleSave();
   };
 
-  const filtersPanel = (
+  const renderFiltersPanel = (options?: { inModal?: boolean; onClose?: () => void }) => (
     <SearchFiltersPanel
       wide
       variant="sidebar"
-      hideDesktopSave
+      inModal={options?.inModal}
       filters={filters}
       onChange={setFilters}
       onReset={handleReset}
-      onSearch={handleSearch}
+      onSearch={(overrideFilters, overrideSort) => {
+        handleSearch(overrideFilters, overrideSort);
+        options?.onClose?.();
+      }}
       onSortChange={changeSort}
       onSave={handleSave}
       searching={searching}
@@ -206,6 +209,8 @@ export default function DashboardPage() {
       }
     />
   );
+
+  const filtersPanel = renderFiltersPanel();
 
   const resultsPanel = (
     <SearchPreviewResults
@@ -316,14 +321,7 @@ export default function DashboardPage() {
 
       <MobileSearchFiltersFab
         targetRef={filtersPanelRef}
-        monitor={{
-          visible: true,
-          connected: Boolean(matchingMonitor),
-          connectedMonitorId: matchingMonitor?.id ?? null,
-          saving,
-          limitReached: saveLimitReached,
-          onSave: handleMonitorClick,
-        }}
+        renderFilters={close => renderFiltersPanel({ inModal: true, onClose: close })}
       />
 
       <TelegramConnectPrompt

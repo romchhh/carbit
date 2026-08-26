@@ -62,7 +62,7 @@ export function DesktopSearchMonitorFab({
       disabled={saving || limitReached}
       className={cn(
         "group relative flex w-full flex-col items-center justify-center gap-0.5 overflow-hidden rounded-2xl px-4 font-bold text-white transition-all",
-        "bg-gradient-to-br from-emerald via-emerald to-emerald-dark shadow-[0_10px_28px_-8px_rgba(16,185,129,0.65)]",
+        "bg-gradient-to-br from-orange-300 via-orange-400 to-orange-500 shadow-[0_10px_28px_-8px_rgba(251,146,60,0.55)]",
         "hover:brightness-105 active:scale-[0.99]",
         "disabled:cursor-not-allowed disabled:opacity-65 disabled:shadow-none",
         compact ? "py-2.5" : "py-3.5",

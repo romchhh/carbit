@@ -1,5 +1,8 @@
-import type { PublishedWithinDaysValue } from "@/lib/search-catalog";
-import { PUBLISHED_WITHIN_OPTIONS, publishedWithinDaysLabel } from "@/lib/search-catalog";
+import type { PublishedOlderThanDaysValue } from "@/lib/search-catalog";
+import {
+  PUBLISHED_WITHIN_OPTIONS,
+  publishedOlderThanDaysLabel,
+} from "@/lib/search-catalog";
 import type { SearchFreshness } from "@/lib/search-preview";
 
 export function pad2(value: number): string {
@@ -47,40 +50,40 @@ export function hasCustomPublishedRange(from: string, to: string): boolean {
 }
 
 export function isPublishedFilterActive(
-  publishedWithinDays: PublishedWithinDaysValue,
+  publishedOlderThanDays: PublishedOlderThanDaysValue,
   publishedFrom: string,
   publishedTo: string,
 ): boolean {
-  return Boolean(publishedWithinDays || hasCustomPublishedRange(publishedFrom, publishedTo));
+  return Boolean(publishedOlderThanDays || hasCustomPublishedRange(publishedFrom, publishedTo));
 }
 
 export function formatPublishedFilterSummary(
-  publishedWithinDays: PublishedWithinDaysValue,
+  publishedOlderThanDays: PublishedOlderThanDaysValue,
   publishedFrom: string,
   publishedTo: string,
   freshness: SearchFreshness = "all",
 ): string {
   if (freshness === "new") {
-    return "Тільки свіжі";
+    return "За 7 днів";
   }
   if (hasCustomPublishedRange(publishedFrom, publishedTo)) {
     const fromLabel = publishedFrom ? formatPublishedDateTimeLabel(publishedFrom) : "…";
     const toLabel = publishedTo ? formatPublishedDateTimeLabel(publishedTo) : "…";
     return `${fromLabel} — ${toLabel}`;
   }
-  if (publishedWithinDays) {
-    return publishedWithinDaysLabel(publishedWithinDays);
+  if (publishedOlderThanDays) {
+    return publishedOlderThanDaysLabel(publishedOlderThanDays);
   }
   return "";
 }
 
 export function isListingAgeFilterActive(
-  publishedWithinDays: PublishedWithinDaysValue,
+  publishedOlderThanDays: PublishedOlderThanDaysValue,
   publishedFrom: string,
   publishedTo: string,
   freshness: SearchFreshness = "all",
 ): boolean {
-  return freshness === "new" || isPublishedFilterActive(publishedWithinDays, publishedFrom, publishedTo);
+  return freshness === "new" || isPublishedFilterActive(publishedOlderThanDays, publishedFrom, publishedTo);
 }
 
 export function getCalendarDays(year: number, month: number): (Date | null)[] {

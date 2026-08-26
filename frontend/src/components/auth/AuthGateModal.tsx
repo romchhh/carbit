@@ -20,9 +20,17 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onAuthenticated: () => void;
+  headline?: string;
+  description?: string;
 };
 
-export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
+export function AuthGateModal({
+  open,
+  onClose,
+  onAuthenticated,
+  headline = "Увійдіть, щоб зберегти пошук",
+  description = "Створіть акаунт за хвилину — збережіть фільтри, підключіть моніторинг і отримуйте нові авто в Telegram.",
+}: Props) {
   const { sendPhoneCode, verifyPhoneCode } = useAuth();
 
   const [tab, setTab] = useState<Tab>("login");
@@ -246,8 +254,9 @@ export function AuthGateModal({ open, onClose, onAuthenticated }: Props) {
           ) : (
             <>
               <h2 id="auth-gate-title" className="text-[20px] font-black tracking-[-0.03em] text-ink">
-                {tab === "login" ? "Вхід" : "Реєстрація"}
+                {headline}
               </h2>
+              <p className="mt-2 text-[13px] leading-relaxed text-muted">{description}</p>
 
               <div className="mt-4 flex rounded-full border border-border/60 bg-surface p-1">
                 {(["login", "register"] as Tab[]).map(t => (

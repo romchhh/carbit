@@ -302,6 +302,7 @@ def _has_published_filter(filters: SearchFilters) -> bool:
     return bool(
         filters.published_within_hours
         or filters.published_within_days
+        or filters.published_older_than_days
         or filters.published_from
         or filters.published_to
     )
@@ -333,6 +334,29 @@ def _filter_listings_by_published_range(
     return filtered
 
 
+def _filter_listings_by_published_older_than_days(
+    items: list[ListingOut],
+    days: int | None,
+) -> list[ListingOut]:
+    if not days:
+        return items
+
+    from datetime import timedelta
+
+    from app.core.timezone import as_kyiv, now_kyiv
+
+    cutoff = now_kyiv() - timedelta(days=days)
+    filtered: list[ListingOut] = []
+    for item in items:
+        try:
+            published = as_kyiv(item.published_at)
+        except Exception:
+            continue
+        if published <= cutoff:
+            filtered.append(item)
+    return filtered
+
+
 def _filter_listings_by_published_filters(
     items: list[ListingOut],
     filters: SearchFilters,
@@ -342,6 +366,11 @@ def _filter_listings_by_published_filters(
             items,
             filters.published_from,
             filters.published_to,
+        )
+    if filters.published_older_than_days:
+        return _filter_listings_by_published_older_than_days(
+            items,
+            filters.published_older_than_days,
         )
     max_age = _published_max_age(filters)
     if max_age:

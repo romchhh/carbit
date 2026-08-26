@@ -7,9 +7,9 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 const ACCIDENT_HAD =
-  /(?:^|(?<![\wа-яіїєґ]))(?:дтп|accident|after crash|після дтп|був у дтп|був в дтп|after an accident|легкий удар|сильний удар|після удару|був удар|бита|битий|битая|биті|після аварії|була в аварії)(?:$|(?![\wа-яіїєґ]))/i;
+  /(?:^|(?<![\wа-яіїєґ]))(?:дтп|accident|after crash|після дтп|був у дтп|був в дтп|after an accident|легкий удар|сильний удар|після удару|був удар|бита|битий|битая|биті|биток|крашен[аийоїє]?|потребує ремонту|требует ремонта|аварійн[аийоїє]?|аварийн[аыйой]?|після аварії|була в аварії|salvage|rebuilt title)(?:$|(?![\wа-яіїєґ]))/i;
 const ACCIDENT_NONE =
-  /(?:^|(?<![\wа-яіїєґ]))(?:без дтп|не в дтп|не був у дтп|не був в дтп|дтп не був|дтп небув|в дтп не був|в дтп небув|no accident|not damaged|не бита|не бит)(?:$|(?![\wа-яіїєґ]))/i;
+  /(?:^|(?<![\wа-яіїєґ]))(?:без дтп|не в дтп|не був у дтп|не був в дтп|дтп не був|дтп небув|в дтп не був|в дтп небув|no accident|not damaged|не бита|не бит|не битий|не битая|не крашена|не крашен|не аварійна|не аварийна)(?:$|(?![\wа-яіїєґ]))/i;
 
 /** true — був у ДТП, false — не був, null — невідомо. */
 export function resolveListingAccidentHad(listing: Listing): boolean | null {
@@ -20,20 +20,25 @@ export function resolveListingAccidentHad(listing: Listing): boolean | null {
   if (typeof condition.wasAccident === "boolean") return condition.wasAccident;
 
   const auto = asRecord(sd.autoData);
-  const damageRaw = auto.damageId ?? auto.damage;
+  const state = asRecord(sd.stateData);
+  const damageRaw = auto.damageId ?? auto.damage ?? state.damageId ?? state.damage ?? sd.damageId ?? sd.damage;
   if (typeof damageRaw === "number" || (typeof damageRaw === "string" && damageRaw.trim())) {
     const damageId = Number(damageRaw);
     if (damageId === 1) return false;
     if (damageId === 2) return true;
   }
 
-  const damageName = String(auto.damageName || "").toLowerCase();
+  const damageName = String(
+    auto.damageName || state.damageName || sd.damageName || "",
+  ).toLowerCase();
   if (damageName) {
     if (/(не був|not in|без дтп|not damaged)/i.test(damageName)) return false;
     if (/(був|після|after|дтп|accident)/i.test(damageName)) return true;
   }
 
   const flags = asRecord(sd.condition_flags);
+  if (flags.damaged === true) return true;
+  if (flags.not_damaged === true) return false;
   if (typeof flags.accident === "boolean") return flags.accident;
   if (typeof flags.had_accident === "boolean") return flags.had_accident;
   if (typeof flags.dtp === "boolean") return flags.dtp;

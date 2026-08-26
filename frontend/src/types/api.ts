@@ -138,6 +138,8 @@ export interface PaginatedListings {
   offer_count?: number | null;
   /** Скільки пропозицій згорнули в дублі. */
   duplicate_count?: number | null;
+  guest_searches_remaining?: number;
+  guest_searches_limit?: number;
 }
 
 export interface SearchLiveResults {

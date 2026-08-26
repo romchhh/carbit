@@ -141,8 +141,18 @@ class OlxSearchParams:
     def needs_detail_fetch(self) -> bool:
         # Кузов/колір/привід/обʼєм/місця вже в API URL — детальні HTML-сторінки
         # потрібні лише для полів, яких немає в серверних фільтрах.
+        from app.services.olx.constants import (
+            CONDITION_ENUM_AFTER_ACCIDENT,
+            CONDITION_ENUM_NOT_BIT,
+        )
+
+        accident_filter = any(
+            enum in (CONDITION_ENUM_AFTER_ACCIDENT, CONDITION_ENUM_NOT_BIT)
+            for enum in self.condition_enums
+        )
         return any(
             [
+                accident_filter,
                 self.consumption_from is not None,
                 self.consumption_to is not None,
                 self.ev_range_from is not None,

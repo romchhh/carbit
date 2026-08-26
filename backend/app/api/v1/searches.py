@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.models import User, SearchQuery
 from app.schemas.schemas import (
+    GuestLiveSearchOut,
     PaginatedListings,
     SearchFilters,
     SearchLiveResultsOut,
@@ -21,7 +22,13 @@ from app.services.parser.results import (
     search_query_to_out,
 )
 from app.services.parser.tasks import schedule_parse_search
+from app.services.search.guest_guard import (
+    enforce_guest_search_protection,
+    verify_guest_internal_secret,
+)
+from app.services.search.guest_search import GUEST_SEARCH_LIMIT, enforce_guest_search_limit
 from app.services.search.search_endpoint import run_live_search
+from app.services.rate_limit import client_ip
 
 router = APIRouter(prefix="/searches", tags=["searches"])
 
@@ -71,6 +78,40 @@ async def live_search(
         sort_by=sort_by,
         mode=mode,
         hourly_limit=effective_live_searches_hour(user),
+    )
+
+
+@router.post("/live/guest", response_model=GuestLiveSearchOut)
+async def guest_live_search(
+    filters: SearchFilters,
+    request: Request,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=20),
+    sort_by: str = Query("newest"),
+    _: None = Depends(verify_guest_internal_secret),
+):
+    """Безкоштовний пошук без реєстрації (обмежено по IP, лише через frontend proxy)."""
+    await enforce_guest_search_protection(request)
+    if page != 1:
+        raise HTTPException(400, "Гостьовий пошук доступний лише для першої сторінки")
+
+    remaining = await enforce_guest_search_limit(request)
+    ip = client_ip(request)
+    result = await run_live_search(
+        filters,
+        user_id=f"guest:{ip}",
+        page=1,
+        per_page=per_page,
+        sort_by=sort_by,
+        mode="preview",
+        hourly_limit=10_000,
+        skip_rate_limit=True,
+    )
+    payload = result.model_dump()
+    return GuestLiveSearchOut(
+        **payload,
+        guest_searches_remaining=remaining,
+        guest_searches_limit=GUEST_SEARCH_LIMIT,
     )
 
 

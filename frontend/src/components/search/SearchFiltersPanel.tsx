@@ -5,6 +5,7 @@ import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
+import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { VoiceSearchCabinetOnlyOverlay } from "@/components/search/VoiceSearchCabinetOnlyOverlay";
 import { VoiceSearchOverlay } from "@/components/search/VoiceSearchOverlay";
 import { VoiceSearchTrigger } from "@/components/search/VoiceSearchTrigger";
@@ -67,8 +68,6 @@ type Props = {
   wide?: boolean;
   /** Компактна ліва колонка на desktop (як AUTO.RIA). */
   variant?: "default" | "sidebar";
-  /** На desktop моніторинг — fixed-кнопка, блок CTA ховаємо. */
-  hideDesktopSave?: boolean;
   freshness?: SearchFreshness;
   onFreshnessChange?: (freshness: SearchFreshness) => void;
   /** Плейсхолдери поля ціни (на лендінгу — без заготовленого діапазону). */
@@ -79,6 +78,8 @@ type Props = {
   onSortChange?: (sort: SortOption) => void;
   /** Закріплений CTA моніторингу в desktop-sidebar (під кнопкою «Шукати»). */
   monitorSlot?: ReactNode;
+  /** Повноекранна мобільна модалка з фільтрами. */
+  inModal?: boolean;
 };
 
 /** Тимчасово приховано — увімкнути, коли голосовий пошук знову в UI. */
@@ -104,7 +105,6 @@ export function SearchFiltersPanel({
   connectedMonitorId,
   wide,
   variant = "default",
-  hideDesktopSave,
   freshness = "all",
   onFreshnessChange,
   pricePlaceholderFrom,
@@ -112,6 +112,7 @@ export function SearchFiltersPanel({
   voiceSearchCabinetOnly,
   onSortChange,
   monitorSlot,
+  inModal,
 }: Props) {
   const priceDefaults = DEFAULT_PRICE_BY_CURRENCY[filters.currency];
   const priceFromPlaceholder = pricePlaceholderFrom ?? priceDefaults.from;
@@ -227,6 +228,7 @@ export function SearchFiltersPanel({
             "rounded-[1.35rem] border border-border/80 bg-white shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] transition-shadow duration-300",
             variant === "sidebar" &&
               "lg:rounded-2xl lg:rounded-b-none lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)]",
+            inModal && "rounded-2xl shadow-none ring-0",
           )}
         >
           <div
@@ -468,6 +470,7 @@ export function SearchFiltersPanel({
             "mt-4 scroll-mt-28 space-y-3 rounded-[1.35rem] border border-border/80 bg-white px-3 py-3.5 shadow-[0_8px_30px_-12px_rgba(10,12,14,0.18)] ring-1 ring-black/[0.04] sm:scroll-mt-8 sm:px-5 lg:scroll-mt-6",
             sidebar &&
               "lg:mt-0 lg:shrink-0 lg:space-y-2.5 lg:rounded-b-2xl lg:border lg:border-t-0 lg:border-border/80 lg:bg-gradient-to-b lg:from-white lg:to-emerald/[0.06] lg:px-3 lg:py-3 lg:shadow-[0_4px_20px_-10px_rgba(10,12,14,0.15)] lg:ring-1 lg:ring-black/[0.04]",
+            inModal && "mt-3 rounded-2xl shadow-none ring-0",
           )}
         >
           {rateLimited ? (
@@ -502,11 +505,21 @@ export function SearchFiltersPanel({
             </span>
           </button>
 
-          {monitorSlot ? <div className="hidden lg:block">{monitorSlot}</div> : null}
+          {monitorSlot ? (
+            <div className="space-y-2">
+              {monitorSlot}
+              {saveSuccess && !monitorConnected && (
+                <p className="text-[12px] font-medium text-emerald-dark">{saveSuccess}</p>
+              )}
+              {saveError && !saveLimitReached && (
+                <p className="text-[12px] font-medium text-red-600">{saveError}</p>
+              )}
+              {saveLimitReached && <UpgradeOffer title="Ліміт моніторингів вичерпано" compact />}
+            </div>
+          ) : null}
 
-          {onSave && (
+          {onSave && !monitorSlot && (
             <SaveSearchCTA
-              className={cn(hideDesktopSave && "lg:hidden")}
               onSave={onSave}
               saving={saving}
               successMessage={saveSuccess}

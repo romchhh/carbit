@@ -2,7 +2,8 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
-import { listingSearch, fx, getApiErrorMessage, isSearchRateLimitError, ApiError } from "@/lib/api";
+import { listingSearch, fx, getApiErrorMessage, isGuestSearchLimitError, isSearchRateLimitError, ApiError } from "@/lib/api";
+import { syncGuestSearchQuota } from "@/lib/guest-search";
 import { resolveDisplayCurrency } from "@/lib/display-currency";
 import {
   DEFAULT_FILTERS,
@@ -36,6 +37,11 @@ type PageResult = {
   sources?: SourceStatus[];
   partial?: boolean;
   from_cache?: boolean;
+  guestSearchesRemaining?: number;
+};
+
+type UsePreviewSearchOptions = {
+  guest?: boolean;
 };
 
 /**
@@ -68,8 +74,13 @@ function growDisplayStable(shown: Listing[], full: Listing[], targetCount: numbe
   return next;
 }
 
-export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAULT_FILTERS }) {
+export function usePreviewSearch(
+  initialFilters: SearchFilterState = { ...DEFAULT_FILTERS },
+  options: UsePreviewSearchOptions = {},
+) {
+  const guestModeRequested = Boolean(options.guest);
   const { user } = useAuth();
+  const guestMode = guestModeRequested && !user;
   const resultsRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState<SearchFilterState>(initialFilters);
   const searchGen = useRef(0);
@@ -156,14 +167,25 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       apiPage: number,
       signal?: AbortSignal,
     ): Promise<PageResult> => {
-      const data = await listingSearch.search(
-        buildRequestFilters(nextFilters, nextFreshness),
-        apiPage,
-        SEARCH_FIRST_BATCH,
-        apiSort,
-        "preview",
-        signal,
-      );
+      const data = guestMode
+        ? await listingSearch.guestSearch(
+            buildRequestFilters(nextFilters, nextFreshness),
+            apiPage,
+            SEARCH_FIRST_BATCH,
+            apiSort,
+            signal,
+          )
+        : await listingSearch.search(
+            buildRequestFilters(nextFilters, nextFreshness),
+            apiPage,
+            SEARCH_FIRST_BATCH,
+            apiSort,
+            "preview",
+            signal,
+          );
+      if (guestMode) {
+        syncGuestSearchQuota(data.guest_searches_remaining, data.guest_searches_limit);
+      }
       return {
         items: data.items,
         total: data.total,
@@ -172,9 +194,10 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         sources: data.sources,
         partial: data.partial,
         from_cache: data.from_cache,
+        guestSearchesRemaining: data.guest_searches_remaining,
       };
     },
-    [buildRequestFilters],
+    [buildRequestFilters, guestMode],
   );
 
   /**
@@ -346,7 +369,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           setSearching(false);
         });
 
-        if (first.pages > 1) {
+        if (!guestMode && first.pages > 1) {
           const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2, signal);
           if (gen !== searchGen.current) return;
           lastApiPageRef.current = 2;
@@ -359,7 +382,9 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
           });
         }
 
-        void hydrateFullPool(gen, nextFilters, nextFreshness, first.total);
+        if (!guestMode) {
+          void hydrateFullPool(gen, nextFilters, nextFreshness, first.total);
+        }
       } catch (err) {
         // AbortError — новий пошук вже запущений; мовчки ігноруємо.
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -382,6 +407,8 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         setError(getApiErrorMessage(err, "Не вдалось виконати пошук. Спробуйте ще раз."));
         if (isSearchRateLimitError(err) && err instanceof ApiError) {
           setErrorRetryAfter(err.retryAfter ?? 3600);
+        } else if (isGuestSearchLimitError(err)) {
+          setErrorRetryAfter(null);
         } else {
           setErrorRetryAfter(null);
         }
@@ -392,7 +419,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         }
       }
     },
-    [hydrateFullPool, scrollToProgress, searchSlice],
+    [guestMode, hydrateFullPool, scrollToProgress, searchSlice],
   );
 
   const fetchMoreFromServer = useCallback(
@@ -402,6 +429,13 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
       nextFreshness: SearchFreshness,
       targetDisplay: number,
     ) => {
+      if (guestMode) {
+        if (gen !== searchGen.current) return;
+        startTransition(() => {
+          applyDisplaySlice(targetDisplay);
+        });
+        return;
+      }
       const apiSort = poolApiSortRef.current;
       // Починаємо з наступної після останньої завантаженої сторінки,
       // а не розраховуємо по розміру пулу — пул може бути меншим через провал гідрації.
@@ -449,7 +483,7 @@ export function usePreviewSearch(initialFilters: SearchFilterState = { ...DEFAUL
         }
       });
     },
-    [applyDisplaySlice, searchSlice],
+    [applyDisplaySlice, guestMode, searchSlice],
   );
 
   const loadMore = useCallback(() => {

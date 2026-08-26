@@ -41,12 +41,18 @@ export function middleware(request: NextRequest) {
   // /auth/login більше не редіректимо через наявність cookie:
   // після logout Set-Cookie може не встигнути / не знятись → цикл /app ↔ login + вічний лоадер.
 
+  if (pathname === "/search" || pathname === "/try") {
+    return withNoIndex(NextResponse.next());
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
     "/app/:path*",
+    "/search",
+    "/try",
     "/auth/login",
     "/auth/telegram/:path*",
     "/auth/reset-password",

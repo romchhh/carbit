@@ -139,15 +139,18 @@ export default function SearchPage() {
     handleSave();
   };
 
-  const filtersPanel = (
+  const renderFiltersPanel = (options?: { inModal?: boolean; onClose?: () => void }) => (
     <SearchFiltersPanel
       wide
       variant="sidebar"
-      hideDesktopSave
+      inModal={options?.inModal}
       filters={filters}
       onChange={setFilters}
       onReset={handleReset}
-      onSearch={handleSearch}
+      onSearch={(overrideFilters, overrideSort) => {
+        handleSearch(overrideFilters, overrideSort);
+        options?.onClose?.();
+      }}
       onSortChange={changeSort}
       onSave={handleSave}
       searching={searching}
@@ -163,16 +166,20 @@ export default function SearchPage() {
       freshness={freshness}
       onFreshnessChange={changeFreshness}
       monitorSlot={
-        <DesktopSearchMonitorFab
-          connected={Boolean(matchingMonitor)}
-          connectedMonitorId={matchingMonitor?.id ?? null}
-          saving={saving}
-          limitReached={saveLimitReached}
-          onSave={handleMonitorClick}
-        />
+        options?.inModal ? null : (
+          <DesktopSearchMonitorFab
+            connected={Boolean(matchingMonitor)}
+            connectedMonitorId={matchingMonitor?.id ?? null}
+            saving={saving}
+            limitReached={saveLimitReached}
+            onSave={handleMonitorClick}
+          />
+        )
       }
     />
   );
+
+  const filtersPanel = renderFiltersPanel();
 
   const resultsPanel = (
     <SearchPreviewResults
@@ -229,18 +236,20 @@ export default function SearchPage() {
         filtersRef={filtersPanelRef}
         filters={filtersPanel}
         results={resultsPanel}
+        filtersMobileHidden
         footer={<RecentSearchesSection onSelect={handleRecentSelect} />}
       />
 
       <MobileSearchFiltersFab
         targetRef={filtersPanelRef}
+        pinned
+        renderFilters={close => renderFiltersPanel({ inModal: true, onClose: close })}
         monitor={{
-          visible: true,
-          connected: Boolean(matchingMonitor),
-          connectedMonitorId: matchingMonitor?.id ?? null,
+          onClick: handleMonitorClick,
           saving,
-          limitReached: saveLimitReached,
-          onSave: handleMonitorClick,
+          disabled: saveLimitReached,
+          connected: Boolean(matchingMonitor),
+          label: "Підключити моніторинг",
         }}
       />
 

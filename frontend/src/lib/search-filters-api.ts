@@ -1,6 +1,7 @@
 import type {
   AccidentFilterValue,
   OwnersFilterValue,
+  PublishedOlderThanDaysValue,
   PublishedWithinDaysValue,
   SearchFilterState,
   SellerFilterValue,
@@ -62,6 +63,7 @@ export type BackendSearchFilters = {
   metallic?: boolean | null;
   power_unit?: string | null;
   published_within_days?: number | null;
+  published_older_than_days?: number | null;
   published_from?: string | null;
   published_to?: string | null;
 };
@@ -116,6 +118,12 @@ function parseOwnersMax(value: OwnersFilterValue): number | null {
 }
 
 function parsePublishedWithinDays(value: PublishedWithinDaysValue): number | null {
+  if (!value) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parsePublishedOlderThanDays(value: PublishedOlderThanDaysValue): number | null {
   if (!value) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
@@ -187,6 +195,9 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
     published_within_days: customPublished
       ? null
       : parsePublishedWithinDays(synced.publishedWithinDays),
+    published_older_than_days: customPublished
+      ? null
+      : parsePublishedOlderThanDays(synced.publishedOlderThanDays),
     published_from: customPublished ? parsePublishedDateTime(synced.publishedFrom) : null,
     published_to: customPublished ? parsePublishedDateTime(synced.publishedTo) : null,
   };
@@ -284,6 +295,7 @@ export function mergeAiSearchFilters(
   if (raw.not_customs != null && String(raw.not_customs).trim()) next.notCustoms = parsed.notCustoms;
   if (raw.metallic === true) next.metallic = true;
   if (raw.published_within_days != null) next.publishedWithinDays = parsed.publishedWithinDays;
+  if (raw.published_older_than_days != null) next.publishedOlderThanDays = parsed.publishedOlderThanDays;
   if (raw.published_from != null) next.publishedFrom = parsed.publishedFrom;
   if (raw.published_to != null) next.publishedTo = parsed.publishedTo;
 
@@ -470,11 +482,19 @@ export function fromBackendSearchFilters(
       const days = raw.published_within_days;
       if (days == null || days === "") return "" as PublishedWithinDaysValue;
       const text = String(days);
-      if (text === "14") return "15" as PublishedWithinDaysValue;
-      if (text === "1" || text === "3" || text === "7" || text === "15" || text === "30") {
+      if (text === "1" || text === "3" || text === "7") {
         return text as PublishedWithinDaysValue;
       }
       return "" as PublishedWithinDaysValue;
+    })(),
+    publishedOlderThanDays: (() => {
+      const older = raw.published_older_than_days;
+      if (older === 15 || older === "15") return "15" as PublishedOlderThanDaysValue;
+      if (older === 30 || older === "30") return "30" as PublishedOlderThanDaysValue;
+      const within = raw.published_within_days;
+      if (within === 15 || within === "14") return "15" as PublishedOlderThanDaysValue;
+      if (within === 30) return "30" as PublishedOlderThanDaysValue;
+      return "" as PublishedOlderThanDaysValue;
     })(),
     publishedFrom: raw.published_from ? toLocalDateTimeInput(String(raw.published_from)) : "",
     publishedTo: raw.published_to ? toLocalDateTimeInput(String(raw.published_to)) : "",
@@ -528,6 +548,7 @@ const COMPARE_KEYS: (keyof BackendSearchFilters)[] = [
   "metallic",
   "power_unit",
   "published_within_days",
+  "published_older_than_days",
   "published_from",
   "published_to",
 ];
