@@ -1,6 +1,10 @@
 from app.services.reono.images import extract_card_image_urls, parse_detail_images
+from app.services.reono.dates import parse_reono_updated_text
+from app.services.reono.detail import parse_detail_published_at
 from app.services.reono.mapper import car_to_listing
-from app.services.reono.parser import parse_catalog_page
+from app.services.reono.parser import ReonoCar, parse_catalog_page
+from app.core.timezone import KYIV_TZ
+from datetime import datetime
 
 SAMPLE_CARD = """
 <article class="car-card" data-announcement-id="113843"
@@ -162,3 +166,27 @@ def test_filters_to_catalog_path_legacy_kyiv_label():
     assert "volkswagen" in path
     assert "passat" in path
     assert path.endswith("page=2")
+
+
+def test_parse_reono_updated_text():
+    parsed = parse_reono_updated_text("Оновлено 19.08.2026")
+    assert parsed == datetime(2026, 8, 19, 12, 0, tzinfo=KYIV_TZ)
+
+
+def test_parse_detail_published_at_from_mvs_block():
+    html = """
+    <div class="characteristecs-car-main__body__info__mvs__date">
+      Оновлено 05.03.2025
+    </div>
+    """
+    parsed = parse_detail_published_at(html)
+    assert parsed == datetime(2025, 3, 5, 12, 0, tzinfo=KYIV_TZ)
+
+
+def test_car_to_listing_uses_parsed_published_at():
+    cars, _ = parse_catalog_page(SAMPLE_CARD)
+    car = cars[0]
+    car.published_at = datetime(2025, 3, 5, 12, 0, tzinfo=KYIV_TZ)
+    listing = car_to_listing(car)
+    assert listing.published_at == car.published_at
+    assert listing.source_data["reono"]["published_at"] == car.published_at.isoformat()

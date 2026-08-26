@@ -41,7 +41,7 @@ async def _enrich_accident_descriptions(listings: list[ListingOut], filters: Sea
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
     payload = {
         "source": "reono",
-        "reono_v": "car-card-v2",
+        "reono_v": "car-card-v3",
         "filters": filters.model_dump(mode="json"),
         "page": page,
         "per_page": per_page,
@@ -50,23 +50,49 @@ def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
 
-async def _enrich_listing_images(listings: list[ListingOut]) -> list[ListingOut]:
-    """Підтягує галерею зі сторінки оголошення, якщо в картці каталогу немає фото."""
-    from app.services.reono.lazy_photos import fetch_reono_listing_images
+def _needs_published_date_enrich(filters: SearchFilters) -> bool:
+    return bool(
+        filters.published_older_than_days
+        or filters.published_within_days
+        or filters.published_within_hours
+        or filters.published_from
+        or filters.published_to
+    )
+
+
+async def _enrich_listing_details(
+    listings: list[ListingOut],
+    *,
+    fetch_dates: bool,
+) -> list[ListingOut]:
+    """Підтягує фото та/або дату публікації зі сторінки оголошення (один HTTP-запит)."""
+    from app.services.reono.lazy_photos import fetch_reono_listing_detail
 
     async def enrich_one(item: ListingOut) -> ListingOut:
-        if len(valid_reono_cdn_urls(item.images or [])) >= 2:
-            return item
-        if not item.url:
+        needs_images = len(valid_reono_cdn_urls(item.images or [])) < 2
+        needs_dates = fetch_dates
+        if not item.url or (not needs_images and not needs_dates):
             return item
         try:
-            images = await fetch_reono_listing_images(item.url)
+            detail = await fetch_reono_listing_detail(item.url)
         except Exception:
-            logger.debug("REONO image enrich failed for %s", item.id, exc_info=True)
+            logger.debug("REONO detail enrich failed for %s", item.id, exc_info=True)
             return item
-        if images:
-            return item.model_copy(update={"images": images})
-        return item
+
+        update: dict = {}
+        if needs_images and detail.images:
+            update["images"] = detail.images
+        if detail.published_at is not None:
+            update["published_at"] = detail.published_at
+            update["found_at"] = detail.published_at
+            source_data = dict(item.source_data or {})
+            nested = dict(source_data.get("reono") or {})
+            nested["published_at"] = detail.published_at.isoformat()
+            source_data["reono"] = nested
+            update["source_data"] = source_data
+        if not update:
+            return item
+        return item.model_copy(update=update)
 
     sem = asyncio.Semaphore(5)
 
@@ -97,7 +123,10 @@ async def _search_reono_body(
         listings.append(listing)
 
     listings = await _enrich_accident_descriptions(listings, filters)
-    listings = await _enrich_listing_images(listings)
+    listings = await _enrich_listing_details(
+        listings,
+        fetch_dates=_needs_published_date_enrich(filters),
+    )
     listings = [item for item in listings if listing_out_matches_filters(item, filters)]
 
     listings = sort_listings(listings, sort_by)

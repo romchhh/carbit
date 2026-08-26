@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from datetime import datetime
 
 from app.services.reono.client import get_shared_http_client
 from app.services.reono.constants import REONO_BASE_URL
+from app.services.reono.detail import parse_detail_published_at
 from app.services.reono.errors import ReonoError
 from app.services.reono.images import parse_detail_images
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ReonoListingDetail:
+    images: list[str]
+    published_at: datetime | None
 
 
 def _normalize_listing_url(url: str) -> str:
@@ -21,7 +30,7 @@ def _normalize_listing_url(url: str) -> str:
     return value
 
 
-async def fetch_reono_listing_images(url: str) -> list[str]:
+async def fetch_reono_listing_detail(url: str) -> ReonoListingDetail:
     listing_url = _normalize_listing_url(url)
     client = await get_shared_http_client()
     try:
@@ -30,11 +39,20 @@ async def fetch_reono_listing_images(url: str) -> list[str]:
         raise ReonoError(f"REONO: мережева помилка: {exc}") from exc
 
     if response.status_code == 404:
-        return []
+        return ReonoListingDetail(images=[], published_at=None)
     if response.status_code >= 400:
         raise ReonoError(f"REONO: помилка {response.status_code}")
 
-    images = parse_detail_images(response.text)
+    html = response.text
+    images = parse_detail_images(html)
     if not images:
         logger.debug("REONO detail page has no images: %s", listing_url)
-    return images
+    return ReonoListingDetail(
+        images=images,
+        published_at=parse_detail_published_at(html),
+    )
+
+
+async def fetch_reono_listing_images(url: str) -> list[str]:
+    detail = await fetch_reono_listing_detail(url)
+    return detail.images

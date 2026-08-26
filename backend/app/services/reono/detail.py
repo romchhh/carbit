@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 
 from bs4 import BeautifulSoup
+from datetime import datetime
+
+from app.services.reono.dates import parse_reono_updated_text
 
 
 def parse_detail_description(html: str) -> str | None:
@@ -28,3 +31,14 @@ def parse_detail_description(html: str) -> str | None:
                 return description
 
     return None
+
+
+def parse_detail_published_at(html: str) -> datetime | None:
+    """Дата оновлення оголошення на REONO (блок МВС «Оновлено …»)."""
+    soup = BeautifulSoup(html, "html.parser")
+    date_el = soup.select_one(".characteristecs-car-main__body__info__mvs__date")
+    if date_el is not None:
+        parsed = parse_reono_updated_text(date_el.get_text(" ", strip=True))
+        if parsed is not None:
+            return parsed
+    return parse_reono_updated_text(soup.get_text(" ", strip=True))

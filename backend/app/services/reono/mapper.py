@@ -23,6 +23,18 @@ def car_to_listing(car: ReonoCar) -> ListingOut:
         images = [car.image_url]
     engine_volume_l = parse_engine_volume_from_text(car.engine or "")
 
+    published_at = car.published_at or now_kyiv()
+    source_data = {
+        "reono": {
+            "car_id": car.car_id,
+            "price_uah": car.price_uah,
+            "is_new": car.is_new,
+            "is_premium": car.is_premium,
+        }
+    }
+    if car.published_at is not None:
+        source_data["reono"]["published_at"] = car.published_at.isoformat()
+
     return ListingOut(
         id=listing_id,
         source="reono",
@@ -42,18 +54,11 @@ def car_to_listing(car: ReonoCar) -> ListingOut:
         seller_type="dealer" if car.is_premium else "private",
         vin=None,
         engine_volume_l=engine_volume_l,
-        source_data={
-            "reono": {
-                "car_id": car.car_id,
-                "price_uah": car.price_uah,
-                "is_new": car.is_new,
-                "is_premium": car.is_premium,
-            }
-        },
+        source_data=source_data,
         price_history=[],
         is_duplicate=False,
-        published_at=now_kyiv(),
-        found_at=now_kyiv(),
+        published_at=published_at,
+        found_at=published_at,
     )
 
 

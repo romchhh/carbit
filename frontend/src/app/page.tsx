@@ -59,13 +59,13 @@ export default function HomePage() {
           <div className="relative section-wrap w-full pt-10 pb-14 sm:py-20">
             <div className="flex w-full max-w-[720px] flex-col min-h-[calc(100dvh-10rem)] sm:min-h-0 pt-4 sm:pt-0">
               <h1 className="w-full text-[clamp(2.05rem,6.8vw+0.4rem,4rem)] font-semibold leading-[1.12] tracking-[-0.015em] text-white animate-fade-up">
-                <span className="block sm:whitespace-nowrap">Пошук авто раніше</span>
-                <span className="block sm:whitespace-nowrap">за конкурентів</span>
+                <span className="block sm:whitespace-nowrap">Весь авторинок</span>
+                <span className="block sm:whitespace-nowrap">в одному місці</span>
               </h1>
 
               <div className="mt-7 w-full animate-fade-up-delay sm:mt-8">
-                <p className="text-[18px] leading-relaxed text-white/90 sm:text-[21px] sm:leading-snug">
-                  Моніторинг оголошень на AUTO.RIA, OLX і Telegram з миттєвими сповіщеннями
+                <p className="text-[15px] leading-relaxed text-white/65 sm:text-[17px] sm:leading-snug">
+                  Моніторинг оголошень з миттєвим сповіщенням
                 </p>
               </div>
 

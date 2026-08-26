@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -42,6 +43,7 @@ class ReonoCar:
     image_url: Optional[str]
     image_urls: list[str] = field(default_factory=list)
     details: dict = field(default_factory=dict)
+    published_at: datetime | None = None
 
 
 def _normalize_url(href: str) -> str:
