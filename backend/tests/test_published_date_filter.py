@@ -69,3 +69,49 @@ def test_filter_listings_by_published_older_than_days():
     filters = SearchFilters(published_older_than_days=15)
     result = _filter_listings_by_published_filters(items, filters)
     assert [item.id for item in result] == ["very_old", "old_enough"]
+
+
+def test_build_live_search_pool_applies_published_older_than_days():
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.search.multi_source import build_live_search_pool
+
+    now = now_kyiv()
+    fresh = _listing("fresh", now - timedelta(hours=1))
+    old = _listing("old", now - timedelta(days=20))
+
+    async def run():
+        with patch(
+            "app.services.auto_ria.service.collect_auto_ria_ids",
+            new_callable=AsyncMock,
+            return_value=([], 0),
+        ), patch(
+            "app.services.search.multi_source._search_olx_body",
+            new_callable=AsyncMock,
+            return_value=PaginatedListings(
+                items=[fresh, old],
+                total=2,
+                page=1,
+                per_page=500,
+                pages=1,
+            ),
+        ), patch(
+            "app.services.search.multi_source._fetch_source_pool",
+            new_callable=AsyncMock,
+            return_value=PaginatedListings(
+                items=[], total=0, page=1, per_page=500, pages=0
+            ),
+        ):
+            slots, nav_total, _market_total, _statuses = await build_live_search_pool(
+                SearchFilters(brand="Hyundai", published_older_than_days=15),
+                sort_by="newest",
+                max_ids=50,
+                olx_enrich_details=False,
+            )
+        return slots, nav_total
+
+    slots, nav_total = asyncio.run(run())
+    assert nav_total == 1
+    assert len(slots) == 1
+    assert slots[0].get("s") == "o"

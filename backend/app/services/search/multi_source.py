@@ -378,6 +378,35 @@ def _filter_listings_by_published_filters(
     return items
 
 
+async def _filter_auto_ria_ids_by_published(
+    auto_ria_ids: list[str],
+    filters: SearchFilters,
+) -> list[str]:
+    """Гідратує AUTO.RIA IDs і лишає лише ті, що проходять фільтр дати публікації."""
+    if not auto_ria_ids or not _has_published_filter(filters):
+        return auto_ria_ids
+
+    from app.services.search.pool_cache import _batch_hydrate_auto_ria, _batch_hydrate_new_auto_ria
+
+    used_ids = [aid for aid in auto_ria_ids if not aid.startswith("n:")]
+    new_ids = [aid[2:] for aid in auto_ria_ids if aid.startswith("n:")]
+
+    hydrated_used, hydrated_new = await asyncio.gather(
+        _batch_hydrate_auto_ria(used_ids),
+        _batch_hydrate_new_auto_ria(new_ids),
+    )
+
+    filtered: list[str] = []
+    for aid in auto_ria_ids:
+        if aid.startswith("n:"):
+            listing = hydrated_new.get(aid[2:])
+        else:
+            listing = hydrated_used.get(aid)
+        if listing and _filter_listings_by_published_filters([listing], filters):
+            filtered.append(aid)
+    return filtered
+
+
 def _filter_listings_by_published_age(
     items: list[ListingOut],
     max_age,
@@ -2016,6 +2045,16 @@ async def build_live_search_pool(
     telegram_filtered = _sort_telegram_photos_first(
         _filter_listings_by_brand_model(list(telegram_result.items), filters)
     )
+
+    if _has_published_filter(filters):
+        olx_filtered = _filter_listings_by_published_filters(olx_filtered, filters)
+        imperiya_filtered = _filter_listings_by_published_filters(imperiya_filtered, filters)
+        udrive_filtered = _filter_listings_by_published_filters(udrive_filtered, filters)
+        car_market_filtered = _filter_listings_by_published_filters(car_market_filtered, filters)
+        reono_filtered = _filter_listings_by_published_filters(reono_filtered, filters)
+        telegram_filtered = _filter_listings_by_published_filters(telegram_filtered, filters)
+        if auto_ria_ids:
+            auto_ria_ids = await _filter_auto_ria_ids_by_published(auto_ria_ids, filters)
 
     # VIN-дублі між OLX / Car Market / Імперія / uDrive / Telegram — в одному пулі.
     ot_merged = mark_duplicates_in_pool(
