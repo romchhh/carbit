@@ -244,3 +244,66 @@ async def admin_api_usage(
 
     data = await build_api_usage_report(hours=hours, days=days)
     return AdminApiUsageOut(**data)
+
+
+class TrafficChartPoint(BaseModel):
+    label: str
+    total: int
+    unique: int = 0
+
+
+class TrafficCountryRow(BaseModel):
+    code: str
+    name: str
+    count: int
+    share: float
+
+
+class TrafficPageRow(BaseModel):
+    path: str
+    label: str
+    count: int
+    share: float
+
+
+class TrafficHourRow(BaseModel):
+    hour: int
+    label: str
+    count: int
+
+
+class TrafficDeviceRow(BaseModel):
+    device: str
+    count: int
+
+
+class AdminTrafficOut(BaseModel):
+    generated_at: str
+    hours_window: int
+    days_window: int
+    online_now: int
+    today_total: int
+    today_unique: int
+    last_hour_total: int
+    period_total: int
+    period_unique: int
+    avg_per_day: float
+    avg_per_hour: float
+    hourly_chart: list[TrafficChartPoint]
+    daily_chart: list[TrafficChartPoint]
+    countries: list[TrafficCountryRow]
+    top_pages: list[TrafficPageRow]
+    time_of_day: list[TrafficHourRow]
+    devices: list[TrafficDeviceRow]
+
+
+@router.get("/traffic", response_model=AdminTrafficOut)
+async def admin_traffic(
+    hours: int = Query(24, ge=6, le=168),
+    days: int = Query(7, ge=3, le=30),
+    _: str = Depends(get_current_admin),
+):
+    from app.services.admin.visit_stats import build_traffic_report
+
+    data = await build_traffic_report(hours=hours, days=days)
+    return AdminTrafficOut(**data)

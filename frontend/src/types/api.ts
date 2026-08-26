@@ -174,6 +174,17 @@ export interface PaginatedNotifications {
   per_page: number;
 }
 
+export type NotificationTypeFilter = "listing_match" | "price_drop" | "vin_found" | "system";
+
+export interface NotificationStats {
+  unread: number;
+  total: number;
+  price_drops: number;
+  vin_found: number;
+  listing_matches: number;
+  unread_price_drops: number;
+}
+
 export interface DashboardStats {
   active_searches: number;
   searches_limit: number;

@@ -417,6 +417,10 @@ class PaginatedNotifications(BaseModel):
 class NotificationStats(BaseModel):
     unread: int
     total: int
+    price_drops: int = 0
+    vin_found: int = 0
+    listing_matches: int = 0
+    unread_price_drops: int = 0
 
 
 # Billing

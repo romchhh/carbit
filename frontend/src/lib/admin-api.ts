@@ -255,6 +255,8 @@ export const adminApi = {
   analytics: () => request<AdminAnalytics>("/admin/analytics"),
   apiUsage: (hours = 24, days = 7) =>
     request<AdminApiUsage>(`/admin/api-usage?hours=${hours}&days=${days}`),
+  traffic: (hours = 24, days = 7) =>
+    request<AdminTraffic>(`/admin/traffic?hours=${hours}&days=${days}`),
   system: () => request<AdminSystem>("/admin/system"),
   listingsBrowse: (page = 1, opts: { source?: string; search?: string; duplicates_only?: boolean } = {}) => {
     const params = new URLSearchParams({ page: String(page), per_page: "30" });
@@ -465,6 +467,57 @@ export interface AdminApiUsage {
   hours_window: number;
   days_window: number;
   sources: Record<string, AdminApiUsageSource>;
+}
+
+export interface AdminTrafficChartPoint {
+  label: string;
+  total: number;
+  unique?: number;
+}
+
+export interface AdminTrafficCountry {
+  code: string;
+  name: string;
+  count: number;
+  share: number;
+}
+
+export interface AdminTrafficPage {
+  path: string;
+  label: string;
+  count: number;
+  share: number;
+}
+
+export interface AdminTrafficHour {
+  hour: number;
+  label: string;
+  count: number;
+}
+
+export interface AdminTrafficDevice {
+  device: string;
+  count: number;
+}
+
+export interface AdminTraffic {
+  generated_at: string;
+  hours_window: number;
+  days_window: number;
+  online_now: number;
+  today_total: number;
+  today_unique: number;
+  last_hour_total: number;
+  period_total: number;
+  period_unique: number;
+  avg_per_day: number;
+  avg_per_hour: number;
+  hourly_chart: AdminTrafficChartPoint[];
+  daily_chart: AdminTrafficChartPoint[];
+  countries: AdminTrafficCountry[];
+  top_pages: AdminTrafficPage[];
+  time_of_day: AdminTrafficHour[];
+  devices: AdminTrafficDevice[];
 }
 
 export interface AdminAnalytics {

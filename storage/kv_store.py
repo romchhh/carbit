@@ -35,6 +35,7 @@ class KVClient(Protocol):
     async def zcard(self, key: str) -> int: ...
     async def zrange(self, key: str, start: int, end: int) -> list[str]: ...
     async def zrem(self, key: str, *members: str) -> None: ...
+    async def zremrangebyscore(self, key: str, min_score: float, max_score: float) -> int: ...
 
 
 def resolve_sqlite_path(url: str, root_dir: Path) -> Path:
@@ -345,6 +346,26 @@ class SQLiteKV:
                 else:
                     conn.execute("DELETE FROM kv WHERE key = ?", (key,))
 
+    def _zremrangebyscore_sync(self, key: str, min_score: float, max_score: float) -> int:
+        with self._connect() as conn:
+            self._purge_expired(conn)
+            data = self._load_zset_sync(conn, key)
+            if not data:
+                return 0
+            removed = 0
+            kept: dict[str, float] = {}
+            for member, score in data.items():
+                if min_score <= score <= max_score:
+                    removed += 1
+                else:
+                    kept[member] = score
+            if removed:
+                if kept:
+                    self._save_zset_sync(conn, key, kept)
+                else:
+                    conn.execute("DELETE FROM kv WHERE key = ?", (key,))
+            return removed
+
     async def zadd(self, key: str, mapping: dict[str, float]) -> None:
         await to_thread(self._zadd_sync, key, mapping)
 
@@ -356,6 +377,9 @@ class SQLiteKV:
 
     async def zrem(self, key: str, *members: str) -> None:
         await to_thread(self._zrem_sync, key, *members)
+
+    async def zremrangebyscore(self, key: str, min_score: float, max_score: float) -> int:
+        return await to_thread(self._zremrangebyscore_sync, key, min_score, max_score)
 
 
 class RedisKV:
@@ -430,6 +454,9 @@ class RedisKV:
     async def zrem(self, key: str, *members: str) -> None:
         if members:
             await self._client.zrem(key, *members)
+
+    async def zremrangebyscore(self, key: str, min_score: float, max_score: float) -> int:
+        return int(await self._client.zremrangebyscore(key, min_score, max_score))
 
     async def aclose(self) -> None:
         await self._client.aclose()

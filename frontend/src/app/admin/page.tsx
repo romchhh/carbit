@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { adminApi, type AdminAnalytics, type AdminDashboard } from "@/lib/admin-api";
-import { AdminBarChart, AdminStatusBadge } from "@/components/admin/AdminCharts";
+import { adminApi, type AdminAnalytics, type AdminDashboard, type AdminTraffic } from "@/lib/admin-api";
+import { AdminAreaChart, AdminBarChart, AdminStatusBadge } from "@/components/admin/AdminCharts";
 import { PLAN_LABELS, cn } from "@/lib/utils";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -15,6 +15,7 @@ const SOURCE_LABELS: Record<string, string> = {
 export default function AdminDashboardPage() {
   const [data, setData] = useState<AdminDashboard | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [traffic, setTraffic] = useState<AdminTraffic | null>(null);
   const [systemStatus, setSystemStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,11 +23,13 @@ export default function AdminDashboardPage() {
       adminApi.dashboard(),
       adminApi.analytics(),
       adminApi.system(),
+      adminApi.traffic(24, 7),
     ])
-      .then(([dash, anal, sys]) => {
+      .then(([dash, anal, sys, visitStats]) => {
         setData(dash);
         setAnalytics(anal);
         setSystemStatus(sys.scheduler_status);
+        setTraffic(visitStats);
       })
       .catch(() => {});
   }, []);
@@ -162,6 +165,23 @@ export default function AdminDashboardPage() {
           <AdminBarChart data={analytics.notifications_chart} colorClass="bg-blue-500" />
         </div>
       </div>
+
+      {traffic ? (
+        <div className="mb-8 rounded-xl border border-border bg-white p-6">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-bold text-ink">Відвідування сайту</h2>
+              <p className="text-[12px] text-muted">
+                {traffic.online_now} онлайн · {traffic.today_total} сьогодні · {traffic.period_total} за 7 днів
+              </p>
+            </div>
+            <Link href="/admin/traffic" className="text-[12px] font-semibold text-emerald hover:underline">
+              Детальна аналітика →
+            </Link>
+          </div>
+          <AdminAreaChart data={traffic.hourly_chart} height={150} />
+        </div>
+      ) : null}
 
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-white border border-border rounded-xl p-6">

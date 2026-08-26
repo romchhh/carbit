@@ -12,6 +12,7 @@ const links = [
   { href: "/admin/listings", label: "Оголошення" },
   { href: "/admin/parsing", label: "Парсинг" },
   { href: "/admin/requests", label: "API запити" },
+  { href: "/admin/traffic", label: "Відвідування" },
   { href: "/admin/source-requests", label: "Заявки" },
   { href: "/admin/channels", label: "Telegram" },
   { href: "/admin/clients", label: "Клієнти" },

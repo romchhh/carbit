@@ -625,7 +625,29 @@ def notification_to_out(
     *,
     listing_out=None,
 ) -> NotificationOut:
+    from app.models.models import NotificationType
+
     ntype = notification.type.value if hasattr(notification.type, "value") else str(notification.type)
+    resolved_listing = listing_out if listing_out is not None else (listing_to_out(listing) if listing else None)
+    if resolved_listing and ntype == NotificationType.price_drop.value:
+        payload = notification.payload or {}
+        old_price = payload.get("old_price")
+        drop_percent = payload.get("drop_percent")
+        updates: dict = {}
+        try:
+            if old_price is not None:
+                updates["previous_price"] = int(old_price)
+        except (TypeError, ValueError):
+            pass
+        try:
+            if drop_percent is not None:
+                updates["price_drop_percent"] = float(drop_percent)
+        except (TypeError, ValueError):
+            pass
+        if updates:
+            updates.setdefault("price_dropped_at", notification.created_at)
+            resolved_listing = resolved_listing.model_copy(update=updates)
+
     return NotificationOut(
         id=notification.id,
         type=ntype,
@@ -637,7 +659,7 @@ def notification_to_out(
         is_read=notification.is_read,
         sent_telegram=notification.sent_telegram,
         created_at=notification.created_at,
-        listing=listing_out if listing_out is not None else (listing_to_out(listing) if listing else None),
+        listing=resolved_listing,
     )
 
 
@@ -663,6 +685,8 @@ def _notification_order_by(sort_by: str):
         return (nulls_last(asc(Listing.mileage)), desc(Notification.created_at))
     if sort_by == "published_asc":
         return (nulls_last(asc(Listing.published_at)), asc(Notification.created_at))
+    if sort_by == "price_drop_desc":
+        return (desc(Notification.created_at),)
     return (desc(Notification.created_at),)
 
 
@@ -674,10 +698,18 @@ async def list_user_notifications(
     per_page: int = 20,
     unread_only: bool = False,
     sort_by: str = "newest",
+    type_filter: str | None = None,
 ) -> tuple[list[NotificationOut], int, int]:
+    from app.models.models import NotificationType
+
     filters = [Notification.user_id == user_id]
     if unread_only:
         filters.append(Notification.is_read.is_(False))
+    if type_filter:
+        try:
+            filters.append(Notification.type == NotificationType(type_filter))
+        except ValueError:
+            pass
 
     total = (
         await db.scalar(

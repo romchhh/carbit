@@ -127,6 +127,9 @@ class Settings(BaseSettings):
     # Observability
     SENTRY_DSN: str = ""
 
+    # GeoIP для аналітики відвідувань (опційно: шлях до GeoLite2-Country.mmdb)
+    GEOIP_COUNTRY_DB: str = ""
+
     @field_validator("LIQPAY_PUBLIC_KEY", "LIQPAY_PRIVATE_KEY", mode="before")
     @classmethod
     def strip_liqpay_keys(cls, value: object) -> str:

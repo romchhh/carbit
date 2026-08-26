@@ -72,6 +72,11 @@ async def _send_event_card(
 ) -> bool:
     if not (user.telegram_connected and user.telegram_id):
         return False
+    from app.services.parser.settings import get_parser_settings
+
+    settings = await get_parser_settings()
+    if not settings.get("notify_telegram", True):
+        return False
     try:
         result = await telegram_client.send_listing_card(
             user.telegram_id,
@@ -221,6 +226,7 @@ async def notify_listing_events(
                 alert_emoji="📉",
             ):
                 notification.sent_telegram = True
+            await db.flush()
 
         if vin_appeared and listing.vin:
             body = f"З’явився VIN: {listing.vin}"
@@ -248,6 +254,7 @@ async def notify_listing_events(
                 alert_emoji="🔑",
             ):
                 notification.sent_telegram = True
+            await db.flush()
 
     if sent:
         await db.flush()

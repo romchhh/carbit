@@ -12,6 +12,8 @@ import type {
   Listing,
   LiqPayCheckout,
   Notification,
+  NotificationStats,
+  NotificationTypeFilter,
   PaginatedListings,
   PaginatedNotifications,
   Plan,
@@ -422,11 +424,23 @@ export const favorites = {
 
 // ── Notifications ─────────────────────────────────────
 export const notifications = {
-  list: (page = 1, unreadOnly = false, sortBy: SortOption = "newest", perPage = 20) =>
-    request<PaginatedNotifications>(
-      `/notifications?page=${page}&per_page=${perPage}&unread_only=${unreadOnly}&sort_by=${sortBy}`,
-    ),
-  stats: () => request<{ unread: number; total: number }>("/notifications/stats"),
+  list: (
+    page = 1,
+    unreadOnly = false,
+    sortBy: SortOption = "newest",
+    perPage = 20,
+    type?: NotificationTypeFilter,
+  ) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      per_page: String(perPage),
+      unread_only: String(unreadOnly),
+      sort_by: sortBy,
+    });
+    if (type) params.set("type", type);
+    return request<PaginatedNotifications>(`/notifications?${params}`);
+  },
+  stats: () => request<NotificationStats>("/notifications/stats"),
   markRead: (id: string) => request<Notification>(`/notifications/${id}/read`, { method: "PATCH" }),
   markAllRead: () => request<{ marked: number }>("/notifications/read-all", { method: "POST" }),
   seedDemo: () => request<{ listings_created: number; notifications_sent: number }>("/notifications/demo/seed", { method: "POST" }),

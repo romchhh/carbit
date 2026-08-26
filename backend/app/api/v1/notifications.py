@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
-from app.models.models import Listing, Notification
+from app.models.models import Listing, Notification, NotificationType
 from app.schemas.schemas import PaginatedNotifications, NotificationOut, NotificationStats
 from app.services.notifications.service import (
     get_unread_count,
@@ -23,6 +23,7 @@ async def list_notifications(
     per_page: int = Query(20, ge=1, le=100),
     unread_only: bool = False,
     sort_by: str = Query("newest"),
+    type: str | None = Query(None, description="listing_match | price_drop | vin_found | system"),
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -33,6 +34,7 @@ async def list_notifications(
         per_page=per_page,
         unread_only=unread_only,
         sort_by=sort_by,
+        type_filter=type,
     )
     return PaginatedNotifications(
         items=items,
@@ -52,7 +54,26 @@ async def notification_stats(
         select(func.count()).select_from(Notification).where(Notification.user_id == user_id)
     ) or 0
     unread = await get_unread_count(db, user_id)
-    return NotificationStats(unread=unread, total=total)
+
+    async def _count(ntype: NotificationType | None = None, unread_only: bool = False) -> int:
+        filters = [Notification.user_id == user_id]
+        if ntype is not None:
+            filters.append(Notification.type == ntype)
+        if unread_only:
+            filters.append(Notification.is_read.is_(False))
+        return (
+            await db.scalar(select(func.count()).select_from(Notification).where(*filters))
+            or 0
+        )
+
+    return NotificationStats(
+        unread=unread,
+        total=total,
+        price_drops=await _count(NotificationType.price_drop),
+        vin_found=await _count(NotificationType.vin_found),
+        listing_matches=await _count(NotificationType.listing_match),
+        unread_price_drops=await _count(NotificationType.price_drop, unread_only=True),
+    )
 
 
 @router.patch("/{notification_id}/read", response_model=NotificationOut)
