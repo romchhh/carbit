@@ -26,7 +26,11 @@ from app.services.auto_ria.constants import (
     region_label_from_state_city,
 )
 from app.services.auto_ria.url_parse import omni_id_from_search_filters
-from app.services.search.filter_multi import canonicalize_region
+from app.services.search.filter_multi import (
+    effective_brands,
+    effective_models,
+    effective_regions,
+)
 from app.services.auto_ria.filter_maps import (
     ACCIDENT_TO_DAMAGE,
     SELLER_TO_RIA,
@@ -58,14 +62,17 @@ async def filters_to_search_params(
         params["omni_id"] = omni_id
         return params
 
-    mark_id = await resolve_mark_id(client, filters.brand or "")
-    if mark_id is None and filters.brand:
+    brand = (effective_brands(filters)[:1] or [""])[0]
+    model = (effective_models(filters)[:1] or [""])[0]
+
+    mark_id = await resolve_mark_id(client, brand)
+    if mark_id is None and brand:
         # Рідкісні марки без taxonomy (як на OLX) — шукаємо без marka_id, пост-фільтр по title.
         pass
     elif mark_id is not None:
         params["marka_id[0]"] = mark_id
-        model_id = await resolve_model_id(client, mark_id, filters.model or "")
-        if filters.model and model_id is None:
+        model_id = await resolve_model_id(client, mark_id, model)
+        if model and model_id is None:
             # Рідкісні кузови (S-Class Coupe тощо) — пошук по марці + пост-фільтр title/model.
             params["model_id[0]"] = 0
         else:
@@ -121,8 +128,9 @@ async def filters_to_search_params(
         else:
             params["top"] = 4
 
-    if filters.region and norm_text(filters.region) not in ("вся україна", ""):
-        canonical_region = canonicalize_region(filters.region) or filters.region
+    search_regions = effective_regions(filters)
+    if search_regions:
+        canonical_region = search_regions[0]
         region_key = norm_text(canonical_region)
         if region_key in REGION_TO_STATE_CITY:
             state_id, city_id = REGION_TO_STATE_CITY[region_key]

@@ -137,5 +137,65 @@ class AutoRiaZeekrSearchTests(unittest.TestCase):
         asyncio.run(run())
 
 
+    def test_filters_to_search_params_regions_array_only(self):
+        async def run():
+            client = AsyncMock()
+            client.get_marks = AsyncMock(
+                return_value=[{"name": "Zeekr", "value": 55280}],
+            )
+            client.get_models = AsyncMock(
+                return_value=[{"name": "001", "value": 64237}],
+            )
+            filters = SearchFilters(
+                brands=["Zeekr"],
+                models=["001"],
+                regions=["Хмельницька"],
+            )
+            from app.services.auto_ria import catalog as ar_catalog
+
+            ar_catalog._marks_cache = None
+            ar_catalog._models_cache.clear()
+            params = await filters_to_search_params(client, filters, page=1, per_page=20)
+            self.assertNotIn("omni_id", params)
+            self.assertEqual(params.get("marka_id[0]"), 55280)
+            self.assertEqual(params.get("model_id[0]"), 64237)
+            self.assertEqual(params.get("state[0]"), 4)
+
+        import asyncio
+
+        asyncio.run(run())
+
+    def test_numeric_models_never_omni_in_api_params(self):
+        cases = [
+            ("Zeekr", "001", 55280, 64237),
+            ("Porsche", "911", 48, 365),
+            ("Mazda", "3", 47, 256),
+        ]
+
+        async def run():
+            from app.services.auto_ria import catalog as ar_catalog
+
+            client = AsyncMock()
+            for brand, model, mark_id, model_id in cases:
+                with self.subTest(brand=brand, model=model):
+                    client.get_marks = AsyncMock(return_value=[{"name": brand, "value": mark_id}])
+                    client.get_models = AsyncMock(return_value=[{"name": model, "value": model_id}])
+                    ar_catalog._marks_cache = None
+                    ar_catalog._models_cache.clear()
+                    params = await filters_to_search_params(
+                        client,
+                        SearchFilters(brand=brand, model=model),
+                        page=1,
+                        per_page=20,
+                    )
+                    self.assertNotIn("omni_id", params)
+                    self.assertEqual(params.get("marka_id[0]"), mark_id)
+                    self.assertEqual(params.get("model_id[0]"), model_id)
+
+        import asyncio
+
+        asyncio.run(run())
+
+
 if __name__ == "__main__":
     unittest.main()

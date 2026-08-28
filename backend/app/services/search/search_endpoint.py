@@ -124,6 +124,10 @@ async def run_live_search(
     hourly_limit: int = 30,
     skip_rate_limit: bool = False,
 ) -> PaginatedListings:
+    from app.services.search.brand_model_keywords import normalize_search_filters
+
+    filters = normalize_search_filters(filters)
+
     if not skip_rate_limit:
         await _safe_rate_limits(
             user_id=user_id,

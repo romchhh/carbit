@@ -422,7 +422,10 @@ async def collect_auto_ria_ids(
     except ValueError as exc:
         raise AutoRiaError(str(exc)) from exc
 
-    if (filters.brand or "").strip() and "marka_id[0]" not in base_params and "omni_id" not in base_params:
+    from app.services.search.filter_multi import effective_brands
+
+    brand = (effective_brands(filters)[:1] or [""])[0]
+    if brand and "marka_id[0]" not in base_params and "omni_id" not in base_params:
         return [], 0
 
     sort_oldest = sort_by == "published_asc"
