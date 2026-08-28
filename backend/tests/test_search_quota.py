@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+from app.core.timezone import now_kyiv
+
 
 class EnforceActiveSearchesQuotaTests(unittest.IsolatedAsyncioTestCase):
     async def test_pauses_excess_after_trial_limit_drops(self):
@@ -63,12 +65,22 @@ class EnforceActiveSearchesQuotaTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TrialLimitTests(unittest.TestCase):
-    def test_active_trial_uses_free_monitor_limit(self):
+    def test_signup_trial_uses_start_limits(self):
+        from app.services.billing.plans import effective_searches_limit
+
+        user = SimpleNamespace(
+            plan=SimpleNamespace(value="lite"),
+            is_trial_active=True,
+            plan_expires_at=now_kyiv() + timedelta(days=3),
+        )
+        self.assertEqual(effective_searches_limit(user), 10)
+
+    def test_free_after_trial_has_one_monitor(self):
         from app.services.billing.plans import effective_searches_limit
 
         user = SimpleNamespace(
             plan=SimpleNamespace(value="free"),
-            is_trial_active=True,
+            is_trial_active=False,
             plan_expires_at=None,
         )
         self.assertEqual(effective_searches_limit(user), 1)

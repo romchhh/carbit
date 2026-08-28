@@ -2,25 +2,26 @@ from datetime import timedelta
 
 from app.core.timezone import as_kyiv, now_kyiv
 
+SIGNUP_TRIAL_DAYS = 7
+SIGNUP_TRIAL_PLAN_ID = "lite"
+
 PLANS: dict[str, dict] = {
     "free": {
         "id": "free",
         "name": "Безкоштовно",
-        "description": "Пробний доступ на 7 днів",
+        "description": "Базовий доступ після пробного «Старт»",
         "searches_limit": 1,
         "devices_limit": 1,
         "requests_month": 1_000,
         "requests_hour": 90,
         # Live-пошук у кабінеті: лише нові запити (page=1), не пагінація.
         "live_searches_hour": 30,
-        # Унікальні VIN-перевірки (None на платних = безліміт).
-        "vin_checks_limit": 3,
+        "vin_checks_limit": None,
         "price_uah": 0,
-        "period_days": 7,
+        "period_days": 0,
         "features": [
-            "Пробний період 7 днів",
-            "До 1 активного моніторингу",
-            "3 перевірки VIN",
+            "1 активний моніторинг",
+            "Необмежені перевірки VIN",
             "1 пристрій",
             "Веб-кабінет і сповіщення",
         ],
@@ -90,9 +91,6 @@ PLANS: dict[str, dict] = {
     },
 }
 
-TRIAL_PLAN_ID = "free"
-
-
 def get_plan(plan_id: str) -> dict:
     return PLANS.get(plan_id, PLANS["free"])
 
@@ -102,11 +100,9 @@ def list_plans() -> list[dict]:
 
 
 def effective_searches_limit(user) -> int:
-    """Ліміт пошуків з урахуванням активного trial і expiry платного плану."""
+    """Ліміт моніторингів з урахуванням expiry платного плану."""
     if enforce_plan_expiry(user):
         pass
-    if getattr(user, "is_trial_active", False) and user.plan.value == "free":
-        return get_plan(TRIAL_PLAN_ID)["searches_limit"]
     return get_plan(user.plan.value)["searches_limit"]
 
 
@@ -114,8 +110,6 @@ def effective_devices_limit(user) -> int:
     """Скільки одночасних сесій (пристроїв) дозволяє план."""
     if enforce_plan_expiry(user):
         pass
-    if getattr(user, "is_trial_active", False) and user.plan.value == "free":
-        return get_plan(TRIAL_PLAN_ID)["devices_limit"]
     return max(1, int(get_plan(user.plan.value).get("devices_limit") or 1))
 
 
@@ -123,10 +117,7 @@ def effective_live_searches_hour(user) -> int:
     """Скільки нових live-пошуків (page=1) на годину дозволяє план."""
     if enforce_plan_expiry(user):
         pass
-    if getattr(user, "is_trial_active", False) and user.plan.value == "free":
-        plan = get_plan(TRIAL_PLAN_ID)
-    else:
-        plan = get_plan(user.plan.value)
+    plan = get_plan(user.plan.value)
     return max(1, int(plan.get("live_searches_hour") or 30))
 
 
@@ -172,7 +163,16 @@ def enforce_plan_expiry(user) -> bool:
         return False
     user.plan = PlanTier.free
     user.plan_expires_at = None
+    trial_end = getattr(user, "trial_ends_at", None)
+    if trial_end is not None and now_kyiv() >= as_kyiv(trial_end):
+        user.trial_ends_at = None
     return True
+
+
+def grant_signup_trial(user) -> None:
+    """7 днів «Старт» після реєстрації; далі — Free через expire_paid_plans."""
+    activate_plan(user, SIGNUP_TRIAL_PLAN_ID, access_days=SIGNUP_TRIAL_DAYS)
+    user.trial_ends_at = now_kyiv() + timedelta(days=SIGNUP_TRIAL_DAYS)
 
 
 def admin_access_days(*, months: int | None = None, days: int | None = None) -> int:

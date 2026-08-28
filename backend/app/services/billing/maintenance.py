@@ -15,7 +15,7 @@ from app.services.billing.notify import (
     notify_plan_expired,
     notify_subscription_cancelled,
 )
-from app.services.billing.plans import enforce_plan_expiry
+from app.services.billing.plans import enforce_active_searches_quota, enforce_plan_expiry
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +50,23 @@ async def expire_paid_plans(db: AsyncSession) -> int:
 
     changed = 0
     for user in rows:
+        active_sub = await db.scalar(
+            select(BillingSubscription.id).where(
+                BillingSubscription.user_id == user.id,
+                BillingSubscription.status == SubscriptionStatus.active,
+            )
+        )
+        if active_sub:
+            continue
+
         previous = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
         if not enforce_plan_expiry(user):
             continue
         changed += 1
+        try:
+            await enforce_active_searches_quota(db, user)
+        except Exception:
+            logger.exception("enforce_active_searches_quota failed user=%s", user.id)
         try:
             await notify_plan_expired(db, user)
         except Exception:

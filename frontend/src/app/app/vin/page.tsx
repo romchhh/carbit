@@ -3,7 +3,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AppPage, AppSection } from "@/components/layout/AppPage";
 import { VinCheckPanel } from "@/components/listings/VinCheckPanel";
-import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { vin as vinApi } from "@/lib/api";
 import { normalizeVin } from "@/lib/vin-check";
 import { formatKyivDateTime } from "@/lib/datetime";
@@ -84,7 +83,6 @@ export default function VinCheckPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [limitReached, setLimitReached] = useState(false);
   const [quota, setQuota] = useState<VinQuotaStatus | null>(null);
   const [mine, setMine] = useState<VinCheckHistoryItem[]>([]);
   const [recent, setRecent] = useState<VinCheckHistoryItem[]>([]);
@@ -117,7 +115,6 @@ export default function VinCheckPage() {
       return;
     }
     setFormError(null);
-    setLimitReached(false);
     setActiveVin(code);
     setSearching(true);
     setPanelOpen(true);
@@ -125,13 +122,6 @@ export default function VinCheckPage() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (quota && !quota.unlimited && (quota.remaining ?? 0) <= 0) {
-      setLimitReached(true);
-      setFormError(
-        `Безкоштовно доступно ${quota.limit ?? 3} перевірки VIN. Оформіть тариф «Старт» — без обмежень.`,
-      );
-      return;
-    }
     openVin(input);
   };
 
@@ -139,7 +129,7 @@ export default function VinCheckPage() {
     <AppPage
       wide
       title="Перевірка VIN"
-      description="База ДАІ та аукціонна історія. Безкоштовно — 3 унікальні VIN; на підписці Старт і вище — безліміт."
+      description="База ДАІ та аукціонна історія. Перевірки VIN без обмежень на всіх тарифах."
     >
       <AppSection className="mb-4">
         <form onSubmit={onSubmit} className="space-y-3">
@@ -182,21 +172,15 @@ export default function VinCheckPage() {
               )}
             </button>
           </div>
-          {quota && (
+          {quota && quota.used > 0 && (
             <p className="text-[12px] text-muted">
-              {quota.unlimited
-                ? "На вашому тарифі перевірки VIN без обмежень."
-                : `Використано ${quota.used} з ${quota.limit ?? 3} безкоштовних перевірок` +
-                  (quota.remaining != null ? ` · залишилось ${quota.remaining}` : "")}
+              Перевірок у вашому акаунті: {quota.used}. Лімітів немає — на всіх тарифах.
             </p>
           )}
           {formError && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-950">
               {formError}
             </div>
-          )}
-          {limitReached && (
-            <UpgradeOffer planId="lite" title="Необмежені перевірки VIN — тариф «Старт»" />
           )}
         </form>
       </AppSection>

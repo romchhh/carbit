@@ -111,7 +111,9 @@ class User(Base):
 
     @staticmethod
     def default_trial_end() -> datetime:
-        return now_kyiv() + timedelta(days=3)
+        from app.services.billing.plans import SIGNUP_TRIAL_DAYS
+
+        return now_kyiv() + timedelta(days=SIGNUP_TRIAL_DAYS)
 
 
 class SearchQuery(Base):

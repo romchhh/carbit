@@ -1,4 +1,4 @@
-"""Ліміт перевірок VIN: 3 унікальні на free, безліміт на платних тарифах."""
+"""Перевірки VIN — безліміт на всіх тарифах."""
 
 from __future__ import annotations
 
@@ -7,22 +7,14 @@ import json
 from fastapi import HTTPException
 
 from app.core.redis import get_redis
-from app.services.billing.plans import enforce_plan_expiry, get_plan
 
 VIN_QUOTA_PREFIX = "vin:quota:v1:"
-MIN_PAID_PLAN = "lite"
-# Квота «назавжди» для free-акаунта (поки не апгрейд).
 QUOTA_TTL_SECONDS = 60 * 60 * 24 * 365 * 5
 
 
 def effective_vin_checks_limit(user) -> int | None:
-    """Скільки унікальних VIN дозволено. None = безліміт."""
-    if enforce_plan_expiry(user):
-        pass
-    plan_id = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
-    if plan_id != "free":
-        return None
-    return max(0, int(get_plan("free").get("vin_checks_limit") or 3))
+    """Скільки унікальних VIN дозволено. None = безліміт (усі тарифи)."""
+    return None
 
 
 def _quota_key(user_id: str) -> str:
@@ -57,63 +49,25 @@ async def vin_checks_usage(user_id: str) -> int:
 
 
 async def enforce_vin_check_quota(user, vin: str) -> int | None:
-    """Дозволяє перевірку VIN або кидає 402.
-
-    Повертає скільки перевірок ще лишилось (None = безліміт).
-    Повторна перевірка того самого VIN не витрачає квоту.
-    """
-    limit = effective_vin_checks_limit(user)
-    if limit is None:
-        return None
-
+    """Дозволяє перевірку VIN. Повертає None (безліміт)."""
     code = (vin or "").strip().upper()
     if not code:
         raise HTTPException(400, "Невалідний VIN")
 
     used_set = await _load_vins(user.id)
-    used = len(used_set)
-
-    if code in used_set:
-        return max(0, limit - used)
-
-    if used >= limit:
-        plan = get_plan(MIN_PAID_PLAN)
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "code": "vin_check_limit",
-                "message": (
-                    f"Безкоштовно доступно {limit} перевірки VIN. "
-                    f"Оформіть тариф «{plan['name']}» — перевірки без обмежень."
-                ),
-                "limit": limit,
-                "used": used,
-                "upgrade_plan": MIN_PAID_PLAN,
-            },
-        )
-
-    used_set.add(code)
-    await _save_vins(user.id, used_set)
-    used += 1
-    return max(0, limit - used)
+    if code not in used_set:
+        used_set.add(code)
+        await _save_vins(user.id, used_set)
+    return None
 
 
 async def vin_quota_status(user) -> dict:
     """Статус квоти для UI."""
-    limit = effective_vin_checks_limit(user)
     used = await vin_checks_usage(user.id)
-    if limit is None:
-        return {
-            "unlimited": True,
-            "limit": None,
-            "used": used,
-            "remaining": None,
-            "upgrade_plan": MIN_PAID_PLAN,
-        }
     return {
-        "unlimited": False,
-        "limit": limit,
-        "used": min(used, limit),
-        "remaining": max(0, limit - used),
-        "upgrade_plan": MIN_PAID_PLAN,
+        "unlimited": True,
+        "limit": None,
+        "used": used,
+        "remaining": None,
+        "upgrade_plan": None,
     }

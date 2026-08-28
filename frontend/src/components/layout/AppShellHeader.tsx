@@ -119,9 +119,12 @@ export function AppShellHeader({ className }: Props) {
                 ) : (
                   <>
                     <p className="mt-1.5 text-[12px] leading-snug text-muted">
-                      {expiresAt
-                        ? `Діє до ${formatKyivDate(expiresAt)}`
-                        : "Активна підписка"}
+                      {user.is_trial_active && planId === "lite" && user.trial_ends_at
+                        ? `Пробний «Старт» до ${formatKyivDate(user.trial_ends_at)}`
+                        : expiresAt
+                          ? `Діє до ${formatKyivDate(expiresAt)}`
+                          : "Активна підписка"}
+                    </p>
                     </p>
                     <Link
                       href="/app/billing"

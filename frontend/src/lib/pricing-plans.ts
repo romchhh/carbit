@@ -17,13 +17,12 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: "free",
     name: "Безкоштовно",
-    description: "Пробний доступ до сервісу моніторингу оголошень авторинку.",
+    description: "Базовий доступ після пробного «Старт».",
     price: "0",
-    period: "7 днів",
+    period: "назавжди",
     features: [
-      "Пробний період 7 днів",
-      "До 1 активного моніторингу",
-      "3 перевірки VIN",
+      "1 активний моніторинг",
+      "Необмежені перевірки VIN",
       "1 пристрій",
       "Веб-кабінет і сповіщення",
     ],
@@ -99,10 +98,10 @@ export const PRICING_PLANS: PricingPlan[] = [
 ];
 
 export const PRICING_COMPARE = [
-  { feature: "Тривалість", free: "7 днів", lite: "30 днів", std: "30 днів", pro: "30 днів" },
+  { feature: "Тривалість", free: "назавжди", lite: "30 днів", std: "30 днів", pro: "30 днів" },
   { feature: "Ціна", free: "Безкоштовно", lite: "390 грн", std: "790 грн", pro: "1 790 грн" },
   { feature: "Активні моніторинги", free: "1", lite: "10", std: "30", pro: "100" },
-  { feature: "Перевірки VIN", free: "3", lite: "Безліміт", std: "Безліміт", pro: "Безліміт" },
+  { feature: "Перевірки VIN", free: "Безліміт", lite: "Безліміт", std: "Безліміт", pro: "Безліміт" },
   { feature: "Пристрої", free: "1", lite: "2", std: "6", pro: "12" },
   { feature: "Telegram-сповіщення", free: true, lite: true, std: true, pro: true },
   { feature: "Веб-кабінет", free: true, lite: true, std: true, pro: true },

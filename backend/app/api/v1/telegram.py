@@ -107,9 +107,13 @@ async def complete_register(
         telegram_id=data["telegram_id"],
         telegram_username=data.get("username"),
         telegram_connected=True,
-        trial_ends_at=User.default_trial_end(),
     )
     db.add(user)
+    await db.flush()
+
+    from app.services.billing.plans import grant_signup_trial
+
+    grant_signup_trial(user)
     await db.flush()
     await sync_telegram_avatar(user)
     await db.flush()

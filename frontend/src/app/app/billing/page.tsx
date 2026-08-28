@@ -37,7 +37,7 @@ function toCabinetCards(
       name: meta?.name ?? api.name,
       description: meta?.description ?? api.description,
       price: formatPrice(api.price_uah),
-      period: meta?.period ?? (api.price_uah > 0 ? "грн / 30 днів" : "7 днів"),
+      period: meta?.period ?? (api.price_uah > 0 ? "грн / 30 днів" : "назавжди"),
       features: meta?.features?.length ? meta.features : api.features,
       missing: meta?.missing ?? [],
       accent: meta?.accent ?? false,
@@ -177,9 +177,10 @@ function BillingPageInner() {
         <AppSection className="mb-5 flex items-center gap-3 !border-emerald/20 !bg-emerald-light/30">
           <IconZap size={18} className="shrink-0 text-emerald-dark" />
           <div>
-            <div className="text-[14px] font-semibold text-ink">Trial активний</div>
+            <div className="text-[14px] font-semibold text-ink">Пробний «Старт» активний</div>
             <div className="text-[12px] text-muted">
-              Trial — 1 активний моніторинг. Після trial оберіть платний тариф — ліміт зросте до 10+
+              7 днів тарифу «Старт» безкоштовно — до {subscription?.searches_limit ?? 10} активних
+              моніторингів. Після закінчення — тариф «Безкоштовно» (1 моніторинг).
             </div>
           </div>
         </AppSection>

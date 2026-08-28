@@ -132,9 +132,13 @@ async def register_verify(body: VerifyCodeRequest, db: AsyncSession = Depends(ge
         email=body.email,
         name=data["name"],
         hashed_password=data["hashed_password"],
-        trial_ends_at=User.default_trial_end(),
     )
     db.add(user)
+    await db.flush()
+
+    from app.services.billing.plans import grant_signup_trial
+
+    grant_signup_trial(user)
     await db.flush()
 
     try:
@@ -266,9 +270,13 @@ async def phone_verify(
             name=name,
             phone=phone,
             phone_verified_at=now_kyiv(),
-            trial_ends_at=User.default_trial_end(),
         )
         db.add(user)
+        await db.flush()
+
+        from app.services.billing.plans import grant_signup_trial
+
+        grant_signup_trial(user)
         await db.flush()
 
     if not user.is_active:
@@ -442,9 +450,13 @@ async def google_callback(
                 email=email,
                 name=name,
                 google_id=google_id,
-                trial_ends_at=User.default_trial_end(),
             )
             db.add(user)
+            await db.flush()
+
+            from app.services.billing.plans import grant_signup_trial
+
+            grant_signup_trial(user)
             await db.flush()
 
     if not user.is_active:
