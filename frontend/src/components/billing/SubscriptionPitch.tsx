@@ -53,7 +53,7 @@ export function SubscriptionPitch({
         <div className="text-[14px] font-black text-ink">
           {planDisplayName(planId)}
           {isTrial ? (
-            <span className="ml-1 text-[11px] font-semibold text-emerald-dark">Trial</span>
+            <span className="ml-1 text-[11px] font-semibold text-emerald-dark">Пробний «Старт»</span>
           ) : null}
         </div>
         <div className="mt-2 mb-2 flex justify-between text-[12px]">
@@ -73,12 +73,14 @@ export function SubscriptionPitch({
             }}
           />
         </div>
-        {isFree || isTrial ? (
+        {isTrial ? (
           <p className="mt-3 text-[11px] leading-snug text-muted">
-            {isTrial
-              ? "Trial — 1 моніторинг. Старт — "
-              : "1 моніторинг. Старт — "}
-            {formatPlanPrice("lite")} · до 10. Про — {formatPlanPrice("standard")} · до 30.
+            Пробний «Старт» — до {searchesLimit} моніторингів. Після 7 днів — Free (1). Оплата — від{" "}
+            {formatPlanPrice("lite")} / 30 днів.
+          </p>
+        ) : isFree ? (
+          <p className="mt-3 text-[11px] leading-snug text-muted">
+            1 моніторинг. Старт — {formatPlanPrice("lite")} · до 10. Про — {formatPlanPrice("standard")} · до 30.
           </p>
         ) : next ? (
           <p className="mt-3 text-[11px] leading-snug text-muted">
@@ -139,18 +141,22 @@ export function SubscriptionPitch({
             {isFree || isTrial ? "Без підписки обмежений доступ" : `Тариф «${planDisplayName(planId)}»`}
           </div>
           <h2 className="mt-3 text-[18px] font-black tracking-tight sm:text-[20px]">
-            {isFree
-              ? "Підключіть підписку — не пропустіть лоти"
-              : next
-                ? "Більше моніторингів — більше угод"
-                : "Ваша підписка активна"}
+            {isTrial
+              ? "Пробний «Старт» — більше моніторингів після оплати"
+              : isFree
+                ? "Підключіть підписку — не пропустіть лоти"
+                : next
+                  ? "Більше моніторингів — більше угод"
+                  : "Ваша підписка активна"}
           </h2>
           <p className="mt-2 text-[13px] leading-relaxed text-white/70">
-            {isFree
-              ? "Оплачуйте раз на 30 днів: автоматичний моніторинг AUTO.RIA і OLX, миттєві сповіщення в Telegram, анти-дубль на Про."
-              : next
-                ? `Зараз ${searchesLimit} активних пошуків. «${next.name}» дає до ${planMonitorLimit(next.id)} — від ${formatPlanPrice(next.id)} з урахуванням залишку поточного періоду.`
-                : "До 100 моніторингів, пріоритетна обробка і командний доступ. Керуйте оплатою в один клік."}
+            {isTrial
+              ? `Зараз до ${searchesLimit} активних пошуків (пробний «Старт»). Після 7 днів — Free (1). Оплатіть «${next?.name ?? "Старт"}» — до ${planMonitorLimit(next?.id ?? "lite")} моніторингів.`
+              : isFree
+                ? "Оплачуйте раз на 30 днів: автоматичний моніторинг AUTO.RIA і OLX, миттєві сповіщення в Telegram, анти-дубль на Про."
+                : next
+                  ? `Зараз ${searchesLimit} активних пошуків. «${next.name}» дає до ${planMonitorLimit(next.id)} — від ${formatPlanPrice(next.id)} з урахуванням залишку поточного періоду.`
+                  : "До 100 моніторингів, пріоритетна обробка і командний доступ. Керуйте оплатою в один клік."}
           </p>
         </div>
         <Link

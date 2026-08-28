@@ -33,11 +33,13 @@ def _quota_hint_footer(package_key: str | None) -> str:
         label = AUTO_RIA_QUOTA_PACKAGE_LABELS.get(package_key, package_key)
         return (
             f"Облік за пакетом <b>{html.escape(label)}</b>. "
-            "Якщо тариф на developers.ria.com інший — оновіть AUTO_RIA_QUOTA_PACKAGE у .env."
+            "Змінити — <code>AUTO_RIA_QUOTA_PACKAGE</code> у "
+            "<code>backend/app/core/config.py</code> або пресети в "
+            "<code>backend/app/services/auto_ria/quota_limits.py</code>."
         )
     return (
-        "Це локальний облік Carbit. За замовчуванням — безкоштовний пакет (30/год). "
-        "Для платного тарифу вкажіть AUTO_RIA_QUOTA_PACKAGE=1m (або 20k/100k/500k) у .env."
+        "Облік за безкоштовним пакетом AUTO.RIA (1 000/міс, 30/год). "
+        "Для платного — встановіть <code>AUTO_RIA_QUOTA_PACKAGE=100k</code> у config.py."
     )
 
 

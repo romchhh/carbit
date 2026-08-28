@@ -481,7 +481,12 @@ export default function AccountPage() {
             <div>
               <div className="text-[17px] font-bold text-ink">{planLabel}</div>
               {subscription?.is_trial_active && (
-                <div className="mt-1 text-[13px] text-emerald-dark">Пробний період</div>
+                <div className="mt-1 text-[13px] text-emerald-dark">
+                  Пробний «Старт»
+                  {subscription.trial_ends_at
+                    ? ` до ${formatDate(subscription.trial_ends_at)}`
+                    : ""}
+                </div>
               )}
               {user.plan !== "free" && subscription?.plan_expires_at && (
                 <div className="mt-1 text-[13px] text-muted">

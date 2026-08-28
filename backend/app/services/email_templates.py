@@ -208,7 +208,7 @@ def welcome_email(name: str, dashboard_url: str) -> tuple[str, str]:
       </table>
       {_cta_button("Перейти до кабінету →", dashboard_url)}
       <p style="margin:20px 0 0;font-size:12px;color:{_MUTED};text-align:center;line-height:1.6;">
-        7 днів безкоштовно · Без прив'язки карти
+        7 днів «Старт» безкоштовно · VIN без обмежень · Без прив&apos;язки карти
       </p>
     """
     return subject, _base_layout(content)

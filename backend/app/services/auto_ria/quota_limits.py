@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+# Пакет за замовчуванням для production (100k). Змінити тут або в config.py.
+DEFAULT_AUTO_RIA_QUOTA_PACKAGE = "100k"
+
 # (місячний ліміт, годинний ліміт) — офіційні тарифи RIA API Platform
 AUTO_RIA_QUOTA_PACKAGES: dict[str, tuple[int, int]] = {
     "free": (1_000, 30),
@@ -43,5 +46,6 @@ def resolve_auto_ria_quota_limits(
     if monthly > 0 or hourly > 0:
         return monthly, hourly, None
 
-    monthly, hourly = AUTO_RIA_QUOTA_PACKAGES["free"]
-    return monthly, hourly, "free"
+    default_pkg = DEFAULT_AUTO_RIA_QUOTA_PACKAGE
+    monthly, hourly = AUTO_RIA_QUOTA_PACKAGES[default_pkg]
+    return monthly, hourly, default_pkg

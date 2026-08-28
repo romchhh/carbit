@@ -72,12 +72,11 @@ class Settings(BaseSettings):
     # External APIs (reserved for future scrapers)
     AUTO_RIA_API_KEY: str = ""
     # Пакет AUTO.RIA (developers.ria.com/payment): free | 20k | 100k | 500k | 1m | max
-    # Має пріоритет над AUTO_RIA_MONTHLY_QUOTA / AUTO_RIA_HOURLY_QUOTA.
-    AUTO_RIA_QUOTA_PACKAGE: str = ""
-    # Ліміти пакета AUTO.RIA для локального обліку та Telegram-алертів адмінам.
-    # Використовуються, якщо AUTO_RIA_QUOTA_PACKAGE порожній (інакше — з пресету пакета).
-    AUTO_RIA_MONTHLY_QUOTA: int = 1000
-    AUTO_RIA_HOURLY_QUOTA: int = 30
+    # За замовчуванням — 100k (див. quota_limits.py). Env лише для override.
+    AUTO_RIA_QUOTA_PACKAGE: str = "100k"
+    # Явні ліміти — лише якщо AUTO_RIA_QUOTA_PACKAGE порожній і потрібен кастом (рідко).
+    AUTO_RIA_MONTHLY_QUOTA: int = 0
+    AUTO_RIA_HOURLY_QUOTA: int = 0
     # Сповіщати, коли залишилось ≤ N% (через кому), напр. 20,10
     AUTO_RIA_QUOTA_WARN_REMAINING: str = "20,10"
     IMPERIYA_API_KEY: str = ""
@@ -138,6 +137,16 @@ class Settings(BaseSettings):
 
     # GeoIP для аналітики відвідувань (опційно: шлях до GeoLite2-Country.mmdb)
     GEOIP_COUNTRY_DB: str = ""
+
+    @field_validator("AUTO_RIA_QUOTA_PACKAGE", mode="before")
+    @classmethod
+    def normalize_auto_ria_quota_package(cls, value: object) -> str:
+        from app.services.auto_ria.quota_limits import DEFAULT_AUTO_RIA_QUOTA_PACKAGE
+
+        if value is None:
+            return DEFAULT_AUTO_RIA_QUOTA_PACKAGE
+        text = str(value).strip().lower()
+        return text or DEFAULT_AUTO_RIA_QUOTA_PACKAGE
 
     @field_validator("LIQPAY_PUBLIC_KEY", "LIQPAY_PRIVATE_KEY", mode="before")
     @classmethod

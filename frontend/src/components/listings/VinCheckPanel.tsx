@@ -3,7 +3,6 @@
 import { useEffect, useId, useState } from "react";
 import { ApiError, getApiErrorMessage, vin as vinApi } from "@/lib/api";
 import { getVinCheck, saveVinCheck } from "@/lib/vin-check-cache";
-import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { cn } from "@/lib/utils";
 import type { VinCheckResult } from "@/types/api";
 
@@ -289,12 +288,6 @@ export function VinCheckPanel({
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-950">
                 {error}
               </div>
-              {limitReached && (
-                <UpgradeOffer
-                  planId="lite"
-                  title="Необмежені перевірки VIN — тариф «Старт»"
-                />
-              )}
               {!limitReached && fallbackUrl && (
                 <a
                   href={fallbackUrl}

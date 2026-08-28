@@ -469,7 +469,7 @@ export default function AuthPage() {
               </div>
             </div>
             <div className="mt-8 grid grid-cols-3 gap-4 pt-8 border-t border-white/10">
-              {[["1 500+", "оголошень"], ["< 5 хв", "до сповіщення"], ["7 днів", "безкоштовно"]].map(([v, l]) => (
+              {[["1 500+", "оголошень"], ["< 5 хв", "до сповіщення"], ["7 днів", "«Старт» free"]].map(([v, l]) => (
                 <div key={l}>
                   <div className="text-[24px] font-black text-emerald">{v}</div>
                   <div className="text-[12px] text-white/45 mt-1 leading-tight">{l}</div>

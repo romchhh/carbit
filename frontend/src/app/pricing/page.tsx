@@ -27,6 +27,10 @@ const PRICING_FAQ = [
     a: "Так. Після реєстрації — 7 днів тарифу «Старт» безкоштовно (до 10 моніторингів), без прив'язки картки. Потім — тариф «Безкоштовно» з 1 моніторингом.",
   },
   {
+    q: "Перевірки VIN платні?",
+    a: "Ні. VIN без обмежень на всіх тарифах.",
+  },
+  {
     q: "Звідки беруться оголошення?",
     a: "AUTO.RIA, OLX та тематичні Telegram-канали авторинку.",
   },
@@ -150,7 +154,9 @@ export default function PricingPage() {
                 <h2 className="text-[26px] sm:text-[32px] font-semibold text-white tracking-[-0.02em] leading-tight">
                   Починай пошук авто безкоштовно
                 </h2>
-                <p className="mt-2 text-[13px] text-white/50">Без прив&apos;язки карти. Перші 7 днів безкоштовно.</p>
+                <p className="mt-2 text-[13px] text-white/50">
+                  Без прив&apos;язки карти. 7 днів «Старт» після реєстрації, потім — Free (1 моніторинг).
+                </p>
               </div>
               <CtaLink href="/auth/login" variant="emerald" size="lg" className="relative shrink-0">
                 Спробувати

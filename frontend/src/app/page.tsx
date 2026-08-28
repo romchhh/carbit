@@ -76,7 +76,7 @@ export default function HomePage() {
                   size="lg"
                   className="!px-8 !py-3.5 !text-[15px] sm:!px-4 sm:!py-2 sm:!text-[13px]"
                 >
-                  Спробувати 7 днів
+                  Спробувати «Старт» 7 днів
                 </CtaLink>
               </div>
 
@@ -115,7 +115,7 @@ export default function HomePage() {
                     { value: "100+", label: "джерел" },
                     { value: "1 500+", label: "оголошень" },
                     { value: "< 5 хв", label: "до сповіщення" },
-                    { value: "7 днів", label: "безкоштовно" },
+                    { value: "7 днів", label: "«Старт» free" },
                   ].map(({ value, label }) => (
                     <div key={label} className="min-w-0 text-center">
                       <div className="text-[13px] font-semibold leading-none text-white/60 sm:text-xl sm:text-white/80">
@@ -209,7 +209,9 @@ export default function HomePage() {
                 <h2 className="text-[26px] sm:text-[32px] font-semibold text-white tracking-[-0.02em] leading-tight">
                   Починай пошук авто швидше за ринок
                 </h2>
-                <p className="mt-2 text-[13px] text-white/50">Без прив&apos;язки карти. Перші 7 днів безкоштовно.</p>
+                <p className="mt-2 text-[13px] text-white/50">
+                  Без прив&apos;язки карти. 7 днів «Старт» після реєстрації, потім — Free (1 моніторинг).
+                </p>
               </div>
               <CtaLink href="/auth/login" variant="emerald" size="lg" className="relative shrink-0">
                 Почати безкоштовно
