@@ -72,7 +72,7 @@ export function SearchPreviewNotice({
           onClick={handleSaveClick}
           disabled={saving}
           className={cn(
-            "inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#229ED9] px-5 py-3.5 text-[14px] font-bold text-white shadow-lg shadow-[#229ED9]/20 transition-all hover:bg-[#1a8bc4] active:scale-[0.99]",
+            "inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#229ED9] px-6 py-3.5 text-[15px] font-bold text-white shadow-lg shadow-[#229ED9]/20 transition-all hover:bg-[#1a8bc4] active:scale-[0.99] min-h-[48px] sm:min-h-[52px] sm:px-8 sm:py-4 sm:text-[16px] w-full sm:w-auto",
             "disabled:cursor-not-allowed disabled:opacity-60",
           )}
         >

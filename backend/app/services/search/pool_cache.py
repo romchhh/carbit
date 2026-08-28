@@ -117,7 +117,7 @@ async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
         return {}
 
     from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
-    from app.services.auto_ria.mapper import info_to_listing
+    from app.services.auto_ria.mapper import info_to_listing, new_info_to_listing
 
     result: dict[str, ListingOut] = {}
     to_fetch: list[str] = []
@@ -151,6 +151,12 @@ async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
             try:
                 info = await client.get_info(aid)
                 listing = info_to_listing(info, fotos=None)
+                return aid, listing
+            except (AutoRiaError, Exception):
+                pass
+            try:
+                info = await client.get_new_info(aid)
+                listing = new_info_to_listing(info)
                 return aid, listing
             except (AutoRiaError, Exception):
                 return aid, None
@@ -285,7 +291,13 @@ async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
 def _search_needs_listing_filter(filters: SearchFilters | None) -> TypeGuard[SearchFilters]:
     if not filters:
         return False
-    return bool((filters.brand or "").strip() or (filters.model or "").strip())
+    from app.services.search.filter_multi import effective_regions
+
+    return bool(
+        (filters.brand or "").strip()
+        or (filters.model or "").strip()
+        or effective_regions(filters)
+    )
 
 
 def _filter_listings_by_brand_model(

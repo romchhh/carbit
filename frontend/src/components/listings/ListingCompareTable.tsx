@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { IconCompare, IconX } from "@/components/icons";
 import { CompareToolbar, ListingCompareMobile } from "@/components/listings/ListingCompareMobile";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthProvider";
 import {
   buildCompareRows,
@@ -129,6 +130,7 @@ function ListingCompareDesktopTable({
                   const isPrice = row.key === "price";
                   const highlighted = row.highlightIndexes?.includes(index);
                   const danger = row.dangerIndexes?.includes(index);
+                  const safe = row.safeIndexes?.includes(index);
                   return (
                     <td
                       key={`${row.key}-${listing?.id ?? index}`}
@@ -137,6 +139,7 @@ function ListingCompareDesktopTable({
                         isPrice ? "font-black text-ink" : "text-ink/90",
                         row.key === "vin" && "font-mono text-[11px]",
                         highlighted && "bg-emerald/10 font-semibold text-emerald-dark",
+                        safe && "bg-emerald/10 font-semibold text-emerald-dark",
                         danger && "bg-red-50 font-semibold text-red-700",
                       )}
                     >
@@ -227,11 +230,10 @@ export function CompareEmptyState() {
         У пошуку натисніть іконку ваг на картці авто — можна додати до {4} оголошень і
         порівняти ціну, пробіг, двигун та інші параметри.
       </p>
-      <Link
-        href="/app/dashboard"
-        className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-emerald px-5 py-2.5 text-[13px] font-bold text-white hover:bg-emerald-dark"
-      >
-        Перейти до пошуку
+      <Link href="/app/dashboard" className="mt-6 flex justify-center">
+        <Button variant="emerald" size="xl" className="w-full min-w-[min(100%,300px)] sm:w-auto sm:min-w-0">
+          Перейти до пошуку
+        </Button>
       </Link>
     </div>
   );

@@ -10,7 +10,9 @@ import type { SearchFreshness } from "@/lib/search-preview";
 
 const KEY = "carbit:recent-searches";
 const CHANGED_EVENT = "carbit:recent-searches-changed";
-const MAX_ITEMS = 12;
+/** Скільки останніх пошуків зберігаємо разом із кешем результатів. */
+export const MAX_RECENT_SEARCHES = 5;
+const MAX_ITEMS = MAX_RECENT_SEARCHES;
 
 export type RecentSearchEntry = {
   id: string;
@@ -65,6 +67,25 @@ function normalizeEntry(raw: unknown): RecentSearchEntry | null {
 function notifyChanged() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(CHANGED_EVENT));
+}
+
+function writeRecentSearches(entries: RecentSearchEntry[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(entries.slice(0, MAX_ITEMS)));
+    notifyChanged();
+  } catch {
+    /* quota — спробуємо без кешу у найстаріших */
+    try {
+      const slim = entries.slice(0, MAX_ITEMS).map((item, index) =>
+        index === 0 ? item : { ...item, cache: undefined },
+      );
+      localStorage.setItem(KEY, JSON.stringify(slim));
+      notifyChanged();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function matchesEntry(
@@ -126,8 +147,7 @@ export function saveRecentSearch(
     0,
     MAX_ITEMS,
   );
-  localStorage.setItem(KEY, JSON.stringify(next));
-  notifyChanged();
+  writeRecentSearches(next);
   return entry;
 }
 
@@ -156,8 +176,7 @@ export function updateRecentSearchCache(
   };
   const next = [...current];
   next[idx] = nextEntry;
-  localStorage.setItem(KEY, JSON.stringify(next));
-  notifyChanged();
+  writeRecentSearches(next);
 }
 
 export function clearRecentSearches() {

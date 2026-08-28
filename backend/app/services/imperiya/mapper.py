@@ -209,6 +209,9 @@ async def filters_to_search_params(
     elif filters.region and norm_text(filters.region) not in ("вся україна", ""):
         regions.append(filters.region)
 
+    from app.services.search.filter_multi import canonicalize_region
+
+    regions = [canonicalize_region(r) or r for r in regions if r]
     region_ids = await resolve_region_ids_for_filters(client, regions)
     if region_ids:
         params["regionId"] = region_ids

@@ -146,6 +146,7 @@ async def attach_price_drops_from_db(db, items: list) -> list:
             item.model_copy(
                 update={
                     "previous_price": drop.previous_price,
+                    "previous_currency": drop.previous_currency,
                     "price_drop_percent": drop.drop_percent,
                     "price_dropped_at": drop.dropped_at,
                     "price_history": row.price_history or getattr(item, "price_history", []) or [],

@@ -72,7 +72,7 @@ export function SaveSearchCTA({
             onClick={handleConnectClick}
             disabled={saving || limitReached}
             className={cn(
-              "inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold transition-colors sm:w-auto sm:shrink-0",
+              "inline-flex w-full min-h-[48px] items-center justify-center gap-2 rounded-full px-6 py-3.5 text-[15px] font-bold transition-colors sm:min-h-[52px] sm:w-auto sm:shrink-0 sm:px-8 sm:py-4 sm:text-[16px]",
               "disabled:cursor-not-allowed disabled:opacity-60",
               connected
                 ? "border border-border bg-white text-ink hover:bg-surface"

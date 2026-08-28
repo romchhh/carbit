@@ -183,6 +183,7 @@ export function ListingCompareMobile({
                     const listing = listings[index];
                     const highlighted = row.highlightIndexes?.includes(index);
                     const danger = row.dangerIndexes?.includes(index);
+                    const safe = row.safeIndexes?.includes(index);
                     return (
                       <td
                         key={`${row.key}-${listing?.id ?? index}`}
@@ -192,6 +193,7 @@ export function ListingCompareMobile({
                           row.key === "price" ? "font-black text-ink" : "text-ink/90",
                           row.key === "vin" && "break-all font-mono text-[9px]",
                           highlighted && "bg-emerald/10 font-semibold text-emerald-dark",
+                          safe && "bg-emerald/10 font-semibold text-emerald-dark",
                           danger && "bg-red-50 font-semibold text-red-700",
                         )}
                       >

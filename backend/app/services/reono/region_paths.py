@@ -5,7 +5,7 @@ import re
 from app.core.text import norm_text
 from app.schemas.schemas import SearchFilters
 from app.services.reono.constants import REONO_CATALOG_PATH, REONO_REGION_SEGMENTS, REGION_SLUGS
-from app.services.search.filter_multi import effective_brands
+from app.services.search.filter_multi import canonicalize_region, effective_brands
 from app.services.search.subbrand_split import split_huawei_subbrand
 
 _CITY_PREFIX_RE = re.compile(r"^м\.\s*", re.IGNORECASE)
@@ -21,7 +21,7 @@ def _slugify_latin(text: str) -> str:
 def resolve_reono_region_segments(region: str | None) -> list[str]:
     if not region:
         return []
-    raw = region.strip()
+    raw = (canonicalize_region(region) or region).strip()
     if not raw:
         return []
 
@@ -29,6 +29,10 @@ def resolve_reono_region_segments(region: str | None) -> list[str]:
     stripped = _CITY_PREFIX_RE.sub("", raw).strip()
     if stripped and norm_text(stripped) not in keys:
         keys.append(norm_text(stripped))
+    if raw.endswith(" область"):
+        short = raw[: -len(" область")].strip()
+        if short and norm_text(short) not in keys:
+            keys.append(norm_text(short))
 
     for key in keys:
         if key in ("вся україна", "всі регіони"):

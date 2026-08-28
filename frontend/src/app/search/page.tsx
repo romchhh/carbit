@@ -98,14 +98,8 @@ export default function PublicSearchPage() {
   );
 
   const { trackSearchStart, handleRecentSelect } = useRecentSearches({
-    filters,
     freshness,
     sort,
-    pages,
-    total,
-    marketTotal,
-    searching,
-    results,
     setFilters,
     changeFreshness,
     runSearch,
@@ -249,7 +243,6 @@ export default function PublicSearchPage() {
     <SearchFiltersPanel
       wide
       variant="sidebar"
-      hideDesktopSave={Boolean(user)}
       inModal={options?.inModal}
       filters={filters}
       onChange={setFilters}
@@ -274,6 +267,17 @@ export default function PublicSearchPage() {
       onFreshnessChange={changeFreshness}
       pricePlaceholderFrom="Від"
       pricePlaceholderTo="До"
+      monitorSlot={
+        user && !options?.inModal ? (
+          <DesktopSearchMonitorFab
+            connected={Boolean(matchingMonitor)}
+            connectedMonitorId={matchingMonitor?.id ?? null}
+            saving={saving}
+            limitReached={saveLimitReached}
+            onSave={handleMonitorClick}
+          />
+        ) : null
+      }
     />
   );
 
@@ -367,33 +371,22 @@ export default function PublicSearchPage() {
 
               <MobileSearchFiltersFab
                 targetRef={filtersPanelRef}
-                pinned
+                filtersMobileHidden
+                visibleWhileSearching={running}
                 bottomInset="public"
                 renderFilters={close => renderFiltersPanel({ inModal: true, onClose: close })}
                 monitor={
                   user
                     ? {
-                        visible: running,
-                        connected: Boolean(matchingMonitor),
-                        connectedMonitorId: matchingMonitor?.id ?? null,
+                        onClick: handleMonitorClick,
                         saving,
-                        limitReached: saveLimitReached,
-                        onSave: handleMonitorClick,
+                        disabled: saveLimitReached,
+                        connected: Boolean(matchingMonitor),
+                        label: "Підключити моніторинг",
                       }
                     : undefined
                 }
               />
-
-              {user ? (
-                <DesktopSearchMonitorFab
-                  visible={running}
-                  connected={Boolean(matchingMonitor)}
-                  connectedMonitorId={matchingMonitor?.id ?? null}
-                  saving={saving}
-                  limitReached={saveLimitReached}
-                  onSave={handleMonitorClick}
-                />
-              ) : null}
             </div>
           </div>
         </div>

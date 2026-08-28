@@ -322,7 +322,11 @@ MODEL_TO_SLUG: dict[str, str] = {
     "accord": "accord",
     "акорд": "accord",
     "e-tron": "e-tron",
+    "e tron": "e-tron",
+    "etron": "e-tron",
     "етрон": "e-tron",
+    "е трон": "e-tron",
+    "е-трон": "e-tron",
 }
 
 # Ручні аліаси (кирилиця / рідкісні). FE-каталог → olx_model_catalog.OLX_FE_MODEL_REMAP

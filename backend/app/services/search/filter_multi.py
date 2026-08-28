@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.core.text import norm_text
 from app.schemas.schemas import SearchFilters
+from app.services.search.region_voice import normalize_region_label
 
 MAX_BRAND_FANOUT = 4
 ALL_UKRAINE = frozenset({"вся україна", "ukraine", "всі регіони", ""})
@@ -25,14 +26,32 @@ def effective_models(filters: SearchFilters) -> list[str]:
     return [model] if model else []
 
 
+def canonicalize_region(value: str | None) -> str | None:
+    """«Хмельницька» / «волинській області» → «Хмельницька область»."""
+    text = (value or "").strip()
+    if not text or norm_text(text) in ALL_UKRAINE:
+        return None
+    return normalize_region_label(text) or text
+
+
 def effective_regions(filters: SearchFilters) -> list[str]:
     regions = [r.strip() for r in (filters.regions or []) if r and str(r).strip()]
-    if regions:
-        return [r for r in regions if norm_text(r) not in ALL_UKRAINE]
-    region = (filters.region or "").strip()
-    if region and norm_text(region) not in ALL_UKRAINE:
-        return [region]
-    return []
+    if not regions:
+        region = (filters.region or "").strip()
+        regions = [region] if region else []
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in regions:
+        canonical = canonicalize_region(raw)
+        if not canonical:
+            continue
+        key = norm_text(canonical)
+        if key in ALL_UKRAINE or key in seen:
+            continue
+        seen.add(key)
+        out.append(canonical)
+    return out
 
 
 def sync_multi_search_filters(filters: SearchFilters) -> SearchFilters:

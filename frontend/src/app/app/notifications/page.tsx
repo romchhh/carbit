@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { ListingCard } from "@/components/listings/ListingCard";
@@ -193,6 +194,11 @@ export default function NotificationsPage() {
           <p className="mx-auto mt-2 max-w-sm text-[12px] text-muted/80">
             Створіть пошуковий запит — нові авто та зниження цін з&apos;являться тут і в Telegram.
           </p>
+          <Link href="/app/dashboard" className="mt-6 flex justify-center">
+            <Button variant="emerald" size="xl" className="w-full min-w-[min(100%,300px)] sm:w-auto sm:min-w-0">
+              Створити моніторинг
+            </Button>
+          </Link>
         </AppEmpty>
       ) : (
         <>

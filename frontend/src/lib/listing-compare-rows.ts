@@ -27,7 +27,12 @@ export type CompareRow = {
   highlightIndexes?: number[];
   /** Індекси комірок з негативним акцентом (напр. був у ДТП). */
   dangerIndexes?: number[];
+  /** Позитивний акцент (напр. ДТП не вказано / не був). */
+  safeIndexes?: number[];
 };
+
+/** Рядки, які лишаються в таблиці навіть без даних або при однакових значеннях. */
+const ALWAYS_VISIBLE_COMPARE_ROW_KEYS = new Set(["accident"]);
 
 function sourceLabel(source: string): string {
   const key = (source || "").trim().toLowerCase();
@@ -107,9 +112,13 @@ function withDanger(
   return indexes.length ? { ...row, dangerIndexes: indexes } : row;
 }
 
-/** Ховає рядки, де в усіх авто значення порожні («—»). */
+/** Ховає рядки, де в усіх авто значення порожні («—»), крім завжди видимих. */
 export function filterEmptyRows(rows: CompareRow[]): CompareRow[] {
-  return rows.filter(row => !row.values.every(isEmptyCompareValue));
+  return rows.filter(
+    row =>
+      ALWAYS_VISIBLE_COMPARE_ROW_KEYS.has(row.key) ||
+      !row.values.every(isEmptyCompareValue),
+  );
 }
 
 export function buildCompareRows(
@@ -183,6 +192,9 @@ export function buildCompareRows(
         key: "accident",
         label: "ДТП",
         values: accidentFlags.map(formatListingAccident),
+        safeIndexes: accidentFlags
+          .map((had, index) => (had !== true ? index : -1))
+          .filter(index => index >= 0),
       },
       accidentFlags
         .map((had, index) => (had === true ? index : -1))
@@ -259,7 +271,8 @@ export function buildCompareRows(
 
 /** Лишає рядки, де значення відрізняються (як «Відмінні» на Hotline). */
 export function filterDifferentRows(rows: CompareRow[]): CompareRow[] {
-  return rows.filter(({ values }) => {
+  return rows.filter(({ key, values }) => {
+    if (ALWAYS_VISIBLE_COMPARE_ROW_KEYS.has(key)) return true;
     const meaningful = values.map(v => normalizeCell(v === "—" ? "" : v));
     const nonEmpty = meaningful.filter(Boolean);
     if (nonEmpty.length <= 1) return nonEmpty.length === 1;

@@ -50,9 +50,9 @@ export function SearchResultsToolbar({
   hasMore = false,
 }: Props) {
   return (
-    <div className="mb-4 rounded-2xl border border-border bg-white p-3.5 sm:px-5 sm:py-3.5 lg:mb-5 lg:px-6 lg:py-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 text-[13px] lg:text-[14px]">
+    <div className="mb-3 rounded-2xl border border-border bg-white p-2.5 sm:mb-4 sm:p-3.5 lg:mb-5 lg:px-6 lg:py-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="min-w-0 text-[12px] sm:text-[13px] lg:text-[14px]">
           {running ? (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {isActive !== undefined ? (
@@ -113,12 +113,12 @@ export function SearchResultsToolbar({
         </div>
 
         {running && (
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2">
             <ExportMenu items={exportItems} filename={exportName} />
             <select
               value={sort}
               onChange={e => onSortChange(e.target.value as SortOption)}
-              className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2.5 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-emerald/20 sm:flex-none sm:rounded-lg sm:bg-white sm:py-1.5 sm:text-[12px] sm:text-muted lg:px-3.5 lg:py-2 lg:text-[13px]"
+              className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-2.5 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-emerald/20 sm:flex-none sm:rounded-lg sm:bg-white sm:px-3 sm:py-1.5 sm:text-[12px] sm:text-muted lg:px-3.5 lg:py-2 lg:text-[13px]"
             >
               {SORT_OPTIONS.map(option => (
                 <option key={option.value} value={option.value}>

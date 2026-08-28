@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
+import { Button } from "@/components/ui/Button";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { useCompareOnListingCard } from "@/hooks/useCompareOnListingCard";
 import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
@@ -205,11 +206,10 @@ export default function MonitorDetailPage({
               ? "За вашими фільтрами поки немає авто зі значним зниженням (≥5%) за останні 14 днів."
               : "Збережіть моніторинг після першого пошуку — сюди потраплять показані авто і всі нові."}
           </p>
-          <Link
-            href="/app/dashboard"
-            className="mt-4 inline-flex rounded-full bg-emerald px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-emerald-dark"
-          >
-            До пошуку
+          <Link href="/app/dashboard" className="mt-6 flex justify-center">
+            <Button variant="emerald" size="xl" className="w-full min-w-[min(100%,300px)] sm:w-auto sm:min-w-0">
+              До пошуку
+            </Button>
           </Link>
         </div>
       ) : (

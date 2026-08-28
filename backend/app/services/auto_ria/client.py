@@ -132,6 +132,13 @@ class AutoRiaClient:
                         "AUTO.RIA тимчасово обірвав з'єднання. Спробуйте ще раз.",
                         status_code=response.status_code,
                     ) from err
+                from app.services.auto_ria.quota_alerts import (
+                    is_auto_ria_quota_error,
+                    schedule_auto_ria_quota_exhausted,
+                )
+
+                if is_auto_ria_quota_error(response.status_code, body):
+                    schedule_auto_ria_quota_exhausted(err.args[0] if err.args else body)
                 await record_api_request("auto_ria", operation, success=False)
                 raise err
 

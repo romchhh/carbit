@@ -123,8 +123,8 @@ export default function MonitorsPage() {
           </p>
         </div>
         <Link href="/app/dashboard" className="shrink-0">
-          <Button variant="emerald" size="sm" className="gap-1.5">
-            <IconPlus size={13} /> Новий
+          <Button variant="emerald" size="xl" className="gap-2">
+            <IconPlus size={18} /> Новий
           </Button>
         </Link>
       </div>
@@ -168,9 +168,9 @@ export default function MonitorsPage() {
           <p className="mx-auto mt-2 max-w-sm text-[13px] text-muted">
             Зробіть пошук і натисніть «Зберегти» — поточні авто і всі нові з’являться тут.
           </p>
-          <Link href="/app/dashboard" className="mt-4 inline-block">
-            <Button variant="emerald" size="sm" className="gap-1.5">
-              <IconPlus size={13} /> Налаштувати фільтри
+          <Link href="/app/dashboard" className="mt-6 flex justify-center">
+            <Button variant="emerald" size="xl" className="w-full min-w-[min(100%,300px)] gap-2 sm:w-auto sm:min-w-0">
+              <IconPlus size={18} /> Налаштувати фільтри
             </Button>
           </Link>
         </AppEmpty>

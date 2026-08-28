@@ -33,6 +33,18 @@ def _new_search_ids(data: dict) -> list[str]:
     return [str(rid) for rid in raw if rid]
 
 
+async def _hydrate_single_auto_ria_id(client: AutoRiaClient, auto_id: str) -> ListingOut | None:
+    try:
+        info = await client.get_info(auto_id)
+        return info_to_listing(info, fotos=None)
+    except AutoRiaError:
+        try:
+            info = await client.get_new_info(auto_id)
+            return new_info_to_listing(info)
+        except AutoRiaError:
+            return None
+
+
 async def _search_auto_ria_uncached(
     filters: SearchFilters,
     *,
@@ -79,11 +91,7 @@ async def _search_auto_ria_body(
 
     async def fetch_one(auto_id: str) -> ListingOut | None:
         async with sem:
-            try:
-                info = await client.get_info(auto_id)
-                return info_to_listing(info, fotos=None)
-            except AutoRiaError:
-                return None
+            return await _hydrate_single_auto_ria_id(client, auto_id)
 
     # Для «всі» і «нові» паралельно тягнемо дилерські авто (/auto/new/search)
     new_car_task = None
@@ -402,11 +410,20 @@ async def collect_auto_ria_ids(
     For "new": used /auto/search (≤1000 км, будь-який рік) + /auto/new/search.
     For "all": used /auto/search + new /auto/new/search interleaved.
     """
+    from app.services.auto_ria.url_parse import omni_id_from_search_filters
+
+    omni_id = omni_id_from_search_filters(filters)
+    if omni_id:
+        return [omni_id], 1
+
     client = AutoRiaClient()
     try:
         base_params = await filters_to_search_params(client, filters, page=1, per_page=50)
     except ValueError as exc:
         raise AutoRiaError(str(exc)) from exc
+
+    if (filters.brand or "").strip() and "marka_id[0]" not in base_params and "omni_id" not in base_params:
+        return [], 0
 
     sort_oldest = sort_by == "published_asc"
     category = (filters.category or "all").strip().lower()
@@ -456,11 +473,7 @@ async def hydrate_auto_ria_ids(
 
     async def fetch_one(auto_id: str) -> ListingOut | None:
         async with sem:
-            try:
-                info = await client.get_info(auto_id)
-                return info_to_listing(info, fotos=None)
-            except AutoRiaError:
-                return None
+            return await _hydrate_single_auto_ria_id(client, auto_id)
 
     listings = [item for item in await asyncio.gather(*(fetch_one(aid) for aid in ids)) if item]
     return sort_listings(listings, sort_by)

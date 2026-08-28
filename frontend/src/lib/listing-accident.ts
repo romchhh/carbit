@@ -54,5 +54,5 @@ export function resolveListingAccidentHad(listing: Listing): boolean | null {
 export function formatListingAccident(had: boolean | null): string {
   if (had === true) return "Був у ДТП";
   if (had === false) return "Не був у ДТП";
-  return "—";
+  return "ДТП не вказано";
 }

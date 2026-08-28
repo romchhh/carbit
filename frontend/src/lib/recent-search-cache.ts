@@ -3,6 +3,8 @@ import type { SearchFilterState } from "@/lib/search-catalog";
 import type { SearchFreshness } from "@/lib/search-preview";
 import {
   loadRecentSearches,
+  saveRecentSearch,
+  updateRecentSearchCache,
   type RecentSearchEntry,
 } from "@/lib/recent-searches";
 import {
@@ -11,9 +13,10 @@ import {
 } from "@/lib/search-filters-api";
 import type { Listing } from "@/types/api";
 
-export const RECENT_CACHE_TTL_MS = 30 * 60 * 1000;
+export const RECENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const RECENT_CACHE_REFRESH_MS = 5 * 60 * 1000;
-export const RECENT_CACHE_MAX_LISTINGS = 24;
+/** Скільки карток зберігаємо на один пошук (≈2 сторінки). */
+export const RECENT_CACHE_MAX_LISTINGS = 40;
 
 export type RecentSearchResultCache = {
   results: Listing[];
@@ -82,4 +85,37 @@ export function findRecentSearchCache(
   const entry = loadRecentSearches().find(item => matchesEntry(item, filters, freshness));
   if (!entry?.cache || !isRecentCacheFresh(entry.cache)) return null;
   return entry.cache;
+}
+
+/** Зберігає результати пошуку в localStorage (останні 5 запитів). */
+export function persistRecentSearchCache(
+  filters: SearchFilterState,
+  freshness: SearchFreshness,
+  data: {
+    results: Listing[];
+    total: number;
+    marketTotal: number | null;
+    sort: SortOption;
+    pages: number;
+  },
+): void {
+  if (typeof window === "undefined" || data.results.length === 0) return;
+  const freshnessNorm: SearchFreshness = freshness === "new" ? "new" : "all";
+  const hasEntry = loadRecentSearches().some(item => matchesEntry(item, filters, freshnessNorm));
+  if (!hasEntry) {
+    saveRecentSearch(filters, freshnessNorm);
+  }
+  const previewImage = data.results.find(item => item.images?.[0])?.images?.[0] ?? null;
+  updateRecentSearchCache(
+    filters,
+    freshnessNorm,
+    buildRecentSearchCache(
+      data.results,
+      data.total,
+      data.marketTotal,
+      data.sort,
+      data.pages,
+    ),
+    previewImage,
+  );
 }

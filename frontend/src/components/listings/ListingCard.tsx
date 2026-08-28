@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
-import { IconArrowLeft, IconArrowRight } from "@/components/icons";
+import { IconArrowLeft, IconArrowRight, IconEye } from "@/components/icons";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
-import { PriceDropBadge } from "@/components/listings/PriceDropBadge";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
   formatEngineVolume,
@@ -22,9 +21,9 @@ import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { listingIsNewCar } from "@/lib/listing-source";
 import { useListingVinCheck } from "@/hooks/useVinCheckCache";
 import { useListingPhotoHydration } from "@/hooks/useListingPhotoHydration";
+import { useListingViewed } from "@/hooks/useListingViewed";
 import { hasVinCheck, resolveListingVin } from "@/lib/vin-check";
 import { cn, formatMileage, publishedAgoLabel, refreshedAgoLabel } from "@/lib/utils";
-import { resolveListingPriceDrop } from "@/lib/listing-price-drop";
 import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Listing } from "@/types/api";
@@ -68,8 +67,7 @@ export function ListingCard({
     displayCurrencyProp ?? user?.preferred_currency,
   );
   const { images, rootRef, photosPending } = useListingPhotoHydration(listing);
-  const priceDrop = resolveListingPriceDrop(listing);
-  const showPriceDropBadge = Boolean(priceDrop) && !hidePriceDrop;
+  const isViewed = useListingViewed(listing.id);
   const fuel = typeof listing.fuel === "string" ? listing.fuel : "";
   const region = typeof listing.region === "string" ? listing.region : "";
   const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
@@ -137,6 +135,7 @@ export function ListingCard({
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40",
         "sm:flex sm:gap-5 sm:p-5 lg:gap-6 lg:p-6 lg:rounded-[1.35rem]",
         isNewForMonitor && "border-emerald/40 ring-1 ring-emerald/20",
+        isViewed && "border-border/70 bg-surface/40 opacity-[0.92]",
         className,
       )}
       onMouseEnter={handlePhotoAreaEnter}
@@ -163,8 +162,11 @@ export function ListingCard({
                 Новий
               </span>
             )}
-            {showPriceDropBadge && (
-              <PriceDropBadge dropPercent={priceDrop!.dropPercent} variant="overlay" />
+            {isViewed && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-ink/70 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm backdrop-blur-sm">
+                <IconEye size={11} />
+                Переглянуто
+              </span>
             )}
           </div>
           <div className="flex items-center gap-1.5">
@@ -306,13 +308,12 @@ export function ListingCard({
                 Новий
               </span>
             )}
-            {showPriceDropBadge && (
-              <PriceDropBadge
-                dropPercent={priceDrop!.dropPercent}
-                variant="overlay"
-                className="hidden sm:inline-flex"
-              />
-            )}
+              {isViewed && (
+                <span className="hidden items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-muted sm:inline-flex">
+                  <IconEye size={11} />
+                  Переглянуто
+                </span>
+              )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[16px] sm:line-clamp-2 lg:text-[18px]">
                 {listing.title}
               </h3>
@@ -422,12 +423,26 @@ export function ListingCard({
             )}
             <span className="hidden text-[11px] text-muted sm:inline">{sellerLabel}</span>
           </span>
-          <span className="flex items-center gap-0.5 text-[12px] font-semibold text-emerald-dark sm:ml-auto">
-            Деталі
-            <IconArrowRight
-              size={12}
-              className="transition-transform group-hover:translate-x-0.5"
-            />
+          <span
+            className={cn(
+              "flex items-center gap-0.5 text-[12px] font-semibold sm:ml-auto",
+              isViewed ? "text-muted" : "text-emerald-dark",
+            )}
+          >
+            {isViewed ? (
+              <>
+                <IconEye size={12} />
+                Переглянуто
+              </>
+            ) : (
+              <>
+                Деталі
+                <IconArrowRight
+                  size={12}
+                  className="transition-transform group-hover:translate-x-0.5"
+                />
+              </>
+            )}
           </span>
         </div>
       </div>

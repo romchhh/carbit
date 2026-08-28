@@ -66,14 +66,8 @@ export default function SearchPage() {
 
   const filtersPanelRef = useRef<HTMLDivElement>(null);
   const { trackSearchStart, handleRecentSelect } = useRecentSearches({
-    filters,
     freshness,
     sort,
-    pages,
-    total,
-    marketTotal,
-    searching,
-    results,
     setFilters,
     changeFreshness,
     runSearch,
@@ -115,7 +109,7 @@ export default function SearchPage() {
   ) => {
     clearSaveMessages();
     clearError();
-    trackSearchStart(overrideFilters);
+    trackSearchStart(overrideFilters ?? filters, freshness);
     void runSearch(overrideFilters ?? filters, freshness, overrideSort);
   };
 
@@ -145,7 +139,6 @@ export default function SearchPage() {
     <SearchFiltersPanel
       wide
       variant="sidebar"
-      hideDesktopSave
       inModal={options?.inModal}
       filters={filters}
       onChange={setFilters}
@@ -168,6 +161,17 @@ export default function SearchPage() {
       connectedMonitorId={matchingMonitor?.id ?? null}
       freshness={freshness}
       onFreshnessChange={changeFreshness}
+      monitorSlot={
+        options?.inModal ? null : (
+          <DesktopSearchMonitorFab
+            connected={Boolean(matchingMonitor)}
+            connectedMonitorId={matchingMonitor?.id ?? null}
+            saving={saving}
+            limitReached={saveLimitReached}
+            onSave={handleMonitorClick}
+          />
+        )
+      }
     />
   );
 
@@ -197,38 +201,59 @@ export default function SearchPage() {
 
   return (
     <div className="lg:max-w-none">
-      <div className="mb-5 flex flex-col gap-2 sm:mb-7 sm:flex-row sm:items-start sm:justify-between sm:gap-3 lg:mb-6">
-        <div>
-          <h1 className="text-[22px] font-black tracking-[-0.02em] text-ink sm:text-[26px]">
-            Пошук авто
-          </h1>
-          <p className="mt-1 max-w-[560px] text-[12px] leading-relaxed text-muted sm:text-[13px]">
-            AUTO.RIA, OLX і Telegram в одному пошуку — усі авто або лише свіжі за тиждень.
-          </p>
-        </div>
-        <span className="flex w-fit flex-col items-end gap-1 sm:items-end">
-          <span className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[11px] text-muted sm:bg-white sm:text-[12px]">
-            До <strong className="text-ink">{user?.searches_limit ?? "—"}</strong> збережених
-            моніторингів
+      <div className="mb-3 flex flex-col gap-2 sm:mb-5 lg:mb-6">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[18px] font-black tracking-[-0.02em] text-ink sm:text-[22px] lg:text-[26px]">
+              Пошук авто
+            </h1>
+            <p className="mt-1 hidden max-w-[560px] text-[12px] leading-relaxed text-muted sm:block sm:text-[13px]">
+              AUTO.RIA, OLX і Telegram в одному пошуку — усі авто або лише свіжі за тиждень.
+            </p>
+          </div>
+          <span className="hidden w-fit shrink-0 flex-col items-end gap-1 sm:flex">
+            <span className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[11px] text-muted sm:bg-white sm:text-[12px]">
+              До <strong className="text-ink">{user?.searches_limit ?? "—"}</strong> збережених
+              моніторингів
+            </span>
+            {user && (
+              <Link
+                href="/app/billing"
+                className="text-[11px] font-semibold text-emerald-dark hover:underline"
+              >
+                {user.plan === "free" ? "Оформити підписку →" : "Змінити тариф →"}
+              </Link>
+            )}
           </span>
-          {user && (
-            <Link
-              href="/app/billing"
-              className="text-[11px] font-semibold text-emerald-dark hover:underline"
-            >
-              {user.plan === "free" ? "Оформити підписку →" : "Змінити тариф →"}
+        </div>
+        {user && (
+          <div className="flex items-center justify-between gap-2 text-[11px] sm:hidden">
+            <span className="text-muted">
+              До <strong className="text-ink">{user.searches_limit}</strong> моніторингів
+            </span>
+            <Link href="/app/billing" className="shrink-0 font-semibold text-emerald-dark">
+              {user.plan === "free" ? "Тариф →" : "Змінити →"}
             </Link>
-          )}
-        </span>
+          </div>
+        )}
       </div>
 
-      <SearchDesktopSplit
-        filtersRef={filtersPanelRef}
-        filters={filtersPanel}
-        results={resultsPanel}
-      />
+      <div className="pb-[calc(4.25rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
+        <SearchDesktopSplit
+          filtersRef={filtersPanelRef}
+          filters={filtersPanel}
+          results={resultsPanel}
+          filtersMobileHidden
+        />
+      </div>
 
-      <div className="mt-10 space-y-10">
+      <div
+        className={
+          running
+            ? "hidden lg:mt-10 lg:block lg:space-y-10"
+            : "mt-8 space-y-8 sm:mt-10 sm:space-y-10"
+        }
+      >
         <RecentSearchesSection onSelect={handleRecentSelect} />
         <RecentListingsSection />
         <FavoriteListingsSection />
@@ -237,23 +262,16 @@ export default function SearchPage() {
 
       <MobileSearchFiltersFab
         targetRef={filtersPanelRef}
+        filtersMobileHidden
+        visibleWhileSearching={running}
+        renderFilters={close => renderFiltersPanel({ inModal: true, onClose: close })}
         monitor={{
-          visible: running,
-          connected: Boolean(matchingMonitor),
-          connectedMonitorId: matchingMonitor?.id ?? null,
+          onClick: handleMonitorClick,
           saving,
-          limitReached: saveLimitReached,
-          onSave: handleMonitorClick,
+          disabled: saveLimitReached,
+          connected: Boolean(matchingMonitor),
+          label: "Підключити моніторинг",
         }}
-      />
-
-      <DesktopSearchMonitorFab
-        visible={running}
-        connected={Boolean(matchingMonitor)}
-        connectedMonitorId={matchingMonitor?.id ?? null}
-        saving={saving}
-        limitReached={saveLimitReached}
-        onSave={handleMonitorClick}
       />
 
       <TelegramConnectPrompt

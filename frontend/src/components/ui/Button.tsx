@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { IconArrowRight } from "@/components/icons";
 
 type Variant = "primary" | "secondary" | "ghost" | "emerald" | "danger";
-type Size = "sm" | "md" | "lg";
+type Size = "sm" | "md" | "lg" | "xl";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -23,6 +23,7 @@ const sizes: Record<Size, string> = {
   sm: "px-2 py-1 text-[11px] rounded-full",
   md: "px-2.5 py-1.5 text-[12px] rounded-full",
   lg: "px-3.5 py-2 text-[13px] rounded-full",
+  xl: "min-h-[48px] rounded-full px-6 py-3.5 text-[15px] sm:min-h-[52px] sm:px-8 sm:py-4 sm:text-[16px]",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -42,12 +43,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       {showArrow && !loading && (
         <span className={cn(
           "flex items-center justify-center rounded-full transition-all duration-300 group-hover:translate-x-0.5",
-          size === "sm" ? "w-4 h-4" : size === "lg" ? "w-5 h-5" : "w-5 h-5",
+          size === "sm" ? "w-4 h-4" : size === "lg" || size === "xl" ? "w-6 h-6" : "w-5 h-5",
           variant === "primary" || variant === "emerald"
             ? "bg-white/15 group-hover:bg-white/25"
             : "bg-ink/5 group-hover:bg-emerald/10 group-hover:text-emerald-dark"
         )}>
-          <IconArrowRight size={size === "sm" ? 10 : size === "lg" ? 12 : 11} />
+          <IconArrowRight size={size === "sm" ? 10 : size === "lg" ? 12 : size === "xl" ? 14 : 11} />
         </span>
       )}
     </button>

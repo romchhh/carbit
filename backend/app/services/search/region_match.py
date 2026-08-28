@@ -80,7 +80,10 @@ def text_mentions_any_region(text: str) -> bool:
 
 def listing_region_matches_filter(listing_region: str, filter_region: str) -> bool:
     """Чи підходить текст локації (або текст TG-поста) під обрану область/місто."""
-    filter_key = norm_text(filter_region or "")
+    from app.services.search.filter_multi import canonicalize_region
+
+    filter_region = canonicalize_region(filter_region) or (filter_region or "")
+    filter_key = norm_text(filter_region)
     if not filter_key or filter_key in ("вся україна", "ukraine"):
         return True
 

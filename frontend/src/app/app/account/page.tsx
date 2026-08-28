@@ -274,10 +274,10 @@ export default function AccountPage() {
     });
 
   return (
-    <AppPage narrow title="Акаунт">
+    <AppPage narrow title="Акаунт" className="pb-2">
       <div className="space-y-4 sm:space-y-5">
         {/* Профіль */}
-        <AppSection id="account-profile" className="!bg-white">
+        <AppSection id="account-profile" className="!border-border/60 !bg-white">
           <div className="flex items-start gap-4">
             <UserAvatar
               name={user.name}
@@ -476,7 +476,7 @@ export default function AccountPage() {
         </AppSection>
 
         {/* Підписка + статистика + оплата */}
-        <AppSection id="account-plan" className="!bg-white">
+        <AppSection id="account-plan" className="!border-border/60 !bg-white">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-[17px] font-bold text-ink">{planLabel}</div>
@@ -737,7 +737,7 @@ export default function AccountPage() {
         </AppSection>
 
         {/* Telegram + підтримка + допомога + вихід */}
-        <AppSection id="account-more" className="!bg-white !p-0 overflow-hidden" data-tour="tour-section-telegram">
+        <AppSection id="account-more" className="!overflow-hidden !border-border/60 !bg-white !p-0" data-tour="tour-section-telegram">
           <div className="divide-y divide-border/60">
             <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div className="flex min-w-0 items-center gap-3">

@@ -151,7 +151,7 @@ export function SearchPreviewResults({
 
   return (
     <>
-      <div ref={resultsRef} id="search-results" className="mt-6 scroll-mt-28 sm:mt-8 sm:scroll-mt-24 lg:mt-0 lg:scroll-mt-6">
+      <div ref={resultsRef} id="search-results" className="mt-0 scroll-mt-24 sm:mt-4 sm:scroll-mt-24 lg:mt-0 lg:scroll-mt-6">
         {running && (
           <SearchResultsToolbar
             running={running}
@@ -211,13 +211,13 @@ export function SearchPreviewResults({
         {searching && !running ? (
           <SearchResultsSkeleton count={3} />
         ) : !running ? (
-          <div className="rounded-2xl border border-dashed border-border bg-surface/40 px-5 py-10 text-center sm:bg-white sm:px-6 sm:py-12">
-            <p className="text-[15px] font-semibold text-ink">Авторинок ще порожній</p>
-            <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-muted">
+          <div className="rounded-2xl border border-dashed border-border bg-surface/40 px-4 py-6 text-center sm:bg-white sm:px-6 sm:py-12">
+            <p className="text-[14px] font-semibold text-ink sm:text-[15px]">Авторинок ще порожній</p>
+            <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-muted sm:mt-2 sm:text-[13px]">
               Оберіть фільтри і тисніть «Шукати» — обійдемо AUTO.RIA, OLX і Telegram,
               ніби це один великий автобазар.
             </p>
-            <p className="mt-3 text-[11px] text-muted">
+            <p className="mt-2 text-[10px] text-muted sm:mt-3 sm:text-[11px]">
               На підписці — більше пошуків на годину, ніж на безкоштовному тарифі
             </p>
           </div>

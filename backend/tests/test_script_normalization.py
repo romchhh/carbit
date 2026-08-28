@@ -65,6 +65,11 @@ class ScriptNormalizationTests(unittest.TestCase):
         self.assertIn("g-class", [t.lower() for t in tokens])
         self.assertIn("G-Class", tokens)
 
+    def test_audi_e_tron_canonical(self):
+        self.assertEqual(canonical_search_model("e tron"), "E-tron")
+        self.assertEqual(canonical_search_model("E-Tron"), "E-tron")
+        self.assertEqual(canonical_search_model("e-tron gt"), "E-tron GT")
+
 
 if __name__ == "__main__":
     unittest.main()

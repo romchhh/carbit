@@ -14,9 +14,15 @@ logger = logging.getLogger(__name__)
 
 
 async def _resolve_live_listing(listing_id: str) -> ListingOut | None:
+    from app.services.auto_ria.url_parse import listing_id_from_external_url
+
     lid = str(listing_id or "").strip()
     if not lid:
         return None
+
+    converted = listing_id_from_external_url(lid)
+    if converted:
+        lid = converted
 
     if lid.startswith("olx_"):
         numeric = lid.removeprefix("olx_")
@@ -32,8 +38,21 @@ async def _resolve_live_listing(listing_id: str) -> ListingOut | None:
             logger.exception("Failed to fetch OLX listing id=%s", lid)
         return None
 
-    if lid.startswith("new_auto_ria_") or lid.startswith("auto_ria_"):
-        auto_id = lid.split("_", 2)[-1]
+    if lid.startswith("new_auto_ria_"):
+        auto_id = lid.removeprefix("new_auto_ria_")
+        try:
+            from app.services.auto_ria.client import AutoRiaClient
+            from app.services.auto_ria.mapper import new_info_to_listing
+
+            client = AutoRiaClient()
+            info = await client.get_new_info(auto_id)
+            return new_info_to_listing(info)
+        except Exception:
+            logger.exception("Failed to hydrate new AUTO.RIA listing id=%s", lid)
+        return None
+
+    if lid.startswith("auto_ria_"):
+        auto_id = lid.removeprefix("auto_ria_")
         try:
             from app.services.auto_ria.service import hydrate_auto_ria_ids
 

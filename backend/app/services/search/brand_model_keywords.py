@@ -276,13 +276,38 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
     "a8": ("a8", "ауді a8", "ауди а8", "audi a8", "d2", "d3", "d4", "d5"),
     "q2": ("q2", "ауді q2", "audi q2"),
     "q3": ("q3", "ауді q3", "ауди q3", "audi q3"),
-    "q4 e-tron": ("q4 e-tron", "q4 etron", "q4", "audi q4"),
+    "q4 e-tron": ("q4 e-tron", "q4 etron", "q4 e tron", "audi q4", "audi q4 e-tron"),
     "q5": ("q5", "ауді q5", "ауди q5", "audi q5", "sq5"),
     "q7": ("q7", "ауді q7", "ауди q7", "audi q7", "sq7"),
     "q8": ("q8", "ауді q8", "ауди q8", "audi q8", "sq8", "q8 e-tron", "q8 etron"),
     "r8": ("r8", "ауді r8", "audi r8"),
     "tt": ("tt", "ауді tt", "audi tt", "tts"),
-    "e-tron": ("e-tron", "etron", "е-трон", "е трон", "audi etron", "e-tron gt", "etron gt"),
+    "e-tron": (
+        "e-tron",
+        "e tron",
+        "etron",
+        "е-трон",
+        "е трон",
+        "и-трон",
+        "и трон",
+        "audi etron",
+        "audi e tron",
+        "audi e-tron",
+        "ауди e tron",
+        "ауди e-tron",
+        "ауді e tron",
+        "ауді e-tron",
+        "e-tron sportback",
+        "e tron sportback",
+    ),
+    "e-tron gt": (
+        "e-tron gt",
+        "e tron gt",
+        "etron gt",
+        "audi e-tron gt",
+        "audi e tron gt",
+        "e-tron gt quattro",
+    ),
     "rs3": ("rs3", "rs 3", "ауді rs3"),
     "rs4": ("rs4", "rs 4", "ауді rs4"),
     "rs5": ("rs5", "rs 5", "ауді rs5"),
@@ -1383,6 +1408,21 @@ def canonical_search_model(model: str) -> str:
     model = (model or "").strip()
     if not model:
         return model
+    key = norm_text(model)
+    e_tron_canon = {
+        "e-tron": "E-tron",
+        "e tron": "E-tron",
+        "etron": "E-tron",
+        "е-трон": "E-tron",
+        "е трон": "E-tron",
+        "и-трон": "E-tron",
+        "и трон": "E-tron",
+        "e-tron gt": "E-tron GT",
+        "e tron gt": "E-tron GT",
+        "etron gt": "E-tron GT",
+    }
+    if key in e_tron_canon:
+        return e_tron_canon[key]
     display = letter_class_display(model)
     if display:
         return display
@@ -2630,8 +2670,24 @@ def _shorter_model_digit_conflicts(hay: str, model: str) -> bool:
     )
 
 
+def _e_tron_model_match_ok(hay: str, model: str) -> bool:
+    """«E-tron» і «E-tron GT» — різні моделі в одній лінійці."""
+    mk = norm_text(model)
+    hay_n = norm_text(hay)
+    if not mk or not hay_n:
+        return True
+    gt = re.search(r"e[\s\-]?tron\s+gt\b", hay_n)
+    if mk == "e-tron":
+        return not bool(gt)
+    if mk == "e-tron gt":
+        return bool(gt)
+    return True
+
+
 def _letter_class_model_match_ok(hay: str, model: str, *, brand: str = "") -> bool:
     """Після позитивного матчу — відсікаємо конфліктні Mercedes (G vs GLA) та Q5 vs Q50."""
+    if not _e_tron_model_match_ok(hay, model):
+        return False
     if _mercedes_letter_class_conflicts(hay, model, brand=brand):
         return False
     if _shorter_model_digit_conflicts(hay, model):

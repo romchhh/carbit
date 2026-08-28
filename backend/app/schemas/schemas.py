@@ -250,6 +250,41 @@ class SearchFilters(BaseModel):
             return "EUR"
         return None
 
+    @field_validator("region", mode="before")
+    @classmethod
+    def normalize_region_field(cls, value: object) -> str | None:
+        if value is None or value == "":
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        from app.services.search.filter_multi import canonicalize_region
+
+        return canonicalize_region(text) or text
+
+    @field_validator("regions", mode="before")
+    @classmethod
+    def normalize_regions_field(cls, value: object) -> list[str] | None:
+        if value is None:
+            return None
+        if not isinstance(value, (list, tuple)):
+            return None
+        from app.services.search.filter_multi import canonicalize_region
+
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            text = str(item or "").strip()
+            if not text:
+                continue
+            canonical = canonicalize_region(text) or text
+            key = canonical.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(canonical)
+        return out or None
+
 
 class SearchQueryCreate(BaseModel):
     name: str
@@ -316,6 +351,7 @@ class ListingOut(BaseModel):
     source_data: Optional[dict[str, Any]] = None
     price_history: list[dict]
     previous_price: Optional[int] = None
+    previous_currency: Optional[str] = None
     price_drop_percent: Optional[float] = None
     price_dropped_at: Optional[datetime] = None
     is_duplicate: bool

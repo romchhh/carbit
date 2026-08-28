@@ -84,6 +84,7 @@ def listing_to_out(listing: Listing) -> ListingOut:
         out = out.model_copy(
             update={
                 "previous_price": drop.previous_price,
+                "previous_currency": drop.previous_currency,
                 "price_drop_percent": drop.drop_percent,
                 "price_dropped_at": drop.dropped_at,
             }

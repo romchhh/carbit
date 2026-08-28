@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconArrowRight } from "@/components/icons";
+import { IconArrowRight, IconPlus } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { RecentListingsSection } from "@/components/listings/RecentListingsSection";
 import { FavoriteListingsSection } from "@/components/listings/FavoriteListingsSection";
@@ -74,14 +74,8 @@ export default function DashboardPage() {
       setSearches(prev => [created, ...prev.filter(s => s.id !== created.id)]);
     });
   const { trackSearchStart, handleRecentSelect } = useRecentSearches({
-    filters,
     freshness,
     sort,
-    pages,
-    total,
-    marketTotal,
-    searching,
-    results,
     setFilters,
     changeFreshness,
     runSearch,
@@ -146,7 +140,7 @@ export default function DashboardPage() {
   ) => {
     clearSaveMessages();
     clearError();
-    trackSearchStart(overrideFilters);
+    trackSearchStart(overrideFilters ?? filters, freshness);
     void runSearch(overrideFilters ?? filters, freshness, overrideSort);
   };
 
@@ -176,7 +170,6 @@ export default function DashboardPage() {
     <SearchFiltersPanel
       wide
       variant="sidebar"
-      hideDesktopSave
       inModal={options?.inModal}
       filters={filters}
       onChange={setFilters}
@@ -199,6 +192,15 @@ export default function DashboardPage() {
       connectedMonitorId={matchingMonitor?.id ?? null}
       freshness={freshness}
       onFreshnessChange={changeFreshness}
+      monitorSlot={
+        <DesktopSearchMonitorFab
+          connected={Boolean(matchingMonitor)}
+          connectedMonitorId={matchingMonitor?.id ?? null}
+          saving={saving}
+          limitReached={saveLimitReached}
+          onSave={handleMonitorClick}
+        />
+      }
     />
   );
 
@@ -277,6 +279,19 @@ export default function DashboardPage() {
               <p className="mx-auto mt-2 max-w-sm text-[12px] text-muted">
                 Налаштуйте фільтри вище і натисніть «Зберегти» — поточні й нові авто з&apos;являться тут.
               </p>
+              <div className="mt-6 flex justify-center">
+                <Button
+                  type="button"
+                  variant="emerald"
+                  size="xl"
+                  className="w-full min-w-[min(100%,300px)] gap-2 sm:w-auto sm:min-w-0"
+                  onClick={() =>
+                    filtersPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                  }
+                >
+                  <IconPlus size={18} /> Налаштувати фільтри
+                </Button>
+              </div>
             </AppEmpty>
           }
         >
@@ -313,23 +328,16 @@ export default function DashboardPage() {
 
       <MobileSearchFiltersFab
         targetRef={filtersPanelRef}
+        filtersMobileHidden
+        visibleWhileSearching={running}
+        renderFilters={close => renderFiltersPanel({ inModal: true, onClose: close })}
         monitor={{
-          visible: running,
-          connected: Boolean(matchingMonitor),
-          connectedMonitorId: matchingMonitor?.id ?? null,
+          onClick: handleMonitorClick,
           saving,
-          limitReached: saveLimitReached,
-          onSave: handleMonitorClick,
+          disabled: saveLimitReached,
+          connected: Boolean(matchingMonitor),
+          label: "Підключити моніторинг",
         }}
-      />
-
-      <DesktopSearchMonitorFab
-        visible={running}
-        connected={Boolean(matchingMonitor)}
-        connectedMonitorId={matchingMonitor?.id ?? null}
-        saving={saving}
-        limitReached={saveLimitReached}
-        onSave={handleMonitorClick}
       />
 
       <TelegramConnectPrompt

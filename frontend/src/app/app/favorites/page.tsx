@@ -146,8 +146,8 @@ export default function FavoritesPage() {
         <AppEmpty>
           <IconHeart size={32} className="mx-auto mb-4 text-muted/30" />
           <p className="text-muted">Поки що немає обраних авто</p>
-          <Link href="/app/dashboard" className="mt-4 inline-block">
-            <Button variant="primary" size="md">
+          <Link href="/app/dashboard" className="mt-6 flex justify-center">
+            <Button variant="primary" size="xl" className="w-full min-w-[min(100%,300px)] sm:w-auto sm:min-w-0">
               До пошуків
             </Button>
           </Link>

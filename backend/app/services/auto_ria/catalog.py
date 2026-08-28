@@ -217,5 +217,5 @@ async def model_filter_needs_post_filter(client: AutoRiaClient, filters) -> bool
         return False
     mark_id = await resolve_mark_id(client, brand)
     if mark_id is None:
-        return False
+        return True
     return await resolve_model_id(client, mark_id, model) is None

@@ -207,8 +207,9 @@ def infer_region_from_text(
     if not best_region:
         return None
 
+# Також: якщо є «київськ» без слова «област» — це область, не місто.
     if best_region in ("м. Київ", "Київська область"):
-        if "київськ" in haystack and any(w in haystack for w in _OBLAST_WORDS):
+        if "київськ" in haystack:
             return "Київська область"
         if _score_region_match(haystack, "м. Київ") >= _score_region_match(haystack, "Київська область"):
             return "м. Київ"
@@ -234,13 +235,23 @@ def normalize_region_label(
         if norm_text(region) == haystack:
             return region
 
+    # Точна коротка форма прикметника: «Хмельницька» / «Миколаївська»
+    # (важливо до city-keyword match — у Львівській є місто Миколаїв).
     for region in regions:
-        if region_mentioned_in_text(text, region):
+        if not region.endswith(" область"):
+            continue
+        adj = norm_text(region[: -len(" область")])
+        if haystack == adj:
             return region
+
+    # Найкращий score, а не перший згадуваний регіон.
+    inferred = infer_region_from_text(text, regions)
+    if inferred and inferred != "Вся Україна":
+        return inferred
 
     if transcript:
         inferred = infer_region_from_text(transcript, regions)
-        if inferred:
+        if inferred and inferred != "Вся Україна":
             return inferred
 
     return None

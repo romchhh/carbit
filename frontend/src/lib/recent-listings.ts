@@ -1,4 +1,5 @@
 import type { Listing } from "@/types/api";
+import { markListingViewed } from "@/lib/viewed-listings";
 
 const KEY = "carbit:recent-listings";
 const MAX_ITEMS = 12;
@@ -59,6 +60,7 @@ export function loadRecentListings(): Listing[] {
 
 export function saveRecentListing(listing: Listing) {
   if (typeof window === "undefined") return;
+  markListingViewed(listing.id);
   const current = loadRecentListings().filter(item => item.id !== listing.id);
   const next = [listing, ...current].slice(0, MAX_ITEMS);
   localStorage.setItem(KEY, JSON.stringify(next));

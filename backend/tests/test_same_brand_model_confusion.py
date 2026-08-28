@@ -118,7 +118,11 @@ class NestedModelNameTests(unittest.TestCase):
         self.assertTrue(matches("Audi Q4 e-tron 2022", "Audi", "Q4 e-tron"))
 
     def test_plain_etron_still_works(self):
-        self.assertTrue(matches("Audi e-tron 55 quattro", "Audi", "e-tron"))
+        self.assertTrue(matches("Audi e-tron 55 quattro", "Audi", "E-tron"))
+
+    def test_etron_gt_is_not_plain_etron(self):
+        self.assertFalse(matches("Audi e-tron GT 2023", "Audi", "E-tron"))
+        self.assertTrue(matches("Audi e-tron GT 2023", "Audi", "E-tron GT"))
 
 
 class SharedModelWordTests(unittest.TestCase):

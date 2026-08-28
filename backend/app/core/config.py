@@ -71,6 +71,15 @@ class Settings(BaseSettings):
 
     # External APIs (reserved for future scrapers)
     AUTO_RIA_API_KEY: str = ""
+    # Пакет AUTO.RIA (developers.ria.com/payment): free | 20k | 100k | 500k | 1m | max
+    # Має пріоритет над AUTO_RIA_MONTHLY_QUOTA / AUTO_RIA_HOURLY_QUOTA.
+    AUTO_RIA_QUOTA_PACKAGE: str = ""
+    # Ліміти пакета AUTO.RIA для локального обліку та Telegram-алертів адмінам.
+    # Використовуються, якщо AUTO_RIA_QUOTA_PACKAGE порожній (інакше — з пресету пакета).
+    AUTO_RIA_MONTHLY_QUOTA: int = 1000
+    AUTO_RIA_HOURLY_QUOTA: int = 30
+    # Сповіщати, коли залишилось ≤ N% (через кому), напр. 20,10
+    AUTO_RIA_QUOTA_WARN_REMAINING: str = "20,10"
     IMPERIYA_API_KEY: str = ""
     OLX_CLIENT_ID: str = ""
     OLX_CLIENT_SECRET: str = ""

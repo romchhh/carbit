@@ -1,27 +1,28 @@
 "use client";
 
 import { useEffect, useState, type ReactNode, type RefObject } from "react";
-import { useRouter } from "next/navigation";
-import { IconCheck, IconFilter, IconTelegram } from "@/components/icons";
+import { IconFilter, IconTelegram } from "@/components/icons";
 import { MobileSearchFiltersModal } from "@/components/search/MobileSearchFiltersModal";
 import { cn } from "@/lib/utils";
 
 type MonitorProps = {
-  visible: boolean;
-  connected: boolean;
-  connectedMonitorId?: string | null;
+  onClick: () => void;
   saving?: boolean;
-  limitReached?: boolean;
-  onSave: () => void;
+  disabled?: boolean;
+  connected?: boolean;
+  label?: string;
 };
 
 type Props = {
   targetRef: RefObject<HTMLElement | null>;
   className?: string;
-  /** Якщо задано — «Фільтри» відкривають модалку замість скролу. */
-  renderFilters?: (close: () => void) => ReactNode;
+  renderFilters: (close: () => void) => ReactNode;
   /** Завжди показувати панель (не ховати, коли фільтри у viewport). */
   pinned?: boolean;
+  /** Показувати панель під час перегляду результатів пошуку. */
+  visibleWhileSearching?: boolean;
+  /** Фільтри на mobile лише в модалці — орієнтуємось на скрол, не на aside. */
+  filtersMobileHidden?: boolean;
   monitor?: MonitorProps;
   /** Відступ знизу для fixed-панелі. */
   bottomInset?: "cabinet" | "public";
@@ -32,15 +33,17 @@ export function MobileSearchFiltersFab({
   className,
   renderFilters,
   pinned = false,
+  visibleWhileSearching = false,
+  filtersMobileHidden = false,
   monitor,
   bottomInset = "cabinet",
 }: Props) {
-  const router = useRouter();
-  const [filtersVisible, setFiltersVisible] = useState(false);
+  const [filtersVisible, setFiltersVisible] = useState(true);
+  const [scrolledDown, setScrolledDown] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
-    if (pinned || renderFilters) return;
+    if (pinned || filtersMobileHidden) return;
     const target = targetRef.current;
     if (!target) return;
 
@@ -48,7 +51,7 @@ export function MobileSearchFiltersFab({
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        setFiltersVisible(!entry.isIntersecting);
+        setFiltersVisible(entry.isIntersecting);
       },
       {
         root,
@@ -59,32 +62,28 @@ export function MobileSearchFiltersFab({
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [pinned, renderFilters, targetRef]);
+  }, [filtersMobileHidden, pinned, targetRef]);
 
-  const scrollToFilters = () => {
-    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const openFilters = () => {
-    if (renderFilters) {
-      setModalOpen(true);
+  useEffect(() => {
+    if (!filtersMobileHidden) {
+      setScrolledDown(false);
       return;
     }
-    scrollToFilters();
-  };
+    const root = targetRef.current?.closest(".app-mobile-scroll") as HTMLElement | null;
+    if (!root) return;
 
-  const handleMonitorClick = () => {
-    if (!monitor || monitor.saving || monitor.limitReached) return;
-    if (monitor.connected && monitor.connectedMonitorId) {
-      router.push(`/app/monitors/${monitor.connectedMonitorId}`);
-      return;
-    }
-    monitor.onSave();
-  };
+    const onScroll = () => {
+      setScrolledDown(root.scrollTop > 72);
+    };
+    onScroll();
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => root.removeEventListener("scroll", onScroll);
+  }, [filtersMobileHidden, targetRef]);
 
-  const showMonitor = Boolean(monitor?.visible);
-  const showFiltersButton = pinned || renderFilters || filtersVisible;
-  const showCluster = showFiltersButton || showMonitor;
+  const showBar =
+    pinned ||
+    visibleWhileSearching ||
+    (filtersMobileHidden ? scrolledDown : !filtersVisible);
 
   const bottomClass =
     bottomInset === "public"
@@ -95,66 +94,57 @@ export function MobileSearchFiltersFab({
     <>
       <div
         className={cn(
-          "fixed right-3 z-[46] flex flex-row-reverse items-center gap-2 lg:hidden",
+          "fixed inset-x-3 z-[46] flex gap-2 lg:hidden",
           bottomClass,
           "transition-all duration-300",
-          showCluster
+          showBar
             ? "pointer-events-auto translate-y-0 opacity-100"
             : "pointer-events-none translate-y-3 opacity-0",
           className,
         )}
       >
-        {showFiltersButton ? (
-          <button
-            type="button"
-            aria-label="Відкрити фільтри"
-            onClick={openFilters}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-full bg-emerald px-4 py-3",
-              "text-[13px] font-bold text-white shadow-[0_8px_24px_-6px_rgba(16,185,129,0.55)]",
-              "transition-all active:scale-[0.97]",
-            )}
-          >
-            <IconFilter size={18} />
-            Фільтри
-          </button>
-        ) : null}
+        <button
+          type="button"
+          aria-label="Відкрити фільтри"
+          onClick={() => setModalOpen(true)}
+          className={cn(
+            "inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald px-4 py-3",
+            "text-[13px] font-bold text-white shadow-[0_8px_24px_-6px_rgba(16,185,129,0.55)]",
+            "transition-all active:scale-[0.98]",
+          )}
+        >
+          <IconFilter size={18} />
+          Фільтри
+        </button>
 
-        {showMonitor && monitor ? (
+        {monitor ? (
           <button
             type="button"
             data-tour="save-search"
-            onClick={handleMonitorClick}
-            disabled={monitor.saving || monitor.limitReached}
+            onClick={monitor.onClick}
+            disabled={monitor.saving || monitor.disabled}
             className={cn(
-              "inline-flex items-center gap-2 rounded-full border-2 bg-white px-3.5 py-2.5",
-              "text-[12px] font-bold shadow-[0_8px_24px_-6px_rgba(16,185,129,0.35)]",
-              "transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60",
-              monitor.connected
-                ? "border-emerald/50 text-emerald-dark"
-                : "border-emerald text-ink",
+              "inline-flex min-h-[48px] flex-[1.15] items-center justify-center gap-2 rounded-2xl px-3 py-3",
+              "text-[12px] font-bold text-white shadow-[0_8px_24px_-6px_rgba(251,146,60,0.5)]",
+              "bg-gradient-to-br from-orange-300 via-orange-400 to-orange-500",
+              "transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-65",
             )}
           >
-            {monitor.connected ? (
-              <>
-                <IconCheck size={16} strokeWidth={2.5} className="text-emerald" />
-                Підключено
-              </>
-            ) : (
-              <>
-                <IconTelegram size={16} className="text-emerald" />
-                {monitor.saving ? "Підключаємо…" : "Моніторинг"}
-              </>
-            )}
+            <IconTelegram size={17} className="shrink-0 text-white" />
+            <span className="leading-tight">
+              {monitor.saving
+                ? "Підключаємо…"
+                : monitor.connected
+                  ? "Підключено"
+                  : monitor.label ?? "Моніторинг"}
+            </span>
           </button>
         ) : null}
       </div>
 
-      {renderFilters ? (
-        <MobileSearchFiltersModal open={modalOpen} onClose={() => setModalOpen(false)}>
-          {modalOpen ? renderFilters(() => setModalOpen(false)) : null}
-        </MobileSearchFiltersModal>
-      ) : null}
+      <MobileSearchFiltersModal open={modalOpen} onClose={() => setModalOpen(false)}>
+        {modalOpen ? renderFilters(() => setModalOpen(false)) : null}
+      </MobileSearchFiltersModal>
     </>
   );
 }

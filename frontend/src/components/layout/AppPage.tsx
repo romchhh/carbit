@@ -26,12 +26,13 @@ export function AppPage({
     <div
       data-tour={tourId}
       className={cn(
-        "mx-auto w-full lg:mx-0",
+        "w-full",
         narrow
-          ? "max-w-[760px] lg:max-w-[880px]"
-          : wide
-            ? "max-w-[920px] lg:max-w-none"
-            : "max-w-[760px] lg:max-w-[1100px]",
+          ? "mx-auto max-w-[min(100%,42rem)]"
+          : cn(
+              "mx-auto lg:mx-0",
+              wide ? "max-w-[920px] lg:max-w-none" : "max-w-[760px] lg:max-w-[1100px]",
+            ),
         className,
       )}
     >

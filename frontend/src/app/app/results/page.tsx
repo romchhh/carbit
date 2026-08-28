@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { SearchResultsToolbar } from "@/components/search/SearchResultsToolbar";
+import { Button } from "@/components/ui/Button";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
 import { useCompareOnListingCard } from "@/hooks/useCompareOnListingCard";
 import { getApiErrorMessage, searches as searchesApi } from "@/lib/api";
@@ -110,11 +111,10 @@ function ResultsPageContent() {
       <div className="max-w-[860px] rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center lg:max-w-none">
         <p className="text-[15px] font-semibold text-ink">Оберіть збережений пошук</p>
         <p className="mt-2 text-[13px] text-muted">Перейдіть до «Мої моніторинги» і відкрийте запит</p>
-        <Link
-          href="/app/monitors"
-          className="mt-4 inline-flex rounded-full bg-emerald px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-emerald-dark"
-        >
-          Мої моніторинги
+        <Link href="/app/monitors" className="mt-6 flex justify-center">
+          <Button variant="emerald" size="xl" className="w-full min-w-[min(100%,300px)] sm:w-auto sm:min-w-0">
+            Мої моніторинги
+          </Button>
         </Link>
       </div>
     );

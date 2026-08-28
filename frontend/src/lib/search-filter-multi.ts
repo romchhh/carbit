@@ -1,4 +1,5 @@
 import { getModelsForBrand } from "@/lib/search-data/brands-models";
+import { canonicalizeRegion } from "@/lib/search-data/regions";
 import type { SearchFilterState } from "@/lib/search-catalog";
 
 const ALL_UKRAINE = "Вся Україна";
@@ -21,7 +22,9 @@ export function syncSearchFilterArrays(filters: SearchFilterState): SearchFilter
   const model = (filters.model || filters.models[0] || "").trim();
   const regionRaw = (filters.region || filters.regions[0] || ALL_UKRAINE).trim();
   const region =
-    !regionRaw || regionRaw === "Всі регіони" ? ALL_UKRAINE : regionRaw;
+    !regionRaw || regionRaw === "Всі регіони"
+      ? ALL_UKRAINE
+      : canonicalizeRegion(regionRaw) || regionRaw;
 
   const validModel =
     brand && model && getModelsForBrand(brand).includes(model) ? model : "";

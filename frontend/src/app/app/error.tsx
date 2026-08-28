@@ -23,12 +23,12 @@ export default function AppSectionError({
       <p className="mt-2 max-w-sm text-[13px] leading-relaxed text-muted">
         Спробуйте ще раз. Якщо помилка повторюється — оновіть сторінку або увійдіть заново.
       </p>
-      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-        <Button size="md" onClick={() => reset()}>
+      <div className="mt-6 flex w-full max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center">
+        <Button size="xl" className="w-full sm:w-auto" onClick={() => reset()}>
           Спробувати знову
         </Button>
-        <Link href="/app/dashboard">
-          <Button variant="secondary" size="md">
+        <Link href="/app/dashboard" className="w-full sm:w-auto">
+          <Button variant="secondary" size="xl" className="w-full">
             На головну кабінету
           </Button>
         </Link>

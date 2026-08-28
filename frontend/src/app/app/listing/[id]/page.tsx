@@ -35,7 +35,7 @@ import {
   listingSourceSiteName,
 } from "@/lib/listing-source";
 import { openExternalUrl } from "@/lib/open-external";
-import { loadRecentListings } from "@/lib/recent-listings";
+import { loadRecentListings, saveRecentListing } from "@/lib/recent-listings";
 import { normalizeListingIdParam } from "@/lib/listing-share";
 import { hasVinCheck } from "@/lib/vin-check";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
@@ -82,6 +82,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           const cached = loadRecentListings().find(item => item.id === data.id);
           const merged = keepListingMirrors(data, cached);
           setListing(merged);
+          saveRecentListing(merged);
           setNotFound(false);
           if (
             data.source === "auto_ria" &&
@@ -97,6 +98,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           const cached = loadRecentListings().find(item => item.id === listingId);
           if (cached) {
             setListing(cached);
+            saveRecentListing(cached);
             setNotFound(false);
             return;
           }
@@ -149,8 +151,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         <p className="max-w-xs text-[13px] text-muted">
           Можливо, воно вже зняте з публікації або посилання застаріло.
         </p>
-        <Link href={user ? "/app/dashboard" : "/"}>
-          <Button variant="secondary" size="md">
+        <Link href={user ? "/app/dashboard" : "/"} className="mt-6 flex justify-center">
+          <Button variant="secondary" size="xl" className="w-full min-w-[min(100%,300px)] sm:w-auto sm:min-w-0">
             {user ? "До пошуків" : "На головну"}
           </Button>
         </Link>

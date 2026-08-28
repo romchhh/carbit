@@ -4,6 +4,7 @@ export const SIGNIFICANT_PRICE_DROP_PERCENT = 5;
 
 export type ListingPriceDrop = {
   previousPrice: number;
+  previousCurrency?: string | null;
   dropPercent: number;
   droppedAt?: string | null;
 };
@@ -21,6 +22,10 @@ function dropFromHistory(listing: Listing): ListingPriceDrop | null {
   const at = (last as { at?: unknown }).at;
   return {
     previousPrice,
+    previousCurrency:
+      typeof (last as { currency?: unknown }).currency === "string"
+        ? (last as { currency: string }).currency
+        : listing.previous_currency ?? listing.currency ?? null,
     dropPercent: Math.round(dropPercent * 10) / 10,
     droppedAt: typeof at === "string" ? at : listing.price_dropped_at ?? null,
   };
@@ -32,6 +37,7 @@ export function resolveListingPriceDrop(listing: Listing): ListingPriceDrop | nu
   if (previousPrice > 0 && dropPercent >= SIGNIFICANT_PRICE_DROP_PERCENT) {
     return {
       previousPrice,
+      previousCurrency: listing.previous_currency ?? listing.currency ?? null,
       dropPercent,
       droppedAt: listing.price_dropped_at ?? null,
     };

@@ -30,6 +30,43 @@ export const UKRAINE_REGIONS = [
 
 export type UkraineRegion = (typeof UKRAINE_REGIONS)[number];
 
+/** «Хмельницька» / «волинській області» → канонічна назва з UKRAINE_REGIONS. */
+export function canonicalizeRegion(value: string | null | undefined): string | null {
+  const raw = (value || "").trim();
+  if (!raw || raw === "Вся Україна" || raw === "Всі регіони") return null;
+  const exact = UKRAINE_REGIONS.find(r => r === raw);
+  if (exact && exact !== "Вся Україна") return exact;
+
+  const low = raw.toLowerCase();
+  for (const region of UKRAINE_REGIONS) {
+    if (region === "Вся Україна") continue;
+    if (region.toLowerCase() === low) return region;
+  }
+
+  // Коротка форма без «область»: «Хмельницька»
+  for (const region of UKRAINE_REGIONS) {
+    if (!region.endsWith(" область")) continue;
+    const short = region.slice(0, -" область".length);
+    if (low === short.toLowerCase()) return region;
+  }
+
+  // Містить назву області / міста
+  for (const region of UKRAINE_REGIONS) {
+    if (region === "Вся Україна") continue;
+    const stem = region
+      .toLowerCase()
+      .replace(/^м\.\s*/, "")
+      .replace(/ область$/, "")
+      .replace(/ська$/, "ськ")
+      .replace(/зька$/, "зьк")
+      .replace(/цька$/, "цьк");
+    if (stem.length >= 4 && low.includes(stem)) return region;
+  }
+
+  return null;
+}
+
+
 /** Міста області для зіставлення з region / текстом TG-оголошення */
 export const REGION_KEYWORDS: Record<string, string[]> = {
   "м. Київ": [
@@ -888,19 +925,20 @@ export const REGION_KEYWORDS: Record<string, string[]> = {
 
 export function regionMatchesListing(listingRegion: string, filterRegion: string): boolean {
   if (!filterRegion || filterRegion === "Вся Україна") return true;
+  const canonicalFilter = canonicalizeRegion(filterRegion) || filterRegion;
   const normalized = (listingRegion || "").toLowerCase();
   if (!normalized || ["україна", "ukraine", "вся україна", "украина", "ua"].includes(normalized.trim())) {
     return true;
   }
-  if (filterRegion === "м. Київ") {
+  if (canonicalFilter === "м. Київ") {
     const head = normalized.split(",")[0]?.trim() || normalized;
     return /^(київ|киев|kyiv|kiev)(\s|$|,)/.test(head) || head === "київ" || head === "киев";
   }
-  const filterKey = filterRegion.toLowerCase();
+  const filterKey = canonicalFilter.toLowerCase();
   if (normalized.includes(filterKey)) return true;
   const oblastShort = filterKey.replace(" область", " обл");
   if (oblastShort !== filterKey && normalized.includes(oblastShort)) return true;
-  const keywords = REGION_KEYWORDS[filterRegion];
+  const keywords = REGION_KEYWORDS[canonicalFilter];
   if (!keywords) return normalized.includes(filterKey);
   return keywords.some(kw => {
     if (kw.length <= 3) {

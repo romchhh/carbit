@@ -102,6 +102,7 @@ export interface Listing {
   source_data?: Record<string, unknown> | null;
   price_history: Record<string, unknown>[];
   previous_price?: number | null;
+  previous_currency?: string | null;
   price_drop_percent?: number | null;
   price_dropped_at?: string | null;
   is_duplicate: boolean;

@@ -143,8 +143,15 @@ async def get_listing(
     db: AsyncSession = Depends(get_db),
 ):
     """Публічний перегляд оголошення — без авторизації."""
-    listing = await db.get(Listing, listing_id)
+    from app.services.auto_ria.url_parse import listing_id_from_external_url
+    from app.services.comparisons.resolve import _resolve_live_listing
+
+    lid = listing_id_from_external_url(listing_id) or listing_id.strip()
+    listing = await db.get(Listing, lid)
     if not listing:
+        live = await _resolve_live_listing(lid)
+        if live:
+            return live
         raise HTTPException(404, "Listing not found")
     if listing_needs_photos(listing):
         await sync_telegram_photos_from_disk(db, listing)

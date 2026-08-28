@@ -44,7 +44,7 @@ export function ListingPriceDisplay({
 
   const previousLabel = formatListingPrice(
     drop.previousPrice,
-    listing.currency,
+    drop.previousCurrency ?? listing.currency,
     displayCurrency,
     listing.source_data,
   );

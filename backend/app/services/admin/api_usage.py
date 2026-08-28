@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 HOUR_TTL_SECONDS = 60 * 60 * 24 * 35  # 35 днів
 DAY_TTL_SECONDS = 60 * 60 * 24 * 95  # 95 днів
+MONTH_TTL_SECONDS = 60 * 60 * 24 * 400  # ~13 місяців
 
 SOURCES = ("auto_ria", "olx", "telegram_channels", "telegram_bot")
 
@@ -25,6 +26,11 @@ def _hour_key(source: str, dt: datetime | None = None) -> str:
 def _day_key(source: str, dt: datetime | None = None) -> str:
     ts = dt or now_kyiv()
     return f"api_usage:day:{source}:{ts.strftime('%Y-%m-%d')}"
+
+
+def _month_key(source: str, dt: datetime | None = None) -> str:
+    ts = dt or now_kyiv()
+    return f"api_usage:month:{source}:{ts.strftime('%Y-%m')}"
 
 
 async def record_api_request(
@@ -44,11 +50,20 @@ async def record_api_request(
         now = now_kyiv()
         hour_key = _hour_key(source, now)
         day_key = _day_key(source, now)
-        for key, ttl in ((hour_key, HOUR_TTL_SECONDS), (day_key, DAY_TTL_SECONDS)):
+        month_key = _month_key(source, now)
+        for key, ttl in (
+            (hour_key, HOUR_TTL_SECONDS),
+            (day_key, DAY_TTL_SECONDS),
+            (month_key, MONTH_TTL_SECONDS),
+        ):
             await redis.hincrby(key, "total", amount)
             await redis.hincrby(key, "ok" if success else "err", amount)
             await redis.hincrby(key, f"op:{op}", amount)
             await redis.expire(key, ttl)
+        if source == "auto_ria":
+            from app.services.auto_ria.quota_alerts import schedule_auto_ria_quota_check
+
+            schedule_auto_ria_quota_check()
     except Exception:
         logger.warning("api_usage record failed source=%s op=%s", source, op, exc_info=True)
 
@@ -104,6 +119,17 @@ async def _read_hash_totals(key: str) -> dict[str, Any]:
     return out
 
 
+async def get_auto_ria_quota_usage() -> dict[str, int]:
+    """Поточне використання AUTO.RIA для годинного/місячного вікна."""
+    now = now_kyiv()
+    hour = await _read_hash_totals(_hour_key("auto_ria", now))
+    month = await _read_hash_totals(_month_key("auto_ria", now))
+    return {
+        "hour_used": int(hour.get("total") or 0),
+        "month_used": int(month.get("total") or 0),
+    }
+
+
 async def build_api_usage_report(*, hours: int = 24, days: int = 7) -> dict[str, Any]:
     """Зведення для адмінки: KPI, погодинні та денні графіки, розбивка по операціях."""
     now = now_kyiv()
@@ -129,6 +155,7 @@ async def build_api_usage_report(*, hours: int = 24, days: int = 7) -> dict[str,
 
         today = await _read_hash_totals(_day_key(source, now))
         last_hour = await _read_hash_totals(_hour_key(source, now))
+        month_bucket = await _read_hash_totals(_month_key(source, now)) if source == "auto_ria" else {}
 
         ops_raw = today.get("ops") or {}
         operations_today = [
@@ -150,6 +177,7 @@ async def build_api_usage_report(*, hours: int = 24, days: int = 7) -> dict[str,
             "today_total": today.get("total", 0),
             "today_ok": today.get("ok", 0),
             "today_err": today.get("err", 0),
+            "month_total": month_bucket.get("total", 0) if source == "auto_ria" else None,
             "period_total": period_total,
             "period_ok": period_ok,
             "period_err": period_err,

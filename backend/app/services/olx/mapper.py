@@ -34,6 +34,7 @@ from app.services.olx.brand_slugs import (
     resolve_olx_model_slug,
 )
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
+from app.services.search.filter_multi import canonicalize_region
 from app.services.search.subbrand_split import split_huawei_subbrand
 
 
@@ -77,8 +78,9 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
         params.condition = CATEGORY_TO_CONDITION.get(filters.category)
 
     if filters.region and norm_text(filters.region) not in ("вся україна", ""):
-        params.region_label = filters.region.strip()
-        region_key = norm_text(filters.region)
+        canonical = canonicalize_region(filters.region) or filters.region.strip()
+        params.region_label = canonical
+        region_key = norm_text(canonical)
         if region_key in KYIV_REGION_KEYS:
             # API: city_id=268; HTML: /q-kyiv/ (search[city_id] на OLX не працює)
             params.city_id = OLX_KYIV_CITY_ID
@@ -89,7 +91,7 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
             if params.region_id is None:
                 # Луганська тощо без geo-id — fallback на /q-…/ + пост-фільтр
                 params.city_query = REGION_TO_CITY_QUERY.get(
-                    region_key, slugify_region(filters.region)
+                    region_key, slugify_region(canonical)
                 )
 
     filter_cur = resolve_filter_currency(filters.currency)

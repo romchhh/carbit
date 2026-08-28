@@ -123,7 +123,7 @@ function RecentSearchCard({
 }
 
 export function RecentSearchesSection({
-  limit = 8,
+  limit = 5,
   className,
   onSelect,
   layout = "row",

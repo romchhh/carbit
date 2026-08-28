@@ -6,8 +6,9 @@ import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { Badge } from "@/components/ui/Badge";
-import { IconArrowLeft, IconArrowRight } from "@/components/icons";
+import { IconArrowLeft, IconArrowRight, IconEye } from "@/components/icons";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
+import { useListingViewed } from "@/hooks/useListingViewed";
 import { saveRecentListing } from "@/lib/recent-listings";
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks } from "@/components/listings/SourceLinks";
@@ -58,6 +59,7 @@ function CarouselListingCard({
   onToggleFavorite,
 }: CarouselListingCardProps) {
   const { user } = useAuth();
+  const isViewed = useListingViewed(listing.id);
   const images = (listing.images ?? []).filter(Boolean);
   const photoCount = images.length;
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -80,7 +82,10 @@ function CarouselListingCard({
           onOpen();
         }
       }}
-      className="w-[272px] shrink-0 snap-start overflow-hidden rounded-2xl border border-border/70 bg-white text-left transition-all hover:border-emerald/30 hover:shadow-[0_8px_24px_-10px_rgba(10,12,14,0.16)] sm:w-[300px]"
+      className={cn(
+        "w-[272px] shrink-0 snap-start overflow-hidden rounded-2xl border border-border/70 bg-white text-left transition-all hover:border-emerald/30 hover:shadow-[0_8px_24px_-10px_rgba(10,12,14,0.16)] sm:w-[300px]",
+        isViewed && "border-border/70 bg-surface/40 opacity-[0.92]",
+      )}
       onMouseEnter={() => {
         if (photoCount <= 1) return;
         setPhotoIndex(prev => (prev + 1) % photoCount);
@@ -100,6 +105,12 @@ function CarouselListingCard({
               <Badge variant="emerald" className="px-2 py-0.5 text-[10px]">
                 Нове
               </Badge>
+            )}
+            {isViewed && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-ink/70 px-2 py-0.5 text-[10px] font-semibold text-white">
+                <IconEye size={10} />
+                Переглянуто
+              </span>
             )}
           </div>
           {canFavorite && (

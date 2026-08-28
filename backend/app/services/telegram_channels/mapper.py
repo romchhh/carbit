@@ -483,8 +483,12 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
                 if text_mentions_any_region(text)
                 else True
             )
+        elif (item.source or "").lower() in ("auto_ria", "autoria", "auto.ria"):
+            # Регіон уже в запиті AUTO.RIA (state/city). Якщо /auto/info не віддав місто —
+            # не відсікаємо повторно (Zeekr та інші часто мають лише stateId).
+            ok = True
         else:
-            # OLX/AUTO.RIA завжди віддають місто, тож «Україна» — це не Київ.
+            # OLX завжди віддають місто, тож «Україна» — це не Київ.
             ok = not (item.region or "").strip()
         if not ok:
             return False

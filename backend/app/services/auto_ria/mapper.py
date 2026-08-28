@@ -23,7 +23,10 @@ from app.services.auto_ria.constants import (
     FUEL_NAME_TO_ID,
     GEARBOX_NAME_TO_ID,
     REGION_TO_STATE_CITY,
+    region_label_from_state_city,
 )
+from app.services.auto_ria.url_parse import omni_id_from_search_filters
+from app.services.search.filter_multi import canonicalize_region
 from app.services.auto_ria.filter_maps import (
     ACCIDENT_TO_DAMAGE,
     SELLER_TO_RIA,
@@ -50,11 +53,16 @@ async def filters_to_search_params(
         "searchType": 4,  # вживані за замовчуванням; для "all" collect_auto_ria_ids додає окремий searchType=1
     }
 
+    omni_id = omni_id_from_search_filters(filters)
+    if omni_id:
+        params["omni_id"] = omni_id
+        return params
+
     mark_id = await resolve_mark_id(client, filters.brand or "")
     if mark_id is None and filters.brand:
-        raise ValueError(f"Марку «{filters.brand}» не знайдено в AUTO.RIA")
-
-    if mark_id is not None:
+        # Рідкісні марки без taxonomy (як на OLX) — шукаємо без marka_id, пост-фільтр по title.
+        pass
+    elif mark_id is not None:
         params["marka_id[0]"] = mark_id
         model_id = await resolve_model_id(client, mark_id, filters.model or "")
         if filters.model and model_id is None:
@@ -114,11 +122,13 @@ async def filters_to_search_params(
             params["top"] = 4
 
     if filters.region and norm_text(filters.region) not in ("вся україна", ""):
-        region_key = norm_text(filters.region)
+        canonical_region = canonicalize_region(filters.region) or filters.region
+        region_key = norm_text(canonical_region)
         if region_key in REGION_TO_STATE_CITY:
             state_id, city_id = REGION_TO_STATE_CITY[region_key]
             params["state[0]"] = state_id
-            params["city[0]"] = city_id
+            if city_id:
+                params["city[0]"] = city_id
 
     if filters.fuel:
         for index, fuel in enumerate(filters.fuel[:3]):
@@ -384,6 +394,51 @@ def _new_auto_photo_urls(photos: Any) -> list[str]:
     return urls
 
 
+def _coerce_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _region_from_auto_ria_info(
+    info: dict[str, Any],
+    state_data: dict[str, Any],
+    auto_data: dict[str, Any],
+) -> str:
+    city = str(
+        state_data.get("name")
+        or info.get("locationCityName")
+        or info.get("cityName")
+        or ""
+    ).strip()
+    region_name = str(
+        state_data.get("regionName")
+        or info.get("locationAreaName")
+        or info.get("regionName")
+        or ""
+    ).strip()
+    if city or region_name:
+        return ", ".join(part for part in (city, region_name) if part)
+
+    state_id = _coerce_int(
+        state_data.get("stateId")
+        or info.get("stateId")
+        or auto_data.get("stateId")
+    )
+    city_id = _coerce_int(
+        state_data.get("cityId")
+        or info.get("cityId")
+        or auto_data.get("cityId")
+    )
+    mapped = region_label_from_state_city(state_id, city_id)
+    if mapped:
+        return mapped
+    return "Україна"
+
+
 def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> ListingOut:
     auto_data = info.get("autoData") or {}
     state_data = info.get("stateData") or {}
@@ -395,11 +450,7 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
 
     images = extract_image_urls(info, fotos)
 
-    region_parts = [
-        str(state_data.get("name") or info.get("locationCityName") or ""),
-        str(state_data.get("regionName") or ""),
-    ]
-    region = ", ".join(part for part in region_parts if part) or "Україна"
+    region = _region_from_auto_ria_info(info, state_data, auto_data)
 
     title = str(info.get("title") or "").strip()
     brand = str(info.get("markName") or "").strip()

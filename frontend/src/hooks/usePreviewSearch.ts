@@ -21,7 +21,12 @@ import {
 } from "@/lib/search-preview";
 import { toBackendSearchFilters } from "@/lib/search-filters-api";
 import { clearSearchSession, type SearchSessionSnapshot } from "@/lib/search-session";
-import type { RecentSearchResultCache } from "@/lib/recent-search-cache";
+import {
+  findRecentSearchCache,
+  persistRecentSearchCache,
+  type RecentSearchResultCache,
+} from "@/lib/recent-search-cache";
+import { saveRecentSearch } from "@/lib/recent-searches";
 import type { Listing, SourceStatus } from "@/types/api";
 
 type RunSearchOptions = {
@@ -316,6 +321,75 @@ export function usePreviewSearch(
     [searchSlice],
   );
 
+  const applyRecentCache = useCallback(
+    (
+      nextFilters: SearchFilterState,
+      nextFreshness: SearchFreshness,
+      cache: RecentSearchResultCache,
+      nextSort: SortOption = cache.sort,
+    ) => {
+      const items = [...cache.results];
+      fullPoolRef.current = items;
+      displayPoolRef.current = items;
+      displayCountRef.current = items.length;
+      lastApiPageRef.current = Math.min(2, Math.max(1, cache.pages));
+      poolApiSortRef.current = nextSort;
+
+      setFilters({ ...nextFilters });
+      setFreshness(nextFreshness);
+      setSort(nextSort);
+      setResults(items);
+      setTotal(cache.total);
+      setMarketTotal(cache.marketTotal);
+      setPage(Math.max(1, Math.ceil(items.length / SEARCH_PAGE_SIZE)));
+      setPages(cache.pages);
+      setPoolSize(items.length);
+      setLoadedApiPage(lastApiPageRef.current);
+      setSourceStatuses([]);
+      setPartial(false);
+      setFromCache(true);
+      setRunning(true);
+      setSearching(false);
+      setLoadingMore(false);
+      setError(null);
+      setErrorRetryAfter(null);
+    },
+    [],
+  );
+
+  const restoreFromRecentCache = useCallback(
+    (
+      nextFilters: SearchFilterState,
+      nextFreshness: SearchFreshness,
+      cache: RecentSearchResultCache,
+      nextSort: SortOption = cache.sort,
+    ) => {
+      searchGen.current += 1;
+      searchAbortRef.current?.abort();
+      applyRecentCache(nextFilters, nextFreshness, cache, nextSort);
+    },
+    [applyRecentCache],
+  );
+
+  const persistSearchCache = useCallback(
+    (
+      nextFilters: SearchFilterState,
+      nextFreshness: SearchFreshness,
+      nextSort: SortOption,
+      meta: PageResult,
+    ) => {
+      if (fullPoolRef.current.length === 0) return;
+      persistRecentSearchCache(nextFilters, nextFreshness, {
+        results: fullPoolRef.current,
+        total: meta.total,
+        marketTotal: meta.marketTotal ?? null,
+        sort: nextSort,
+        pages: Math.max(meta.pages || 0, Math.ceil(meta.total / SEARCH_PAGE_SIZE) || 0),
+      });
+    },
+    [],
+  );
+
   const fetchInitial = useCallback(
     async (
       nextFilters: SearchFilterState,
@@ -331,17 +405,26 @@ export function usePreviewSearch(
       const signal = controller.signal;
 
       const gen = ++searchGen.current;
+      let showedCachedResults = false;
       setSearching(true);
       setError(null);
       setErrorRetryAfter(null);
       if (!background) {
-        fullPoolRef.current = [];
-        displayPoolRef.current = [];
-        displayCountRef.current = 0;
-        lastApiPageRef.current = 0;
-        setPoolSize(0);
-        setLoadedApiPage(0);
-        scrollToProgress();
+        saveRecentSearch(nextFilters, nextFreshness);
+        const cached = findRecentSearchCache(nextFilters, nextFreshness);
+        if (cached) {
+          applyRecentCache(nextFilters, nextFreshness, cached, nextSort);
+          showedCachedResults = true;
+          scrollToProgress();
+        } else {
+          fullPoolRef.current = [];
+          displayPoolRef.current = [];
+          displayCountRef.current = 0;
+          lastApiPageRef.current = 0;
+          setPoolSize(0);
+          setLoadedApiPage(0);
+          scrollToProgress();
+        }
       }
       poolApiSortRef.current = nextSort;
 
@@ -368,6 +451,7 @@ export function usePreviewSearch(
           syncMeta(first, nextFilters, nextSort, nextFreshness);
           setSearching(false);
         });
+        persistSearchCache(nextFilters, nextFreshness, nextSort, first);
 
         if (!guestMode && first.pages > 1) {
           const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2, signal);
@@ -380,6 +464,7 @@ export function usePreviewSearch(
             setLoadedApiPage(2);
             syncMeta(second, nextFilters, nextSort, nextFreshness);
           });
+          persistSearchCache(nextFilters, nextFreshness, nextSort, second);
         }
 
         if (!guestMode) {
@@ -389,7 +474,7 @@ export function usePreviewSearch(
         // AbortError — новий пошук вже запущений; мовчки ігноруємо.
         if (err instanceof DOMException && err.name === "AbortError") return;
         if (gen !== searchGen.current) return;
-        if (!background) {
+        if (!background && !showedCachedResults) {
           fullPoolRef.current = [];
           displayPoolRef.current = [];
           displayCountRef.current = 0;
@@ -419,7 +504,7 @@ export function usePreviewSearch(
         }
       }
     },
-    [guestMode, hydrateFullPool, scrollToProgress, searchSlice],
+    [applyRecentCache, guestMode, hydrateFullPool, persistSearchCache, scrollToProgress, searchSlice],
   );
 
   const fetchMoreFromServer = useCallback(
@@ -651,45 +736,6 @@ export function usePreviewSearch(
     setError(null);
     setErrorRetryAfter(null);
   }, []);
-
-  const restoreFromRecentCache = useCallback(
-    (
-      nextFilters: SearchFilterState,
-      nextFreshness: SearchFreshness,
-      cache: RecentSearchResultCache,
-      nextSort: SortOption = cache.sort,
-    ) => {
-      searchGen.current += 1;
-      searchAbortRef.current?.abort();
-
-      const items = [...cache.results];
-      fullPoolRef.current = items;
-      displayPoolRef.current = items;
-      displayCountRef.current = items.length;
-      lastApiPageRef.current = Math.min(2, Math.max(1, cache.pages));
-      poolApiSortRef.current = nextSort;
-
-      setFilters({ ...nextFilters });
-      setFreshness(nextFreshness);
-      setSort(nextSort);
-      setResults(items);
-      setTotal(cache.total);
-      setMarketTotal(cache.marketTotal);
-      setPage(Math.max(1, Math.ceil(items.length / SEARCH_PAGE_SIZE)));
-      setPages(cache.pages);
-      setPoolSize(items.length);
-      setLoadedApiPage(lastApiPageRef.current);
-      setSourceStatuses([]);
-      setPartial(false);
-      setFromCache(true);
-      setRunning(true);
-      setSearching(false);
-      setLoadingMore(false);
-      setError(null);
-      setErrorRetryAfter(null);
-    },
-    [],
-  );
 
   return {
     filters,
