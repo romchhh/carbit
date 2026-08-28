@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
+import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
