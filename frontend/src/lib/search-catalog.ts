@@ -246,9 +246,21 @@ export const DEFAULT_PRICE_BY_CURRENCY = {
 /** Підказки для placeholder — не підставляються як значення фільтра. */
 export const YEAR_PLACEHOLDERS = { from: "2018", to: "2024" } as const;
 export const YEAR_MIN = 1950;
+/** Нижня межа року в select-фільтрі пошуку. */
+export const YEAR_FILTER_MIN = 2000;
 
 export function yearMax(): number {
   return new Date().getFullYear() + 1;
+}
+
+/** Роки для select «від/до» — від поточного+1 до YEAR_FILTER_MIN, спадно. */
+export function yearFilterOptions(): number[] {
+  const max = yearMax();
+  const years: number[] = [];
+  for (let y = max; y >= YEAR_FILTER_MIN; y -= 1) {
+    years.push(y);
+  }
+  return years;
 }
 
 export const DEFAULT_FILTERS: SearchFilterState = {

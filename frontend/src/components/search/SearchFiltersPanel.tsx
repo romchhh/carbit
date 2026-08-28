@@ -5,6 +5,7 @@ import { AdvancedSearchPanel } from "@/components/search/AdvancedSearchPanel";
 import { UpgradeOffer } from "@/components/billing/UpgradeOffer";
 import { FilterOptionsPopover } from "@/components/search/FilterOptionsPopover";
 import { FilterRangePopover } from "@/components/search/FilterRangePopover";
+import { FilterYearRangePopover } from "@/components/search/FilterYearRangePopover";
 import { SaveSearchCTA } from "@/components/search/SaveSearchCTA";
 import { VoiceSearchCabinetOnlyOverlay } from "@/components/search/VoiceSearchCabinetOnlyOverlay";
 import { VoiceSearchOverlay } from "@/components/search/VoiceSearchOverlay";
@@ -30,13 +31,9 @@ import {
   DEFAULT_PRICE_BY_CURRENCY,
   PRICE_CURRENCY_OPTIONS,
   VEHICLE_TYPE_OPTIONS,
-  YEAR_MIN,
-  YEAR_PLACEHOLDERS,
   formatPriceInput,
-  formatYearInput,
   normalizePriceRange,
   normalizeYearRange,
-  yearMax,
   type SearchFilterState,
   type SortOption,
 } from "@/lib/search-catalog";
@@ -375,16 +372,10 @@ export function SearchFiltersPanel({
                 sidebar && "lg:grid-cols-1 lg:gap-1.5",
               )}
             >
-              <FilterRangePopover
-                label="Рік випуску"
+              <FilterYearRangePopover
                 from={filters.yearFrom}
                 to={filters.yearTo}
                 onChange={(yearFrom, yearTo) => update({ yearFrom, yearTo })}
-                format={formatYearInput}
-                normalize={normalizeYearRange}
-                hint={`Допустимо ${YEAR_MIN}–${yearMax()}.`}
-                placeholderFrom={YEAR_PLACEHOLDERS.from}
-                placeholderTo={YEAR_PLACEHOLDERS.to}
                 compact={compactFilters}
               />
               <FilterRangePopover
