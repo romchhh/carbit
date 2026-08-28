@@ -4,8 +4,9 @@ import { useState } from "react";
 import { IconShare } from "@/components/icons";
 import {
   buildListingShareUrl,
-  listingShareTitle,
-  shareOrCopyUrl,
+  isNativeShareSupported,
+  shareListing,
+  shareResultMessage,
 } from "@/lib/listing-share";
 import { cn } from "@/lib/utils";
 import type { Listing } from "@/types/api";
@@ -15,7 +16,7 @@ type Props = {
   className?: string;
   size?: "sm" | "md";
   variant?: "default" | "overlay";
-  /** Короткий текст-підказка після копіювання (опційно зовні). */
+  /** Короткий текст-підказка після share/copy (опційно зовні). */
   onResult?: (message: string) => void;
 };
 
@@ -28,32 +29,33 @@ export function ListingShareButton({
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const nativeShare = isNativeShareSupported();
 
   const handleShare = async () => {
     if (busy) return;
     setBusy(true);
-    const url = buildListingShareUrl(listing.id);
-    const result = await shareOrCopyUrl({
-      url,
-      title: listingShareTitle(listing),
-    });
+    const result = await shareListing(listing);
     setBusy(false);
-    if (result === "copied" || result === "shared") {
-      const message =
-        result === "shared" ? "Посилання надіслано" : "Посилання на картку скопійовано";
+
+    const message = shareResultMessage(result);
+    if (message) {
       onResult?.(message);
       setDone(true);
       window.setTimeout(() => setDone(false), 2000);
-    } else {
-      onResult?.(url);
+      return;
     }
+
+    onResult?.(buildListingShareUrl(listing.id));
   };
+
+  const idleTitle = nativeShare ? "Поділитися" : "Скопіювати посилання";
+  const doneTitle = done ? (nativeShare ? "Надіслано" : "Скопійовано") : idleTitle;
 
   return (
     <button
       type="button"
       aria-label="Поділитися посиланням на авто"
-      title={done ? "Скопійовано" : "Поділитися"}
+      title={doneTitle}
       disabled={busy}
       onClick={e => {
         e.preventDefault();

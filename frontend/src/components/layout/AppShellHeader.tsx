@@ -101,9 +101,7 @@ export function AppShellHeader({ className }: Props) {
                   <>
                     {user.is_trial_active && user.trial_ends_at ? (
                       <p className="mt-1.5 text-[12px] leading-snug text-muted">
-                        {planId === "lite"
-                          ? `Пробний «Старт» до ${formatKyivDate(user.trial_ends_at)}`
-                          : `Пробний період до ${formatKyivDate(user.trial_ends_at)}`}
+                        Пробний період до {formatKyivDate(user.trial_ends_at)}
                       </p>
                     ) : (
                       <p className="mt-1.5 text-[12px] leading-snug text-muted">

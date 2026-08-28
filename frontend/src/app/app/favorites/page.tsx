@@ -12,6 +12,7 @@ import { comparisons as comparisonsApi, favorites as favoritesApi, ApiError } fr
 import {
   buildListingsSelectionShareUrl,
   shareOrCopyUrl,
+  shareResultMessage,
 } from "@/lib/listing-share";
 import { MAX_COMPARE } from "@/lib/listing-compare";
 import { saveRecentListing } from "@/lib/recent-listings";
@@ -94,13 +95,12 @@ export default function FavoritesPage() {
         url,
         title: "Підбірка авто з Carbit",
       });
-      if (result === "shared") {
-        setShareHint("Підбірку надіслано");
-      } else if (result === "copied") {
+      const message = shareResultMessage(result);
+      if (message) {
         setShareHint(
-          listings.length > MAX_COMPARE
-            ? `Посилання скопійовано (перші ${MAX_COMPARE} з ${listings.length})`
-            : "Посилання на підбірку скопійовано",
+          result === "copied" && listings.length > MAX_COMPARE
+            ? `${message} (перші ${MAX_COMPARE} з ${listings.length})`
+            : message,
         );
       } else {
         setShareHint(url);

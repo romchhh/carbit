@@ -17,6 +17,7 @@ import {
   buildCompareShareUrl,
   replaceCompareListings,
 } from "@/lib/listing-compare";
+import { shareOrCopyUrl, shareResultMessage } from "@/lib/listing-share";
 import type { Listing, SavedComparison } from "@/types/api";
 
 function ComparePageInner() {
@@ -129,12 +130,13 @@ function ComparePageInner() {
       }
     }
     const url = buildCompareShareUrl(items, shareId);
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareMessage("Посилання скопійовано");
-    } catch {
-      setShareMessage(url);
-    }
+    const result = await shareOrCopyUrl({
+      url,
+      title: `Порівняння ${count} авто`,
+      text: items.map(item => item.title).filter(Boolean).slice(0, 3).join(" · "),
+    });
+    const message = shareResultMessage(result);
+    setShareMessage(message ?? url);
     window.setTimeout(() => setShareMessage(null), 4000);
   };
 

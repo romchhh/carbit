@@ -11,7 +11,7 @@ function siteOrigin(): string {
 
 /**
  * Id з URL `/app/listing/...` або посилання AUTO.RIA.
- * Деякі месенджери склеюють title/text до посилання — відрizaємо все після пробілу.
+ * Деякі месенджери склеюють title/text до посилання — відрізаємо все після пробілу.
  */
 export function normalizeListingIdParam(raw: string | null | undefined): string {
   let value = (raw || "").trim();
@@ -63,23 +63,50 @@ export function buildListingsSelectionShareUrl(
 
 export type ShareResult = "shared" | "copied" | "failed";
 
-/** Web Share API або копіювання в буфер. */
-export async function shareOrCopyUrl(options: {
+export type SharePayload = {
   url: string;
   title?: string;
   text?: string;
-}): Promise<ShareResult> {
-  const { url, title } = options;
+};
+
+function buildShareData(options: SharePayload): ShareData {
+  const data: ShareData = { url: options.url };
+  if (options.title?.trim()) data.title = options.title.trim();
+  if (options.text?.trim()) data.text = options.text.trim();
+  return data;
+}
+
+/** Чи доступний системний діалог «Поділитися» (Web Share API). */
+export function canNativeShare(options: SharePayload): boolean {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") {
+    return false;
+  }
+  const data = buildShareData(options);
+  if (!data.url) return false;
+  if (typeof navigator.canShare === "function") {
+    try {
+      return navigator.canShare(data);
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function isNativeShareSupported(): boolean {
+  return typeof navigator !== "undefined" && typeof navigator.share === "function";
+}
+
+/** Системний share (Web Share API) або копіювання в буфер. */
+export async function shareOrCopyUrl(options: SharePayload): Promise<ShareResult> {
+  const { url } = options;
   if (!url) return "failed";
 
-  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+  const shareData = buildShareData(options);
+
+  if (canNativeShare(options)) {
     try {
-      // Лише url (+ title). Не передаємо text — месенджери часто
-      // склеюють text до url і ламають path (/listing/id Title…).
-      await navigator.share({
-        title: title || "Carbit",
-        url,
-      });
+      await navigator.share(shareData);
       return "shared";
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -101,4 +128,28 @@ export function listingShareTitle(listing: Listing): string {
     .map(v => (v || "").trim())
     .filter(Boolean);
   return bits.join(" · ") || "Авто на Carbit";
+}
+
+export function listingShareText(listing: Listing): string | undefined {
+  const bits: string[] = [];
+  if (listing.price > 0) {
+    bits.push(`${listing.price.toLocaleString("uk-UA")} ${listing.currency || "USD"}`);
+  }
+  if (listing.region?.trim()) bits.push(listing.region.trim());
+  return bits.length ? bits.join(" · ") : undefined;
+}
+
+/** Поділитися карткою авто через системний діалог. */
+export async function shareListing(listing: Listing): Promise<ShareResult> {
+  return shareOrCopyUrl({
+    url: buildListingShareUrl(listing.id),
+    title: listingShareTitle(listing),
+    text: listingShareText(listing),
+  });
+}
+
+export function shareResultMessage(result: ShareResult): string | null {
+  if (result === "shared") return "Надіслано";
+  if (result === "copied") return "Посилання скопійовано";
+  return null;
 }
