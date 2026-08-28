@@ -73,6 +73,19 @@ def omni_id_from_search_filters(filters) -> str | None:
     return None
 
 
+def listing_id_matches_omni_search(listing_id: str | None, filters) -> bool:
+    """True, якщо пошук був за конкретним id/URL AUTO.RIA і це те саме оголошення."""
+    omni_id = omni_id_from_search_filters(filters)
+    if not omni_id or not listing_id:
+        return False
+    raw = str(listing_id).strip()
+    if raw.startswith("new_auto_ria_"):
+        return raw.removeprefix("new_auto_ria_") == omni_id
+    if raw.startswith("auto_ria_"):
+        return raw.removeprefix("auto_ria_") == omni_id
+    return raw == omni_id
+
+
 def listing_id_from_external_url(raw: str) -> str | None:
     """AUTO.RIA URL або ``auto_ria_123`` → ``auto_ria_123`` / ``new_auto_ria_123``."""
     value = (raw or "").strip()

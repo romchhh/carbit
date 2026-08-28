@@ -162,12 +162,6 @@ export function ListingCard({
                 Новий
               </span>
             )}
-            {isViewed && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-ink/70 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm backdrop-blur-sm">
-                <IconEye size={11} />
-                Переглянуто
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-1.5">
             <ListingShareButton listing={listing} variant="overlay" />
@@ -308,12 +302,6 @@ export function ListingCard({
                 Новий
               </span>
             )}
-              {isViewed && (
-                <span className="hidden items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-muted sm:inline-flex">
-                  <IconEye size={11} />
-                  Переглянуто
-                </span>
-              )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[16px] sm:line-clamp-2 lg:text-[18px]">
                 {listing.title}
               </h3>
@@ -425,7 +413,7 @@ export function ListingCard({
           </span>
           <span
             className={cn(
-              "flex items-center gap-0.5 text-[12px] font-semibold sm:ml-auto",
+              "ml-auto flex shrink-0 items-center gap-0.5 text-[12px] font-semibold",
               isViewed ? "text-muted" : "text-emerald-dark",
             )}
           >

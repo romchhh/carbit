@@ -106,12 +106,6 @@ function CarouselListingCard({
                 Нове
               </Badge>
             )}
-            {isViewed && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-ink/70 px-2 py-0.5 text-[10px] font-semibold text-white">
-                <IconEye size={10} />
-                Переглянуто
-              </span>
-            )}
           </div>
           {canFavorite && (
             <ListingFavoriteButton
@@ -156,11 +150,19 @@ function CarouselListingCard({
               </span>
             )}
           </div>
-          {(listing.alternate_sources?.length ?? 0) > 0 ? (
-            <SourceLinks listing={listing} iconOnly className="shrink-0" />
-          ) : (
-            <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" />
-          )}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {(listing.alternate_sources?.length ?? 0) > 0 ? (
+              <SourceLinks listing={listing} iconOnly className="shrink-0" />
+            ) : (
+              <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" />
+            )}
+            {isViewed ? (
+              <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-muted">
+                <IconEye size={11} />
+                Переглянуто
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     </article>

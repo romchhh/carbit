@@ -418,23 +418,30 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
     models = effective_models(filters)
 
     if brands or models:
-        brand_candidates = brands or [""]
-        model_candidates = models or [""]
-        matched = False
-        for brand in brand_candidates:
-            for model in model_candidates:
-                if not _listing_matches_single_brand(
-                    item, haystack, brand, model_hint=model
-                ):
-                    continue
-                if not _listing_matches_single_model(
-                    item, model, brand=brand, category=filters.category or ""
-                ):
-                    continue
-                matched = True
-                break
-            if matched:
-                break
+        from app.services.auto_ria.url_parse import listing_id_matches_omni_search
+
+        # Пошук за URL/id AUTO.RIA — omni_id вже знайшов оголошення; brand=URL не
+        # проходить text-match, тому пропускаємо brand/model gate для цільового id.
+        if listing_id_matches_omni_search(item.id, filters):
+            matched = True
+        else:
+            brand_candidates = brands or [""]
+            model_candidates = models or [""]
+            matched = False
+            for brand in brand_candidates:
+                for model in model_candidates:
+                    if not _listing_matches_single_brand(
+                        item, haystack, brand, model_hint=model
+                    ):
+                        continue
+                    if not _listing_matches_single_model(
+                        item, model, brand=brand, category=filters.category or ""
+                    ):
+                        continue
+                    matched = True
+                    break
+                if matched:
+                    break
         if not matched:
             return False
 

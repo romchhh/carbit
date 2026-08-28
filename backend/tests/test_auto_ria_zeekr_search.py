@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.auto_ria.mapper import _region_from_auto_ria_info, filters_to_search_params
-from app.services.auto_ria.url_parse import omni_id_from_search_filters
+from app.services.auto_ria.url_parse import listing_id_matches_omni_search, omni_id_from_search_filters
 from app.services.telegram_channels.mapper import listing_out_matches_filters
 
 
@@ -18,6 +18,36 @@ class AutoRiaZeekrSearchTests(unittest.TestCase):
             model="001",
         )
         self.assertEqual(omni_id_from_search_filters(filters), "40351832")
+
+    def test_url_in_brand_passes_post_filter_for_target_listing(self):
+        from app.core.timezone import now_kyiv
+
+        url = "https://auto.ria.com/uk/auto_zeekr_001_40351832.html"
+        filters = SearchFilters(brand=url)
+        listing = ListingOut(
+            id="auto_ria_40351832",
+            source="auto_ria",
+            title="Zeekr 001",
+            brand="Zeekr",
+            model="001",
+            year=2024,
+            price=42000,
+            currency="USD",
+            mileage=16000,
+            fuel="електро",
+            transmission="автомат",
+            region="Хмельницький, Хмельницька",
+            description=None,
+            images=[],
+            url=url,
+            seller_type="dealer",
+            price_history=[],
+            is_duplicate=False,
+            published_at=now_kyiv(),
+            found_at=now_kyiv(),
+        )
+        self.assertTrue(listing_id_matches_omni_search(listing.id, filters))
+        self.assertTrue(listing_out_matches_filters(listing, filters))
 
     def test_region_from_state_id_when_names_missing(self):
         region = _region_from_auto_ria_info(
