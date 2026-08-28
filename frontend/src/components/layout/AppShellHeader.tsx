@@ -125,7 +125,6 @@ export function AppShellHeader({ className }: Props) {
                           ? `Діє до ${formatKyivDate(expiresAt)}`
                           : "Активна підписка"}
                     </p>
-                    </p>
                     <Link
                       href="/app/billing"
                       onClick={() => setPlanOpen(false)}
