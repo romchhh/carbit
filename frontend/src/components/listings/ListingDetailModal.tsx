@@ -8,6 +8,7 @@ import { IconHeart, IconX, IconArrowLeft, IconArrowRight } from "@/components/ic
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { ListingPlateBadge } from "@/components/listings/ListingPlateBadge";
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
@@ -288,6 +289,7 @@ export function ListingDetailModal({
   const highlights = hasAutoRiaDetails ? [] : getAutoRiaHighlights(listing.source_data);
   const mileageKm = resolveListingMileage(listing);
   const engineVolume = resolveListingEngineVolume(listing);
+  const plateLabel = listing.plate?.trim() || "";
   const source = listing.source_data ?? {};
   const priceUsd = typeof source.USD === "number" ? source.USD : null;
   const priceEur = typeof source.EUR === "number" ? source.EUR : null;
@@ -472,6 +474,11 @@ export function ListingDetailModal({
             <div className="pointer-events-none absolute bottom-3 left-3">
               <PublishedTimeBadge date={listing.published_at} short />
             </div>
+            {plateLabel ? (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 z-[1] -translate-x-1/2">
+                <ListingPlateBadge plate={plateLabel} size="md" elevated />
+              </div>
+            ) : null}
           </div>
 
           {photos.length > 1 && (
@@ -549,6 +556,11 @@ export function ListingDetailModal({
                   <div className="absolute bottom-2 left-2">
                     <PublishedTimeBadge date={listing.published_at} short />
                   </div>
+                  {plateLabel ? (
+                    <div className="pointer-events-none absolute bottom-2 left-1/2 z-[1] -translate-x-1/2">
+                      <ListingPlateBadge plate={plateLabel} size="md" elevated />
+                    </div>
+                  ) : null}
                 </div>
 
                 {photos.length > 1 && (
@@ -582,6 +594,11 @@ export function ListingDetailModal({
                     <p className="mt-1 text-[13px] text-muted">
                       {listing.brand} {listing.model}
                     </p>
+                    {plateLabel ? (
+                      <div className="mt-3">
+                        <ListingPlateBadge plate={plateLabel} size="md" />
+                      </div>
+                    ) : null}
                     {publishedAgoLabel(listing.published_at) && (
                       <p className="mt-1 text-[12px] text-muted/80">
                         {publishedAgoLabel(listing.published_at)}
@@ -656,6 +673,11 @@ export function ListingDetailModal({
             {/* Mobile-only price block (desktop shows it in top row) */}
             <div className="flex flex-wrap items-end justify-between gap-3 sm:hidden">
               <div>
+                {plateLabel ? (
+                  <div className="mb-3">
+                    <ListingPlateBadge plate={plateLabel} size="md" />
+                  </div>
+                ) : null}
                 {listing && (
                   <ListingPriceDisplay
                     listing={listing}

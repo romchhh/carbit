@@ -29,6 +29,7 @@ import {
 } from "@/lib/utils";
 import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { ListingPlateBadge } from "@/components/listings/ListingPlateBadge";
 import { resolveDisplayCurrency } from "@/lib/display-currency";
 import {
   listingAttributionUrl,
@@ -175,6 +176,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   const mileageKm = resolveListingMileage(listing);
   const engineVolume = resolveListingEngineVolume(listing);
+  const plateLabel = listing.plate?.trim() || "";
 
   const specs = [
     { label: "Рік", value: listing.year > 0 ? String(listing.year) : null },
@@ -305,6 +307,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <div className="pointer-events-none absolute bottom-3 left-3">
                 <PublishedTimeBadge date={listing.published_at} short />
               </div>
+              {plateLabel ? (
+                <div className="pointer-events-none absolute bottom-3 left-1/2 z-[1] -translate-x-1/2">
+                  <ListingPlateBadge plate={plateLabel} size="md" elevated />
+                </div>
+              ) : null}
             </div>
 
             {images.length > 1 && (
@@ -332,6 +339,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             <p className="mt-1 text-[12px] text-muted">
               {listing.brand} {listing.model}
             </p>
+            {plateLabel ? (
+              <div className="mt-3">
+                <ListingPlateBadge plate={plateLabel} size="md" />
+              </div>
+            ) : null}
             {publishedLabel && (
               <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
             )}
@@ -428,6 +440,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-[12px] text-muted">
               {listing.brand} {listing.model}
             </p>
+            {plateLabel ? (
+              <div className="mt-3">
+                <ListingPlateBadge plate={plateLabel} size="md" />
+              </div>
+            ) : null}
             {publishedLabel && (
               <p className="mt-1 text-[12px] text-muted/80">{publishedLabel}</p>
             )}
