@@ -116,7 +116,9 @@ def sanitize_listing_out(item: ListingOut) -> ListingOut | None:
             volume = extract_listing_engine_volume(validated)
             if volume is not None:
                 validated = validated.model_copy(update={"engine_volume_l": volume})
-        return validated
+        from app.services.listings.plate import enrich_listing_plate
+
+        return enrich_listing_plate(validated)
     except Exception:
         logger.exception("Dropping listing that failed response sanitize: %s", getattr(item, "id", "?"))
         return None
@@ -170,4 +172,7 @@ def slim_source_data_for_list(source_data: dict[str, Any] | None) -> dict[str, A
 
 
 def slim_listing_for_list(item: ListingOut) -> ListingOut:
-    return item.model_copy(update={"source_data": slim_source_data_for_list(item.source_data)})
+    from app.services.listings.plate import enrich_listing_plate
+
+    enriched = enrich_listing_plate(item)
+    return enriched.model_copy(update={"source_data": slim_source_data_for_list(enriched.source_data)})

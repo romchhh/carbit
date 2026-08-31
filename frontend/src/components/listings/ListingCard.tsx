@@ -8,6 +8,7 @@ import { ListingCompareButton } from "@/components/listings/ListingCompareButton
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { ListingPlateOverlay } from "@/components/listings/ListingPlateOverlay";
 import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
 import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
 import {
@@ -87,6 +88,7 @@ export function ListingCard({
   const hasMirrorSources = (listing.alternate_sources?.length ?? 0) > 0;
   const isNewForMonitor = Boolean(listing.is_new);
   const isNewCar = listingIsNewCar(listing);
+  const plateLabel = listing.plate?.trim() || "";
   const [photoIndex, setPhotoIndex] = useState(0);
   const photoCount = images.length;
   const safeIndex = photoCount > 0 ? ((photoIndex % photoCount) + photoCount) % photoCount : 0;
@@ -220,6 +222,11 @@ export function ListingCard({
         <div className="absolute bottom-2 left-2 z-[1]">
           <PublishedTimeBadge date={timeBadgeDate} short />
         </div>
+        {plateLabel ? (
+          <div className="absolute bottom-2 left-1/2 z-[2] -translate-x-1/2">
+            <ListingPlateOverlay plate={plateLabel} />
+          </div>
+        ) : null}
       </div>
 
       {/* Desktop: thumbnail left with photo arrows */}
@@ -286,6 +293,11 @@ export function ListingCard({
         <div className="absolute bottom-2 left-2 z-[1]">
           <PublishedTimeBadge date={timeBadgeDate} short />
         </div>
+        {plateLabel ? (
+          <div className="absolute bottom-2 left-1/2 z-[2] -translate-x-1/2">
+            <ListingPlateOverlay plate={plateLabel} />
+          </div>
+        ) : null}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col p-4 pt-3.5 sm:p-0 sm:justify-center">

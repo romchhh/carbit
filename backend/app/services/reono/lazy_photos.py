@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.services.reono.client import get_shared_http_client
 from app.services.reono.constants import REONO_BASE_URL
-from app.services.reono.detail import parse_detail_published_at
+from app.services.reono.detail import parse_detail_plate, parse_detail_published_at
 from app.services.reono.errors import ReonoError
 from app.services.reono.images import parse_detail_images
 
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 class ReonoListingDetail:
     images: list[str]
     published_at: datetime | None
+    plate: str | None = None
 
 
 def _normalize_listing_url(url: str) -> str:
@@ -39,7 +40,7 @@ async def fetch_reono_listing_detail(url: str) -> ReonoListingDetail:
         raise ReonoError(f"REONO: мережева помилка: {exc}") from exc
 
     if response.status_code == 404:
-        return ReonoListingDetail(images=[], published_at=None)
+        return ReonoListingDetail(images=[], published_at=None, plate=None)
     if response.status_code >= 400:
         raise ReonoError(f"REONO: помилка {response.status_code}")
 
@@ -50,6 +51,7 @@ async def fetch_reono_listing_detail(url: str) -> ReonoListingDetail:
     return ReonoListingDetail(
         images=images,
         published_at=parse_detail_published_at(html),
+        plate=parse_detail_plate(html),
     )
 
 

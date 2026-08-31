@@ -183,6 +183,19 @@ def test_parse_detail_published_at_from_mvs_block():
     assert parsed == datetime(2025, 3, 5, 12, 0, tzinfo=KYIV_TZ)
 
 
+def test_parse_detail_plate_from_mvs_block():
+    from app.services.reono.detail import parse_detail_plate
+
+    html = """
+    <div class="characteristecs-car-main__body__info__number">
+      <div class="characteristecs-car-main__body__info__number__country">UA
+        <div class="characteristecs-car-main__body__info__number__country__number">AA2459TP</div>
+      </div>
+    </div>
+    """
+    assert parse_detail_plate(html) == "AA 2459 TP"
+
+
 def test_car_to_listing_uses_parsed_published_at():
     cars, _ = parse_catalog_page(SAMPLE_CARD)
     car = cars[0]

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ListingDetailModal } from "@/components/listings/ListingDetailModal";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { ListingPlateOverlay } from "@/components/listings/ListingPlateOverlay";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight, IconEye } from "@/components/icons";
 import { useListingFavorites } from "@/hooks/useListingFavorite";
@@ -66,6 +67,7 @@ function CarouselListingCard({
   const safeIndex = photoCount > 0 ? ((photoIndex % photoCount) + photoCount) % photoCount : 0;
   const city = listing.region.split(",")[0]?.trim() || listing.region;
   const fuel = listing.fuel.split(",")[0]?.trim();
+  const plateLabel = listing.plate?.trim() || "";
 
   useEffect(() => {
     setPhotoIndex(0);
@@ -119,6 +121,11 @@ function CarouselListingCard({
         <div className="absolute bottom-2 left-2">
           <PublishedTimeBadge date={listing.published_at} short />
         </div>
+        {plateLabel ? (
+          <div className="absolute bottom-2 left-1/2 z-[2] -translate-x-1/2">
+            <ListingPlateOverlay plate={plateLabel} />
+          </div>
+        ) : null}
       </div>
 
       <div className="p-4">

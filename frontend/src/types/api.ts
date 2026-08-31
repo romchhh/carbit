@@ -97,6 +97,7 @@ export interface Listing {
   seller_telegram?: string | null;
   seller_url?: string | null;
   vin?: string | null;
+  plate?: string | null;
   vin_checked?: boolean | null;
   vin_check_url?: string | null;
   source_data?: Record<string, unknown> | null;

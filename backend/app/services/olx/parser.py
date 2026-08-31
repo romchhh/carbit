@@ -1317,13 +1317,33 @@ def parse_listing_details(html: str) -> dict:
             break
 
     from app.services.listings.seller_contact import extract_phone_from_text
+    from app.services.listings.plate import plate_from_olx_params
 
     seller_phone = extract_phone_from_text(description) if description else None
+
+    plate = None
+    for raw in _try_extract_embedded_json(html):
+        plate = plate_from_olx_params(raw.get("params"))
+        if plate:
+            break
+    if not plate:
+        for spec_key, spec_value in specs.items():
+            key_low = str(spec_key).lower()
+            if "держ" not in key_low and "license" not in key_low and "номер реєстр" not in key_low:
+                continue
+            from app.services.listings.plate import normalize_ua_plate
+
+            plate = normalize_ua_plate(str(spec_value) if spec_value is not None else None)
+            if plate:
+                break
+    if plate:
+        specs.setdefault("Держ. номер реєстрації", plate)
 
     return {
         "description": description,
         "photos": photos,
         "vin": vin,
+        "plate": plate,
         "specs": specs,
         "price": price,
         "currency": currency,
@@ -1369,6 +1389,9 @@ def apply_details_to_listing(listing: OlxListing, details: dict) -> None:
 
     listing.description = details.get("description") or listing.description
     listing.vin = details.get("vin") or listing.vin
+    plate = details.get("plate")
+    if plate:
+        listing.specs = {**(listing.specs or {}), "Держ. номер реєстрації": plate}
     if not listing.vin:
         from app.services.vin import extract_vin
 

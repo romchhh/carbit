@@ -68,10 +68,13 @@ async def _enrich_listing_details(
     """Підтягує фото та/або дату публікації зі сторінки оголошення (один HTTP-запит)."""
     from app.services.reono.lazy_photos import fetch_reono_listing_detail
 
+    from app.services.listings.plate import resolve_listing_plate
+
     async def enrich_one(item: ListingOut) -> ListingOut:
         needs_images = len(valid_reono_cdn_urls(item.images or [])) < 2
         needs_dates = fetch_dates
-        if not item.url or (not needs_images and not needs_dates):
+        needs_plate = resolve_listing_plate(item) is None
+        if not item.url or (not needs_images and not needs_dates and not needs_plate):
             return item
         try:
             detail = await fetch_reono_listing_detail(item.url)
@@ -80,14 +83,22 @@ async def _enrich_listing_details(
             return item
 
         update: dict = {}
+        source_data = dict(item.source_data or {})
+        nested = dict(source_data.get("reono") or {})
+        source_data_changed = False
+
         if needs_images and detail.images:
             update["images"] = detail.images
         if detail.published_at is not None:
             update["published_at"] = detail.published_at
             update["found_at"] = detail.published_at
-            source_data = dict(item.source_data or {})
-            nested = dict(source_data.get("reono") or {})
             nested["published_at"] = detail.published_at.isoformat()
+            source_data_changed = True
+        if detail.plate:
+            update["plate"] = detail.plate
+            nested["plateNumber"] = detail.plate
+            source_data_changed = True
+        if source_data_changed:
             source_data["reono"] = nested
             update["source_data"] = source_data
         if not update:

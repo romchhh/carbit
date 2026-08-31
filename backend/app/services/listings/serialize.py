@@ -77,7 +77,10 @@ def listing_to_out(listing: Listing) -> ListingOut:
     if volume is not None:
         out = out.model_copy(update={"engine_volume_l": volume})
 
+    from app.services.listings.plate import enrich_listing_plate
     from app.services.listings.price_drop import extract_recent_price_drop
+
+    out = enrich_listing_plate(out)
 
     drop = extract_recent_price_drop(listing)
     if drop:

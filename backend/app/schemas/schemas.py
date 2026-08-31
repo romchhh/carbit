@@ -346,6 +346,7 @@ class ListingOut(BaseModel):
     seller_url: Optional[str] = None
     engine_volume_l: Optional[float] = None
     vin: Optional[str] = None
+    plate: Optional[str] = None
     vin_checked: Optional[bool] = None
     vin_check_url: Optional[str] = None
     source_data: Optional[dict[str, Any]] = None
