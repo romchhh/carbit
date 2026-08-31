@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthProvider";
+import { FacebookPixel } from "@/components/analytics/FacebookPixel";
+import { FacebookPixelPageView } from "@/components/analytics/FacebookPixelPageView";
 import { VisitTracker } from "@/components/analytics/VisitTracker";
 import { PwaSplash } from "@/components/pwa/PwaSplash";
 import { PwaServiceWorker } from "@/components/pwa/PwaServiceWorker";
@@ -31,7 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <JsonLd data={[organizationJsonLd(), websiteJsonLd(), productJsonLd()]} />
         <PwaSplash />
         <PwaServiceWorker />
+        <FacebookPixel />
         <AuthProvider>
+          <FacebookPixelPageView />
           <VisitTracker />
           {children}
         </AuthProvider>
