@@ -124,6 +124,17 @@ class NestedModelNameTests(unittest.TestCase):
         self.assertFalse(matches("Audi e-tron GT 2023", "Audi", "E-tron"))
         self.assertTrue(matches("Audi e-tron GT 2023", "Audi", "E-tron GT"))
 
+    def test_q8_etron_is_not_plain_q8(self):
+        self.assertFalse(matches("Audi Q8 55 TFSI 2022", "Audi", "Q8 e-tron"))
+        self.assertTrue(matches("Audi Q8 e-tron 2024", "Audi", "Q8 e-tron"))
+
+    def test_q8_etron_is_not_plain_etron(self):
+        self.assertFalse(matches("Audi e-tron 55 quattro", "Audi", "Q8 e-tron"))
+
+    def test_plain_q8_does_not_match_q8_etron(self):
+        self.assertFalse(matches("Audi Q8 e-tron 2024", "Audi", "Q8"))
+        self.assertTrue(matches("Audi Q8 55 TFSI 2022", "Audi", "Q8"))
+
 
 class SharedModelWordTests(unittest.TestCase):
     """Спільне слово кількох моделей марки саме по собі не ідентифікує модель."""

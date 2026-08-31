@@ -47,7 +47,7 @@ def filters_group_key(filters: SearchFilters | dict) -> str:
 
 
 def _normalized_sources(sources: list[str] | None) -> tuple[str, ...]:
-    default = ("auto_ria", "olx", "car_market", "reono", "imperiya", "udrive", "telegram")
+    default = ("auto_ria", "olx", "car_market", "lubeavto", "reono", "imperiya", "udrive", "telegram")
     if not sources:
         return default
     out: list[str] = []
@@ -63,6 +63,8 @@ def _normalized_sources(sources: list[str] | None) -> tuple[str, ...]:
             out.append("udrive")
         elif key in ("car_market", "carmarket", "car-market", "car_market_net") and "car_market" not in out:
             out.append("car_market")
+        elif key in ("lubeavto", "lube_avto", "lube-avto", "любе_авто", "любеавто") and "lubeavto" not in out:
+            out.append("lubeavto")
         elif key in ("reono", "reono_ua", "reono-ua") and "reono" not in out:
             out.append("reono")
         elif key == "telegram" and "telegram" not in out:

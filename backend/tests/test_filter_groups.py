@@ -93,6 +93,7 @@ class FilterGroupTests(unittest.TestCase):
             ]
         )
         self.assertIn("car_market", merged.sources or [])
+        self.assertIn("lubeavto", merged.sources or [])
         self.assertIn("reono", merged.sources or [])
         self.assertIn("udrive", merged.sources or [])
 

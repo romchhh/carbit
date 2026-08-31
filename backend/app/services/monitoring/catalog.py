@@ -6,6 +6,7 @@ WEB_PARSER_SOURCES: tuple[str, ...] = (
     "imperiya",
     "udrive",
     "car_market",
+    "lubeavto",
     "reono",
 )
 
@@ -15,6 +16,7 @@ PARSER_LABELS: dict[str, str] = {
     "imperiya": "Імперія Авто",
     "udrive": "uDrive",
     "car_market": "Car Market",
+    "lubeavto": "Любе Авто",
     "reono": "REONO",
     "telegram": "Telegram",
 }
@@ -30,6 +32,9 @@ SOURCE_ALIASES: dict[str, str] = {
     "udrive": "udrive",
     "car_market": "car_market",
     "car market": "car_market",
+    "lubeavto": "lubeavto",
+    "lube avto": "lubeavto",
+    "любе авто": "lubeavto",
     "reono": "reono",
     "telegram": "telegram",
     "tg": "telegram",

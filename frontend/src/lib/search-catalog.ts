@@ -126,6 +126,7 @@ export const SOURCE_OPTIONS = [
   "AUTO.RIA",
   "OLX",
   "Car Market",
+  "Любе Авто",
   "REONO",
   "Імперія Авто",
   "uDrive",

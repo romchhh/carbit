@@ -210,7 +210,7 @@ async def _process_group(
         # Live-pool переважно AUTO.RIA — для інших джерел завжди live API.
         needs_live_api = bool(
             set(parse_sources)
-            & {"olx", "telegram", "car_market", "reono", "udrive", "imperiya"}
+            & {"olx", "telegram", "car_market", "lubeavto", "reono", "udrive", "imperiya"}
         )
         pooled = await try_load_pool_listings(
             parse_filters,

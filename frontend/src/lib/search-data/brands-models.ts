@@ -4,7 +4,7 @@ export const BRAND_MODELS: Record<string, readonly string[]> = {
   Aito: ["M5","M6","M7","M8","M9"],
   "Alfa Romeo": ["145","146","147","155","156","159","164","166","4C","8C","Brera","Giulia","Giulietta","GT","GTV","MiTo","Spider","Stelvio","Tonale"],
   "Aston Martin": ["DB11","DB9","DBS","DBX","Rapide","V8 Vantage","Vantage","Virage"],
-  Audi: ["100","80","90","A1","A2","A3","A4","A4 Allroad","A5","A6","A6 Allroad","A7","A8","Cabriolet","Coupe","E-tron","E-tron GT","Q2","Q3","Q4 e-tron","Q5","Q7","Q8","R8","RS Q3","RS Q8","RS3","RS4","RS5","RS6","RS7","S3","S4","S5","S6","S7","S8","SQ5","SQ7","SQ8","TT","TTS"],
+  Audi: ["100","80","90","A1","A2","A3","A4","A4 Allroad","A5","A6","A6 Allroad","A7","A8","Cabriolet","Coupe","E-tron","E-tron GT","Q2","Q3","Q4 e-tron","Q5","Q7","Q8","Q8 e-tron","R8","RS Q3","RS Q8","RS3","RS4","RS5","RS6","RS7","S3","S4","S5","S6","S7","S8","SQ5","SQ7","SQ8","TT","TTS"],
   Avatr: ["06","06T","07","11","12"],
   BAIC: ["BJ40","BJ60","BJ80","EC180","EC200","EC3","EC5","EU5","EU7","EX3","EX5","U5 Plus","X35","X55","X7"],
   Bentley: ["Arnage","Azure","Bentayga","Brooklands","Continental","Continental Flying Spur","Continental GT","Flying Spur","Mulsanne"],

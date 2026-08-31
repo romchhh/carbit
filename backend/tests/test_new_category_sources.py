@@ -14,6 +14,7 @@ class NewCategorySourcesTests(unittest.TestCase):
         sources = sources_for_filters(SearchFilters(category="new"))
         self.assertNotIn("olx", sources)
         self.assertNotIn("car_market", sources)
+        self.assertNotIn("lubeavto", sources)
         self.assertNotIn("reono", sources)
         self.assertIn("auto_ria", sources)
         self.assertIn("udrive", sources)
@@ -34,6 +35,7 @@ class NewCategorySourcesTests(unittest.TestCase):
         sources = sources_for_filters(SearchFilters(category="all"))
         self.assertIn("olx", sources)
         self.assertIn("car_market", sources)
+        self.assertIn("lubeavto", sources)
         self.assertIn("reono", sources)
         self.assertIn("udrive", sources)
 

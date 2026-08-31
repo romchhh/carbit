@@ -24,6 +24,7 @@ class Source(str, enum.Enum):
     imperiya = "imperiya"
     udrive = "udrive"
     car_market = "car_market"
+    lubeavto = "lubeavto"
     reono = "reono"
 
 

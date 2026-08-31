@@ -279,7 +279,17 @@ MODEL_EXTRA_ALIASES: dict[str, tuple[str, ...]] = {
     "q4 e-tron": ("q4 e-tron", "q4 etron", "q4 e tron", "audi q4", "audi q4 e-tron"),
     "q5": ("q5", "ауді q5", "ауди q5", "audi q5", "sq5"),
     "q7": ("q7", "ауді q7", "ауди q7", "audi q7", "sq7"),
-    "q8": ("q8", "ауді q8", "ауди q8", "audi q8", "sq8", "q8 e-tron", "q8 etron"),
+    "q8": ("q8", "ауді q8", "ауди q8", "audi q8", "sq8"),
+    "q8 e-tron": (
+        "q8 e-tron",
+        "q8 etron",
+        "q8 e tron",
+        "audi q8 e-tron",
+        "audi q8 e tron",
+        "audi q8 etron",
+        "ауді q8 e-tron",
+        "ауди q8 e-tron",
+    ),
     "r8": ("r8", "ауді r8", "audi r8"),
     "tt": ("tt", "ауді tt", "audi tt", "tts"),
     "e-tron": (
@@ -2671,16 +2681,24 @@ def _shorter_model_digit_conflicts(hay: str, model: str) -> bool:
 
 
 def _e_tron_model_match_ok(hay: str, model: str) -> bool:
-    """«E-tron» і «E-tron GT» — різні моделі в одній лінійці."""
+    """«E-tron», «Q4/Q8 e-tron» і «E-tron GT» — різні моделі в одній лінійці."""
     mk = norm_text(model)
     hay_n = norm_text(hay)
     if not mk or not hay_n:
         return True
     gt = re.search(r"e[\s\-]?tron\s+gt\b", hay_n)
+    q4_etron = re.search(r"q4[\s\-]?e[\s\-]?tron\b", hay_n)
+    q8_etron = re.search(r"q8[\s\-]?e[\s\-]?tron\b", hay_n)
     if mk == "e-tron":
-        return not bool(gt)
+        return not bool(gt) and not bool(q4_etron) and not bool(q8_etron)
     if mk == "e-tron gt":
         return bool(gt)
+    if mk == "q4 e-tron":
+        return bool(q4_etron) and not bool(q8_etron)
+    if mk == "q8 e-tron":
+        return bool(q8_etron)
+    if mk == "q8":
+        return not bool(q8_etron)
     return True
 
 

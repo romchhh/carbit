@@ -818,6 +818,7 @@ OLX_FE_TEXT_MODELS: frozenset[str] = frozenset({
     'audi|e-tron gt',
     'audi|q4 e-tron',
     'audi|q8',
+    'audi|q8 e-tron',
     'audi|rs q3',
     'audi|rs q8',
     'audi|rs7',
