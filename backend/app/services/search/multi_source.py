@@ -21,6 +21,7 @@ from app.services.udrive.service import search_udrive
 from app.services.olx.errors import OlxError
 from app.services.olx.service import _search_olx_body
 from app.services.search.concurrency import acquire_olx_slot
+from app.services.monitoring.parser_status import is_transient_partial_source_error
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 from app.services.telegram_channels.ingest import search_telegram_listings
 
@@ -36,8 +37,11 @@ AUTO_RIA_PAGE_SIZE = 50
 AUTO_RIA_POOL_TIMEOUT_SECONDS = 25.0
 IMPERIYA_POOL_TIMEOUT_SECONDS = 25.0
 IMPERIYA_PAGE_SIZE = 50
+# Не тягнемо 10+ сторінок API в один wait_for(25s) — це головна причина таймаутів.
+IMPERIYA_POOL_MAX_PAGES = 3
 UDRIVE_POOL_TIMEOUT_SECONDS = 25.0
 UDRIVE_PAGE_SIZE = 50
+UDRIVE_POOL_MAX_PAGES = 3
 CAR_MARKET_POOL_TIMEOUT_SECONDS = 20.0
 CAR_MARKET_PAGE_SIZE = 20
 LUBEAVTO_POOL_TIMEOUT_SECONDS = 20.0
@@ -663,7 +667,10 @@ async def _fetch_source_pool(
         seen: set[str] = set()
         total = 0
         page = 1
-        max_pages = max((need + IMPERIYA_PAGE_SIZE - 1) // IMPERIYA_PAGE_SIZE, 1)
+        max_pages = min(
+            IMPERIYA_POOL_MAX_PAGES,
+            max((need + IMPERIYA_PAGE_SIZE - 1) // IMPERIYA_PAGE_SIZE, 1),
+        )
         while len(collected) < need and page <= max_pages:
             chunk = await _search_single_source(
                 source,
@@ -701,7 +708,10 @@ async def _fetch_source_pool(
         seen: set[str] = set()
         total = 0
         page = 1
-        max_pages = max((need + UDRIVE_PAGE_SIZE - 1) // UDRIVE_PAGE_SIZE, 1)
+        max_pages = min(
+            UDRIVE_POOL_MAX_PAGES,
+            max((need + UDRIVE_PAGE_SIZE - 1) // UDRIVE_PAGE_SIZE, 1),
+        )
         while len(collected) < need and page <= max_pages:
             chunk = await _search_single_source(
                 source,
@@ -882,16 +892,6 @@ def _search_filters_summary(filters: SearchFilters) -> str:
     return ", ".join(parts) or "без фільтрів"
 
 
-def _olx_timeout_partial_error(error: str | None) -> bool:
-    err = (error or "").lower()
-    return "таймаут" in err or "timeout" in err
-
-
-def _olx_blocked_partial_error(error: str | None) -> bool:
-    err = (error or "").lower()
-    return "403" in err or "заблок" in err or "blocked" in err
-
-
 async def _notify_partial_source_failures(
     source_statuses: list[SourceSearchStatus],
     filters: SearchFilters,
@@ -906,11 +906,13 @@ async def _notify_partial_source_failures(
     details = f"Частковий пошук: {_search_filters_summary(filters)}"
     for status in failed:
         err = status.error or "невідома помилка"
-        # OLX часто не встигає / блокується; AUTO.RIA/TG уже дали видачу — не спамимо.
-        if status.source.upper() == "OLX" and (
-            _olx_timeout_partial_error(err) or _olx_blocked_partial_error(err)
-        ):
-            logger.warning("OLX partial failure (skipped admin alert): %s | %s", err, details)
+        if is_transient_partial_source_error(err):
+            logger.warning(
+                "%s partial failure (skipped admin alert): %s | %s",
+                status.source,
+                err,
+                details,
+            )
             continue
         await notify_admin_parsing_error(
             source=status.source,
@@ -1220,7 +1222,7 @@ async def search_listings_outcome(
     if "auto_ria" in sources:
         auto_ria_out = raw_results[result_index]
         result_index += 1
-        if isinstance(auto_ria_out, Exception):
+        if isinstance(auto_ria_out, BaseException):
             errors.append(auto_ria_out)
             source_statuses.append(_failed_source_status("AUTO.RIA", auto_ria_out))
         else:
@@ -1244,7 +1246,7 @@ async def search_listings_outcome(
     if "imperiya" in sources:
         imperiya_out = raw_results[result_index]
         result_index += 1
-        if isinstance(imperiya_out, Exception):
+        if isinstance(imperiya_out, BaseException):
             errors.append(imperiya_out)
             source_statuses.append(_failed_source_status("Імперія Авто", imperiya_out))
         else:
@@ -1256,7 +1258,7 @@ async def search_listings_outcome(
     if "udrive" in sources:
         udrive_out = raw_results[result_index]
         result_index += 1
-        if isinstance(udrive_out, Exception):
+        if isinstance(udrive_out, BaseException):
             errors.append(udrive_out)
             source_statuses.append(_failed_source_status("uDrive", udrive_out))
         else:
@@ -1268,7 +1270,7 @@ async def search_listings_outcome(
     if "car_market" in sources:
         car_market_out = raw_results[result_index]
         result_index += 1
-        if isinstance(car_market_out, Exception):
+        if isinstance(car_market_out, BaseException):
             errors.append(car_market_out)
             source_statuses.append(_failed_source_status("Car Market", car_market_out))
         else:
@@ -1280,7 +1282,7 @@ async def search_listings_outcome(
     if "lubeavto" in sources:
         lubeavto_out = raw_results[result_index]
         result_index += 1
-        if isinstance(lubeavto_out, Exception):
+        if isinstance(lubeavto_out, BaseException):
             errors.append(lubeavto_out)
             source_statuses.append(_failed_source_status("Любе Авто", lubeavto_out))
         else:
@@ -1292,7 +1294,7 @@ async def search_listings_outcome(
     if "reono" in sources:
         reono_out = raw_results[result_index]
         result_index += 1
-        if isinstance(reono_out, Exception):
+        if isinstance(reono_out, BaseException):
             errors.append(reono_out)
             source_statuses.append(_failed_source_status("REONO", reono_out))
         else:
@@ -1303,7 +1305,7 @@ async def search_listings_outcome(
 
     if "telegram" in sources:
         telegram_out = raw_results[result_index]
-        if isinstance(telegram_out, Exception):
+        if isinstance(telegram_out, BaseException):
             errors.append(telegram_out)
             source_statuses.append(_failed_source_status("Telegram", telegram_out))
         else:

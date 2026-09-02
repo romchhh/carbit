@@ -15,7 +15,7 @@ from app.services.imperiya.errors import ImperiyaError
 from app.services.monitoring.catalog import PARSER_LABELS, WEB_PARSER_SOURCES
 from app.services.monitoring.collect import _check_parser
 from app.services.monitoring.models import ComponentStatus, HealthLevel, SystemStatus
-from app.services.monitoring.parser_status import is_benign_parser_error, normalize_parser_source
+from app.services.monitoring.parser_status import is_benign_parser_error, is_transient_partial_source_error, normalize_parser_source
 from app.services.olx.errors import OlxError
 from app.services.reono.errors import ReonoError
 from app.services.search.multi_source import SourceSearchStatus, _failed_source_status
@@ -211,3 +211,22 @@ def test_olx_error_without_request_still_works() -> None:
     assert status.error == "OLX: помилка 404"
     assert status.request is None
     assert is_benign_parser_error(status.error) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "CancelledError",
+        "Імперія Авто: таймаут 25s",
+        "Імперія Авто: помилка 522: Cloudflare",
+        "REONO: мережева помилка: timeout",
+        "OLX: таймаут 22s",
+        "OLX: помилка 403",
+    ],
+)
+def test_transient_partial_source_error(message: str) -> None:
+    assert is_transient_partial_source_error(message) is True
+
+
+def test_transient_partial_source_error_rejects_auth_failures() -> None:
+    assert is_transient_partial_source_error("Імперія Авто: IMPERIYA_API_KEY не налаштовано") is False

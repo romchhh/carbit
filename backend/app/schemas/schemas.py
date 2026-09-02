@@ -491,6 +491,7 @@ class BillingPaymentOut(BaseModel):
     card_mask: str | None = None
     description: str | None = None
     paid_at: datetime
+    liqpay_payment_id: str | None = None
 
     model_config = {"from_attributes": True}
 

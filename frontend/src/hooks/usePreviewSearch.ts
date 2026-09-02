@@ -11,7 +11,6 @@ import {
   normalizeYearRange,
   type SearchFilterState,
   type SortOption,
-  sortListingItems,
 } from "@/lib/search-catalog";
 import {
   SEARCH_FIRST_BATCH,
@@ -224,20 +223,6 @@ export function usePreviewSearch(
     setPage(Math.max(1, Math.ceil(displayCountRef.current / SEARCH_PAGE_SIZE)));
   }, []);
 
-  /**
-   * Для зміни сортування: пересортовуємо весь fullPool і замінюємо displayPool.
-   * Викликається лише при явній зміні sort-опції користувачем.
-   */
-  const applySortedView = useCallback((sortKey: SortOption, count: number) => {
-    const sorted = sortListingItems(fullPoolRef.current, sortKey);
-    fullPoolRef.current = sorted;
-    const clamped = Math.min(Math.max(count, 0), sorted.length);
-    displayPoolRef.current = sorted.slice(0, clamped);
-    displayCountRef.current = clamped;
-    setResults([...displayPoolRef.current]);
-    setPage(Math.max(1, Math.ceil(clamped / SEARCH_PAGE_SIZE)));
-  }, []);
-
   const syncMeta = (
     data: PageResult,
     nextFilters: SearchFilterState,
@@ -434,9 +419,8 @@ export function usePreviewSearch(
         if (gen !== searchGen.current) return;
         lastApiPageRef.current = 1;
 
-        // Бекенд повертає результати у відсортованому порядку (newest → oldest).
-        // Клієнтське сортування — додаткова страховка (пул міг бути з іншим sort_by).
-        const firstItems = sortListingItems(first.items, nextSort);
+        // Порядок карток задає бекенд (fair blend / глобальне сортування) — не пересортовуємо на клієнті.
+        const firstItems = [...first.items];
         fullPoolRef.current = [...firstItems];
         // Показуємо одразу до SEARCH_PAGE_SIZE; решту — через «Показати ще».
         const initialDisplay = firstItems.slice(0, SEARCH_PAGE_SIZE);
@@ -634,14 +618,13 @@ export function usePreviewSearch(
 
   const changeSort = useCallback(
     (nextSort: SortOption) => {
+      if (nextSort === sort) return;
       setSort(nextSort);
-      if (!running || fullPoolRef.current.length === 0) return;
-      // При явній зміні сортування — пересортовуємо весь пул і показуємо спочатку
-      startTransition(() => {
-        applySortedView(nextSort, displayCountRef.current);
-      });
+      if (!running) return;
+      // Інакше при поверненні на «Спочатку нові» клієнтський sort ламав порядок бекенду.
+      void fetchInitial(filters, nextSort, freshness, { background: true });
     },
-    [applySortedView, running],
+    [fetchInitial, filters, freshness, running, sort],
   );
 
   const changeFreshness = useCallback((nextFreshness: SearchFreshness) => {

@@ -224,6 +224,7 @@ export interface BillingPayment {
   card_mask?: string | null;
   description?: string | null;
   paid_at: string;
+  liqpay_payment_id?: string | null;
 }
 
 export interface Subscription {

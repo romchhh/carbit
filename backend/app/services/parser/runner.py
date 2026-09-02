@@ -17,7 +17,7 @@ from app.services.telegram_channels.mapper import listing_out_matches_filters
 from app.services.parser.linking import link_listing_to_search
 from app.services.parser.settings import get_filter_cache, get_parser_settings, set_filter_cache
 from app.services.notifications.freshness import coerce_notification_max_hours
-from app.services.monitoring.parser_status import is_benign_parser_error
+from app.services.monitoring.parser_status import is_benign_parser_error, is_transient_partial_source_error
 from app.services.search.multi_source import normalize_sources, search_listings_outcome
 from app.services.search.pool_cache import try_load_pool_listings
 from app.services.telegram_channels.ingest import (
@@ -266,6 +266,16 @@ async def _process_group(
 
     for status in outcome.sources:
         if status.error and not is_benign_parser_error(status.error):
+            if is_transient_partial_source_error(status.error):
+                log.append(f"  · {status.source}: {status.error} (тимчасово)")
+                from app.services.monitoring.parser_status import record_parser_status
+
+                await record_parser_status(
+                    status.source,
+                    ok=True,
+                    count=status.item_count,
+                )
+                continue
             log.append(f"  ⚠ {status.source}: {status.error}")
             from app.services.monitoring.parser_status import record_parser_status
 

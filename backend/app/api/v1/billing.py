@@ -60,6 +60,7 @@ async def _subscription_out(db, user) -> SubscriptionOut:
                 card_mask=_format_card_mask(row.card_mask),
                 description=row.description,
                 paid_at=row.paid_at,
+                liqpay_payment_id=row.liqpay_payment_id,
             )
         )
 

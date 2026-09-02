@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { LiqPayLogo } from "@/components/brand/LiqPayLogo";
@@ -9,6 +9,7 @@ import { CtaLink } from "@/components/ui/CtaLink";
 import { useAuth } from "@/contexts/AuthProvider";
 import { billing as billingApi } from "@/lib/api";
 import { formatKyivDate, formatKyivDateTime } from "@/lib/datetime";
+import { trackMetaPurchase } from "@/lib/meta-pixel";
 import type { BillingPayment, Subscription } from "@/types/api";
 
 function formatMoney(amount: number, currency = "UAH"): string {
@@ -30,6 +31,7 @@ export default function PaymentSuccessPage() {
   const { refreshUser } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const purchaseTracked = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +89,19 @@ export default function PaymentSuccessPage() {
   const paidAt = latestPayment?.paid_at ?? null;
   const nextPayment = subscription?.next_payment_at ?? subscription?.plan_expires_at ?? null;
   const recurring = Boolean(subscription?.recurring_active);
+
+  useEffect(() => {
+    if (!latestPayment || latestPayment.status !== "success" || purchaseTracked.current) return;
+    purchaseTracked.current = true;
+    trackMetaPurchase({
+      value: latestPayment.amount,
+      currency: latestPayment.currency,
+      contentName: latestPayment.plan_name,
+      contentIds: [latestPayment.plan],
+      orderId: latestPayment.order_id,
+      paymentId: latestPayment.liqpay_payment_id,
+    });
+  }, [latestPayment]);
 
   return (
     <div className="relative mx-auto w-full max-w-lg px-1 py-6 sm:py-10">

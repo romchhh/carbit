@@ -30,6 +30,7 @@ from app.services.billing.notify import (
 from app.services.billing.plans import activate_plan, get_plan
 from app.services.billing.maintenance import MAX_FAILED_CHARGES
 from app.services.billing.payments import extract_card_mask, record_billing_payment
+from app.services.meta.conversions import schedule_meta_purchase_event
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +222,26 @@ async def apply_successful_payment(
         user.plan_expires_at = now_kyiv() + timedelta(days=days)
 
     await record_billing_payment(db, sub=sub, payload=payload, status="success")
+
+    try:
+        amount = float(sub.amount or 0)
+        if payload.get("amount") is not None:
+            amount = float(payload["amount"])
+        currency = str(payload.get("currency") or sub.currency or "UAH").upper()
+        plan_name = str(get_plan(sub.plan).get("name") or sub.plan)
+        schedule_meta_purchase_event(
+            user_id=user.id,
+            email=user.email,
+            phone=user.phone,
+            order_id=sub.order_id,
+            payment_id=str(payment_id) if payment_id else None,
+            plan_id=sub.plan,
+            plan_name=plan_name,
+            amount=amount,
+            currency=currency,
+        )
+    except Exception:
+        logger.exception("Meta Purchase scheduling failed order_id=%s", sub.order_id)
 
     # Одноразова доплата апгрейду — не лишаємо «active» рекурент (інакше UI думає що є підписка).
     if is_once:

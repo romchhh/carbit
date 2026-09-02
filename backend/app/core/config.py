@@ -138,6 +138,10 @@ class Settings(BaseSettings):
     # GeoIP для аналітики відвідувань (опційно: шлях до GeoLite2-Country.mmdb)
     GEOIP_COUNTRY_DB: str = ""
 
+    # Meta Conversions API (Purchase після оплати підписки)
+    META_PIXEL_ID: str = "1619297012895746"
+    META_CONVERSIONS_ACCESS_TOKEN: str = ""
+
     @field_validator("AUTO_RIA_QUOTA_PACKAGE", mode="before")
     @classmethod
     def normalize_auto_ria_quota_package(cls, value: object) -> str:

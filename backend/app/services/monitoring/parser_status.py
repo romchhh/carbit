@@ -43,6 +43,26 @@ def is_benign_parser_error(error: str | None) -> bool:
     return False
 
 
+def is_transient_partial_source_error(error: str | None) -> bool:
+    """Тимчасові збої зовнішнього API — не слати адмін-алерт при частковій видачі."""
+    if not error:
+        return False
+    err = error.strip().lower()
+    if "cancellederror" in err or err == "cancelled":
+        return True
+    if "таймаут" in err or "timeout" in err:
+        return True
+    if "522" in err or "cloudflare" in err:
+        return True
+    if any(code in err for code in ("502", "503", "504", "429")):
+        return True
+    if "мережева помилка" in err or "network" in err:
+        return True
+    if "403" in err or "заблок" in err or "blocked" in err:
+        return True
+    return False
+
+
 async def record_parser_status(
     source: str,
     *,

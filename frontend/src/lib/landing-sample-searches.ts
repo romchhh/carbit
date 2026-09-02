@@ -46,6 +46,7 @@ export const LANDING_SAMPLE_PRESETS: LandingSamplePreset[] = [
     subtitle: "Седани · до $18 000 · Київ",
     filters: {
       ...DEFAULT_FILTERS,
+      category: "used",
       region: "Київ",
       regions: ["Київ"],
       currency: "USD",
@@ -75,6 +76,7 @@ export const LANDING_SAMPLE_PRESETS: LandingSamplePreset[] = [
     subtitle: "Хетчбек · до $12 000 · Львів",
     filters: {
       ...DEFAULT_FILTERS,
+      category: "used",
       region: "Львів",
       regions: ["Львів"],
       currency: "USD",
@@ -104,6 +106,7 @@ export const LANDING_SAMPLE_PRESETS: LandingSamplePreset[] = [
     subtitle: "Кросовер · дизель · Одеса",
     filters: {
       ...DEFAULT_FILTERS,
+      category: "used",
       region: "Одеса",
       regions: ["Одеса"],
       currency: "USD",

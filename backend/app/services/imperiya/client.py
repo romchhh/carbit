@@ -71,7 +71,7 @@ class ImperiyaClient:
                     response.status_code,
                     request=request_label,
                 )
-                if response.status_code in (408, 425, 429, 500, 502, 503, 504) and attempt + 1 < _MAX_ATTEMPTS:
+                if response.status_code in (408, 425, 429, 500, 502, 503, 504, 522) and attempt + 1 < _MAX_ATTEMPTS:
                     await asyncio.sleep(_RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)])
                     last_error = err
                     continue
