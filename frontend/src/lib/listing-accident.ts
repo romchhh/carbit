@@ -9,7 +9,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 const ACCIDENT_HAD =
   /(?:^|(?<![\wа-яіїєґ]))(?:дтп|accident|after crash|після дтп|був у дтп|був в дтп|after an accident|легкий удар|сильний удар|після удару|був удар|бита|битий|битая|биті|биток|крашен[аийоїє]?|потребує ремонту|требует ремонта|аварійн[аийоїє]?|аварийн[аыйой]?|після аварії|була в аварії|salvage|rebuilt title)(?:$|(?![\wа-яіїєґ]))/i;
 const ACCIDENT_NONE =
-  /(?:^|(?<![\wа-яіїєґ]))(?:без дтп|не в дтп|не був у дтп|не був в дтп|дтп не був|дтп небув|в дтп не був|в дтп небув|no accident|not damaged|не бита|не бит|не битий|не битая|не крашена|не крашен|не аварійна|не аварийна)(?:$|(?![\wа-яіїєґ]))/i;
+  /(?:^|(?<![\wа-яіїєґ]))(?:без дтп|не в дтп|не був у дтп|не був в дтп|дтп не був|дтп небув|в дтп не був|в дтп небув|no accident|not damaged|не бита|не бит|не битий|не битая|не крашена|не крашен|не аварійна|не аварийна|запобігання дтп|запобежение дтп|collision prevention)(?:$|(?![\wа-яіїєґ]))/i;
 
 /** true — був у ДТП, false — не був, null — невідомо. */
 export function resolveListingAccidentHad(listing: Listing): boolean | null {
@@ -28,6 +28,20 @@ export function resolveListingAccidentHad(listing: Listing): boolean | null {
 
   const auto = asRecord(sd.autoData);
   const state = asRecord(sd.stateData);
+
+  const infoBar = asRecord(sd.autoInfoBar);
+  if (infoBar.damage === true) return true;
+  if (infoBar.damage === false) return false;
+
+  const infoBarText = String(sd.infoBarText || "").toLowerCase();
+  if (infoBarText) {
+    if (/(не був|без дтп|not damaged)/i.test(infoBarText)) return false;
+    if (/(був у дтп|був в дтп|після дтп)/i.test(infoBarText)) return true;
+  }
+
+  const pageBadges = asRecord(sd.ria_page_badges);
+  if (pageBadges.had_accident === true) return true;
+
   const damageRaw = auto.damageId ?? auto.damage ?? state.damageId ?? state.damage ?? sd.damageId ?? sd.damage;
   if (typeof damageRaw === "number" || (typeof damageRaw === "string" && damageRaw.trim())) {
     const damageId = Number(damageRaw);

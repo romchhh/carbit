@@ -80,6 +80,47 @@ class ListingOutFlagsTests(unittest.TestCase):
         )
         self.assertFalse(out.had_accident)
 
+    def test_auto_ria_info_bar_damage(self):
+        out = ListingOut(
+            **_base_listing(
+                id="auto_ria_2",
+                source="auto_ria",
+                source_data={"autoInfoBar": {"damage": True}, "infoBarText": "Був в ДТП"},
+            )
+        )
+        self.assertTrue(out.had_accident)
+
+    def test_auto_ria_page_badges_usa(self):
+        out = ListingOut(
+            **_base_listing(
+                id="auto_ria_3",
+                source="auto_ria",
+                source_data={"ria_page_badges": {"usa_import": True}},
+            )
+        )
+        self.assertTrue(out.usa_import)
+
+    def test_collision_prevention_not_accident(self):
+        out = ListingOut(
+            **_base_listing(
+                description="Дістроник (запобігання дтп), камера 360",
+            )
+        )
+        self.assertIsNone(out.had_accident)
+
+
+class AutoRiaPageBadgesTests(unittest.TestCase):
+    def test_parse_page_badges_html(self):
+        from app.services.auto_ria.page_badges import parse_page_badges_html
+
+        html = (
+            '{"id":"badgesDamaged","isHide":false,"elements":[{"content":"Був у ДТП"}]},'
+            '{"id":"badgesOrderFrom","isHide":false,"elements":[{"content":"Пригнано з США"}]}'
+        )
+        badges = parse_page_badges_html(html)
+        self.assertTrue(badges["had_accident"])
+        self.assertTrue(badges["usa_import"])
+
 
 if __name__ == "__main__":
     unittest.main()

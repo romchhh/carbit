@@ -18,7 +18,20 @@ def _bool_flag(value: object) -> bool | None:
     return None
 
 
+def _auto_ria_page_badges_usa(sd: dict) -> bool | None:
+    page_badges = sd.get("ria_page_badges")
+    if isinstance(page_badges, dict):
+        flag = _bool_flag(page_badges.get("usa_import"))
+        if flag is not None:
+            return flag
+    return None
+
+
 def _auto_ria_from_usa(sd: dict) -> bool | None:
+    page_usa = _auto_ria_page_badges_usa(sd)
+    if page_usa is True:
+        return True
+
     for block in (sd, sd.get("autoData"), sd.get("stateData")):
         if not isinstance(block, dict):
             continue

@@ -118,6 +118,7 @@ async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
 
     from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
     from app.services.auto_ria.mapper import info_to_listing
+    from app.services.auto_ria.page_badges import attach_page_badges_to_info
 
     result: dict[str, ListingOut] = {}
     to_fetch: list[str] = []
@@ -150,6 +151,7 @@ async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
         async with sem:
             try:
                 info = await client.get_info(aid)
+                info = await attach_page_badges_to_info(info)
                 listing = info_to_listing(info, fotos=None)
                 return aid, listing
             except (AutoRiaError, Exception):

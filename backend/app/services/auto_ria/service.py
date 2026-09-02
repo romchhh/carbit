@@ -41,6 +41,9 @@ def _new_search_ids(data: dict) -> list[str]:
 async def _hydrate_single_auto_ria_id(client: AutoRiaClient, auto_id: str) -> ListingOut | None:
     try:
         info = await client.get_info(auto_id)
+        from app.services.auto_ria.page_badges import attach_page_badges_to_info
+
+        info = await attach_page_badges_to_info(info)
         return info_to_listing(info, fotos=None)
     except AutoRiaError:
         return None

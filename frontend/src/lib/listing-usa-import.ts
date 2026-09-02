@@ -55,6 +55,9 @@ export function resolveListingUsaImport(listing: Listing): boolean {
   const flags = asRecord(sd.condition_flags);
   if (flags.usa_import === true) return true;
 
+  const pageBadges = asRecord(sd.ria_page_badges);
+  if (pageBadges.usa_import === true) return true;
+
   const specs = asRecord(sd.specs);
 
   for (const [key, value] of Object.entries(specs)) {

@@ -30,7 +30,8 @@ _ACCIDENT_NONE_TEXT = re.compile(
     + r"(без дтп|не в дтп|не був у дтп|не був в дтп|дтп не був|дтп небув|"
     + r"в дтп не був|в дтп небув|no accident|not damaged|"
     + r"не бита|не бит|не битий|не битая|"
-    + r"не крашена|не крашен|не аварійна|не аварийна)"
+    + r"не крашена|не крашен|не аварійна|не аварийна|"
+    + r"запобігання дтп|запобежение дтп|collision prevention)"
     + _CYR_BOUNDARY_END,
     re.IGNORECASE,
 )
@@ -81,6 +82,29 @@ def _condition_flags_had(sd: dict) -> bool | None:
             return True
         if flags.get(key) is False:
             return False
+    return None
+
+
+def _auto_ria_info_bar_had(sd: dict) -> bool | None:
+    info_bar = sd.get("autoInfoBar")
+    if isinstance(info_bar, dict):
+        damage = info_bar.get("damage")
+        if damage is True:
+            return True
+        if damage is False:
+            return False
+
+    info_text = norm_text(str(sd.get("infoBarText") or ""))
+    if info_text:
+        if any(token in info_text for token in ("без дтп", "не був", "not damaged")):
+            return False
+        if any(token in info_text for token in ("був у дтп", "був в дтп", "після дтп")):
+            return True
+
+    page_badges = sd.get("ria_page_badges")
+    if isinstance(page_badges, dict) and page_badges.get("had_accident") is True:
+        return True
+
     return None
 
 
@@ -175,6 +199,10 @@ def extract_listing_accident_had(item: ListingOut) -> bool | None:
         had = _imperiya_was_accident(imperiya)
         if had is not None:
             return had
+
+    info_bar_had = _auto_ria_info_bar_had(sd)
+    if info_bar_had is not None:
+        return info_bar_had
 
     damage_raw, damage_name = _auto_ria_damage_fields(sd)
     had = _damage_id_to_had(damage_raw)
