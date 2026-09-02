@@ -353,8 +353,6 @@ export function ListingCard({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-3 lg:mt-4 lg:gap-2">
-          {hadAccident && <AccidentBadge />}
-          {isUsaImport && <UsaImportBadge />}
           {listing.year > 0 && (
             <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
               {listing.year}
