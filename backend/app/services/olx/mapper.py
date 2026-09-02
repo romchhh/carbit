@@ -34,6 +34,7 @@ from app.services.olx.brand_slugs import (
     resolve_olx_model_slug,
 )
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
+from app.services.listings.olx_specs import olx_spec_condition_flags
 from app.services.search.filter_multi import canonicalize_region
 from app.services.search.subbrand_split import split_huawei_subbrand
 
@@ -397,6 +398,7 @@ def olx_listing_to_listing_out(
 
     raw_params = listing.raw_params if isinstance(listing.raw_params, dict) else {}
     seller_type = "dealer" if raw_params.get("isBusiness") else "private"
+    condition_flags = olx_spec_condition_flags(specs)
 
     return ListingOut(
         id=f"olx_{listing_id}",
@@ -421,6 +423,7 @@ def olx_listing_to_listing_out(
         engine_volume_l=engine_volume_l,
         source_data={
             "specs": specs,
+            "condition_flags": condition_flags,
             "published": listing.published,
             "promoted": listing.promoted,
             "raw_params": listing.raw_params,

@@ -168,8 +168,8 @@ class AutoRiaZeekrSearchTests(unittest.TestCase):
     def test_numeric_models_never_omni_in_api_params(self):
         cases = [
             ("Zeekr", "001", 55280, 64237),
-            ("Porsche", "911", 48, 365),
-            ("Mazda", "3", 47, 256),
+            ("Porsche", "911", 59, 539),
+            ("Mazda", "3", 47, 1692),
         ]
 
         async def run():

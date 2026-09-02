@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.core.timezone import now_kyiv
+from app.services.reono.dates import REONO_UNKNOWN_PUBLISHED_AT
 from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.listings.engine_volume import parse_engine_volume_from_text
 from app.services.reono.parser import ReonoCar
@@ -23,7 +24,7 @@ def car_to_listing(car: ReonoCar) -> ListingOut:
         images = [car.image_url]
     engine_volume_l = parse_engine_volume_from_text(car.engine or "")
 
-    published_at = car.published_at or now_kyiv()
+    published_at = car.published_at or REONO_UNKNOWN_PUBLISHED_AT
     source_data = {
         "reono": {
             "car_id": car.car_id,
@@ -58,7 +59,7 @@ def car_to_listing(car: ReonoCar) -> ListingOut:
         price_history=[],
         is_duplicate=False,
         published_at=published_at,
-        found_at=published_at,
+        found_at=now_kyiv(),
     )
 
 

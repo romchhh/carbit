@@ -1,15 +1,45 @@
 from __future__ import annotations
 
-import asyncio
+import json
+import logging
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from app.core.text import bounded_substring, letter_class_canonical, norm_text, unify_class_spelling
 from app.services.auto_ria.client import AutoRiaClient
-from app.services.auto_ria.constants import DEFAULT_CATEGORY_ID
 
-_lock = asyncio.Lock()
+logger = logging.getLogger(__name__)
+
+_CATALOG_PATH = Path(__file__).with_name("ria_id_catalog.json")
 _marks_cache: list[dict[str, Any]] | None = None
 _models_cache: dict[int, list[dict[str, Any]]] = {}
+
+
+@lru_cache(maxsize=1)
+def _static_catalog() -> dict[str, Any]:
+    if not _CATALOG_PATH.is_file():
+        logger.warning("AUTO.RIA static catalog missing: %s", _CATALOG_PATH)
+        return {"marks": [], "models": {}}
+    try:
+        data = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        logger.warning("AUTO.RIA static catalog unreadable", exc_info=True)
+        return {"marks": [], "models": {}}
+    return data if isinstance(data, dict) else {"marks": [], "models": {}}
+
+
+def _static_marks() -> list[dict[str, Any]]:
+    marks = _static_catalog().get("marks") or []
+    return marks if isinstance(marks, list) else []
+
+
+def _static_models(mark_id: int) -> list[dict[str, Any]]:
+    models = _static_catalog().get("models") or {}
+    if not isinstance(models, dict):
+        return []
+    rows = models.get(str(mark_id))
+    return rows if isinstance(rows, list) else []
 
 
 def _normalize_model_key(value: str) -> str:
@@ -71,22 +101,23 @@ def _resolve_letter_class_model(
 
 
 async def _load_marks(client: AutoRiaClient) -> list[dict[str, Any]]:
+    """Марки з закоміченого JSON — без /auto/categories/.../marks."""
+    del client
     global _marks_cache
     if _marks_cache is not None:
         return _marks_cache
-    async with _lock:
-        if _marks_cache is None:
-            _marks_cache = await client.get_marks(DEFAULT_CATEGORY_ID)
+    _marks_cache = _static_marks()
     return _marks_cache
 
 
 async def _load_models(client: AutoRiaClient, mark_id: int) -> list[dict[str, Any]]:
+    """Моделі з закоміченого JSON — без /auto/categories/.../models."""
+    del client
     if mark_id in _models_cache:
         return _models_cache[mark_id]
-    async with _lock:
-        if mark_id not in _models_cache:
-            _models_cache[mark_id] = await client.get_models(mark_id, DEFAULT_CATEGORY_ID)
-    return _models_cache[mark_id]
+    rows = _static_models(mark_id)
+    _models_cache[mark_id] = rows
+    return rows
 
 
 async def resolve_mark_id(client: AutoRiaClient, brand: str) -> int | None:

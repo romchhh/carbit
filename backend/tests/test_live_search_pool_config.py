@@ -39,6 +39,29 @@ def _listing(listing_id: str, source: str, *, minutes_ago: int = 0) -> ListingOu
 
 
 class LiveSearchPoolConfigTests(unittest.TestCase):
+    def test_auto_ria_hydrate_caps_are_tight(self):
+        self.assertLessEqual(multi_source.AUTO_RIA_INFO_HYDRATE_CAP, 40)
+        self.assertLessEqual(multi_source.AUTO_RIA_PRICE_SORT_HYDRATE_CAP, 80)
+        self.assertLessEqual(multi_source.AR_MODEL_POST_FILTER_CAP, 40)
+        self.assertLessEqual(multi_source.AUTO_RIA_ID_COLLECT_CAP, 100)
+        self.assertEqual(multi_source._auto_ria_hydrate_cap("newest"), multi_source.AUTO_RIA_INFO_HYDRATE_CAP)
+        self.assertEqual(
+            multi_source._auto_ria_hydrate_cap("price_asc"),
+            multi_source.AUTO_RIA_PRICE_SORT_HYDRATE_CAP,
+        )
+
+    def test_split_ar_ids_hydrates_interleaved_window(self):
+        used, new = multi_source._split_ar_ids_for_hydrate(
+            ["n:1", "10", "n:2", "11", "n:3", "12"],
+            4,
+        )
+        self.assertEqual(used, ["10", "11"])
+        self.assertEqual(new, ["1", "2"])
+
+    def test_live_pool_ttl_is_five_to_ten_minutes(self):
+        self.assertGreaterEqual(pool_cache.LIVE_POOL_TTL_SECONDS, 300)
+        self.assertLessEqual(pool_cache.LIVE_POOL_TTL_SECONDS, 600)
+
     def test_pool_caps_are_bounded(self):
         # Live pool тримає слоти з 3 джерел; OLX/TG всередині ріжуть глибше самі.
         self.assertLessEqual(pool_cache.LIVE_POOL_SIZE, 500)
@@ -49,6 +72,40 @@ class LiveSearchPoolConfigTests(unittest.TestCase):
     def test_auto_ria_pool_timeout_defined(self):
         self.assertGreater(multi_source.AUTO_RIA_POOL_TIMEOUT_SECONDS, 0)
         self.assertGreater(multi_source.OLX_SEARCH_TIMEOUT_SECONDS, 0)
+
+    def test_merge_multi_source_newest_is_globally_sorted(self):
+        batches = [
+            (
+                "auto_ria",
+                PaginatedListings(
+                    items=[_listing("a20h", "auto_ria", minutes_ago=20 * 60)],
+                    total=1,
+                    page=1,
+                    per_page=1,
+                    pages=1,
+                ),
+            ),
+            (
+                "olx",
+                PaginatedListings(
+                    items=[
+                        _listing("o1d", "olx", minutes_ago=24 * 60),
+                        _listing("o6d", "olx", minutes_ago=6 * 24 * 60),
+                    ],
+                    total=2,
+                    page=1,
+                    per_page=2,
+                    pages=1,
+                ),
+            ),
+        ]
+        page_items, _, _ = multi_source._merge_multi_source_page(
+            batches,
+            page=1,
+            per_page=3,
+            sort_by="newest",
+        )
+        self.assertEqual([item.id for item in page_items], ["a20h", "o1d", "o6d"])
 
     def test_fair_merge_newest_prefers_source_blend(self):
         batches = [

@@ -38,14 +38,14 @@ from app.services.parser.filter_groups import filters_group_key
 logger = logging.getLogger(__name__)
 
 LIVE_POOL_PREFIX = "live-pool:"
-LIVE_POOL_TTL_SECONDS = 180  # 3 хвилини
+LIVE_POOL_TTL_SECONDS = 600  # 10 хвилин — повторний пошук без нових AR-запитів
 # Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
 LIVE_POOL_SIZE = 500
 
 # Кеш окремих AUTO.RIA-оголошень (щоб не гідратувати одне й те саме двічі)
 _AR_INFO_PREFIX = "ar-info:"
 _AR_NEW_INFO_PREFIX = "ar-new-info:"
-_AR_INFO_TTL_SECONDS = 600  # 10 хвилин
+_AR_INFO_TTL_SECONDS = 1800  # 30 хвилин — /auto/info платний, тримаємо довше
 
 
 def live_pool_cache_key(filters: SearchFilters, sort_by: str) -> str:
@@ -117,7 +117,7 @@ async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
         return {}
 
     from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
-    from app.services.auto_ria.mapper import info_to_listing, new_info_to_listing
+    from app.services.auto_ria.mapper import info_to_listing
 
     result: dict[str, ListingOut] = {}
     to_fetch: list[str] = []
@@ -153,12 +153,7 @@ async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
                 listing = info_to_listing(info, fotos=None)
                 return aid, listing
             except (AutoRiaError, Exception):
-                pass
-            try:
-                info = await client.get_new_info(aid)
-                listing = new_info_to_listing(info)
-                return aid, listing
-            except (AutoRiaError, Exception):
+                # Вживані ID не пробуємо /auto/new/auto — це другий платний запит на промах.
                 return aid, None
 
     fetched = await asyncio.gather(*(fetch_one(aid) for aid in to_fetch))
@@ -178,6 +173,34 @@ async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
         pass
 
     return result
+
+
+async def hydrate_tagged_auto_ria_ids(
+    ids: list[str],
+    *,
+    limit: int | None = None,
+) -> list[ListingOut]:
+    """Гідратує tagged IDs (`123` вживані, `n:456` нові) зі спільним Redis-кешем."""
+    tagged = list(ids[:limit] if limit is not None else ids)
+    if not tagged:
+        return []
+    used_ids = [aid for aid in tagged if not aid.startswith("n:")]
+    new_ids = [aid[2:] for aid in tagged if aid.startswith("n:")]
+    hydrated_used, hydrated_new = await asyncio.gather(
+        _batch_hydrate_auto_ria(used_ids),
+        _batch_hydrate_new_auto_ria(new_ids),
+    )
+    items: list[ListingOut] = []
+    seen: set[str] = set()
+    for aid in tagged:
+        listing = (
+            hydrated_new.get(aid[2:]) if aid.startswith("n:") else hydrated_used.get(aid)
+        )
+        if listing is None or listing.id in seen:
+            continue
+        seen.add(listing.id)
+        items.append(listing)
+    return items
 
 
 async def _batch_hydrate_new_auto_ria(ids: list[str]) -> dict[str, ListingOut]:

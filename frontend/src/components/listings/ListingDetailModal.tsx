@@ -9,6 +9,7 @@ import { ListingCompareButton } from "@/components/listings/ListingCompareButton
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { ListingPlateBadge } from "@/components/listings/ListingPlateBadge";
+import { AccidentBadge } from "@/components/listings/AccidentBadge";
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
@@ -51,6 +52,7 @@ import {
 import { cn, formatMileage, publishedAgoLabel } from "@/lib/utils";
 import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
 import { resolveDisplayCurrency, type DisplayCurrency } from "@/lib/display-currency";
+import { resolveListingAccidentHad } from "@/lib/listing-accident";
 import { resolveListingImages } from "@/lib/listing-image-url";
 import { listings as listingsApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
@@ -290,6 +292,7 @@ export function ListingDetailModal({
   const mileageKm = resolveListingMileage(listing);
   const engineVolume = resolveListingEngineVolume(listing);
   const plateLabel = listing.plate?.trim() || "";
+  const hadAccident = resolveListingAccidentHad(listing) === true;
   const source = listing.source_data ?? {};
   const priceUsd = typeof source.USD === "number" ? source.USD : null;
   const priceEur = typeof source.EUR === "number" ? source.EUR : null;
@@ -310,6 +313,7 @@ export function ListingDetailModal({
           label: "Продавець",
           value: listing.seller_type === "dealer" ? "Автосалон" : "Приват",
         },
+        ...(hadAccident ? [{ label: "ДТП", value: "Був у ДТП" }] : []),
         ...(listing.vin ? [{ label: "VIN", value: listing.vin }] : []),
         ...(priceUsd ? [{ label: "Ціна USD", value: priceUsd.toLocaleString("uk-UA") }] : []),
         ...(priceEur ? [{ label: "Ціна EUR", value: priceEur.toLocaleString("uk-UA") }] : []),
@@ -474,6 +478,11 @@ export function ListingDetailModal({
             <div className="pointer-events-none absolute bottom-3 left-3">
               <PublishedTimeBadge date={listing.published_at} short />
             </div>
+            {hadAccident ? (
+              <div className="pointer-events-none absolute left-3 top-3 z-[1]">
+                <AccidentBadge variant="overlay" />
+              </div>
+            ) : null}
             {plateLabel ? (
               <div className="pointer-events-none absolute bottom-3 left-1/2 z-[1] -translate-x-1/2">
                 <ListingPlateBadge plate={plateLabel} size="md" elevated />
@@ -556,6 +565,11 @@ export function ListingDetailModal({
                   <div className="absolute bottom-2 left-2">
                     <PublishedTimeBadge date={listing.published_at} short />
                   </div>
+                  {hadAccident ? (
+                    <div className="pointer-events-none absolute left-2 top-2 z-[1]">
+                      <AccidentBadge variant="overlay" />
+                    </div>
+                  ) : null}
                   {plateLabel ? (
                     <div className="pointer-events-none absolute bottom-2 left-1/2 z-[1] -translate-x-1/2">
                       <ListingPlateBadge plate={plateLabel} size="md" elevated />
@@ -591,6 +605,11 @@ export function ListingDetailModal({
                       {isNewCar && <strong className="text-blue-600">НОВИЙ </strong>}
                       {listing.title}
                     </h2>
+                    {hadAccident ? (
+                      <div className="mt-2">
+                        <AccidentBadge variant="label" />
+                      </div>
+                    ) : null}
                     <p className="mt-1 text-[13px] text-muted">
                       {listing.brand} {listing.model}
                     </p>
@@ -618,6 +637,7 @@ export function ListingDetailModal({
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
+                  {hadAccident && <AccidentBadge />}
                   {listing.year > 0 && (
                     <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink">
                       {listing.year}
@@ -673,6 +693,11 @@ export function ListingDetailModal({
             {/* Mobile-only price block (desktop shows it in top row) */}
             <div className="flex flex-wrap items-end justify-between gap-3 sm:hidden">
               <div>
+                {hadAccident ? (
+                  <div className="mb-3">
+                    <AccidentBadge variant="label" />
+                  </div>
+                ) : null}
                 {plateLabel ? (
                   <div className="mb-3">
                     <ListingPlateBadge plate={plateLabel} size="md" />

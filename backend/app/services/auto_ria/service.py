@@ -14,6 +14,11 @@ from app.services.auto_ria.mapper import (
 )
 from app.services.search.concurrency import acquire_auto_ria_slot
 
+# Офіційний максимум countpage для /auto/search — 100 ID за один запит.
+AUTO_RIA_USED_SEARCH_PAGE_SIZE = 100
+# /auto/new/search: limit ≤ 50.
+AUTO_RIA_NEW_SEARCH_PAGE_SIZE = 50
+
 
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
     payload = {
@@ -38,11 +43,7 @@ async def _hydrate_single_auto_ria_id(client: AutoRiaClient, auto_id: str) -> Li
         info = await client.get_info(auto_id)
         return info_to_listing(info, fotos=None)
     except AutoRiaError:
-        try:
-            info = await client.get_new_info(auto_id)
-            return new_info_to_listing(info)
-        except AutoRiaError:
-            return None
+        return None
 
 
 async def _search_auto_ria_uncached(
@@ -97,7 +98,7 @@ async def _search_auto_ria_body(
     new_car_task = None
     new_total = 0
     if category in ("all", "new") and page == 1:
-        new_cap = max(min(per_page // 2, 50), 20)
+        new_cap = min(max(per_page // 2, 8), 12)
 
         async def _fetch_new_cars() -> list[ListingOut]:
             nonlocal new_total
@@ -211,8 +212,9 @@ async def _collect_ids_raw(
     else:
         sort_patch = {}
 
+    page_size = AUTO_RIA_USED_SEARCH_PAGE_SIZE
     while len(all_ids) < max_ids:
-        params = {**base_params, **sort_patch, "page": api_page, "countpage": 50}
+        params = {**base_params, **sort_patch, "page": api_page, "countpage": page_size}
         async with acquire_auto_ria_slot():
             data = await client.search(params)
 
@@ -228,7 +230,7 @@ async def _collect_ids_raw(
             if rid and len(all_ids) < max_ids:
                 all_ids.append(str(rid))
 
-        if len(raw_ids) < 50 or len(all_ids) >= total:
+        if len(raw_ids) < page_size or len(all_ids) >= total:
             break
         api_page += 1
 
@@ -275,9 +277,10 @@ async def _collect_new_ids_raw(
     all_ids: list[str] = []
     total = 0
     api_page = 1
+    page_size = AUTO_RIA_NEW_SEARCH_PAGE_SIZE
 
     while len(all_ids) < max_ids:
-        params = {**new_params, "page": api_page, "limit": 50}
+        params = {**new_params, "page": api_page, "limit": page_size}
         if use_slot:
             async with acquire_auto_ria_slot():
                 data = await client.search_new(params)
@@ -295,91 +298,26 @@ async def _collect_new_ids_raw(
             if rid and len(all_ids) < max_ids:
                 all_ids.append(str(rid))
 
-        if len(raw_ids) < 50 or len(all_ids) >= total:
+        if len(raw_ids) < page_size or len(all_ids) >= total:
             break
         api_page += 1
 
     return all_ids, total
 
 
-async def _new_model_ids_for_search(
-    client: AutoRiaClient,
-    used_params: dict,
-    filters: SearchFilters,
-) -> list[int]:
-    """modelId з params + successor IDs для нових авто (A4→A5)."""
-    primary: list[int] = []
-    raw = used_params.get("model_id[0]")
-    if raw:
-        try:
-            mid = int(raw)
-        except (TypeError, ValueError):
-            mid = 0
-        if mid:
-            primary.append(mid)
-    if not ((filters.brand or "").strip() and (filters.model or "").strip()):
-        return primary
-    try:
-        from app.services.auto_ria.catalog import resolve_new_search_model_ids
-
-        extra = await resolve_new_search_model_ids(
-            client, filters.brand or "", filters.model or ""
-        )
-    except Exception:
-        extra = []
-    if not extra:
-        return primary
-    seen = set(primary)
-    out = list(primary)
-    for mid in extra:
-        if mid not in seen:
-            seen.add(mid)
-            out.append(mid)
-    return out
-
-
 async def _collect_new_ids_expanded(
     client: AutoRiaClient,
     used_params: dict,
-    filters: SearchFilters,
+    _filters: SearchFilters,
     *,
     max_ids: int,
     use_slot: bool = True,
 ) -> tuple[list[str], int]:
+    """Один /auto/new/search по primary modelId — без parallel successor (A4→A5)."""
     new_params = _build_new_search_params(used_params)
-    model_ids = await _new_model_ids_for_search(client, used_params, filters)
-    if len(model_ids) <= 1:
-        if model_ids:
-            new_params["modelId"] = model_ids[0]
-        return await _collect_new_ids_raw(
-            client, new_params, max_ids=max_ids, use_slot=use_slot
-        )
-
-    new_params.pop("modelId", None)
-    parts = await asyncio.gather(
-        *[
-            _collect_new_ids_raw(
-                client,
-                {**new_params, "modelId": mid},
-                max_ids=max_ids,
-                use_slot=use_slot,
-            )
-            for mid in model_ids
-        ]
+    return await _collect_new_ids_raw(
+        client, new_params, max_ids=max_ids, use_slot=use_slot
     )
-    seen: set[str] = set()
-    ids: list[str] = []
-    total = 0
-    for part_ids, part_total in parts:
-        total += int(part_total or 0)
-        for aid in part_ids:
-            if aid in seen:
-                continue
-            seen.add(aid)
-            ids.append(aid)
-            if len(ids) >= max_ids:
-                return ids, total
-    return ids, total
 
 
 def _interleave_two(a: list[str], b: list[str]) -> list[str]:
@@ -418,7 +356,9 @@ async def collect_auto_ria_ids(
 
     client = AutoRiaClient()
     try:
-        base_params = await filters_to_search_params(client, filters, page=1, per_page=50)
+        base_params = await filters_to_search_params(
+            client, filters, page=1, per_page=AUTO_RIA_USED_SEARCH_PAGE_SIZE
+        )
     except ValueError as exc:
         raise AutoRiaError(str(exc)) from exc
 

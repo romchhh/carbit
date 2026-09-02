@@ -20,6 +20,7 @@ from app.services.search.concurrency import acquire_live_search_slot
 from app.services.search.multi_source import build_live_search_pool, SourceSearchStatus
 from app.services.search.pool_cache import (
     LIVE_POOL_SIZE,
+    LIVE_POOL_TTL_SECONDS,
     get_live_pool,
     set_live_pool,
     slice_pool,
@@ -27,7 +28,7 @@ from app.services.search.pool_cache import (
 
 logger = logging.getLogger(__name__)
 
-LIVE_SEARCH_CACHE_TTL_SECONDS = 120
+LIVE_SEARCH_CACHE_TTL_SECONDS = LIVE_POOL_TTL_SECONDS
 
 
 def _pool_market_total_for_cache(

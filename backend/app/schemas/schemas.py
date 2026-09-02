@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Any, Optional
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from typing import Any, Optional, Self
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 # Auth
@@ -363,6 +363,18 @@ class ListingOut(BaseModel):
     published_at: datetime
     refreshed_at: Optional[datetime] = None
     found_at: datetime
+    # ДТП / пригнано з США — з AUTO.RIA, OLX specs, Імперія API (див. listings/accident, usa_import).
+    had_accident: Optional[bool] = None
+    usa_import: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _populate_listing_flags(self) -> Self:
+        from app.services.listings.accident import extract_listing_accident_had
+        from app.services.listings.usa_import import extract_listing_usa_import
+
+        object.__setattr__(self, "had_accident", extract_listing_accident_had(self))
+        object.__setattr__(self, "usa_import", extract_listing_usa_import(self))
+        return self
 
     model_config = {"from_attributes": True}
 

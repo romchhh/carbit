@@ -41,7 +41,7 @@ async def _enrich_accident_descriptions(listings: list[ListingOut], filters: Sea
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
     payload = {
         "source": "reono",
-        "reono_v": "car-card-v3",
+        "reono_v": "car-card-v4",
         "filters": filters.model_dump(mode="json"),
         "page": page,
         "per_page": per_page,
@@ -60,6 +60,16 @@ def _needs_published_date_enrich(filters: SearchFilters) -> bool:
     )
 
 
+def _reono_needs_published_at(item: ListingOut) -> bool:
+    """Каталог REONO не дає дату — без деталі картка показує «щойно»."""
+    if (item.source or "").lower() != "reono":
+        return False
+    reono = (item.source_data or {}).get("reono")
+    if not isinstance(reono, dict):
+        return True
+    return not reono.get("published_at")
+
+
 async def _enrich_listing_details(
     listings: list[ListingOut],
     *,
@@ -72,7 +82,7 @@ async def _enrich_listing_details(
 
     async def enrich_one(item: ListingOut) -> ListingOut:
         needs_images = len(valid_reono_cdn_urls(item.images or [])) < 2
-        needs_dates = fetch_dates
+        needs_dates = fetch_dates or _reono_needs_published_at(item)
         needs_plate = resolve_listing_plate(item) is None
         if not item.url or (not needs_images and not needs_dates and not needs_plate):
             return item
@@ -91,7 +101,6 @@ async def _enrich_listing_details(
             update["images"] = detail.images
         if detail.published_at is not None:
             update["published_at"] = detail.published_at
-            update["found_at"] = detail.published_at
             nested["published_at"] = detail.published_at.isoformat()
             source_data_changed = True
         if detail.plate:

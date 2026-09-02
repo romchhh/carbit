@@ -33,6 +33,9 @@ SOURCE_POOL_CAP = 500
 TELEGRAM_POOL_CAP = 500
 TELEGRAM_MAX_SCAN = 4000
 AUTO_RIA_PAGE_SIZE = 50
+# Скільки AUTO.RIA ID тягнути в live-пул. 500 × countpage=50 = ~10 /auto/search
+# (і ще стільки ж /auto/new/search для «всі/нові»). Гідратуємо лише ~40, тож 100 ID досить.
+AUTO_RIA_ID_COLLECT_CAP = 100
 # Live pool збирає лише IDs — 25 с достатньо; 90 с тримало весь gather.
 AUTO_RIA_POOL_TIMEOUT_SECONDS = 25.0
 IMPERIYA_POOL_TIMEOUT_SECONDS = 25.0
@@ -62,11 +65,20 @@ _SOURCE_BLEND_ORDER = {
     "auto_ria": 7,
 }
 _DATE_SORT_KEYS = frozenset({"newest", "published_desc", "published_asc"})
-# Максимум AR IDs для model_post_filter гідрації (захист від 500 API-запитів).
-# AR IDs вже відсортовані від нових до старих, тому перші N найрелевантніші.
-AR_MODEL_POST_FILTER_CAP = 150
+# /auto/search дає лише ID; кожен /auto/info — окремий платний запит.
+# Гідратуємо вікно перших сторінок, не весь пул (було 150–200 на запит).
+AUTO_RIA_INFO_HYDRATE_CAP = 40
+AUTO_RIA_PRICE_SORT_HYDRATE_CAP = 60
+# Максимум AR IDs для model_post_filter гідрації (захист від сотень API-запитів).
+AR_MODEL_POST_FILTER_CAP = 40
 
 logger = logging.getLogger(__name__)
+
+
+def _auto_ria_hydrate_cap(sort_by: str) -> int:
+    if sort_by in _DATE_SORT_KEYS:
+        return AUTO_RIA_INFO_HYDRATE_CAP
+    return AUTO_RIA_PRICE_SORT_HYDRATE_CAP
 
 
 @dataclass(frozen=True)
@@ -291,8 +303,6 @@ def _merge_multi_source_page(
     per_page: int,
     sort_by: str,
 ) -> tuple[list[ListingOut], int, int]:
-    if sort_by in _DATE_SORT_KEYS:
-        return _fair_merge_slice(batches, page=page, per_page=per_page, sort_by=sort_by)
     return _sorted_merge_slice(batches, page=page, per_page=per_page, sort_by=sort_by)
 
 
@@ -398,8 +408,9 @@ async def _filter_auto_ria_ids_by_published(
 
     from app.services.search.pool_cache import _batch_hydrate_auto_ria, _batch_hydrate_new_auto_ria
 
-    used_ids = [aid for aid in auto_ria_ids if not aid.startswith("n:")]
-    new_ids = [aid[2:] for aid in auto_ria_ids if aid.startswith("n:")]
+    tagged = auto_ria_ids[:AUTO_RIA_INFO_HYDRATE_CAP]
+    used_ids = [aid for aid in tagged if not aid.startswith("n:")]
+    new_ids = [aid[2:] for aid in tagged if aid.startswith("n:")]
 
     hydrated_used, hydrated_new = await asyncio.gather(
         _batch_hydrate_auto_ria(used_ids),
@@ -407,7 +418,7 @@ async def _filter_auto_ria_ids_by_published(
     )
 
     filtered: list[str] = []
-    for aid in auto_ria_ids:
+    for aid in tagged:
         if aid.startswith("n:"):
             listing = hydrated_new.get(aid[2:])
         else:
@@ -771,47 +782,22 @@ async def _fetch_source_pool(
             cache_ttl_seconds=cache_ttl_seconds,
         )
 
-    # AUTO.RIA: countpage ≤ 50 — збираємо кілька сторінок
-    collected: list[ListingOut] = []
-    seen: set[str] = set()
-    total = 0
-    page = 1
-    max_pages = max((need + AUTO_RIA_PAGE_SIZE - 1) // AUTO_RIA_PAGE_SIZE, 1)
+    # AUTO.RIA: лише IDs + гідрація вікна (не 9×50 /auto/info на моніторинг).
+    from app.services.auto_ria.service import collect_auto_ria_ids
+    from app.services.search.pool_cache import hydrate_tagged_auto_ria_ids
 
-    while len(collected) < need and page <= max_pages:
-        chunk = await _search_single_source(
-            source,
-            filters,
-            page=page,
-            per_page=min(AUTO_RIA_PAGE_SIZE, need - len(collected)),
-            sort_by=sort_by,
-            use_cache=use_cache,
-            cache_ttl_seconds=cache_ttl_seconds,
-            db=db,
-            keyword_refresh=keyword_refresh,
-            olx_enrich_details=olx_enrich_details,
-        )
-        total = max(total, chunk.total)
-        if not chunk.items:
-            break
-        for item in chunk.items:
-            if item.id in seen:
-                continue
-            seen.add(item.id)
-            collected.append(item)
-            if len(collected) >= need:
-                break
-        if len(chunk.items) < chunk.per_page:
-            break
-        page += 1
-
-    pages = (total + need - 1) // need if total else 0
+    id_budget = min(need, _auto_ria_hydrate_cap(sort_by))
+    ids, total = await collect_auto_ria_ids(filters, max_ids=id_budget, sort_by=sort_by)
+    collected = await hydrate_tagged_auto_ria_ids(ids, limit=id_budget)
+    collected = sort_listings(collected, sort_by)
+    pages = (total + max(need, 1) - 1) // max(need, 1) if total else 0
     return PaginatedListings(
-        items=collected[:need],
+        items=collected,
         total=total,
         page=1,
         per_page=need,
         pages=pages,
+        market_total=total,
     )
 
 
@@ -949,11 +935,15 @@ async def search_listings_outcome(
 
         try:
             if has_published_filter:
-                raw = await _search_single_source(
+                pool_need = (
+                    _auto_ria_hydrate_cap(sort_by)
+                    if source == "auto_ria"
+                    else per_page * max(page, 1) * 3
+                )
+                raw = await _fetch_source_pool(
                     source,
                     filters,
-                    page=1,
-                    per_page=per_page * max(page, 1) * 3,
+                    need=pool_need,
                     sort_by=sort_by,
                     use_cache=use_cache,
                     cache_ttl_seconds=cache_ttl_seconds,
@@ -1519,10 +1509,8 @@ async def _build_globally_sorted_slots(
     )
 
     # Достатньо для перших сторінок; решту AR допишемо в кінці в API-порядку.
-    hydrate_cap = min(max(limit, 0), 200)
-    used_ids = [aid for aid in auto_ria_ids if not aid.startswith("n:")][:hydrate_cap]
-    new_budget = max(0, hydrate_cap - len(used_ids))
-    new_ids = [aid[2:] for aid in auto_ria_ids if aid.startswith("n:")][:new_budget]
+    hydrate_cap = min(max(limit, 0), _auto_ria_hydrate_cap(sort_by))
+    used_ids, new_ids = _split_ar_ids_for_hydrate(auto_ria_ids, hydrate_cap)
 
     try:
         hydrated_used, hydrated_new = await asyncio.wait_for(
@@ -1604,10 +1592,8 @@ async def _build_vin_aware_slots(
         _batch_hydrate_new_auto_ria,
     )
 
-    hydrate_cap = min(max(limit, 0), 200)
-    used_ids = [aid for aid in auto_ria_ids if not aid.startswith("n:")][:hydrate_cap]
-    new_budget = max(0, hydrate_cap - len(used_ids))
-    new_ids = [aid[2:] for aid in auto_ria_ids if aid.startswith("n:")][:new_budget]
+    hydrate_cap = min(max(limit, 0), _auto_ria_hydrate_cap(sort_by))
+    used_ids, new_ids = _split_ar_ids_for_hydrate(auto_ria_ids, hydrate_cap)
 
     try:
         hydrated_used, hydrated_new = await asyncio.wait_for(
@@ -1618,26 +1604,8 @@ async def _build_vin_aware_slots(
             timeout=45.0,
         )
     except (asyncio.TimeoutError, Exception):
-        logger.warning("VIN-aware pool: AR hydrate failed, falling back to fair blend")
-        olx_only = [i for i in ot_items if (i.source or "").lower() == "olx"]
-        imperiya_only = [i for i in ot_items if (i.source or "").lower() == "imperiya"]
-        udrive_only = [i for i in ot_items if (i.source or "").lower() == "udrive"]
-        car_market_only = [i for i in ot_items if (i.source or "").lower() == "car_market"]
-        lubeavto_only = [i for i in ot_items if (i.source or "").lower() == "lubeavto"]
-        reono_only = [i for i in ot_items if (i.source or "").lower() == "reono"]
-        tg_only = [i for i in ot_items if (i.source or "").lower() == "telegram"]
-        return _build_fair_blend_slots(
-            auto_ria_ids=auto_ria_ids,
-            olx_items=olx_only,
-            telegram_items=tg_only,
-            imperiya_items=imperiya_only,
-            udrive_items=udrive_only,
-            car_market_items=car_market_only,
-            lubeavto_items=lubeavto_only,
-            reono_items=reono_only,
-            limit=limit,
-            sort_by=sort_by,
-        )
+        logger.warning("VIN-aware pool: AR hydrate failed, sorting OT sources only")
+        hydrated_used, hydrated_new = {}, {}
 
     ar_items = list(hydrated_used.values()) + list(hydrated_new.values())
     merged = mark_duplicates_in_pool([*ot_items, *ar_items])
@@ -1666,6 +1634,14 @@ async def _build_vin_aware_slots(
             slots.append({"s": "r", "i": aid})
 
     return slots[:limit]
+
+
+def _split_ar_ids_for_hydrate(auto_ria_ids: list[str], limit: int) -> tuple[list[str], list[str]]:
+    """Перші `limit` ID в API-порядку (вживані + нові interleaved), не «спочатку всі used»."""
+    tagged = auto_ria_ids[: max(limit, 0)]
+    used_ids = [aid for aid in tagged if not aid.startswith("n:")]
+    new_ids = [aid[2:] for aid in tagged if aid.startswith("n:")]
+    return used_ids, new_ids
 
 
 def _make_ar_slots(auto_ria_ids: list[str]) -> list[dict]:
@@ -1850,8 +1826,9 @@ async def build_live_search_pool(
 
     async def run_auto_ria():
         try:
+            ar_id_budget = min(max_ids, AUTO_RIA_ID_COLLECT_CAP)
             return await asyncio.wait_for(
-                collect_auto_ria_ids(filters, max_ids=max_ids, sort_by=sort_by),
+                collect_auto_ria_ids(filters, max_ids=ar_id_budget, sort_by=sort_by),
                 timeout=AUTO_RIA_POOL_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
@@ -2191,27 +2168,19 @@ async def build_live_search_pool(
     udrive_sorted = [item for item in ot_merged if (item.source or "").lower() == "udrive"]
     telegram_sorted = [item for item in ot_merged if (item.source or "").lower() == "telegram"]
 
-    if auto_ria_ids and (olx_sorted or car_market_sorted or lubeavto_sorted or reono_sorted or imperiya_sorted or udrive_sorted or telegram_sorted) and sort_by not in _DATE_SORT_KEYS:
-        # VIN-aware гідрація потрібна лише для сортувань за ціною/пробігом,
-        # де треба знати точні значення AR-оголошень для глобального rank.
-        # Для «newest»/«published_desc» — AR API вже повертає IDs у порядку дати;
-        # fair blend зберігає цей порядок і уникає 200 AR API-запитів на кожен пошук.
+    if auto_ria_ids and (
+        olx_sorted
+        or car_market_sorted
+        or lubeavto_sorted
+        or reono_sorted
+        or imperiya_sorted
+        or udrive_sorted
+        or telegram_sorted
+    ):
+        # Глобальне сортування між джерелами (дата, ціна, пробіг) після VIN-dedup.
         slots = await _build_vin_aware_slots(
             auto_ria_ids=auto_ria_ids,
             ot_items=ot_merged,
-            limit=POOL_LIMIT,
-            sort_by=sort_by,
-        )
-    elif auto_ria_ids and (olx_sorted or car_market_sorted or lubeavto_sorted or reono_sorted or imperiya_sorted or udrive_sorted or telegram_sorted) and sort_by in _DATE_SORT_KEYS:
-        slots = _build_fair_blend_slots(
-            auto_ria_ids=auto_ria_ids,
-            olx_items=olx_sorted,
-            telegram_items=telegram_sorted,
-            imperiya_items=imperiya_sorted,
-            udrive_items=udrive_sorted,
-            car_market_items=car_market_sorted,
-            lubeavto_items=lubeavto_sorted,
-            reono_items=reono_sorted,
             limit=POOL_LIMIT,
             sort_by=sort_by,
         )
@@ -2228,18 +2197,27 @@ async def build_live_search_pool(
             filters=filters,
         )
     else:
-        slots = _build_interleaved_slots(
-            auto_ria_ids=[],
-            olx_items=olx_sorted,
-            telegram_items=telegram_sorted,
-            imperiya_items=imperiya_sorted,
-            udrive_items=udrive_sorted,
-            car_market_items=car_market_sorted,
-            lubeavto_items=lubeavto_sorted,
-            reono_items=reono_sorted,
-            limit=POOL_LIMIT,
-            sort_by=sort_by,
-        )
+        if sort_by in _DATE_SORT_KEYS:
+            from app.services.listings.duplicates import dedupe_telegram_posts_in_pool
+
+            merged = dedupe_telegram_posts_in_pool(ot_merged)
+            slots = [
+                _listing_to_slot(item)
+                for item in sort_listings(merged, sort_by)[:POOL_LIMIT]
+            ]
+        else:
+            slots = _build_interleaved_slots(
+                auto_ria_ids=[],
+                olx_items=olx_sorted,
+                telegram_items=telegram_sorted,
+                imperiya_items=imperiya_sorted,
+                udrive_items=udrive_sorted,
+                car_market_items=car_market_sorted,
+                lubeavto_items=lubeavto_sorted,
+                reono_items=reono_sorted,
+                limit=POOL_LIMIT,
+                sort_by=sort_by,
+            )
 
     nav_total = len(slots)
     if brand_model_filter:

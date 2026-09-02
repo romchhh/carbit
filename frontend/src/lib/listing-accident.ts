@@ -13,7 +13,14 @@ const ACCIDENT_NONE =
 
 /** true — був у ДТП, false — не був, null — невідомо. */
 export function resolveListingAccidentHad(listing: Listing): boolean | null {
+  if (listing.had_accident === true) return true;
+  if (listing.had_accident === false) return false;
+
   const sd = asRecord(listing.source_data);
+  const flags = asRecord(sd.condition_flags);
+  if (flags.had_accident === true) return true;
+  if (flags.not_damaged === true) return false;
+
   const imperiya = asRecord(sd.imperiya);
   if (typeof imperiya.wasAccident === "boolean") return imperiya.wasAccident;
   const condition = asRecord(imperiya.condition);
@@ -36,9 +43,7 @@ export function resolveListingAccidentHad(listing: Listing): boolean | null {
     if (/(був|після|after|дтп|accident)/i.test(damageName)) return true;
   }
 
-  const flags = asRecord(sd.condition_flags);
   if (flags.damaged === true) return true;
-  if (flags.not_damaged === true) return false;
   if (typeof flags.accident === "boolean") return flags.accident;
   if (typeof flags.had_accident === "boolean") return flags.had_accident;
   if (typeof flags.dtp === "boolean") return flags.dtp;

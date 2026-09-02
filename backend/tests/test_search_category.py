@@ -280,6 +280,32 @@ class AutoRiaNewSearchEndpointTests(unittest.IsolatedAsyncioTestCase):
         client.get_new_info.assert_called()
         self.assertEqual(len(body.items), 1)
 
+    async def test_new_search_does_not_fan_out_successor_models(self):
+        from app.services.auto_ria.service import collect_auto_ria_ids
+
+        with patch("app.services.auto_ria.service.AutoRiaClient") as client_cls:
+            client = client_cls.return_value
+            client.search = AsyncMock(
+                return_value={"result": {"search_result": {"count": 0, "ids": []}}}
+            )
+            client.search_new = AsyncMock(return_value={"count": 2, "ids": [1, 2]})
+            with patch(
+                "app.services.auto_ria.service.filters_to_search_params",
+                new_callable=AsyncMock,
+                return_value={"marka_id[0]": 9, "model_id[0]": 111},
+            ), patch(
+                "app.services.auto_ria.catalog.resolve_new_search_model_ids",
+                new_callable=AsyncMock,
+                return_value=[111, 222, 333],
+            ):
+                ids, _total = await collect_auto_ria_ids(
+                    SearchFilters(category="new", brand="Audi", model="A4"),
+                    max_ids=20,
+                )
+
+        self.assertEqual(client.search_new.call_count, 1)
+        self.assertEqual(ids, ["n:1", "n:2"])
+
 
 class NewSearchIdsParseTests(unittest.TestCase):
     def test_prefers_ids_over_autos(self):

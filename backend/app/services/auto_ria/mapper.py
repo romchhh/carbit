@@ -52,7 +52,7 @@ async def filters_to_search_params(
     params: dict[str, Any] = {
         "category_id": DEFAULT_CATEGORY_ID,
         "page": max(page - 1, 0),
-        "countpage": min(max(per_page, 1), 50),
+        "countpage": min(max(per_page, 1), 100),
         "status_id": 0,
         "searchType": 4,  # вживані за замовчуванням; для "all" collect_auto_ria_ids додає окремий searchType=1
     }

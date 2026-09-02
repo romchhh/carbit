@@ -118,7 +118,6 @@ export function usePreviewSearch(
   const displayPoolRef = useRef<Listing[]>([]);
   const displayCountRef = useRef(0);
   const poolApiSortRef = useRef<SortOption>("newest");
-  const hydratingPoolRef = useRef(false);
   /**
    * Остання завантажена сторінка API.
    * Використовуємо для nextPage замість розрахунку по розміру пулу,
@@ -253,59 +252,6 @@ export function usePreviewSearch(
     });
   }, []);
 
-  /** Фонове дозавантаження — тихо наповнює fullPool без зміни displayPool. */
-  const hydrateFullPool = useCallback(
-    async (
-      gen: number,
-      nextFilters: SearchFilterState,
-      nextFreshness: SearchFreshness,
-      targetTotal: number,
-    ) => {
-      if (hydratingPoolRef.current || targetTotal <= 0) return;
-      if (fullPoolRef.current.length >= targetTotal) return;
-
-      hydratingPoolRef.current = true;
-      const apiSort = poolApiSortRef.current;
-      try {
-        let apiPage = lastApiPageRef.current + 1;
-        const maxApiPage = Math.max(1, Math.ceil(targetTotal / SEARCH_FIRST_BATCH));
-        let emptyPages = 0;
-
-        while (
-          gen === searchGen.current &&
-          fullPoolRef.current.length < targetTotal &&
-          apiPage <= maxApiPage &&
-          emptyPages < 2
-        ) {
-          const prevLen = fullPoolRef.current.length;
-          const data = await searchSlice(nextFilters, apiSort, nextFreshness, apiPage);
-          if (gen !== searchGen.current) return;
-          fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, data.items);
-          lastApiPageRef.current = Math.max(lastApiPageRef.current, apiPage);
-          setPoolSize(fullPoolRef.current.length);
-          setLoadedApiPage(lastApiPageRef.current);
-          apiPage += 1;
-          // Зупиняємось тільки якщо API дійсно не повернув нічого (не плутаємо з дедупом)
-          if (data.items.length === 0) {
-            emptyPages += 1;
-          } else {
-            emptyPages = 0;
-          }
-          if (fullPoolRef.current.length === prevLen && data.items.length < SEARCH_FIRST_BATCH) {
-            // Дедуп + мало items: не прогрес, але продовжимо ще 1 сторінку
-            if (data.items.length === 0) break;
-          }
-        }
-        // НЕ оновлюємо display — щоб фон не пересортував показані картки
-      } catch {
-        /* фонове дозавантаження — не ламаємо UI */
-      } finally {
-        hydratingPoolRef.current = false;
-      }
-    },
-    [searchSlice],
-  );
-
   const applyRecentCache = useCallback(
     (
       nextFilters: SearchFilterState,
@@ -436,24 +382,6 @@ export function usePreviewSearch(
           setSearching(false);
         });
         persistSearchCache(nextFilters, nextFreshness, nextSort, first);
-
-        if (!guestMode && first.pages > 1) {
-          const second = await searchSlice(nextFilters, nextSort, nextFreshness, 2, signal);
-          if (gen !== searchGen.current) return;
-          lastApiPageRef.current = 2;
-          // Дописуємо стор. 2 у пул — без розширення display (лише preload).
-          fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, second.items);
-          startTransition(() => {
-            setPoolSize(fullPoolRef.current.length);
-            setLoadedApiPage(2);
-            syncMeta(second, nextFilters, nextSort, nextFreshness);
-          });
-          persistSearchCache(nextFilters, nextFreshness, nextSort, second);
-        }
-
-        if (!guestMode) {
-          void hydrateFullPool(gen, nextFilters, nextFreshness, first.total);
-        }
       } catch (err) {
         // AbortError — новий пошук вже запущений; мовчки ігноруємо.
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -488,7 +416,7 @@ export function usePreviewSearch(
         }
       }
     },
-    [applyRecentCache, guestMode, hydrateFullPool, persistSearchCache, scrollToProgress, searchSlice],
+    [applyRecentCache, persistSearchCache, scrollToProgress, searchSlice],
   );
 
   const fetchMoreFromServer = useCallback(

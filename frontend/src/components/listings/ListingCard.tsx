@@ -19,6 +19,10 @@ import {
 import { SourceBadge } from "@/components/listings/SourceBadge";
 import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
+import { AccidentBadge } from "@/components/listings/AccidentBadge";
+import { UsaImportBadge } from "@/components/listings/UsaImportBadge";
+import { resolveListingAccidentHad } from "@/lib/listing-accident";
+import { resolveListingUsaImport } from "@/lib/listing-usa-import";
 import { listingIsNewCar } from "@/lib/listing-source";
 import { useListingVinCheck } from "@/hooks/useVinCheckCache";
 import { useListingPhotoHydration } from "@/hooks/useListingPhotoHydration";
@@ -88,6 +92,8 @@ export function ListingCard({
   const hasMirrorSources = (listing.alternate_sources?.length ?? 0) > 0;
   const isNewForMonitor = Boolean(listing.is_new);
   const isNewCar = listingIsNewCar(listing);
+  const hadAccident = resolveListingAccidentHad(listing) === true;
+  const isUsaImport = resolveListingUsaImport(listing);
   const plateLabel = listing.plate?.trim() || "";
   const [photoIndex, setPhotoIndex] = useState(0);
   const photoCount = images.length;
@@ -164,6 +170,8 @@ export function ListingCard({
                 Новий
               </span>
             )}
+            {hadAccident && <AccidentBadge variant="overlay" />}
+            {isUsaImport && <UsaImportBadge variant="overlay" />}
           </div>
           <div className="flex items-center gap-1.5">
             <ListingShareButton listing={listing} variant="overlay" />
@@ -314,6 +322,12 @@ export function ListingCard({
                 Новий
               </span>
             )}
+              {hadAccident && (
+                <AccidentBadge variant="label" className="hidden sm:inline-flex" />
+              )}
+              {isUsaImport && (
+                <UsaImportBadge variant="label" className="hidden sm:inline-flex" />
+              )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[16px] sm:line-clamp-2 lg:text-[18px]">
                 {listing.title}
               </h3>
@@ -339,6 +353,8 @@ export function ListingCard({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-3 lg:mt-4 lg:gap-2">
+          {hadAccident && <AccidentBadge />}
+          {isUsaImport && <UsaImportBadge />}
           {listing.year > 0 && (
             <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
               {listing.year}

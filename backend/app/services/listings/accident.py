@@ -6,6 +6,8 @@ import re
 
 from app.core.text import norm_text
 from app.schemas.schemas import ListingOut, SearchFilters
+from app.services.listings.haystack import listing_search_haystack
+from app.services.listings.olx_specs import olx_spec_condition_flags
 
 _CYR_BOUNDARY_START = r"(?:^|(?<![\wа-яіїєґ]))"
 _CYR_BOUNDARY_END = r"(?:$|(?![\wа-яіїєґ]))"
@@ -58,6 +60,8 @@ def search_needs_olx_detail_enrich(filters: SearchFilters | None) -> bool:
 def _imperiya_was_accident(imperiya: dict) -> bool | None:
     if imperiya.get("wasAccident") is not None:
         return bool(imperiya.get("wasAccident"))
+    if imperiya.get("was_accident") is not None:
+        return bool(imperiya.get("was_accident"))
     condition = imperiya.get("condition")
     if isinstance(condition, dict) and condition.get("wasAccident") is not None:
         return bool(condition.get("wasAccident"))
@@ -130,18 +134,7 @@ def _damage_name_to_had(damage_name: str) -> bool | None:
 
 
 def _listing_haystack(item: ListingOut) -> str:
-    return norm_text(
-        " ".join(
-            part
-            for part in (
-                item.title,
-                item.description or "",
-                item.brand,
-                item.model,
-            )
-            if part
-        )
-    )
+    return listing_search_haystack(item)
 
 
 def _text_had_from_haystack(haystack: str) -> bool | None:
@@ -169,6 +162,13 @@ def extract_listing_accident_had(item: ListingOut) -> bool | None:
     flags_had = _condition_flags_had(sd)
     if flags_had is not None:
         return flags_had
+
+    specs = sd.get("specs") if isinstance(sd.get("specs"), dict) else {}
+    olx_flags = olx_spec_condition_flags(specs)
+    if olx_flags.get("had_accident"):
+        return True
+    if olx_flags.get("not_damaged"):
+        return False
 
     imperiya = sd.get("imperiya")
     if isinstance(imperiya, dict):

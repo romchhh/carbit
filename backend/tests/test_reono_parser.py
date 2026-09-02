@@ -173,6 +173,20 @@ def test_parse_reono_updated_text():
     assert parsed == datetime(2026, 8, 19, 12, 0, tzinfo=KYIV_TZ)
 
 
+def test_parse_reono_published_text():
+    parsed = parse_reono_updated_text("Опубліковано 23.08.2025")
+    assert parsed == datetime(2025, 8, 23, 12, 0, tzinfo=KYIV_TZ)
+
+
+def test_car_to_listing_without_published_at_uses_placeholder():
+    from app.services.reono.dates import REONO_UNKNOWN_PUBLISHED_AT
+
+    cars, _ = parse_catalog_page(SAMPLE_CARD)
+    listing = car_to_listing(cars[0])
+    assert listing.published_at == REONO_UNKNOWN_PUBLISHED_AT
+    assert "published_at" not in (listing.source_data.get("reono") or {})
+
+
 def test_parse_detail_published_at_from_mvs_block():
     html = """
     <div class="characteristecs-car-main__body__info__mvs__date">
@@ -203,3 +217,39 @@ def test_car_to_listing_uses_parsed_published_at():
     listing = car_to_listing(car)
     assert listing.published_at == car.published_at
     assert listing.source_data["reono"]["published_at"] == car.published_at.isoformat()
+
+
+def test_reono_needs_published_at_when_missing():
+    from app.schemas.schemas import ListingOut
+    from app.services.reono.service import _reono_needs_published_at
+
+    listing = ListingOut(
+        id="reono_1",
+        source="reono",
+        title="Test",
+        brand="BMW",
+        model="X5",
+        year=2020,
+        price=10000,
+        currency="USD",
+        mileage=50000,
+        fuel="Бензин",
+        transmission="Автомат",
+        region="Київ",
+        description=None,
+        images=[],
+        url="https://reono.ua/test-1",
+        seller_type="private",
+        vin=None,
+        source_data={"reono": {"car_id": 1}},
+        price_history=[],
+        is_duplicate=False,
+        published_at=datetime(1970, 1, 1, 12, 0, tzinfo=KYIV_TZ),
+        found_at=datetime(2026, 9, 2, 12, 0, tzinfo=KYIV_TZ),
+    )
+    assert _reono_needs_published_at(listing) is True
+
+    with_date = listing.model_copy(
+        update={"source_data": {"reono": {"car_id": 1, "published_at": "2025-08-23T12:00:00+03:00"}}}
+    )
+    assert _reono_needs_published_at(with_date) is False

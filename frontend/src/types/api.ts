@@ -115,6 +115,10 @@ export interface Listing {
   published_at: string;
   refreshed_at?: string | null;
   found_at: string;
+  /** Був у ДТП (AUTO.RIA damageId, OLX specs, Імперія API). */
+  had_accident?: boolean | null;
+  /** Пригнано з США (OLX specs, AUTO.RIA, текст). */
+  usa_import?: boolean | null;
 }
 
 export interface SourceStatus {
