@@ -1,12 +1,14 @@
 name: carbit
 
+x-python-build: &python-build
+  context: .
+  dockerfile: docker/python/Dockerfile
+
 x-python-slim: &python-slim
   image: carbit-python:latest
   build:
-    context: .
-    dockerfile: docker/python/Dockerfile
-    args:
-      INSTALL_PLAYWRIGHT: "0"
+    <<: *python-build
+    target: runtime-slim
 
 services:
   # Опційно: docker compose --profile cache up -d
@@ -43,11 +45,8 @@ services:
   backend:
     image: carbit-backend:latest
     build:
-      context: .
-      dockerfile: docker/python/Dockerfile
-      args:
-        # Chromium лише тут (VIN-аукціон). Без --with-deps — менше місця на диску.
-        INSTALL_PLAYWRIGHT: "1"
+      <<: *python-build
+      target: runtime-playwright
     container_name: carbit-backend
     restart: unless-stopped
     env_file:

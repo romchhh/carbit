@@ -206,6 +206,26 @@ cd carbit
 ./scripts/docker-deploy.sh
 ```
 
+### Швидкий rebuild (без повторного pip/npm)
+
+BuildKit кешує шари. **Залежності не качаються знову**, якщо не змінювались `requirements.txt` / `package-lock.json`:
+
+| Що змінилось | Команда |
+|--------------|---------|
+| Тільки Python-код | `docker compose build backend worker bot telegram-worker` |
+| Тільки frontend | `docker compose build frontend` |
+| `requirements.txt` | `docker compose build backend worker bot telegram-worker` (pip-шар перезбереться один раз) |
+| `package-lock.json` | `docker compose build frontend` |
+
+Worker/bot **не** тягнуть Chromium — їхній build швидший за backend.
+
+Увімкніть BuildKit (зазвичай уже є в Docker 24+):
+
+```bash
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+```
+
 Або вручну:
 
 ```bash

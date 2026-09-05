@@ -30,3 +30,20 @@ database/*.db-*
 .DS_Store
 *.log
 terminals
+
+# Tests / dev — не потрібні в runtime-образі
+backend/tests
+bot/tests
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+coverage
+htmlcov
+.agent
+agent-transcripts
+
+# Великі/локальні артефакти
+media/
+cartest.py
+cartest2.py
+cartest3.py

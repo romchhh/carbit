@@ -3,7 +3,8 @@
 FROM node:20-alpine AS deps
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 FROM node:20-alpine AS builder
 WORKDIR /app
