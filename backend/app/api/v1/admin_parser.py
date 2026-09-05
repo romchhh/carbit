@@ -167,12 +167,15 @@ class MonitorApiEstimateOut(BaseModel):
 
 class AdminSearchDetailOut(BaseModel):
     search: AdminActiveSearchOut
-    listings: list[AdminSearchListingOut]
+    listings: list["AdminSearchListingOut"]
     telegram_sent_total: int
     telegram_pending: int
     api_usage_7d: MonitorApiUsageOut | None = None
     api_usage_30d: MonitorApiUsageOut | None = None
     api_estimate_daily: MonitorApiEstimateOut | None = None
+
+
+class AdminSearchListingOut(BaseModel):
     listing_id: str
     title: str
     brand: str
@@ -192,7 +195,7 @@ class AdminSearchDetailOut(BaseModel):
     telegram_issue: str | None = None
 
 
-class AdminSearchListingOut(BaseModel):
+def _filters_summary(filters: dict | None) -> tuple[str | None, str | None, str | None, list[str] | None]:
     data = filters if isinstance(filters, dict) else {}
     brand = (data.get("brand") or "").strip() or None
     model = (data.get("model") or "").strip() or None
