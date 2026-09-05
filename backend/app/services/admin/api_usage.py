@@ -64,6 +64,9 @@ async def record_api_request(
             from app.services.auto_ria.quota_alerts import schedule_auto_ria_quota_check
 
             schedule_auto_ria_quota_check()
+        from app.services.admin.monitor_api_usage import record_monitor_api_request
+
+        await record_monitor_api_request(source, op, success=success, count=amount)
     except Exception:
         logger.warning("api_usage record failed source=%s op=%s", source, op, exc_info=True)
 

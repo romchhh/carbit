@@ -69,6 +69,59 @@ function formatTelegramIssue(issue: string | null | undefined) {
   return TELEGRAM_ISSUE_LABELS[issue] ?? issue;
 }
 
+function formatApiCount(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "0";
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return String(Math.round(value * 10) / 10);
+}
+
+function MonitorApiUsagePanel({
+  title,
+  usage,
+}: {
+  title: string;
+  usage: import("@/lib/admin-api").MonitorApiUsage;
+}) {
+  const sourceEntries = Object.entries(usage.sources || {});
+  return (
+    <div className="rounded-xl border border-border/70 bg-white p-3">
+      <div className="mb-2 text-[12px] font-bold text-ink">{title}</div>
+      <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+        <div>
+          <div className="text-muted">API всього</div>
+          <div className="font-bold text-ink">{formatApiCount(usage.api_total)}</div>
+        </div>
+        <div>
+          <div className="text-muted">Середньо / день</div>
+          <div className="font-bold text-ink">{formatApiCount(usage.avg_api_per_day)}</div>
+        </div>
+        <div>
+          <div className="text-muted">Перевірок</div>
+          <div className="font-bold text-ink">{usage.cycles}</div>
+        </div>
+        <div>
+          <div className="text-muted">Live / кеш / pool</div>
+          <div className="font-bold text-ink">
+            {usage.live_fetches} / {usage.cache_hits} / {usage.pool_hits}
+          </div>
+        </div>
+      </div>
+      {sourceEntries.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {sourceEntries.map(([source, row]) => (
+            <span
+              key={source}
+              className="rounded bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-ink"
+            >
+              {SOURCE_LABELS[source] ?? source}: {formatApiCount(row.total)}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminParsingPage() {
   const [stats, setStats] = useState<AdminParserStats | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
@@ -378,6 +431,22 @@ export default function AdminParsingPage() {
         </div>
       )}
 
+      {stats?.monitor_api_estimate && (
+        <div className="mb-5 rounded-xl border border-amber-200/80 bg-amber-50/60 px-4 py-3 text-[12px] text-ink">
+          <div className="font-semibold">Оцінка API на 1 моніторинг / добу</div>
+          <p className="mt-1 text-muted">
+            Інтервал {Math.round(stats.monitor_api_estimate.interval_seconds / 60)} хв →{" "}
+            {stats.monitor_api_estimate.cycles_per_day} перевірок. Один live-fetch (AUTO.RIA + OLX): ~
+            {stats.monitor_api_estimate.api_per_live_fetch.total} запитів. Орієнтовно{" "}
+            <strong className="text-ink">
+              ~{stats.monitor_api_estimate.estimated_api_per_day.toLocaleString("uk-UA")} API/добу
+            </strong>{" "}
+            без кешу та dedupe груп.
+          </p>
+          <p className="mt-1 text-[11px] text-muted">{stats.monitor_api_estimate.note}</p>
+        </div>
+      )}
+
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-6">
         {[
           {
@@ -487,6 +556,9 @@ export default function AdminParsingPage() {
                       <span className="rounded bg-emerald/15 px-1.5 py-0.5 font-medium text-emerald-dark">
                         TG: {s.telegram_sent_count}
                       </span>
+                      <span className="rounded bg-sky-100 px-1.5 py-0.5 font-medium text-sky-800">
+                        API: {formatApiCount(s.api_today)} / {formatApiCount(s.api_7d)} (7д)
+                      </span>
                     </div>
                     <div className="mt-1 text-[10px] text-muted">
                       {s.user_name}
@@ -572,6 +644,23 @@ export default function AdminParsingPage() {
                           <p className="mt-1 text-[11px] text-muted">
                             Остання перевірка: {formatKyivDateTime(searchDetail.search.last_checked_at)}
                           </p>
+                        )}
+                        {(searchDetail.api_usage_7d || searchDetail.api_estimate_daily) && (
+                          <div className="mt-3 space-y-2">
+                            {searchDetail.api_estimate_daily && (
+                              <p className="text-[11px] text-muted">
+                                Оцінка: ~
+                                {searchDetail.api_estimate_daily.estimated_api_per_day.toLocaleString("uk-UA")}{" "}
+                                API/добу (live-fetch ~{searchDetail.api_estimate_daily.api_per_live_fetch.total})
+                              </p>
+                            )}
+                            {searchDetail.api_usage_7d && (
+                              <MonitorApiUsagePanel title="Фактично за 7 днів" usage={searchDetail.api_usage_7d} />
+                            )}
+                            {searchDetail.api_usage_30d && (
+                              <MonitorApiUsagePanel title="Фактично за 30 днів" usage={searchDetail.api_usage_30d} />
+                            )}
+                          </div>
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-2">

@@ -362,6 +362,35 @@ export interface AdminParserStats {
   total_telegram_sent: number;
   last_run: AdminParseRun | null;
   settings: AdminParserSettings;
+  monitor_api_estimate?: MonitorApiEstimate | null;
+}
+
+export interface MonitorApiUsage {
+  api_total: number;
+  avg_api_per_day: number;
+  avg_cycles_per_day: number;
+  cycles: number;
+  cache_hits: number;
+  pool_hits: number;
+  live_fetches: number;
+  listings_found: number;
+  listings_new: number;
+  sources: Record<
+    string,
+    { total: number; ok: number; err: number; ops: Record<string, number> }
+  >;
+  daily_chart: Array<{ label: string; api_total: number; cycles: number; listings_new: number }>;
+  days_window: number;
+  generated_at: string;
+}
+
+export interface MonitorApiEstimate {
+  interval_seconds: number;
+  cycles_per_day: number;
+  estimated_live_fetches_per_day: number;
+  estimated_api_per_day: number;
+  api_per_live_fetch: { per_source: Record<string, Record<string, number>>; total: number };
+  note: string;
 }
 
 export interface AdminParserNotification {
@@ -404,6 +433,8 @@ export interface AdminActiveSearch {
   telegram_sent_count: number;
   last_checked_at: string | null;
   created_at: string;
+  api_today?: number;
+  api_7d?: number;
 }
 
 export interface AdminSearchListingRow {
@@ -431,6 +462,9 @@ export interface AdminSearchDetail {
   listings: AdminSearchListingRow[];
   telegram_sent_total: number;
   telegram_pending: number;
+  api_usage_7d?: MonitorApiUsage | null;
+  api_usage_30d?: MonitorApiUsage | null;
+  api_estimate_daily?: MonitorApiEstimate | null;
 }
 
 export interface AdminTelegramChannel {

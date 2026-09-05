@@ -10,6 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing, ParseRun, ParseRunStatus, SearchQuery, User
 from app.schemas.schemas import ListingOut
+from app.services.admin.monitor_api_usage import (
+    record_monitor_cycle,
+    reset_monitor_search_ids,
+    set_monitor_search_ids,
+)
 from app.services.listings.serialize import listing_to_out
 from app.services.listings.upsert import upsert_listing
 from app.services.parser.filter_groups import FilterGroup, filters_group_key, group_searches, parse_search_filters
@@ -151,6 +156,9 @@ async def _process_group(
         if search and search.is_active:
             searches.append(search)
 
+    monitor_ids = [search.id for search in searches]
+    monitor_ctx = set_monitor_search_ids(monitor_ids)
+
     parse_sources = _sources_for_group(group, searches, sources_only=sources_only)
     upserted: list[UpsertedListing] = []
     tg_found_after = (
@@ -205,6 +213,12 @@ async def _process_group(
                     notifications = await _deliver_monitor_telegram_for_searches(
                         db, searches, notifications, log
                     )
+                    await record_monitor_cycle(
+                        monitor_ids,
+                        event="cache_hit",
+                        listings_found=len(upserted),
+                        listings_new=new_total,
+                    )
                     return len(upserted), new_total, notifications
 
         # Live-pool переважно AUTO.RIA — для інших джерел завжди live API.
@@ -241,6 +255,12 @@ async def _process_group(
             notifications = await _deliver_monitor_telegram_for_searches(
                 db, searches, notifications, log
             )
+            await record_monitor_cycle(
+                monitor_ids,
+                event="pool_hit",
+                listings_found=len(pooled),
+                listings_new=new_total,
+            )
             return len(pooled), new_total, notifications
 
         if tg_found_after is not None:
@@ -260,7 +280,10 @@ async def _process_group(
         )
     except Exception as exc:
         log.append(f"  ✗ Помилка пошуку: {exc}")
+        await record_monitor_cycle(monitor_ids, event="error")
         return 0, 0, 0
+    finally:
+        reset_monitor_search_ids(monitor_ctx)
 
     log.append(f"  · Джерела: {', '.join(parse_sources)} · Telegram ≤ {max_hours_int} год")
 
@@ -335,6 +358,12 @@ async def _process_group(
     mark_searches_checked(searches)
     notifications = await _deliver_monitor_telegram_for_searches(
         db, searches, notifications, log
+    )
+    await record_monitor_cycle(
+        monitor_ids,
+        event="live_api",
+        listings_found=found,
+        listings_new=new_total,
     )
     return found, new_total, notifications
 

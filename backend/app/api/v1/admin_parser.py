@@ -93,6 +93,7 @@ class ParserStatsOut(BaseModel):
     total_telegram_sent: int
     last_run: ParseRunOut | None
     settings: ParserSettingsOut
+    monitor_api_estimate: MonitorApiEstimateOut | None = None
 
 
 class ParserNotificationOut(BaseModel):
@@ -135,9 +136,43 @@ class AdminActiveSearchOut(BaseModel):
     telegram_sent_count: int
     last_checked_at: datetime | None
     created_at: datetime
+    api_today: float = 0
+    api_7d: float = 0
 
 
-class AdminSearchListingOut(BaseModel):
+class MonitorApiUsageOut(BaseModel):
+    api_total: float
+    avg_api_per_day: float
+    avg_cycles_per_day: float
+    cycles: int
+    cache_hits: int
+    pool_hits: int
+    live_fetches: int
+    listings_found: int
+    listings_new: int
+    sources: dict
+    daily_chart: list[dict]
+    days_window: int
+    generated_at: str
+
+
+class MonitorApiEstimateOut(BaseModel):
+    interval_seconds: int
+    cycles_per_day: int
+    estimated_live_fetches_per_day: int
+    estimated_api_per_day: int
+    api_per_live_fetch: dict
+    note: str
+
+
+class AdminSearchDetailOut(BaseModel):
+    search: AdminActiveSearchOut
+    listings: list[AdminSearchListingOut]
+    telegram_sent_total: int
+    telegram_pending: int
+    api_usage_7d: MonitorApiUsageOut | None = None
+    api_usage_30d: MonitorApiUsageOut | None = None
+    api_estimate_daily: MonitorApiEstimateOut | None = None
     listing_id: str
     title: str
     brand: str
@@ -157,14 +192,7 @@ class AdminSearchListingOut(BaseModel):
     telegram_issue: str | None = None
 
 
-class AdminSearchDetailOut(BaseModel):
-    search: AdminActiveSearchOut
-    listings: list[AdminSearchListingOut]
-    telegram_sent_total: int
-    telegram_pending: int
-
-
-def _filters_summary(filters: dict | None) -> tuple[str | None, str | None, str | None, list[str] | None]:
+class AdminSearchListingOut(BaseModel):
     data = filters if isinstance(filters, dict) else {}
     brand = (data.get("brand") or "").strip() or None
     model = (data.get("model") or "").strip() or None
@@ -216,7 +244,20 @@ def _telegram_issue_hint(
     return "send_failed"
 
 
-async def _active_search_out(db: AsyncSession, search: SearchQuery, user: User) -> AdminActiveSearchOut:
+async def _monitor_api_totals_batch(search_ids: list[str], *, days: int = 1) -> dict[str, float]:
+    from app.services.admin.monitor_api_usage import batch_monitor_api_totals
+
+    return await batch_monitor_api_totals(search_ids, days=days)
+
+
+async def _active_search_out(
+    db: AsyncSession,
+    search: SearchQuery,
+    user: User,
+    *,
+    api_today: float = 0,
+    api_7d: float = 0,
+) -> AdminActiveSearchOut:
     brand, model, region, sources = _filters_summary(search.filters)
     return AdminActiveSearchOut(
         id=search.id,
@@ -237,6 +278,8 @@ async def _active_search_out(db: AsyncSession, search: SearchQuery, user: User) 
         telegram_sent_count=await _search_telegram_sent_count(db, search.id),
         last_checked_at=search.last_checked_at,
         created_at=search.created_at,
+        api_today=api_today,
+        api_7d=api_7d,
     )
 
 
@@ -267,6 +310,13 @@ async def parser_stats(db: AsyncSession = Depends(get_db), _admin=Depends(get_cu
     )
     last = await db.scalar(select(ParseRun).order_by(desc(ParseRun.started_at)).limit(1))
     settings = await get_parser_settings()
+    from app.services.admin.monitor_api_usage import estimate_monitor_daily_api
+
+    estimate_raw = estimate_monitor_daily_api(
+        ["auto_ria", "olx"],
+        category="all",
+        interval_seconds=int(settings.get("interval_seconds") or 900),
+    )
     return ParserStatsOut(
         active_searches=active or 0,
         total_search_listings=total_links or 0,
@@ -274,6 +324,7 @@ async def parser_stats(db: AsyncSession = Depends(get_db), _admin=Depends(get_cu
         total_telegram_sent=total_telegram or 0,
         last_run=_run_out(last) if last else None,
         settings=ParserSettingsOut(**settings),
+        monitor_api_estimate=MonitorApiEstimateOut(**estimate_raw),
     )
 
 
@@ -294,9 +345,20 @@ async def list_parser_searches(
         stmt = stmt.where(SearchQuery.is_active.is_(True))
 
     rows = (await db.execute(stmt)).all()
+    search_ids = [search.id for search, _user in rows]
+    api_today_map = await _monitor_api_totals_batch(search_ids, days=1)
+    api_7d_map = await _monitor_api_totals_batch(search_ids, days=7)
     out: list[AdminActiveSearchOut] = []
     for search, user in rows:
-        out.append(await _active_search_out(db, search, user))
+        out.append(
+            await _active_search_out(
+                db,
+                search,
+                user,
+                api_today=api_today_map.get(search.id, 0.0),
+                api_7d=api_7d_map.get(search.id, 0.0),
+            )
+        )
     return out
 
 
@@ -394,11 +456,31 @@ async def get_parser_search_detail(
         )
 
     search_out = await _active_search_out(db, search, user)
+    from app.services.admin.monitor_api_usage import (
+        build_monitor_usage_report,
+        estimate_monitor_daily_api,
+    )
+
+    usage_7d = await build_monitor_usage_report(search_id, days=7)
+    usage_30d = await build_monitor_usage_report(search_id, days=30)
+    filters = search.filters if isinstance(search.filters, dict) else {}
+    category = str(filters.get("category") or "all")
+    sources = filters.get("sources") if isinstance(filters.get("sources"), list) else None
+    settings = await get_parser_settings()
+    estimate_raw = estimate_monitor_daily_api(
+        [str(s) for s in sources] if sources else None,
+        category=category,
+        interval_seconds=int(settings.get("interval_seconds") or 900),
+    )
+
     return AdminSearchDetailOut(
         search=search_out,
         listings=listings_out,
         telegram_sent_total=telegram_sent_total,
         telegram_pending=telegram_pending,
+        api_usage_7d=MonitorApiUsageOut(**usage_7d),
+        api_usage_30d=MonitorApiUsageOut(**usage_30d),
+        api_estimate_daily=MonitorApiEstimateOut(**estimate_raw),
     )
 
 
