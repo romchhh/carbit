@@ -18,6 +18,7 @@ from app.services.udrive.constants import (
     UDRIVE_CDN_TRANSFORM,
     UDRIVE_PAGE_SIZE,
     UDRIVE_SITE_URL,
+    udrive_listing_url,
 )
 from app.services.udrive.errors import UdriveBrandNotFound
 
@@ -120,7 +121,7 @@ def _mileage_km(car: dict[str, Any]) -> int:
 def car_to_listing(
     car: dict[str, Any],
     *,
-    brand_slug: str,
+    brand_slug: str = "",
     makes_by_id: dict[int, dict[str, Any]],
     currency: str = "USD",
 ) -> ListingOut:
@@ -152,8 +153,7 @@ def car_to_listing(
     title = " ".join(x for x in title_bits if x).strip() or "uDrive"
 
     car_id = str(car.get("id") or "")
-    slug = str(make_o.get("slug") or brand_slug or "car").strip() or "car"
-    url = f"{UDRIVE_SITE_URL}/catalog/cars/{slug}/{car_id}" if car_id else UDRIVE_SITE_URL
+    url = udrive_listing_url(car_id)
 
     uah, usd = parse_price(car.get("price"))
     price_amount, price_currency = _pick_price(uah, usd, currency)

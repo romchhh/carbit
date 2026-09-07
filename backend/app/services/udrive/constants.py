@@ -1,5 +1,13 @@
 UDRIVE_API_BASE_URL = "https://api.udrive.store/api/v1"
 UDRIVE_SITE_URL = "https://udrive.com.ua"
+
+
+def udrive_listing_url(car_id: str) -> str:
+    """Публічна сторінка авто: /catalog/cars/{uuid} (без slug марки)."""
+    normalized = str(car_id or "").strip().lower()
+    if not normalized:
+        return UDRIVE_SITE_URL
+    return f"{UDRIVE_SITE_URL}/catalog/cars/{normalized}"
 UDRIVE_CDN_BASE = "https://ik.imagekit.io/udriveapp/production/"
 UDRIVE_CDN_TRANSFORM = "?tr=q-80"
 
