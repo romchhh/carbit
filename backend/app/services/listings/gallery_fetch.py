@@ -7,6 +7,9 @@ import re
 from dataclasses import dataclass
 
 from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
+from app.services.auto_ria_beta.client import AutoRiaBetaClient
+from app.services.auto_ria_beta.errors import AutoRiaBetaError
+from app.services.auto_ria_beta.parser import ScrapedCar
 from app.services.auto_ria.details import extract_image_urls
 from app.services.auto_ria.mapper import _new_auto_photo_urls
 from app.services.imperiya.client import ImperiyaClient
@@ -25,9 +28,10 @@ from app.services.olx.mapper import _listing_images
 logger = logging.getLogger(__name__)
 
 GALLERY_COMPLETE_MIN_IMAGES = 2
-_SUPPORTED = frozenset({"auto_ria", "olx", "imperiya"})
+_SUPPORTED = frozenset({"auto_ria", "auto_ria_beta", "olx", "imperiya"})
 
 _AUTO_RIA_ID_RE = re.compile(r"^auto_ria_(\d+)$")
+_AUTO_RIA_BETA_ID_RE = re.compile(r"^auto_ria_beta_(\d+)$")
 _OLX_ID_RE = re.compile(r"^olx_(.+)$")
 _IMPERIYA_ID_RE = re.compile(r"^imperiya_(\d+)$")
 
@@ -92,6 +96,34 @@ async def fetch_auto_ria_gallery(
         logger.exception("AUTO.RIA gallery fetch error for %s", listing_id)
 
     return GalleryFetchResult(images=images, **_contact_from_dict(contact))
+
+
+async def fetch_auto_ria_beta_gallery(
+    *,
+    listing_id: str | None,
+    url: str | None,
+    current_images: list[str] | None = None,
+) -> GalleryFetchResult:
+    match = _AUTO_RIA_BETA_ID_RE.match(listing_id or "")
+    car_id = int(match.group(1)) if match else None
+    images = list(current_images or [])
+    if not car_id or not url:
+        return GalleryFetchResult(images=images)
+
+    try:
+        client = AutoRiaBetaClient()
+        car = ScrapedCar(car_id=car_id, url=url)
+        await client.enrich_car(car)
+        if car.photos:
+            images = list(car.photos)
+        elif car.photo_url:
+            images = [car.photo_url]
+    except AutoRiaBetaError:
+        logger.debug("AUTO.RIA beta gallery fetch failed for %s", listing_id, exc_info=True)
+    except Exception:
+        logger.exception("AUTO.RIA beta gallery fetch error for %s", listing_id)
+
+    return GalleryFetchResult(images=images)
 
 
 async def fetch_olx_gallery(
@@ -181,6 +213,8 @@ async def fetch_listing_gallery(
     key = (source or "").strip().lower()
     if key == "auto_ria":
         return await fetch_auto_ria_gallery(listing_id=listing_id, url=url, current_images=images)
+    if key == "auto_ria_beta":
+        return await fetch_auto_ria_beta_gallery(listing_id=listing_id, url=url, current_images=images)
     if key == "olx":
         return await fetch_olx_gallery(listing_id=listing_id, url=url, current_images=images)
     if key == "imperiya":

@@ -37,10 +37,10 @@ from app.services.parser.filter_groups import filters_group_key
 
 logger = logging.getLogger(__name__)
 
-LIVE_POOL_PREFIX = "live-pool:"
+LIVE_POOL_PREFIX = "live-pool:v3:"
 LIVE_POOL_TTL_SECONDS = 600  # 10 хвилин — повторний пошук без нових AR-запитів
 # Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
-LIVE_POOL_SIZE = 500
+LIVE_POOL_SIZE = 2500
 
 # Кеш окремих AUTO.RIA-оголошень (щоб не гідратувати одне й те саме двічі)
 _AR_INFO_PREFIX = "ar-info:"
@@ -82,6 +82,7 @@ async def set_live_pool(
     sources: list[SourceStatusOut] | list[dict] | None = None,
     partial: bool = False,
     model_post_filter: bool = False,
+    beta_cursor: dict | None = None,
     ttl_seconds: int = LIVE_POOL_TTL_SECONDS,
 ) -> None:
     try:
@@ -96,6 +97,8 @@ async def set_live_pool(
             "total": total,
             "market_total": market_total,
             "model_post_filter": model_post_filter,
+            "beta_cursor": beta_cursor,
+            "sort_by": sort_by,
         }
         await redis.setex(
             live_pool_cache_key(filters, sort_by),
@@ -104,6 +107,108 @@ async def set_live_pool(
         )
     except Exception:
         logger.exception("Live pool cache write failed")
+
+
+_beta_extend_locks: dict[str, asyncio.Lock] = {}
+
+
+def _beta_slot_ids(slots: list[dict]) -> set[int]:
+    ids: set[int] = set()
+    for slot in slots:
+        if slot.get("s") != "b":
+            continue
+        data = slot.get("d") or {}
+        raw = str(data.get("id") or "")
+        suffix = raw.removeprefix("auto_ria_beta_")
+        if suffix.isdigit():
+            ids.add(int(suffix))
+    return ids
+
+
+async def ensure_beta_pool_covers(
+    pool: dict[str, Any],
+    *,
+    filters: SearchFilters,
+    sort_by: str,
+    need: int,
+) -> dict[str, Any]:
+    """Довантажує наступні HTML-сторінки AUTO.RIA test beta, коли користувач гортає далі."""
+    cursor = pool.get("beta_cursor")
+    if not isinstance(cursor, dict) or cursor.get("exhausted"):
+        return pool
+
+    slots = list(pool.get("slots") or [])
+    if need <= len(slots):
+        return pool
+
+    from app.services.auto_ria_beta.constants import MAX_PAGES, PAGE_SIZE, POOL_MAX_ITEMS
+    from app.services.auto_ria_beta.service import fetch_auto_ria_beta_batch
+
+    key = live_pool_cache_key(filters, sort_by)
+    lock = _beta_extend_locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        fresh = await get_live_pool(filters, sort_by)
+        if isinstance(fresh, dict):
+            pool = fresh
+        cursor = pool.get("beta_cursor") if isinstance(pool.get("beta_cursor"), dict) else cursor
+        slots = list(pool.get("slots") or [])
+        if not isinstance(cursor, dict) or cursor.get("exhausted") or need <= len(slots):
+            return pool
+
+        seen = _beta_slot_ids(slots)
+        next_html = int(cursor.get("next_html_page") or 0)
+        market_total = int(pool.get("market_total") or 0)
+        while len(slots) < need and next_html < MAX_PAGES and len(slots) < POOL_MAX_ITEMS:
+            batch = await fetch_auto_ria_beta_batch(
+                filters,
+                sort_by=sort_by,
+                start_page=next_html,
+                html_pages=1,
+                need=PAGE_SIZE,
+                seen_ids=seen,
+            )
+            next_html = batch.next_html_page
+            market_total = max(market_total, batch.market_total)
+            added = 0
+            for listing in batch.listings:
+                suffix = (listing.id or "").removeprefix("auto_ria_beta_")
+                if suffix.isdigit():
+                    car_id = int(suffix)
+                    if car_id in seen:
+                        continue
+                    seen.add(car_id)
+                slots.append({"s": "b", "d": listing.model_dump(mode="json")})
+                added += 1
+            cursor = {
+                "next_html_page": next_html,
+                "exhausted": bool(batch.exhausted or added == 0),
+            }
+            if batch.exhausted or added == 0:
+                break
+
+        extra = 0
+        if cursor and not cursor.get("exhausted"):
+            extra = max(0, market_total - len(slots))
+        nav_total = len(slots) + extra
+        pool = {
+            **pool,
+            "slots": slots,
+            "beta_cursor": cursor,
+            "total": nav_total,
+            "market_total": market_total or pool.get("market_total"),
+        }
+        await set_live_pool(
+            filters,
+            sort_by,
+            slots=slots,
+            total=nav_total,
+            market_total=pool.get("market_total"),
+            sources=pool.get("sources") or [],
+            partial=bool(pool.get("partial")),
+            model_post_filter=bool(pool.get("model_post_filter")),
+            beta_cursor=cursor,
+        )
+        return pool
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +379,11 @@ async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
     {"s":"n","i":"..."} — AUTO.RIA нові,   гідрат через /auto/new/auto.
     {"s":"o"/"t","d":{...}} — OLX/Telegram, розпаковуються напряму.
     """
-    used_ids = [s["i"] for s in slots if s.get("s") == "r" and "i" in s]
+    used_ids = [
+        s["i"]
+        for s in slots
+        if s.get("s") == "r" and "i" in s and not str(s.get("i", "")).startswith("beta_")
+    ]
     new_ids = [s["i"] for s in slots if s.get("s") == "n" and "i" in s]
 
     hydrated_used, hydrated_new = await asyncio.gather(
@@ -441,13 +550,24 @@ async def slice_pool(
     page: int,
     per_page: int,
     filters: SearchFilters | None = None,
+    sort_by: str = "newest",
 ) -> PaginatedListings:
     """Повертає одну сторінку з пулу, гідратуючи AUTO.RIA-стаби за потреби."""
     slots = pool.get("slots")
 
     # Зворотна сумісність зі старим форматом (full items list)
-    if not slots:
+    if not slots and not pool.get("beta_cursor"):
         return _slice_legacy_pool(pool, page=page, per_page=per_page)
+
+    if filters is not None:
+        need = page * per_page
+        pool = await ensure_beta_pool_covers(
+            pool, filters=filters, sort_by=sort_by, need=need
+        )
+        slots = pool.get("slots") or []
+
+    if not isinstance(slots, list):
+        slots = []
 
     total = int(pool.get("total") or len(slots))
     raw_market = pool.get("market_total")

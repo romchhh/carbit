@@ -96,6 +96,9 @@ class ReonoClient:
                     raise err
 
                 cars, total = parse_catalog_page(response.text)
+                from app.services.admin.api_usage import record_api_request
+
+                await record_api_request("reono", "search", success=True)
                 return cars, total
 
         if last_error:

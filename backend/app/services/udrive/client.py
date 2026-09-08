@@ -54,6 +54,9 @@ class UdriveClient:
         params: dict[str, Any] | None = None,
         json_body: dict[str, Any] | None = None,
     ) -> Any:
+        from app.services.admin.api_usage import record_api_request, scraper_operation
+
+        operation = scraper_operation(path)
         last_error: Exception | None = None
         clean_path = path.lstrip("/")
 
@@ -95,10 +98,15 @@ class UdriveClient:
                 raise err
 
             try:
-                return response.json()
+                payload = response.json()
             except ValueError as exc:
+                await record_api_request("udrive", operation, success=False)
                 raise UdriveError("uDrive: некоректна JSON-відповідь") from exc
 
+            await record_api_request("udrive", operation, success=True)
+            return payload
+
+        await record_api_request("udrive", operation, success=False)
         raise last_error or UdriveError("uDrive: невідома помилка")
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:

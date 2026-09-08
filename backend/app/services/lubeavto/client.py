@@ -94,6 +94,9 @@ class LubeAvtoClient:
                 raise err
 
             cars, total = parse_catalog_page(response.text, catalog=catalog)
+            from app.services.admin.api_usage import record_api_request
+
+            await record_api_request("lubeavto", "search", success=True)
             return cars, total
 
         raise last_error or LubeAvtoError(

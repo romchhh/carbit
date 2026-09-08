@@ -70,6 +70,7 @@ export type BackendSearchFilters = {
 
 const SOURCE_TO_BACKEND: Record<string, string> = {
   "AUTO.RIA": "auto_ria",
+  "AUTO.RIA test beta": "auto_ria_beta",
   OLX: "olx",
   "Імперія Авто": "imperiya",
   "Car Market": "car_market",

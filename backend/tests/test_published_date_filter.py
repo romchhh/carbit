@@ -103,7 +103,7 @@ def test_build_live_search_pool_applies_published_older_than_days():
                 items=[], total=0, page=1, per_page=500, pages=0
             ),
         ):
-            slots, nav_total, _market_total, _statuses = await build_live_search_pool(
+            slots, nav_total, _market_total, _statuses, *_ = await build_live_search_pool(
                 SearchFilters(brand="Hyundai", published_older_than_days=15),
                 sort_by="newest",
                 max_ids=50,

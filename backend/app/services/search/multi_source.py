@@ -12,6 +12,8 @@ from app.services.auto_ria.client import AutoRiaError
 from app.services.auto_ria.mapper import sort_listings
 from app.services.auto_ria.service import search_auto_ria
 from app.services.car_market.service import fetch_car_market_pool, search_car_market
+from app.services.auto_ria_beta.service import fetch_auto_ria_beta_batch, fetch_auto_ria_beta_pool, search_auto_ria_beta
+from app.services.auto_ria_beta.constants import PAGE_SIZE as AUTO_RIA_BETA_PAGE_SIZE
 from app.services.lubeavto.service import fetch_lubeavto_pool, search_lubeavto
 from app.services.reono.service import fetch_reono_pool, search_reono
 from app.services.imperiya.errors import ImperiyaError
@@ -25,19 +27,19 @@ from app.services.monitoring.parser_status import is_transient_partial_source_er
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 from app.services.telegram_channels.ingest import search_telegram_listings
 
-IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram", "imperiya", "udrive", "car_market", "lubeavto", "reono"}
+IMPLEMENTED_SOURCES = {"auto_ria", "auto_ria_beta", "olx", "telegram", "imperiya", "udrive", "car_market", "lubeavto", "reono"}
 # Бюджет лише на HTTP-сканування після acquire_olx_slot (черга не входить у wait_for).
 OLX_SEARCH_TIMEOUT_SECONDS = 22.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
-SOURCE_POOL_CAP = 500
+SOURCE_POOL_CAP = 2500
 TELEGRAM_POOL_CAP = 500
 TELEGRAM_MAX_SCAN = 4000
 AUTO_RIA_PAGE_SIZE = 50
-# Скільки AUTO.RIA ID тягнути в live-пул. 500 × countpage=50 = ~10 /auto/search
-# (і ще стільки ж /auto/new/search для «всі/нові»). Гідратуємо лише ~40, тож 100 ID досить.
-AUTO_RIA_ID_COLLECT_CAP = 100
-# Live pool збирає лише IDs — 25 с достатньо; 90 с тримало весь gather.
-AUTO_RIA_POOL_TIMEOUT_SECONDS = 25.0
+# Скільки AUTO.RIA ID тягнути в live-пул (/auto/search — лише IDs, без /auto/info).
+# Гідратація — лише поточна сторінка в slice_pool.
+AUTO_RIA_ID_COLLECT_CAP = 2500
+# Live pool збирає лише IDs — для 2500 ID потрібно більше часу на пагінацію search API.
+AUTO_RIA_POOL_TIMEOUT_SECONDS = 90.0
 IMPERIYA_POOL_TIMEOUT_SECONDS = 25.0
 IMPERIYA_PAGE_SIZE = 50
 # Не тягнемо 10+ сторінок API в один wait_for(25s) — це головна причина таймаутів.
@@ -50,6 +52,7 @@ CAR_MARKET_PAGE_SIZE = 20
 LUBEAVTO_POOL_TIMEOUT_SECONDS = 20.0
 LUBEAVTO_PAGE_SIZE = 24
 REONO_POOL_TIMEOUT_SECONDS = 20.0
+AUTO_RIA_BETA_POOL_TIMEOUT_SECONDS = 90.0
 REONO_PAGE_SIZE = 40
 # TG — лише БД (без keyword refresh на live-пошуку).
 TELEGRAM_POOL_TIMEOUT_SECONDS = 12.0
@@ -63,6 +66,7 @@ _SOURCE_BLEND_ORDER = {
     "udrive": 5,
     "telegram": 6,
     "auto_ria": 7,
+    "auto_ria_beta": 8,
 }
 _DATE_SORT_KEYS = frozenset({"newest", "published_desc", "published_asc"})
 # /auto/search дає лише ID; кожен /auto/info — окремий платний запит.
@@ -122,6 +126,8 @@ def normalize_sources(sources: list[str] | None) -> list[str]:
         key = raw.strip().lower().replace(".", "_").replace(" ", "_")
         if key in ("auto_ria", "autoria"):
             normalized.append("auto_ria")
+        elif key in ("auto_ria_beta", "autoria_beta", "auto_ria_test_beta", "autoria_test_beta"):
+            normalized.append("auto_ria_beta")
         elif key == "olx":
             normalized.append("olx")
         elif key in ("imperiya", "imperiya_auto", "imperiya-auto", "iautos"):
@@ -573,6 +579,15 @@ async def _search_single_source(
             use_cache=use_cache,
             cache_ttl_seconds=cache_ttl_seconds,
         )
+    if source == "auto_ria_beta":
+        return await search_auto_ria_beta(
+            filters,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            use_cache=use_cache,
+            cache_ttl_seconds=cache_ttl_seconds,
+        )
     return await search_auto_ria(
         filters,
         page=page,
@@ -600,7 +615,7 @@ async def _fetch_source_pool(
     from app.services.search.filter_multi import expand_filters_for_api_fetch, needs_api_fanout
 
     need = max(need, 1)
-    if source in ("auto_ria", "olx", "imperiya", "udrive", "car_market", "lubeavto", "reono") and needs_api_fanout(filters):
+    if source in ("auto_ria", "auto_ria_beta", "olx", "imperiya", "udrive", "car_market", "lubeavto", "reono") and needs_api_fanout(filters):
         variants = expand_filters_for_api_fetch(filters)
         per_variant = max(need // len(variants), 20)
         chunks = await asyncio.gather(
@@ -764,6 +779,16 @@ async def _fetch_source_pool(
             cache_ttl_seconds=cache_ttl_seconds,
         )
 
+    if source == "auto_ria_beta":
+        return await fetch_auto_ria_beta_pool(
+            filters,
+            need=min(need, AUTO_RIA_BETA_PAGE_SIZE),
+            sort_by=sort_by,
+            use_cache=use_cache,
+            cache_ttl_seconds=cache_ttl_seconds,
+            html_pages=1,
+        )
+
     if source == "lubeavto":
         return await fetch_lubeavto_pool(
             filters,
@@ -847,6 +872,8 @@ def _pick_primary_error(errors: list[Exception]) -> Exception:
 def _source_label(source: str) -> str:
     if source == "auto_ria":
         return "AUTO.RIA"
+    if source == "auto_ria_beta":
+        return "AUTO.RIA test beta"
     if source == "imperiya":
         return "Імперія Авто"
     if source == "udrive":
@@ -967,7 +994,7 @@ async def search_listings_outcome(
                     per_page=per_page,
                     pages=pages,
                 )
-            elif source in ("auto_ria", "olx", "imperiya", "udrive", "car_market", "lubeavto") and needs_api_fanout(filters):
+            elif source in ("auto_ria", "auto_ria_beta", "olx", "imperiya", "udrive", "car_market", "lubeavto") and needs_api_fanout(filters):
                 pool_need = per_page * max(page, 1)
                 pool = await _fetch_source_pool(
                     source,
@@ -1125,6 +1152,28 @@ async def search_listings_outcome(
         except Exception as exc:
             return exc
 
+    async def run_auto_ria_beta() -> PaginatedListings | Exception:
+        try:
+            return await asyncio.wait_for(
+                _fetch_source_pool(
+                    "auto_ria_beta",
+                    filters,
+                    need=pool_need,
+                    sort_by=sort_by,
+                    use_cache=use_cache,
+                    cache_ttl_seconds=cache_ttl_seconds,
+                    keyword_refresh=keyword_refresh,
+                    olx_enrich_details=olx_enrich_details,
+                ),
+                timeout=AUTO_RIA_BETA_POOL_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return TimeoutError(
+                f"AUTO.RIA test beta: таймаут {AUTO_RIA_BETA_POOL_TIMEOUT_SECONDS:.0f}s"
+            )
+        except Exception as exc:
+            return exc
+
     async def run_lubeavto() -> PaginatedListings | Exception:
         try:
             return await asyncio.wait_for(
@@ -1199,6 +1248,8 @@ async def search_listings_outcome(
         tasks.append(asyncio.create_task(run_udrive()))
     if "car_market" in sources:
         tasks.append(asyncio.create_task(run_car_market()))
+    if "auto_ria_beta" in sources:
+        tasks.append(asyncio.create_task(run_auto_ria_beta()))
     if "lubeavto" in sources:
         tasks.append(asyncio.create_task(run_lubeavto()))
     if "reono" in sources:
@@ -1269,6 +1320,21 @@ async def search_listings_outcome(
                 SourceSearchStatus(source="Car Market", item_count=len(car_market_out.items))
             )
 
+    if "auto_ria_beta" in sources:
+        auto_ria_beta_out = raw_results[result_index]
+        result_index += 1
+        if isinstance(auto_ria_beta_out, BaseException):
+            errors.append(auto_ria_beta_out)
+            source_statuses.append(_failed_source_status("AUTO.RIA test beta", auto_ria_beta_out))
+        else:
+            successful.append(("auto_ria_beta", auto_ria_beta_out))
+            source_statuses.append(
+                SourceSearchStatus(
+                    source="AUTO.RIA test beta",
+                    item_count=len(auto_ria_beta_out.items),
+                )
+            )
+
     if "lubeavto" in sources:
         lubeavto_out = raw_results[result_index]
         result_index += 1
@@ -1329,7 +1395,7 @@ async def search_listings_outcome(
         filtered_batches = []
         for source, result in successful:
             # AUTO.RIA «під пригон» уже відфільтрований параметром custom=1.
-            if source == "auto_ria" and category == "import":
+            if source in ("auto_ria", "auto_ria_beta") and category == "import":
                 filtered_batches.append((source, result))
                 continue
             items = [item for item in result.items if listing_matches_category(item, category)]
@@ -1464,6 +1530,10 @@ def _listing_to_slot(item: ListingOut) -> dict:
     """ListingOut → slot для live-pool (AR — stub, OLX/Telegram — повний об'єкт)."""
     lid = item.id or ""
     src = (item.source or "").strip().lower()
+    # auto_ria_beta_… також починається з auto_ria_ — перевіряємо HTML-бета РАНІШЕ,
+    # інакше слот стає {"s":"r","i":"beta_…"} і гідрація через /auto/info дає 0 карток.
+    if src == "auto_ria_beta" or lid.startswith("auto_ria_beta_"):
+        return {"s": "b", "d": item.model_dump(mode="json")}
     payload = item.model_dump(mode="json") if (item.alternate_sources or []) else None
     if src in ("auto_ria", "autoria", "auto.ria") or lid.startswith(("auto_ria_", "new_auto_ria_")):
         if lid.startswith("new_auto_ria_"):
@@ -1620,7 +1690,7 @@ async def _build_vin_aware_slots(
         lid = item.id or ""
         if lid.startswith("new_auto_ria_"):
             represented_ar.add("n:" + lid.removeprefix("new_auto_ria_"))
-        elif lid.startswith("auto_ria_"):
+        elif lid.startswith("auto_ria_") and not lid.startswith("auto_ria_beta_"):
             represented_ar.add(lid.removeprefix("auto_ria_"))
 
     for aid in auto_ria_ids:
@@ -1667,6 +1737,7 @@ def _build_fair_blend_slots(
     imperiya_items: list[ListingOut] | None = None,
     udrive_items: list[ListingOut] | None = None,
     car_market_items: list[ListingOut] | None = None,
+    auto_ria_beta_items: list[ListingOut] | None = None,
     lubeavto_items: list[ListingOut] | None = None,
     reono_items: list[ListingOut] | None = None,
     limit: int,
@@ -1676,6 +1747,7 @@ def _build_fair_blend_slots(
     imperiya_items = imperiya_items or []
     udrive_items = udrive_items or []
     car_market_items = car_market_items or []
+    auto_ria_beta_items = auto_ria_beta_items or []
     lubeavto_items = lubeavto_items or []
     reono_items = reono_items or []
     batches: list[tuple[str, list[dict]]] = []
@@ -1691,6 +1763,13 @@ def _build_fair_blend_slots(
             (
                 "car_market",
                 [_listing_to_slot(item) for item in sort_listings(car_market_items, sort_by)],
+            )
+        )
+    if auto_ria_beta_items:
+        batches.append(
+            (
+                "auto_ria_beta",
+                [_listing_to_slot(item) for item in sort_listings(auto_ria_beta_items, sort_by)],
             )
         )
     if lubeavto_items:
@@ -1770,6 +1849,7 @@ def _build_interleaved_slots(
     imperiya_items: list[ListingOut] | None = None,
     udrive_items: list[ListingOut] | None = None,
     car_market_items: list[ListingOut] | None = None,
+    auto_ria_beta_items: list[ListingOut] | None = None,
     lubeavto_items: list[ListingOut] | None = None,
     reono_items: list[ListingOut] | None = None,
 ) -> list[dict]:
@@ -1781,6 +1861,7 @@ def _build_interleaved_slots(
         imperiya_items=imperiya_items,
         udrive_items=udrive_items,
         car_market_items=car_market_items,
+        auto_ria_beta_items=auto_ria_beta_items,
         lubeavto_items=lubeavto_items,
         reono_items=reono_items,
         limit=limit,
@@ -1819,6 +1900,8 @@ async def build_live_search_pool(
     imperiya_result = _empty_page(1, max_ids)
     udrive_result = _empty_page(1, max_ids)
     car_market_result = _empty_page(1, max_ids)
+    auto_ria_beta_result = _empty_page(1, max_ids)
+    beta_cursor: dict | None = None
     lubeavto_result = _empty_page(1, max_ids)
     reono_result = _empty_page(1, max_ids)
     telegram_result = _empty_page(1, max_ids)
@@ -1914,6 +1997,31 @@ async def build_live_search_pool(
             logger.warning("Car Market pool fetch failed: %s", exc)
             return _empty_page(1, max_ids)
 
+    async def run_auto_ria_beta():
+        try:
+            batch = await asyncio.wait_for(
+                fetch_auto_ria_beta_batch(
+                    filters,
+                    sort_by=sort_by,
+                    start_page=0,
+                    html_pages=1,
+                    need=AUTO_RIA_BETA_PAGE_SIZE,
+                ),
+                timeout=AUTO_RIA_BETA_POOL_TIMEOUT_SECONDS,
+            )
+            page = batch.to_page(need=AUTO_RIA_BETA_PAGE_SIZE)
+            object.__setattr__(
+                page,
+                "_beta_cursor",
+                {"next_html_page": batch.next_html_page, "exhausted": batch.exhausted},
+            )
+            return page
+        except asyncio.TimeoutError:
+            return _empty_page(1, max_ids)
+        except Exception as exc:
+            logger.warning("AUTO.RIA test beta pool fetch failed: %s", exc)
+            return _empty_page(1, max_ids)
+
     async def run_lubeavto():
         try:
             return await asyncio.wait_for(
@@ -1982,6 +2090,9 @@ async def build_live_search_pool(
     if "car_market" in sources:
         tasks.append(asyncio.create_task(run_car_market()))
         task_order.append("car_market")
+    if "auto_ria_beta" in sources:
+        tasks.append(asyncio.create_task(run_auto_ria_beta()))
+        task_order.append("auto_ria_beta")
     if "lubeavto" in sources:
         tasks.append(asyncio.create_task(run_lubeavto()))
         task_order.append("lubeavto")
@@ -2061,6 +2172,22 @@ async def build_live_search_pool(
                 SourceSearchStatus(source="Car Market", item_count=len(car_market_result.items))
             )
 
+    if "auto_ria_beta" in task_order:
+        res = raw_results[result_index]
+        result_index += 1
+        if isinstance(res, BaseException):
+            auto_ria_beta_result = _empty_page(1, max_ids)
+            source_statuses.append(_failed_source_status("AUTO.RIA test beta", res))
+        else:
+            auto_ria_beta_result = res
+            beta_cursor = getattr(res, "_beta_cursor", None)
+            source_statuses.append(
+                SourceSearchStatus(
+                    source="AUTO.RIA test beta",
+                    item_count=len(auto_ria_beta_result.items),
+                )
+            )
+
     if "lubeavto" in task_order:
         res = raw_results[result_index]
         result_index += 1
@@ -2127,6 +2254,7 @@ async def build_live_search_pool(
     imperiya_filtered = _filter_listings_by_brand_model(list(imperiya_result.items), filters)
     udrive_filtered = _filter_listings_by_brand_model(list(udrive_result.items), filters)
     car_market_filtered = _filter_listings_by_brand_model(list(car_market_result.items), filters)
+    auto_ria_beta_filtered = _filter_listings_by_brand_model(list(auto_ria_beta_result.items), filters)
     lubeavto_filtered = _filter_listings_by_brand_model(list(lubeavto_result.items), filters)
     reono_filtered = _filter_listings_by_brand_model(list(reono_result.items), filters)
     telegram_filtered = _sort_telegram_photos_first(
@@ -2138,6 +2266,7 @@ async def build_live_search_pool(
         imperiya_filtered = _filter_listings_by_published_filters(imperiya_filtered, filters)
         udrive_filtered = _filter_listings_by_published_filters(udrive_filtered, filters)
         car_market_filtered = _filter_listings_by_published_filters(car_market_filtered, filters)
+        auto_ria_beta_filtered = _filter_listings_by_published_filters(auto_ria_beta_filtered, filters)
         lubeavto_filtered = _filter_listings_by_published_filters(lubeavto_filtered, filters)
         reono_filtered = _filter_listings_by_published_filters(reono_filtered, filters)
         telegram_filtered = _filter_listings_by_published_filters(telegram_filtered, filters)
@@ -2150,6 +2279,7 @@ async def build_live_search_pool(
             sort_listings(
                 list(olx_filtered)
                 + list(car_market_filtered)
+                + list(auto_ria_beta_filtered)
                 + list(lubeavto_filtered)
                 + list(reono_filtered)
                 + list(imperiya_filtered)
@@ -2162,6 +2292,7 @@ async def build_live_search_pool(
     ot_merged = filter_listings_by_advanced(ot_merged, filters)
     olx_sorted = [item for item in ot_merged if (item.source or "").lower() == "olx"]
     car_market_sorted = [item for item in ot_merged if (item.source or "").lower() == "car_market"]
+    auto_ria_beta_sorted = [item for item in ot_merged if (item.source or "").lower() == "auto_ria_beta"]
     lubeavto_sorted = [item for item in ot_merged if (item.source or "").lower() == "lubeavto"]
     reono_sorted = [item for item in ot_merged if (item.source or "").lower() == "reono"]
     imperiya_sorted = [item for item in ot_merged if (item.source or "").lower() == "imperiya"]
@@ -2171,6 +2302,7 @@ async def build_live_search_pool(
     if auto_ria_ids and (
         olx_sorted
         or car_market_sorted
+        or auto_ria_beta_sorted
         or lubeavto_sorted
         or reono_sorted
         or imperiya_sorted
@@ -2213,6 +2345,7 @@ async def build_live_search_pool(
                 imperiya_items=imperiya_sorted,
                 udrive_items=udrive_sorted,
                 car_market_items=car_market_sorted,
+                auto_ria_beta_items=auto_ria_beta_sorted,
                 lubeavto_items=lubeavto_sorted,
                 reono_items=reono_sorted,
                 limit=POOL_LIMIT,
@@ -2220,29 +2353,34 @@ async def build_live_search_pool(
             )
 
     nav_total = len(slots)
-    if brand_model_filter:
-        market_total = nav_total
-    else:
-        market_total = (
-            auto_ria_market_total
-            + olx_result.total
-            + car_market_result.total
-            + lubeavto_result.total
-            + reono_result.total
-            + imperiya_result.total
-            + udrive_result.total
-            + telegram_result.total
-        )
+    market_total = (
+        auto_ria_market_total
+        + olx_result.total
+        + car_market_result.total
+        + auto_ria_beta_result.total
+        + lubeavto_result.total
+        + reono_result.total
+        + imperiya_result.total
+        + udrive_result.total
+        + telegram_result.total
+    )
+    if beta_cursor and not beta_cursor.get("exhausted"):
+        extra = max(0, int(auto_ria_beta_result.total or 0) - len(auto_ria_beta_sorted))
+        nav_total += extra
 
     if brand_model_filter:
         source_statuses = [
             SourceSearchStatus(
                 source=row.source,
                 item_count=(
-                    len(olx_sorted)
+                    auto_ria_market_total
+                    if row.source == "AUTO.RIA"
+                    else len(olx_sorted)
                     if row.source == "OLX"
                     else len(car_market_sorted)
                     if row.source == "Car Market"
+                    else (auto_ria_beta_result.total or len(auto_ria_beta_sorted))
+                    if row.source == "AUTO.RIA test beta"
                     else len(lubeavto_sorted)
                     if row.source == "Любе Авто"
                     else len(reono_sorted)
@@ -2265,4 +2403,4 @@ async def build_live_search_pool(
 
     await _notify_partial_source_failures(source_statuses, filters)
 
-    return slots, nav_total, market_total, source_statuses
+    return slots, nav_total, market_total, source_statuses, beta_cursor

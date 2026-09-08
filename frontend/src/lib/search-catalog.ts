@@ -124,6 +124,7 @@ export const BODY_TYPE_OPTIONS = [
 ] as const;
 export const SOURCE_OPTIONS = [
   "AUTO.RIA",
+  "AUTO.RIA test beta",
   "OLX",
   "Car Market",
   "Любе Авто",

@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 function sourceLabel(source: string): string {
   if (source === "olx" || source === "OLX") return "OLX";
   if (source === "auto_ria" || source === "AUTO.RIA") return "AUTO.RIA";
+  if (source === "auto_ria_beta" || source === "AUTO.RIA test beta") return "AUTO.RIA test beta";
   if (source === "imperiya" || source === "Імперія Авто") return "Імперія Авто";
   if (source === "car_market" || source === "Car Market") return "Car Market";
   if (source === "lubeavto" || source === "Любе Авто") return "Любе Авто";
@@ -111,7 +112,7 @@ export function SearchPreviewResults({
   loadingMore,
   hasMore,
   total,
-  marketTotal: _marketTotal,
+  marketTotal,
   results,
   sort,
   freshness,
@@ -128,6 +129,7 @@ export function SearchPreviewResults({
   const { cardCompareProps, compareHint } = useCompareOnListingCard();
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const exportItems = useMemo(() => listingsToExportItems(results), [results]);
+  const catalogTotal = marketTotal && marketTotal > total ? marketTotal : total;
   const remaining = Math.max(0, total - results.length);
   const nextBatch = Math.min(SEARCH_PAGE_SIZE, remaining);
   const canLoadMore = Boolean(hasMore && onLoadMore && remaining > 0);
@@ -156,7 +158,7 @@ export function SearchPreviewResults({
         {running && (
           <SearchResultsToolbar
             running={running}
-            total={total}
+            total={catalogTotal}
             shown={results.length}
             sort={sort}
             onSortChange={onSortChange}
@@ -165,6 +167,7 @@ export function SearchPreviewResults({
             offerCount={offerStats.offers}
             duplicateCount={offerStats.duplicates}
             hasMore={canLoadMore}
+            browsableTotal={total}
           />
         )}
 

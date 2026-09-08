@@ -43,7 +43,7 @@ class LiveSearchPoolConfigTests(unittest.TestCase):
         self.assertLessEqual(multi_source.AUTO_RIA_INFO_HYDRATE_CAP, 40)
         self.assertLessEqual(multi_source.AUTO_RIA_PRICE_SORT_HYDRATE_CAP, 80)
         self.assertLessEqual(multi_source.AR_MODEL_POST_FILTER_CAP, 40)
-        self.assertLessEqual(multi_source.AUTO_RIA_ID_COLLECT_CAP, 100)
+        self.assertGreaterEqual(multi_source.AUTO_RIA_ID_COLLECT_CAP, 1000)
         self.assertEqual(multi_source._auto_ria_hydrate_cap("newest"), multi_source.AUTO_RIA_INFO_HYDRATE_CAP)
         self.assertEqual(
             multi_source._auto_ria_hydrate_cap("price_asc"),
@@ -62,10 +62,9 @@ class LiveSearchPoolConfigTests(unittest.TestCase):
         self.assertGreaterEqual(pool_cache.LIVE_POOL_TTL_SECONDS, 300)
         self.assertLessEqual(pool_cache.LIVE_POOL_TTL_SECONDS, 600)
 
-    def test_pool_caps_are_bounded(self):
-        # Live pool тримає слоти з 3 джерел; OLX/TG всередині ріжуть глибше самі.
-        self.assertLessEqual(pool_cache.LIVE_POOL_SIZE, 500)
-        self.assertLessEqual(multi_source.SOURCE_POOL_CAP, 500)
+    def test_pool_caps_support_full_catalog(self):
+        self.assertGreaterEqual(pool_cache.LIVE_POOL_SIZE, 2000)
+        self.assertGreaterEqual(multi_source.SOURCE_POOL_CAP, 2000)
         self.assertEqual(pool_cache.LIVE_POOL_SIZE, multi_source.SOURCE_POOL_CAP)
         self.assertLessEqual(multi_source.OLX_SEARCH_TIMEOUT_SECONDS, 25.0)
 

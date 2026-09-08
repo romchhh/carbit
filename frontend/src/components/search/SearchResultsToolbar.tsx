@@ -31,6 +31,8 @@ type Props = {
   offerCount?: number;
   duplicateCount?: number;
   hasMore?: boolean;
+  /** Скільки карток реально є в пулі для пагінації (може бути менше за total). */
+  browsableTotal?: number;
 };
 
 export function SearchResultsToolbar({
@@ -48,6 +50,7 @@ export function SearchResultsToolbar({
   offerCount,
   duplicateCount,
   hasMore = false,
+  browsableTotal,
 }: Props) {
   return (
     <div className="mb-3 rounded-2xl border border-border bg-white p-2.5 sm:mb-4 sm:p-3.5 lg:mb-5 lg:px-6 lg:py-4">
@@ -87,6 +90,7 @@ export function SearchResultsToolbar({
                   offers={offerCount}
                   duplicates={duplicateCount}
                   hasMore={hasMore}
+                  browsableTotal={browsableTotal}
                 />
               </span>
               {typeof newCount === "number" && newCount > 0 && (
@@ -139,18 +143,28 @@ function FoundCount({
   offers,
   duplicates,
   hasMore,
+  browsableTotal,
 }: {
   cards: number;
   shown: number;
   offers?: number;
   duplicates?: number;
   hasMore: boolean;
+  browsableTotal?: number;
 }) {
   const dups = Math.max(0, duplicates ?? 0);
   const offerTotal = offers ?? cards;
-  const moreHint = hasMore && shown < cards && (
+  const poolTotal = browsableTotal ?? cards;
+  const moreHint = hasMore && shown < poolTotal && (
     <span className="hidden sm:inline"> · показано {shown}</span>
   );
+  const catalogHint =
+    browsableTotal != null && cards > browsableTotal ? (
+      <span className="text-muted">
+        {" "}
+        · доступно для перегляду {browsableTotal.toLocaleString("uk-UA")}
+      </span>
+    ) : null;
 
   if (!hasMore && dups > 0 && offerTotal > cards) {
     return (
@@ -162,6 +176,7 @@ function FoundCount({
         {dups.toLocaleString("uk-UA")} {ukPlural(dups, "дубль", "дублі", "дублів")}
         {" · "}
         {cards.toLocaleString("uk-UA")} {ukPlural(cards, "картка", "картки", "карток")}
+        {catalogHint}
         {moreHint}
       </>
     );
@@ -170,6 +185,7 @@ function FoundCount({
   return (
     <>
       Знайдено <strong className="text-ink">{cards.toLocaleString("uk-UA")}</strong>
+      {catalogHint}
       {moreHint}
     </>
   );

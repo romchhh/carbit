@@ -15,7 +15,37 @@ HOUR_TTL_SECONDS = 60 * 60 * 24 * 35  # 35 днів
 DAY_TTL_SECONDS = 60 * 60 * 24 * 95  # 95 днів
 MONTH_TTL_SECONDS = 60 * 60 * 24 * 400  # ~13 місяців
 
-SOURCES = ("auto_ria", "olx", "telegram_channels", "telegram_bot")
+MONITORED_SOURCES = (
+    "auto_ria",
+    "olx",
+    "imperiya",
+    "car_market",
+    "reono",
+    "udrive",
+    "lubeavto",
+    "telegram_channels",
+    "telegram_bot",
+)
+
+SOURCES = MONITORED_SOURCES
+
+
+def normalize_api_source(source: str) -> str:
+    s = (source or "").strip().lower().replace(".", "_").replace("-", "_")
+    if s in ("telegram", "telegram_channel", "tg"):
+        return "telegram_channels"
+    if s in MONITORED_SOURCES:
+        return s
+    return "other"
+
+
+def scraper_operation(path: str) -> str:
+    p = (path or "").split("?", 1)[0].strip().lower()
+    if "/references/" in p or "makes" in p or "models" in p:
+        return "catalog"
+    if "/cars/" in p and not p.rstrip("/").endswith("/cars"):
+        return "details"
+    return "search"
 
 
 def _hour_key(source: str, dt: datetime | None = None) -> str:
@@ -41,6 +71,7 @@ async def record_api_request(
     count: int = 1,
 ) -> None:
     """Збільшити лічильник запитів для source/operation (fire-and-forget safe)."""
+    source = normalize_api_source(source)
     if source not in SOURCES:
         return
     op = (operation or "other").strip().lower()[:48] or "other"

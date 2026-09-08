@@ -42,6 +42,9 @@ class ImperiyaClient:
             raise ImperiyaError("IMPERIYA_API_KEY не налаштовано")
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        from app.services.admin.api_usage import record_api_request, scraper_operation
+
+        operation = scraper_operation(path)
         headers = {"X-API-Key": self.api_key, "Accept": "application/json"}
         last_error: Exception | None = None
 
@@ -78,10 +81,15 @@ class ImperiyaClient:
                 raise err
 
             try:
-                return response.json()
+                data = response.json()
             except ValueError as exc:
+                await record_api_request("imperiya", operation, success=False)
                 raise ImperiyaError("Імперія Авто: некоректна JSON-відповідь") from exc
 
+            await record_api_request("imperiya", operation, success=True)
+            return data
+
+        await record_api_request("imperiya", operation, success=False)
         raise last_error or ImperiyaError("Імперія Авто: невідома помилка")
 
     async def search_cars(self, params: dict[str, Any]) -> dict[str, Any]:

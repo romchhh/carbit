@@ -2,6 +2,7 @@ import { SOURCE_LOGOS } from "@/lib/brand-assets";
 
 export type ListingSourceKey =
   | "auto_ria"
+  | "auto_ria_beta"
   | "olx"
   | "imperiya"
   | "car_market"
@@ -16,6 +17,7 @@ const SOURCE_ICON_KEYS: Record<
   string
 > = {
   auto_ria: SOURCE_LOGOS.autoRia,
+  auto_ria_beta: SOURCE_LOGOS.autoRia,
   olx: SOURCE_LOGOS.olx,
   imperiya: SOURCE_LOGOS.imperiya,
   udrive: SOURCE_LOGOS.udrive,
@@ -25,6 +27,7 @@ const SOURCE_ICON_KEYS: Record<
 /** Підписи з фільтра SearchFilterState.sources */
 const SOURCE_FILTER_LABEL_TO_KEY: Record<string, ListingSourceKey> = {
   "AUTO.RIA": "auto_ria",
+  "AUTO.RIA test beta": "auto_ria_beta",
   OLX: "olx",
   "Імперія Авто": "imperiya",
   "Car Market": "car_market",
@@ -37,6 +40,7 @@ const SOURCE_FILTER_LABEL_TO_KEY: Record<string, ListingSourceKey> = {
 export function listingSourceLabel(source: string): string {
   if (source === "olx") return "OLX";
   if (source === "auto_ria") return "AUTO.RIA";
+  if (source === "auto_ria_beta") return "AUTO.RIA test beta";
   if (source === "imperiya") return "Імперія Авто";
   if (source === "car_market") return "Car Market";
   if (source === "lubeavto") return "Любе Авто";
@@ -100,6 +104,7 @@ export function listingAttributionUrl(source: string, listingUrl?: string): stri
   if (listingUrl) return listingUrl;
   if (source === "olx") return "https://www.olx.ua";
   if (source === "auto_ria") return "https://auto.ria.com";
+  if (source === "auto_ria_beta") return "https://auto.ria.com";
   if (source === "imperiya") return "https://imperiya-auto.com.ua";
   if (source === "car_market") return "https://car-market.net";
   if (source === "lubeavto") return "https://lubeavto.com.ua";

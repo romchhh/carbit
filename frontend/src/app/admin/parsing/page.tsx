@@ -25,8 +25,22 @@ const STATUS_LABELS: Record<string, string> = {
 const SOURCE_LABELS: Record<string, string> = {
   auto_ria: "AUTO.RIA",
   olx: "OLX",
+  imperiya: "Імперія",
+  car_market: "Car Market",
+  reono: "REONO",
+  udrive: "uDrive",
+  lubeavto: "Любе Авто",
   telegram: "Telegram",
+  telegram_channels: "Telegram",
+  telegram_bot: "Telegram Bot",
+  other: "Інше",
 };
+
+function normalizeMonitorSource(source: string) {
+  const key = source.trim().toLowerCase().replace(/[.\s-]+/g, "_");
+  if (key === "telegram" || key === "telegram_channel") return "telegram_channels";
+  return key;
+}
 
 const TEST_SOURCES = [
   { key: "auto_ria" as const, label: "AUTO.RIA", className: "bg-blue-600 hover:bg-blue-700" },
@@ -78,11 +92,29 @@ function formatApiCount(value: number | null | undefined) {
 function MonitorApiUsagePanel({
   title,
   usage,
+  expectedSources,
 }: {
   title: string;
   usage: import("@/lib/admin-api").MonitorApiUsage;
+  expectedSources?: string[] | null;
 }) {
-  const sourceEntries = Object.entries(usage.sources || {});
+  const tracked = usage.sources || {};
+  const sourceKeys = new Set<string>(Object.keys(tracked));
+  for (const raw of expectedSources || []) {
+    sourceKeys.add(normalizeMonitorSource(raw));
+  }
+
+  const rows = Array.from(sourceKeys)
+    .map(source => ({
+      source,
+      label: SOURCE_LABELS[source] ?? source,
+      total: tracked[source]?.total ?? 0,
+      ok: tracked[source]?.ok ?? 0,
+      err: tracked[source]?.err ?? 0,
+      ops: tracked[source]?.ops ?? {},
+    }))
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "uk"));
+
   return (
     <div className="rounded-xl border border-border/70 bg-white p-3">
       <div className="mb-2 text-[12px] font-bold text-ink">{title}</div>
@@ -106,16 +138,28 @@ function MonitorApiUsagePanel({
           </div>
         </div>
       </div>
-      {sourceEntries.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {sourceEntries.map(([source, row]) => (
-            <span
-              key={source}
-              className="rounded bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-ink"
-            >
-              {SOURCE_LABELS[source] ?? source}: {formatApiCount(row.total)}
-            </span>
-          ))}
+      {rows.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[280px] text-left text-[10px]">
+            <thead>
+              <tr className="border-b border-border/60 text-muted">
+                <th className="py-1 pr-2 font-medium">Джерело</th>
+                <th className="py-1 pr-2 font-medium">API</th>
+                <th className="py-1 pr-2 font-medium">OK</th>
+                <th className="py-1 font-medium">Помилки</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(row => (
+                <tr key={row.source} className="border-b border-border/30 last:border-0">
+                  <td className="py-1 pr-2 font-medium text-ink">{row.label}</td>
+                  <td className="py-1 pr-2 font-semibold text-ink">{formatApiCount(row.total)}</td>
+                  <td className="py-1 pr-2 text-emerald-700">{formatApiCount(row.ok)}</td>
+                  <td className="py-1 text-red-600">{formatApiCount(row.err)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -648,17 +692,42 @@ export default function AdminParsingPage() {
                         {(searchDetail.api_usage_7d || searchDetail.api_estimate_daily) && (
                           <div className="mt-3 space-y-2">
                             {searchDetail.api_estimate_daily && (
-                              <p className="text-[11px] text-muted">
-                                Оцінка: ~
-                                {searchDetail.api_estimate_daily.estimated_api_per_day.toLocaleString("uk-UA")}{" "}
-                                API/добу (live-fetch ~{searchDetail.api_estimate_daily.api_per_live_fetch.total})
-                              </p>
+                              <div className="text-[11px] text-muted">
+                                <p>
+                                  Оцінка: ~
+                                  {searchDetail.api_estimate_daily.estimated_api_per_day.toLocaleString("uk-UA")}{" "}
+                                  API/добу (live-fetch ~
+                                  {searchDetail.api_estimate_daily.api_per_live_fetch.total})
+                                </p>
+                                {Object.keys(
+                                  searchDetail.api_estimate_daily.api_per_live_fetch.per_source || {},
+                                ).length > 0 && (
+                                  <p className="mt-1">
+                                    За live-fetch:{" "}
+                                    {Object.entries(
+                                      searchDetail.api_estimate_daily.api_per_live_fetch.per_source,
+                                    )
+                                      .map(([source, row]) =>
+                                        `${SOURCE_LABELS[normalizeMonitorSource(source)] ?? source}: ${row.total ?? 0}`,
+                                      )
+                                      .join(" · ")}
+                                  </p>
+                                )}
+                              </div>
                             )}
                             {searchDetail.api_usage_7d && (
-                              <MonitorApiUsagePanel title="Фактично за 7 днів" usage={searchDetail.api_usage_7d} />
+                              <MonitorApiUsagePanel
+                                title="Фактично за 7 днів"
+                                usage={searchDetail.api_usage_7d}
+                                expectedSources={searchDetail.search.sources}
+                              />
                             )}
                             {searchDetail.api_usage_30d && (
-                              <MonitorApiUsagePanel title="Фактично за 30 днів" usage={searchDetail.api_usage_30d} />
+                              <MonitorApiUsagePanel
+                                title="Фактично за 30 днів"
+                                usage={searchDetail.api_usage_30d}
+                                expectedSources={searchDetail.search.sources}
+                              />
                             )}
                           </div>
                         )}

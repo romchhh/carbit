@@ -9,11 +9,11 @@ from typing import Any
 
 from app.core.redis import get_redis
 from app.core.timezone import now_kyiv
+from app.services.admin.api_usage import MONITORED_SOURCES, normalize_api_source
 
 logger = logging.getLogger(__name__)
 
 DAY_TTL_SECONDS = 60 * 60 * 24 * 95
-MONITOR_SOURCES = ("auto_ria", "olx", "telegram_channels", "telegram_bot", "other")
 
 _monitor_search_ids: ContextVar[list[str] | None] = ContextVar("monitor_search_ids", default=None)
 
@@ -37,21 +37,14 @@ async def _incr_fields(search_id: str, fields: dict[str, float], *, dt: datetime
     try:
         redis = await get_redis()
         key = _day_key(search_id, dt)
-        pipe = redis.pipeline(transaction=False)
         for field, amount in fields.items():
-            if not amount:
+            inc = int(round(float(amount)))
+            if inc <= 0:
                 continue
-            pipe.hincrbyfloat(key, field, float(amount))
-        pipe.expire(key, DAY_TTL_SECONDS)
-        await pipe.execute()
+            await redis.hincrby(key, field, inc)
+        await redis.expire(key, DAY_TTL_SECONDS)
     except Exception:
         logger.warning("monitor_api_usage incr failed search=%s", search_id, exc_info=True)
-
-
-def _split_amount(amount: float, search_ids: list[str]) -> float:
-    if not search_ids:
-        return 0.0
-    return float(amount) / len(search_ids)
 
 
 async def record_monitor_api_request(
@@ -66,9 +59,11 @@ async def record_monitor_api_request(
     if not search_ids:
         return
 
-    src = source if source in MONITOR_SOURCES else "other"
+    src = normalize_api_source(source)
+    if src not in MONITORED_SOURCES:
+        src = "other"
     op = (operation or "other").strip().lower()[:48] or "other"
-    amount = _split_amount(max(1, int(count)), search_ids)
+    amount = max(1, int(count))
     status = "ok" if success else "err"
 
     for search_id in search_ids:
@@ -135,11 +130,12 @@ def _sum_api_by_source(bucket: dict[str, float]) -> dict[str, dict[str, float]]:
         if len(parts) != 3:
             continue
         _, source, op = parts
-        block = sources.setdefault(source, {"total": 0.0, "ops": {}})
-        if op in ("total", "ok", "err"):
+        block = sources.setdefault(source, {"total": 0.0, "ok": 0.0, "err": 0.0, "ops": {}})
+        if op == "total":
+            block["total"] = block.get("total", 0.0) + value
+        elif op in ("ok", "err"):
             block[op] = block.get(op, 0.0) + value
         else:
-            block["total"] = block.get("total", 0.0) + value
             ops = block.setdefault("ops", {})
             if isinstance(ops, dict):
                 ops[op] = ops.get(op, 0.0) + value
@@ -154,7 +150,6 @@ def _rollup_buckets(buckets: list[dict[str, float]]) -> dict[str, Any]:
 
     api_total = merged.get("api:total", 0.0)
     sources = _sum_api_by_source(merged)
-    daily: list[dict[str, Any]] = []
 
     return {
         "api_total": round(api_total, 1),
@@ -179,33 +174,23 @@ def _rollup_buckets(buckets: list[dict[str, float]]) -> dict[str, Any]:
             }
             for name, block in sorted(sources.items(), key=lambda item: -item[1].get("total", 0))
         },
-        "daily_chart": daily,
+        "daily_chart": [],
     }
 
 
 async def batch_monitor_api_totals(search_ids: list[str], *, days: int = 1) -> dict[str, float]:
-    """Сума api:total за N днів для списку моніторингів (один Redis round-trip на день)."""
+    """Сума api:total за N днів для списку моніторингів."""
     if not search_ids:
         return {}
     days = max(1, min(int(days), 90))
     now = now_kyiv()
     totals = {sid: 0.0 for sid in search_ids}
     try:
-        redis = await get_redis()
         for offset in range(days):
             dt = now - timedelta(days=offset)
-            pipe = redis.pipeline(transaction=False)
-            keys = [_day_key(sid, dt) for sid in search_ids]
-            for key in keys:
-                pipe.hget(key, "api:total")
-            values = await pipe.execute()
-            for sid, raw in zip(search_ids, values):
-                if raw is None:
-                    continue
-                try:
-                    totals[sid] += float(raw)
-                except (TypeError, ValueError):
-                    continue
+            for sid in search_ids:
+                bucket = await _read_day_bucket(sid, dt)
+                totals[sid] += bucket.get("api:total", 0.0)
     except Exception:
         logger.warning("batch_monitor_api_totals failed", exc_info=True)
     return totals
@@ -245,7 +230,7 @@ def estimate_monitor_api_per_live_fetch(
     category: str = "all",
 ) -> dict[str, Any]:
     """Орієнтовні зовнішні виклики за один live-fetch (без кешу / live-pool)."""
-    normalized = {s.strip().lower().replace(".", "_").replace(" ", "_") for s in (sources or [])}
+    normalized = {normalize_api_source(s) for s in (sources or []) if s}
     if not normalized:
         normalized = {"auto_ria", "olx"}
 
@@ -274,8 +259,8 @@ def estimate_monitor_api_per_live_fetch(
             per_source[key] = {"search": subtotal, "total": subtotal}
             total += subtotal
 
-    if "telegram" in normalized:
-        per_source["telegram"] = {"db_query": 1, "total": 0}
+    if "telegram_channels" in normalized:
+        per_source["telegram_channels"] = {"db_query": 1, "total": 0}
 
     return {"per_source": per_source, "total": total}
 

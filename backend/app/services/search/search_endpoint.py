@@ -36,11 +36,12 @@ def _pool_market_total_for_cache(
     model_post_filter: bool,
     market_total: int,
     nav_total: int,
-    brand_model_filter: bool = False,
 ) -> int | None:
-    if model_post_filter or brand_model_filter:
+    if model_post_filter:
         return None
-    return market_total if market_total > nav_total else None
+    if market_total <= 0:
+        return None
+    return market_total
 
 
 async def _safe_rate_limits(
@@ -107,9 +108,16 @@ async def _page_from_cached_pool(
     page: int,
     per_page: int,
     filters: SearchFilters,
+    sort_by: str,
 ) -> PaginatedListings:
     """Slice a page from the cached slot pool, hydrating AUTO.RIA items on demand."""
-    page_result = await slice_pool(cached_pool, page=page, per_page=per_page, filters=filters)
+    page_result = await slice_pool(
+        cached_pool,
+        page=page,
+        per_page=per_page,
+        filters=filters,
+        sort_by=sort_by or cached_pool.get("sort_by") or "newest",
+    )
     page_result.items = [slim_listing_for_list(item) for item in page_result.items]
     return sanitize_paginated_listings(page_result)
 
@@ -142,7 +150,7 @@ async def run_live_search(
     cached_pool = await get_live_pool(filters, sort_by)
     if cached_pool is not None:
         return await _page_from_cached_pool(
-            cached_pool, page=page, per_page=per_page, filters=filters
+            cached_pool, page=page, per_page=per_page, filters=filters, sort_by=sort_by
         )
 
     # 2) Будуємо слот-пул: AUTO.RIA — тільки IDs (швидко), OLX/Telegram — повні об'єкти
@@ -153,7 +161,7 @@ async def run_live_search(
         cached_pool = await get_live_pool(filters, sort_by)
         if cached_pool is not None:
             return await _page_from_cached_pool(
-                cached_pool, page=page, per_page=per_page, filters=filters
+                cached_pool, page=page, per_page=per_page, filters=filters, sort_by=sort_by
             )
 
         slots: list[dict] = []
@@ -163,7 +171,7 @@ async def run_live_search(
         try:
             from app.services.listings.accident import search_needs_olx_detail_enrich
 
-            slots, nav_total, market_total, source_statuses = await build_live_search_pool(
+            slots, nav_total, market_total, source_statuses, beta_cursor = await build_live_search_pool(
                 filters,
                 sort_by=sort_by,
                 max_ids=LIVE_POOL_SIZE,
@@ -193,7 +201,6 @@ async def run_live_search(
         partial = any(s.error for s in sources) and any(s.item_count > 0 for s in sources)
 
         model_post_filter = False
-        brand_model_filter = bool((filters.brand or "").strip() or (filters.model or "").strip())
         if (filters.model or "").strip():
             try:
                 from app.services.auto_ria.client import AutoRiaClient
@@ -208,7 +215,6 @@ async def run_live_search(
             model_post_filter=model_post_filter,
             market_total=market_total,
             nav_total=nav_total,
-            brand_model_filter=brand_model_filter,
         )
 
         logger.info(
@@ -228,6 +234,8 @@ async def run_live_search(
             "sources": [s.model_dump() if hasattr(s, "model_dump") else s.__dict__ for s in sources],
             "partial": partial,
             "model_post_filter": model_post_filter,
+            "beta_cursor": beta_cursor,
+            "sort_by": sort_by,
         }
 
         await set_live_pool(
@@ -239,13 +247,14 @@ async def run_live_search(
             sources=sources,
             partial=partial,
             model_post_filter=model_post_filter,
+            beta_cursor=beta_cursor,
             ttl_seconds=LIVE_SEARCH_CACHE_TTL_SECONDS,
         )
 
     # 3) Гідратуємо лише поточну сторінку (10 AUTO.RIA get_info замість 500)
     assert pool_data is not None
     results = await _page_from_cached_pool(
-        pool_data, page=page, per_page=per_page, filters=filters
+        pool_data, page=page, per_page=per_page, filters=filters, sort_by=sort_by
     )
 
     if page == 1:
