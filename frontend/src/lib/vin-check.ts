@@ -51,7 +51,7 @@ export function resolveListingVin(listing: Listing): string | null {
 export function getVinCheckUrl(listing: Listing): string | null {
   if (listing.vin_check_url) return listing.vin_check_url;
 
-  const match = listing.id.match(/^auto_ria_(\d+)$/);
+  const match = listing.id.match(/^auto_ria_(?:beta_)?(\d+)$/);
   if (match) {
     return `${AUTO_RIA_SITE}/vin-check/auto/${match[1]}/`;
   }

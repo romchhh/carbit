@@ -124,7 +124,6 @@ export const BODY_TYPE_OPTIONS = [
 ] as const;
 export const SOURCE_OPTIONS = [
   "AUTO.RIA",
-  "AUTO.RIA test beta",
   "OLX",
   "Car Market",
   "Любе Авто",
@@ -133,6 +132,20 @@ export const SOURCE_OPTIONS = [
   "uDrive",
   "Telegram",
 ] as const;
+
+export function sanitizeFilterSources(sources: readonly string[] | null | undefined): string[] {
+  const mapped = (sources ?? []).map(source =>
+    source === "AUTO.RIA test beta" || source === "auto_ria_beta" ? "AUTO.RIA" : source,
+  );
+  const allowed = new Set<string>(SOURCE_OPTIONS);
+  const out: string[] = [];
+  for (const source of mapped) {
+    if (!allowed.has(source) || out.includes(source)) continue;
+    out.push(source);
+  }
+  return out.length ? out : [...SOURCE_OPTIONS];
+}
+
 export const DRIVE_OPTIONS = ["Передній", "Задній", "Повний"] as const;
 export const COLOR_SWATCHES = [
   { name: "Білий", hex: "#F5F5F5", border: true },
@@ -461,6 +474,29 @@ export function filterListings(items: SearchResult[], filters: SearchFilterState
   });
 }
 
+function listingPublishMs(item: {
+  published_at?: string | null;
+  publishedAt?: string | null;
+  refreshed_at?: string | null;
+  refreshedAt?: string | null;
+  found_at?: string | null;
+  foundAt?: string | null;
+}): number {
+  const cutoff = Date.parse("1972-01-01T00:00:00Z");
+  for (const raw of [
+    item.published_at,
+    item.publishedAt,
+    item.refreshed_at,
+    item.refreshedAt,
+    item.found_at,
+    item.foundAt,
+  ]) {
+    const t = Date.parse(raw || "");
+    if (Number.isFinite(t) && t > cutoff) return t;
+  }
+  return 0;
+}
+
 export function sortListings(items: SearchResult[], sort: SortOption): SearchResult[] {
   const sorted = [...items];
   switch (sort) {
@@ -473,27 +509,9 @@ export function sortListings(items: SearchResult[], sort: SortOption): SearchRes
     case "mileage_asc":
       return sorted.sort((a, b) => a.mileage - b.mileage);
     case "newest":
-      return sorted.sort((a, b) => {
-        const sortMs = (item: SearchResult) => {
-          for (const raw of [item.refreshedAt, item.publishedAt, item.foundAt]) {
-            const t = Date.parse(raw || "");
-            if (Number.isFinite(t) && t > 0) return t;
-          }
-          return 0;
-        };
-        return sortMs(b) - sortMs(a);
-      });
+      return sorted.sort((a, b) => listingPublishMs(b) - listingPublishMs(a));
     case "published_asc":
-      return sorted.sort((a, b) => {
-        const sortMs = (item: SearchResult) => {
-          for (const raw of [item.refreshedAt, item.publishedAt, item.foundAt]) {
-            const t = Date.parse(raw || "");
-            if (Number.isFinite(t) && t > 0) return t;
-          }
-          return 0;
-        };
-        return sortMs(a) - sortMs(b);
-      });
+      return sorted.sort((a, b) => listingPublishMs(a) - listingPublishMs(b));
     default:
       return sorted;
   }
@@ -504,20 +522,7 @@ export function sortListingItems(items: Listing[], sort: SortOption): Listing[] 
   const sorted = [...items];
   const priceUah = (item: Listing) =>
     toUah(item.price, resolveListingCurrency(item.currency));
-  const publishedMs = (item: Listing) => {
-    for (const raw of [
-      item.refreshed_at,
-      (item as Listing & { refreshedAt?: string }).refreshedAt,
-      item.published_at,
-      (item as Listing & { publishedAt?: string }).publishedAt,
-      item.found_at,
-      (item as Listing & { foundAt?: string }).foundAt,
-    ]) {
-      const t = Date.parse(raw || "");
-      if (Number.isFinite(t) && t > 0) return t;
-    }
-    return 0;
-  };
+  const publishedMs = (item: Listing) => listingPublishMs(item);
 
   switch (sort) {
     case "price_asc":

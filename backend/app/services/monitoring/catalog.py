@@ -26,6 +26,8 @@ SOURCE_ALIASES: dict[str, str] = {
     "auto_ria": "auto_ria",
     "auto.ria": "auto_ria",
     "autoria": "auto_ria",
+    "auto_ria_beta": "auto_ria",
+    "auto.ria test beta": "auto_ria",
     "olx": "olx",
     "imperiya": "imperiya",
     "imperiya avto": "imperiya",

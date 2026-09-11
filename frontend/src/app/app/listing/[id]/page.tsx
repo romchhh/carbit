@@ -42,6 +42,8 @@ import {
 import { openExternalUrl } from "@/lib/open-external";
 import { loadRecentListings, saveRecentListing } from "@/lib/recent-listings";
 import { normalizeListingIdParam } from "@/lib/listing-share";
+import { listingHasAutoRiaDetails } from "@/lib/auto-ria-details";
+import { ensureListingGallery, listingShouldFetchGallery } from "@/lib/listing-gallery";
 import { hasVinCheck } from "@/lib/vin-check";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
 import { hasSellerContact } from "@/lib/seller-contact";
@@ -89,7 +91,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           setListing(merged);
           saveRecentListing(merged);
           setNotFound(false);
-          if (
+          if (listingShouldFetchGallery(merged)) {
+            ensureListingGallery(merged)
+              .then(fresh => setListing(prev => keepListingMirrors(fresh, prev, cached)))
+              .catch(() => {});
+          } else if (
             data.source === "auto_ria" &&
             (data.images?.length ?? 0) < 2
           ) {
@@ -167,10 +173,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   const images = Array.isArray(listing.images) ? listing.images : [];
   const publishedLabel = publishedAgoLabel(listing.published_at);
-  const hasAutoRiaDetails =
-    listing.source === "auto_ria" &&
-    listing.source_data &&
-    Object.keys(listing.source_data).length > 0;
+  const hasAutoRiaDetails = listingHasAutoRiaDetails(listing);
   const descriptionText = (() => {
     const fromListing = (listing.description || "").trim();
     if (fromListing) return fromListing;

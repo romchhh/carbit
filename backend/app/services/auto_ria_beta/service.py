@@ -29,6 +29,7 @@ class AutoRiaBetaBatch:
     market_total: int
     next_html_page: int
     exhausted: bool
+    error: str | None = None
 
     def to_page(self, *, need: int) -> PaginatedListings:
         items = list(self.listings)
@@ -46,7 +47,7 @@ class AutoRiaBetaBatch:
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
     payload = {
         "source": "auto_ria_beta",
-        "beta_v": "html-v3",
+        "beta_v": "html-v6",
         "filters": filters.model_dump(mode="json"),
         "page": page,
         "per_page": per_page,
@@ -62,7 +63,7 @@ async def fetch_auto_ria_beta_batch(
     start_page: int = 0,
     html_pages: int = INITIAL_HTML_PAGES,
     need: int | None = None,
-    seen_ids: set[int] | None = None,
+    seen_ids: set[str] | None = None,
 ) -> AutoRiaBetaBatch:
     """Тягне обмежену кількість HTML-сторінок пошуку (без повного обходу каталогу)."""
     cap = min(need, POOL_MAX_ITEMS) if need is not None else POOL_MAX_ITEMS
@@ -70,27 +71,38 @@ async def fetch_auto_ria_beta_batch(
     start_page = max(start_page, 0)
     client = AutoRiaBetaClient()
     collected_cars = []
-    seen: set[int] = set(seen_ids or ())
+    seen: set[str] = set(seen_ids or ())
     total = 0
     html_page = start_page
     last_page = min(start_page + html_pages, MAX_PAGES)
     exhausted = start_page >= MAX_PAGES
 
     while html_page < last_page and len(collected_cars) < cap:
-        params = await filters_to_html_params(filters, page=html_page, size=PAGE_SIZE)
+        params = await filters_to_html_params(
+            filters, page=html_page, size=PAGE_SIZE, sort_by=sort_by
+        )
         try:
             page_cars, page_total = await client.fetch_search_page(params)
-        except AutoRiaBetaError:
+        except AutoRiaBetaError as exc:
             logger.warning("auto_ria_beta html page=%s failed", html_page, exc_info=True)
+            if html_page == start_page and not collected_cars:
+                return AutoRiaBetaBatch(
+                    listings=[],
+                    market_total=total,
+                    next_html_page=html_page,
+                    exhausted=True,
+                    error=str(exc),
+                )
             exhausted = True
             break
 
         total = max(total, page_total)
         added = 0
         for car in apply_client_filters(page_cars, filters):
-            if car.car_id in seen:
+            key = f"n:{car.car_id}" if car.is_new else str(car.car_id)
+            if key in seen:
                 continue
-            seen.add(car.car_id)
+            seen.add(key)
             collected_cars.append(car)
             added += 1
             if len(collected_cars) >= cap:

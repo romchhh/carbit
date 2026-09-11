@@ -222,6 +222,9 @@ def test_olx_error_without_request_still_works() -> None:
         "REONO: мережева помилка: timeout",
         "OLX: таймаут 22s",
         "OLX: помилка 403",
+        'AUTO.RIA помилка 404: {"error": "Error message: <!DOCTYPE html>"}',
+        "AUTO.RIA помилка 404: HTML error page from AUTO.RIA gateway",
+        "AUTO.RIA тимчасово обірвав з'єднання. Спробуйте ще раз.",
     ],
 )
 def test_transient_partial_source_error(message: str) -> None:
@@ -230,3 +233,12 @@ def test_transient_partial_source_error(message: str) -> None:
 
 def test_transient_partial_source_error_rejects_auth_failures() -> None:
     assert is_transient_partial_source_error("Імперія Авто: IMPERIYA_API_KEY не налаштовано") is False
+
+
+def test_auto_ria_html_404_is_transient() -> None:
+    from app.services.auto_ria.client import _is_transient_http_status, _sanitize_error_body
+
+    body = '{"error": "Error message: <!DOCTYPE html>\\n<html lang=\\"ru\\">"}'
+    assert _is_transient_http_status(404, body) is True
+    assert "DOCTYPE" not in _sanitize_error_body(body)
+    assert "HTML error page" in _sanitize_error_body(body)

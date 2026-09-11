@@ -232,6 +232,6 @@ def listing_matches_accident_filter(item: ListingOut, accident: str | None) -> b
 
     # «Був у ДТП»: AUTO.RIA вже фільтрує damage=2, дозволяємо невідомих.
     source = (item.source or "").strip().lower()
-    if source == "auto_ria":
+    if source in ("auto_ria", "auto_ria_beta"):
         return had is not False
     return had is True

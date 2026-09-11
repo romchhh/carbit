@@ -106,7 +106,7 @@ class ListingOutFlagsTests(unittest.TestCase):
                 description="Дістроник (запобігання дтп), камера 360",
             )
         )
-        self.assertIsNone(out.had_accident)
+        self.assertFalse(out.had_accident)
 
 
 class AutoRiaPageBadgesTests(unittest.TestCase):
@@ -120,6 +120,24 @@ class AutoRiaPageBadgesTests(unittest.TestCase):
         badges = parse_page_badges_html(html)
         self.assertTrue(badges["had_accident"])
         self.assertTrue(badges["usa_import"])
+
+    def test_parse_page_badges_china_is_not_usa(self):
+        from app.services.auto_ria.page_badges import parse_page_badges_html
+
+        html = '{"id":"badgesOrderFrom","isHide":false,"elements":[{"content":"Пригнано з Китаю"}]}'
+        badges = parse_page_badges_html(html)
+        self.assertEqual(badges.get("usa_import"), False)
+        self.assertNotIn("had_accident", badges)
+
+    def test_auto_ria_beta_china_import_is_not_usa(self):
+        out = ListingOut(
+            **_base_listing(
+                id="auto_ria_beta_1",
+                source="auto_ria_beta",
+                source_data={"ria_page_badges": {"usa_import": False}},
+            )
+        )
+        self.assertFalse(out.usa_import)
 
 
 if __name__ == "__main__":

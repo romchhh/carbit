@@ -20,7 +20,19 @@ def _dedupe_key(source: str, error: str) -> str:
     err = (error or "").strip().lower()
     if "таймаут" in err or "timeout" in err:
         return f"{source}:timeout"
+    if "404" in err and ("html" in err or "doctype" in err or "httpoison" in err or ":closed" in err):
+        return f"{source}:html404"
+    if "обірвав" in err or "тимчасово недоступ" in err:
+        return f"{source}:transient"
     return f"{source}:{error[:160]}"
+
+
+def _safe_error_for_admin(error: str) -> str:
+    text = (error or "").strip()
+    low = text.lower()
+    if "<!doctype" in low or "<html" in low:
+        return "AUTO.RIA тимчасово недоступний (HTML 404 від шлюзу)."
+    return text[:500]
 
 
 async def _should_notify(key: str, *, cooldown: float | None = None) -> bool:
@@ -62,7 +74,7 @@ async def notify_admin_parsing_error(
     lines = [
         f"⚠️ <b>Помилка парсингу: {html.escape(source)}</b>",
         "",
-        f"<code>{html.escape(error[:1800])}</code>",
+        f"<code>{html.escape(_safe_error_for_admin(error))}</code>",
     ]
     if details:
         lines.extend(["", html.escape(details[:800])])

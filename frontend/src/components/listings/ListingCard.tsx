@@ -71,30 +71,32 @@ export function ListingCard({
   const displayCurrency = resolveDisplayCurrency(
     displayCurrencyProp ?? user?.preferred_currency,
   );
-  const { images, rootRef, photosPending } = useListingPhotoHydration(listing);
+  const { images, rootRef, photosPending, listing: hydrated } = useListingPhotoHydration(listing);
+  const display = hydrated;
   const isViewed = useListingViewed(listing.id);
-  const fuel = typeof listing.fuel === "string" ? listing.fuel : "";
-  const region = typeof listing.region === "string" ? listing.region : "";
-  const sellerLabel = listing.seller_type === "dealer" ? "Автосалон" : "Приват";
-  const resolvedVin = resolveListingVin(listing);
-  const cachedVinCheck = useListingVinCheck(listing);
-  const showVinBlock = Boolean(resolvedVin) || hasVinCheck(listing);
-  const highlights = getAutoRiaHighlights(listing.source_data).slice(0, 3);
-  const mileageKm = resolveListingMileage(listing);
-  const engineVolume = resolveListingEngineVolume(listing);
-  const publishedLabel = publishedAgoLabel(listing.published_at);
+  const fuel = typeof display.fuel === "string" ? display.fuel : "";
+  const region = typeof display.region === "string" ? display.region : "";
+  const sellerLabel = display.seller_type === "dealer" ? "Автосалон" : "Приват";
+  const resolvedVin = resolveListingVin(display);
+  const cachedVinCheck = useListingVinCheck(display);
+  const showVinBlock =
+    Boolean(resolvedVin) || hasVinCheck(display) || Boolean(display.vin_checked);
+  const highlights = getAutoRiaHighlights(display.source_data).slice(0, 3);
+  const mileageKm = resolveListingMileage(display);
+  const engineVolume = resolveListingEngineVolume(display);
+  const publishedLabel = publishedAgoLabel(display.published_at);
   const refreshedLabel =
-    listing.refreshed_at && listing.refreshed_at !== listing.published_at
-      ? refreshedAgoLabel(listing.refreshed_at)
+    display.refreshed_at && display.refreshed_at !== display.published_at
+      ? refreshedAgoLabel(display.refreshed_at)
       : "";
   // На фото — дата публікації, не lastRefresh (підняття на OLX).
-  const timeBadgeDate = listing.published_at;
-  const hasMirrorSources = (listing.alternate_sources?.length ?? 0) > 0;
-  const isNewForMonitor = Boolean(listing.is_new);
-  const isNewCar = listingIsNewCar(listing);
-  const hadAccident = resolveListingAccidentHad(listing) === true;
-  const isUsaImport = resolveListingUsaImport(listing);
-  const plateLabel = listing.plate?.trim() || "";
+  const timeBadgeDate = display.published_at;
+  const hasMirrorSources = (display.alternate_sources?.length ?? 0) > 0;
+  const isNewForMonitor = Boolean(display.is_new);
+  const isNewCar = listingIsNewCar(display);
+  const hadAccident = resolveListingAccidentHad(display) === true;
+  const isUsaImport = resolveListingUsaImport(display);
+  const plateLabel = display.plate?.trim() || "";
   const [photoIndex, setPhotoIndex] = useState(0);
   const photoCount = images.length;
   const safeIndex = photoCount > 0 ? ((photoIndex % photoCount) + photoCount) % photoCount : 0;
@@ -153,7 +155,7 @@ export function ListingCard({
       <div className="relative aspect-[16/10] w-full bg-surface sm:hidden">
         <ListingPhoto
           src={currentPhoto}
-          alt={listing.title}
+          alt={display.title}
           pending={photosPending && !currentPhoto}
           sizes="100vw"
           pendingLabel="Завантаження фото…"
@@ -174,7 +176,7 @@ export function ListingCard({
             {isUsaImport && <UsaImportBadge variant="overlay" />}
           </div>
           <div className="flex items-center gap-1.5">
-            <ListingShareButton listing={listing} variant="overlay" />
+            <ListingShareButton listing={display} variant="overlay" />
             {onToggleCompare && (
               <ListingCompareButton
                 active={isCompared}
@@ -241,7 +243,7 @@ export function ListingCard({
       <div className="relative hidden h-44 w-64 shrink-0 overflow-hidden rounded-xl bg-surface sm:block lg:h-56 lg:w-[22rem] lg:rounded-2xl">
         <ListingPhoto
           src={currentPhoto}
-          alt={listing.title}
+          alt={display.title}
           pending={photosPending && !currentPhoto}
           sizes="(min-width: 1024px) 352px, 256px"
           imageClassName="transition-transform duration-300 group-hover:scale-[1.02]"
@@ -249,7 +251,7 @@ export function ListingCard({
           logoClassName="h-10 sm:h-11"
         />
         <div className="absolute right-2 top-2 z-[1] flex items-center gap-1.5">
-          <ListingShareButton listing={listing} variant="overlay" />
+          <ListingShareButton listing={display} variant="overlay" />
           {onToggleCompare && (
             <ListingCompareButton
               active={isCompared}
@@ -329,12 +331,12 @@ export function ListingCard({
                 <UsaImportBadge variant="label" className="hidden sm:inline-flex" />
               )}
               <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-ink sm:text-[16px] sm:line-clamp-2 lg:text-[18px]">
-                {listing.title}
+                {display.title}
               </h3>
             </div>
             <div className="mt-2 sm:hidden">
               <ListingPriceDisplay
-                listing={listing}
+                listing={display}
                 displayCurrency={displayCurrency}
                 priceClassName="text-[22px]"
                 showBadge={!hidePriceDrop}
@@ -343,7 +345,7 @@ export function ListingCard({
           </div>
           <div className="hidden shrink-0 text-right sm:block">
             <ListingPriceDisplay
-              listing={listing}
+              listing={display}
               displayCurrency={displayCurrency}
               priceClassName="text-[22px] lg:text-[26px]"
               className="items-end"
@@ -353,9 +355,9 @@ export function ListingCard({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-3 lg:mt-4 lg:gap-2">
-          {listing.year > 0 && (
+          {display.year > 0 && (
             <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
-              {listing.year}
+              {display.year}
             </span>
           )}
           {mileageKm != null && mileageKm > 0 && (
@@ -368,9 +370,9 @@ export function ListingCard({
               {formatEngineVolume(engineVolume)}
             </span>
           )}
-          {listing.transmission && (
+          {display.transmission && (
             <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
-              {listing.transmission}
+              {display.transmission}
             </span>
           )}
           {fuel && (
@@ -400,13 +402,13 @@ export function ListingCard({
                   VIN: {resolvedVin}
                 </span>
               )}
-              {listing.vin_checked && !cachedVinCheck && (
+              {display.vin_checked && !cachedVinCheck && (
                 <Badge variant="emerald" className="text-[10px]">
                   VIN перевірено
                 </Badge>
               )}
             </div>
-            <VinCheckButton listing={listing} showSummary />
+            <VinCheckButton listing={display} showSummary />
           </div>
         )}
 
@@ -431,7 +433,7 @@ export function ListingCard({
               </span>
             )}
             {hasMirrorSources ? (
-              <SourceLinks listing={listing} iconOnly />
+              <SourceLinks listing={display} iconOnly />
             ) : (
               <SourceBadge source={listing.source} variant="outline" />
             )}

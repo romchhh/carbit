@@ -10,7 +10,7 @@ import type { Listing } from "@/types/api";
 const SOURCE_OPTIONS = [
   { value: "", label: "Усі джерела" },
   { value: "auto_ria", label: "AUTO.RIA" },
-  { value: "auto_ria_beta", label: "AUTO.RIA test beta" },
+  { value: "auto_ria_beta", label: "AUTO.RIA (архів HTML)" },
   { value: "olx", label: "OLX" },
   { value: "imperiya", label: "Імперія Авто" },
   { value: "car_market", label: "Car Market" },
@@ -22,7 +22,7 @@ const SOURCE_OPTIONS = [
 
 const SOURCE_LABELS: Record<string, string> = {
   auto_ria: "AUTO.RIA",
-  auto_ria_beta: "AUTO.RIA test beta",
+  auto_ria_beta: "AUTO.RIA",
   olx: "OLX",
   imperiya: "Імперія Авто",
   car_market: "Car Market",

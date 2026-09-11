@@ -605,7 +605,18 @@ def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
         },
         price_history=[],
         is_duplicate=False,
-        published_at=_parse_datetime(info.get("updatedDate")),
+        is_new=True,
+        published_at=_parse_datetime(
+            info.get("addDate")
+            or info.get("createdDate")
+            or info.get("date")
+            or info.get("updatedDate")
+        ),
+        refreshed_at=_parse_datetime(info.get("updatedDate"))
+        if info.get("updatedDate") and info.get("updatedDate") != (
+            info.get("addDate") or info.get("createdDate") or info.get("date")
+        )
+        else None,
         found_at=now_kyiv(),
         ),
         seller_contact_from_auto_ria_salon(salon if isinstance(salon, dict) else {}),

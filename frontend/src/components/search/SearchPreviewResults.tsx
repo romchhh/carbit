@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 function sourceLabel(source: string): string {
   if (source === "olx" || source === "OLX") return "OLX";
   if (source === "auto_ria" || source === "AUTO.RIA") return "AUTO.RIA";
-  if (source === "auto_ria_beta" || source === "AUTO.RIA test beta") return "AUTO.RIA test beta";
+  if (source === "auto_ria_beta" || source === "AUTO.RIA test beta") return "AUTO.RIA";
   if (source === "imperiya" || source === "Імперія Авто") return "Імперія Авто";
   if (source === "car_market" || source === "Car Market") return "Car Market";
   if (source === "lubeavto" || source === "Любе Авто") return "Любе Авто";

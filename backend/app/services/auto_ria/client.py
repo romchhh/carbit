@@ -53,16 +53,36 @@ async def _reset_shared_http_client() -> None:
         _http_client = None
 
 
+def _body_looks_like_html_error(body: str) -> bool:
+    """404/5xx інколи несуть HTML-сторінку шлюзу всередині JSON {"error":"..."}."""
+    low = (body or "").lower()
+    return (
+        "<!doctype html" in low
+        or "<html" in low
+        or "httpoison" in low
+        or "reason: :closed" in low
+        or ":closed" in low
+    )
+
+
+def _sanitize_error_body(body: str, *, limit: int = 160) -> str:
+    """Не тягнемо HTML у логи / Telegram — лише короткий текст."""
+    text = (body or "").strip().replace("\n", " ").replace("\r", " ")
+    if _body_looks_like_html_error(text):
+        return "HTML error page from AUTO.RIA gateway"
+    if len(text) > limit:
+        return text[: limit - 1] + "…"
+    return text
+
+
 def _is_transient_http_status(status: int, body: str) -> bool:
     """Чи варто повторити запит (тимчасовий збій upstream, не логічна помилка)."""
     if status in (408, 425, 429, 500, 502, 503, 504):
         return True
-    # AUTO.RIA інколи віддає 404 з тілом Elixir HTTPoison при обриві з'єднання
-    # їхнього проксі до внутрішнього сервісу — це не «ресурс не знайдено».
-    if status == 404:
-        low = (body or "").lower()
-        if "httpoison" in low or "reason: :closed" in low or ":closed" in low:
-            return True
+    # AUTO.RIA інколи віддає 404 з HTTPoison/:closed або HTML шлюзу —
+    # це не «ресурс не знайдено».
+    if status == 404 and _body_looks_like_html_error(body):
+        return True
     return False
 
 
@@ -103,13 +123,14 @@ class AutoRiaClient:
                 continue
 
             if response.status_code >= 400:
-                body = response.text[:200]
+                raw_body = response.text[:800]
+                safe_body = _sanitize_error_body(raw_body)
                 err = AutoRiaError(
-                    f"AUTO.RIA помилка {response.status_code}: {body}",
+                    f"AUTO.RIA помилка {response.status_code}: {safe_body}",
                     status_code=response.status_code,
                 )
                 if (
-                    _is_transient_http_status(response.status_code, body)
+                    _is_transient_http_status(response.status_code, raw_body)
                     and attempt + 1 < _MAX_ATTEMPTS
                 ):
                     delay = _RETRY_BACKOFF_SECONDS[min(attempt, len(_RETRY_BACKOFF_SECONDS) - 1)]
@@ -120,13 +141,13 @@ class AutoRiaClient:
                         attempt + 1,
                         _MAX_ATTEMPTS,
                         delay,
-                        body[:120],
+                        safe_body,
                     )
                     last_error = err
                     await _reset_shared_http_client()
                     await asyncio.sleep(delay)
                     continue
-                if _is_transient_http_status(response.status_code, body):
+                if _is_transient_http_status(response.status_code, raw_body):
                     await record_api_request("auto_ria", operation, success=False)
                     raise AutoRiaError(
                         "AUTO.RIA тимчасово обірвав з'єднання. Спробуйте ще раз.",
@@ -137,8 +158,8 @@ class AutoRiaClient:
                     schedule_auto_ria_quota_exhausted,
                 )
 
-                if is_auto_ria_quota_error(response.status_code, body):
-                    schedule_auto_ria_quota_exhausted(err.args[0] if err.args else body)
+                if is_auto_ria_quota_error(response.status_code, raw_body):
+                    schedule_auto_ria_quota_exhausted(err.args[0] if err.args else safe_body)
                 await record_api_request("auto_ria", operation, success=False)
                 raise err
 

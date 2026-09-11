@@ -27,7 +27,7 @@ const SOURCE_ICON_KEYS: Record<
 /** Підписи з фільтра SearchFilterState.sources */
 const SOURCE_FILTER_LABEL_TO_KEY: Record<string, ListingSourceKey> = {
   "AUTO.RIA": "auto_ria",
-  "AUTO.RIA test beta": "auto_ria_beta",
+  "AUTO.RIA test beta": "auto_ria",
   OLX: "olx",
   "Імперія Авто": "imperiya",
   "Car Market": "car_market",
@@ -40,7 +40,7 @@ const SOURCE_FILTER_LABEL_TO_KEY: Record<string, ListingSourceKey> = {
 export function listingSourceLabel(source: string): string {
   if (source === "olx") return "OLX";
   if (source === "auto_ria") return "AUTO.RIA";
-  if (source === "auto_ria_beta") return "AUTO.RIA test beta";
+  if (source === "auto_ria_beta") return "AUTO.RIA";
   if (source === "imperiya") return "Імперія Авто";
   if (source === "car_market") return "Car Market";
   if (source === "lubeavto") return "Любе Авто";

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from datetime import date
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,6 +63,63 @@ def listing_vin_for_dedup(item: ListingOut | Listing) -> str | None:
     vin = _normalize_vin(getattr(item, "vin", None))
     if is_valid_vin(vin):
         return vin
+    return None
+
+
+_AUTO_RIA_SOURCES = {"auto_ria", "auto_ria_beta", "autoria", "auto.ria"}
+_FRESH_USED_STOCK_MAX_KM = 5000
+
+
+def _auto_ria_source(item: ListingOut | Listing) -> str:
+    return (getattr(item, "source", None) or "").strip().lower()
+
+
+def _is_auto_ria_new_stock(item: ListingOut | Listing) -> bool:
+    lid = (getattr(item, "id", None) or "").strip()
+    if lid.startswith("new_auto_ria_"):
+        return True
+    if getattr(item, "is_new", None) is not True:
+        return False
+    return _auto_ria_source(item) in _AUTO_RIA_SOURCES
+
+
+def _is_auto_ria_fresh_used_stock(item: ListingOut | Listing) -> bool:
+    """Вживані URL дилерського стоку (нові авто з пробігом «до салону»)."""
+    lid = (getattr(item, "id", None) or "").strip()
+    if lid.startswith("new_auto_ria_") or not lid.startswith("auto_ria_"):
+        return False
+    if _auto_ria_source(item) not in _AUTO_RIA_SOURCES:
+        return False
+    try:
+        year = int(getattr(item, "year", 0) or 0)
+        mileage = int(getattr(item, "mileage", 0) or 0)
+    except (TypeError, ValueError):
+        return False
+    return year >= date.today().year - 1 and 0 <= mileage <= _FRESH_USED_STOCK_MAX_KM
+
+
+def auto_ria_new_stock_fingerprint(item: ListingOut | Listing) -> str | None:
+    """Однакові дилерські лоти AUTO.RIA (різні ID) — без VIN.
+
+    Newauto: пробіг не входить (HTML — км до салону, API ставить 0).
+    Свіжі used-URL: пробіг входить, щоб не склеювати звичайні б/у з округленими тис. км.
+    """
+    brand = norm_text(getattr(item, "brand", None) or "")
+    model = norm_text(getattr(item, "model", None) or "")
+    try:
+        year = int(getattr(item, "year", 0) or 0)
+        price = int(getattr(item, "price", 0) or 0)
+        mileage = int(getattr(item, "mileage", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+    if not brand or not model or year < 1990 or price <= 0:
+        return None
+    currency = (getattr(item, "currency", None) or "USD").strip().upper() or "USD"
+    region = norm_text(str(getattr(item, "region", None) or "").split(",")[0])
+    if _is_auto_ria_new_stock(item):
+        return f"arnew:{brand}:{model}:{year}:{price}:{currency}:{region}"
+    if _is_auto_ria_fresh_used_stock(item):
+        return f"arused:{brand}:{model}:{year}:{price}:{currency}:{region}:{mileage}"
     return None
 
 
@@ -338,10 +396,14 @@ def dedupe_telegram_posts_in_pool(items: list[ListingOut]) -> list[ListingOut]:
 
 
 def listings_look_same(a: ListingOut | Listing, b: ListingOut | Listing) -> bool:
-    """Одне авто — лише при збігу валідного 17-символьного VIN."""
+    """Одне авто: той самий VIN або той самий дилерський newauto-лот."""
     vin_a = listing_vin_for_dedup(a)
     vin_b = listing_vin_for_dedup(b)
-    return bool(vin_a and vin_b and vin_a == vin_b)
+    if vin_a and vin_b and vin_a == vin_b:
+        return True
+    fp_a = auto_ria_new_stock_fingerprint(a)
+    fp_b = auto_ria_new_stock_fingerprint(b)
+    return bool(fp_a and fp_b and fp_a == fp_b)
 
 
 async def find_duplicate_of(db: AsyncSession, data: ListingOut) -> Listing | None:

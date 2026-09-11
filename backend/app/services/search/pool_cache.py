@@ -3,7 +3,7 @@
 Slot-based pool format (Redis):
   {
     "slots": [
-      {"s": "r", "i": "12345"},          # AUTO.RIA вживані — тільки ID, гідратується через /auto/info
+      {"s": "r", "i": "12345", "d": {...}?},  # AUTO.RIA: ID + опційна HTML-картка; деталі — /auto/info
       {"s": "n", "i": "1928969"},         # AUTO.RIA нові   — тільки ID, гідратується через /auto/new/auto
       {"s": "o", "d": {...listing}},      # OLX      — повний об'єкт
       {"s": "i", "d": {...listing}},      # Імперія  — повний об'єкт
@@ -37,7 +37,7 @@ from app.services.parser.filter_groups import filters_group_key
 
 logger = logging.getLogger(__name__)
 
-LIVE_POOL_PREFIX = "live-pool:v3:"
+LIVE_POOL_PREFIX = "live-pool:v7:"
 LIVE_POOL_TTL_SECONDS = 600  # 10 хвилин — повторний пошук без нових AR-запитів
 # Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
 LIVE_POOL_SIZE = 2500
@@ -112,17 +112,47 @@ async def set_live_pool(
 _beta_extend_locks: dict[str, asyncio.Lock] = {}
 
 
-def _beta_slot_ids(slots: list[dict]) -> set[int]:
-    ids: set[int] = set()
+def _html_slot_keys(slots: list[dict]) -> set[str]:
+    keys: set[str] = set()
     for slot in slots:
-        if slot.get("s") != "b":
+        src = slot.get("s")
+        if src == "r":
+            raw = str(slot.get("i") or "")
+            if raw.isdigit():
+                keys.add(raw)
+            continue
+        if src == "n":
+            raw = str(slot.get("i") or "")
+            if raw.isdigit():
+                keys.add(f"n:{raw}")
+            continue
+        if src != "b":
             continue
         data = slot.get("d") or {}
         raw = str(data.get("id") or "")
-        suffix = raw.removeprefix("auto_ria_beta_")
+        if raw.startswith("new_auto_ria_"):
+            suffix = raw.removeprefix("new_auto_ria_")
+            if suffix.isdigit():
+                keys.add(f"n:{suffix}")
+            continue
+        suffix = raw.removeprefix("auto_ria_beta_").removeprefix("auto_ria_")
         if suffix.isdigit():
-            ids.add(int(suffix))
-    return ids
+            keys.add(suffix)
+    return keys
+
+
+def _html_slot_new_stock_fps(slots: list[dict]) -> set[str]:
+    from app.services.listings.duplicates import auto_ria_new_stock_fingerprint
+
+    fps: set[str] = set()
+    for slot in slots:
+        listing = _slot_listing(slot)
+        if listing is None:
+            continue
+        fp = auto_ria_new_stock_fingerprint(listing)
+        if fp:
+            fps.add(fp)
+    return fps
 
 
 async def ensure_beta_pool_covers(
@@ -132,7 +162,7 @@ async def ensure_beta_pool_covers(
     sort_by: str,
     need: int,
 ) -> dict[str, Any]:
-    """Довантажує наступні HTML-сторінки AUTO.RIA test beta, коли користувач гортає далі."""
+    """Довантажує наступні HTML-сторінки AUTO.RIA, коли користувач гортає далі."""
     cursor = pool.get("beta_cursor")
     if not isinstance(cursor, dict) or cursor.get("exhausted"):
         return pool
@@ -155,7 +185,8 @@ async def ensure_beta_pool_covers(
         if not isinstance(cursor, dict) or cursor.get("exhausted") or need <= len(slots):
             return pool
 
-        seen = _beta_slot_ids(slots)
+        seen = _html_slot_keys(slots)
+        seen_fps = _html_slot_new_stock_fps(slots)
         next_html = int(cursor.get("next_html_page") or 0)
         market_total = int(pool.get("market_total") or 0)
         while len(slots) < need and next_html < MAX_PAGES and len(slots) < POOL_MAX_ITEMS:
@@ -169,21 +200,40 @@ async def ensure_beta_pool_covers(
             )
             next_html = batch.next_html_page
             market_total = max(market_total, batch.market_total)
-            added = 0
+            if batch.error:
+                cursor = {
+                    "next_html_page": next_html,
+                    "exhausted": True,
+                }
+                break
+            from app.services.auto_ria.html_merge import listing_numeric_id
+            from app.services.listings.duplicates import auto_ria_new_stock_fingerprint
+
             for listing in batch.listings:
-                suffix = (listing.id or "").removeprefix("auto_ria_beta_")
-                if suffix.isdigit():
-                    car_id = int(suffix)
-                    if car_id in seen:
-                        continue
-                    seen.add(car_id)
-                slots.append({"s": "b", "d": listing.model_dump(mode="json")})
-                added += 1
+                aid = listing_numeric_id(listing)
+                if not aid or aid in seen:
+                    continue
+                fp = auto_ria_new_stock_fingerprint(listing)
+                if fp and fp in seen_fps:
+                    continue
+                seen.add(aid)
+                if fp:
+                    seen_fps.add(fp)
+                if aid.startswith("n:"):
+                    slots.append({"s": "n", "i": aid[2:], "d": listing.model_dump(mode="json")})
+                else:
+                    slots.append({"s": "r", "i": aid, "d": listing.model_dump(mode="json")})
             cursor = {
                 "next_html_page": next_html,
-                "exhausted": bool(batch.exhausted or added == 0),
+                "exhausted": bool(batch.exhausted),
             }
-            if batch.exhausted or added == 0:
+            if batch.exhausted:
+                break
+            if not batch.listings:
+                cursor = {
+                    "next_html_page": next_html,
+                    "exhausted": True,
+                }
                 break
 
         extra = 0
@@ -286,11 +336,15 @@ async def hydrate_tagged_auto_ria_ids(
     ids: list[str],
     *,
     limit: int | None = None,
+    html_cards: dict[str, ListingOut] | None = None,
 ) -> list[ListingOut]:
     """Гідратує tagged IDs (`123` вживані, `n:456` нові) зі спільним Redis-кешем."""
+    from app.services.auto_ria.html_merge import merge_html_card_with_api
+
     tagged = list(ids[:limit] if limit is not None else ids)
     if not tagged:
         return []
+    cards = html_cards or {}
     used_ids = [aid for aid in tagged if not aid.startswith("n:")]
     new_ids = [aid[2:] for aid in tagged if aid.startswith("n:")]
     hydrated_used, hydrated_new = await asyncio.gather(
@@ -300,9 +354,13 @@ async def hydrate_tagged_auto_ria_ids(
     items: list[ListingOut] = []
     seen: set[str] = set()
     for aid in tagged:
-        listing = (
-            hydrated_new.get(aid[2:]) if aid.startswith("n:") else hydrated_used.get(aid)
-        )
+        raw = aid[2:] if aid.startswith("n:") else aid
+        listing = hydrated_new.get(raw) if aid.startswith("n:") else hydrated_used.get(aid)
+        html = cards.get(raw)
+        if listing and html:
+            listing = merge_html_card_with_api(html, listing)
+        elif listing is None:
+            listing = html
         if listing is None or listing.id in seen:
             continue
         seen.add(listing.id)
@@ -372,13 +430,25 @@ async def _batch_hydrate_new_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
     return result
 
 
+def _slot_listing(slot: dict) -> ListingOut | None:
+    raw = slot.get("d")
+    if not raw:
+        return None
+    try:
+        return ListingOut.model_validate(raw)
+    except Exception:
+        return None
+
+
 async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
     """Перетворює слоти сторінки на повні ListingOut об'єкти.
 
-    {"s":"r","i":"..."} — AUTO.RIA вживані, гідрат через /auto/info.
+    {"s":"r","i":"...","d":?} — AUTO.RIA вживані: завжди /auto/info, HTML-картка зливається.
     {"s":"n","i":"..."} — AUTO.RIA нові,   гідрат через /auto/new/auto.
     {"s":"o"/"t","d":{...}} — OLX/Telegram, розпаковуються напряму.
     """
+    from app.services.auto_ria.html_merge import merge_html_card_with_api
+
     used_ids = [
         s["i"]
         for s in slots
@@ -395,30 +465,27 @@ async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
     for slot in slots:
         src = slot.get("s")
         if src == "r":
-            if "d" in slot:
-                try:
-                    items.append(ListingOut.model_validate(slot["d"]))
-                    continue
-                except Exception:
-                    pass
-            listing = hydrated_used.get(slot.get("i", ""))
-            if listing:
-                items.append(listing)
+            html = _slot_listing(slot)
+            api = hydrated_used.get(slot.get("i", ""))
+            if api and html:
+                items.append(merge_html_card_with_api(html, api))
+            elif api:
+                items.append(api)
+            elif html:
+                items.append(html)
         elif src == "n":
-            if "d" in slot:
-                try:
-                    items.append(ListingOut.model_validate(slot["d"]))
-                    continue
-                except Exception:
-                    pass
-            listing = hydrated_new.get(slot.get("i", ""))
+            html = _slot_listing(slot)
+            api = hydrated_new.get(slot.get("i", ""))
+            if api and html:
+                items.append(merge_html_card_with_api(html, api))
+            elif api:
+                items.append(api)
+            elif html:
+                items.append(html)
+        elif "d" in slot:
+            listing = _slot_listing(slot)
             if listing:
                 items.append(listing)
-        elif "d" in slot:
-            try:
-                items.append(ListingOut.model_validate(slot["d"]))
-            except Exception:
-                pass
     return items
 
 
@@ -544,6 +611,59 @@ def collapse_pool_totals(
     return slot_total, pages, offer_count, None
 
 
+async def _collect_unique_page_items(
+    pool: dict[str, Any],
+    *,
+    filters: SearchFilters | None,
+    sort_by: str,
+    page: int,
+    per_page: int,
+    apply_listing_filter: bool,
+) -> tuple[list[ListingOut], dict[str, Any]]:
+    """Гідратує слоти, добирає унікальні картки до per_page, сортує сторінку."""
+    from app.services.auto_ria.mapper import sort_listings
+    from app.services.listings.duplicates import mark_duplicates_in_pool
+    from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+    skip = max(page - 1, 0) * per_page
+    want = skip + per_page
+    kept: list[ListingOut] = []
+    idx = 0
+    max_scan = max(skip + per_page * 5, per_page * 2)
+
+    while len(kept) < want:
+        slots = list(pool.get("slots") or [])
+        if idx >= len(slots):
+            if filters is None or idx >= max_scan:
+                break
+            before = len(slots)
+            pool = await ensure_beta_pool_covers(
+                pool,
+                filters=filters,
+                sort_by=sort_by,
+                need=before + 1,
+            )
+            slots = list(pool.get("slots") or [])
+            if len(slots) <= before:
+                break
+            max_scan = max(max_scan, len(slots))
+            continue
+        if idx >= max_scan:
+            break
+        batch = slots[idx : idx + per_page]
+        idx += len(batch)
+        if not batch:
+            break
+        hydrated = await _hydrate_page_slots(batch)
+        if apply_listing_filter and filters is not None:
+            hydrated = [row for row in hydrated if listing_out_matches_filters(row, filters)]
+        hydrated = await _apply_vin_mirrors_to_page(hydrated)
+        kept = mark_duplicates_in_pool([*kept, *hydrated])
+
+    page_items = kept[skip : skip + per_page]
+    return sort_listings(page_items, sort_by), pool
+
+
 async def slice_pool(
     pool: dict[str, Any],
     *,
@@ -560,7 +680,7 @@ async def slice_pool(
         return _slice_legacy_pool(pool, page=page, per_page=per_page)
 
     if filters is not None:
-        need = page * per_page
+        need = page * per_page * 2
         pool = await ensure_beta_pool_covers(
             pool, filters=filters, sort_by=sort_by, need=need
         )
@@ -573,23 +693,21 @@ async def slice_pool(
     raw_market = pool.get("market_total")
     market_total = int(raw_market) if raw_market is not None else None
     model_post_filter = bool(pool.get("model_post_filter"))
+    apply_listing_filter = bool(
+        model_post_filter or _search_needs_listing_filter(filters)
+    )
 
-    start = (page - 1) * per_page
-    end = start + per_page
-
-    if model_post_filter and _search_needs_listing_filter(filters):
-        items = await _collect_matching_listings_from_slots(slots, filters, limit=end)
-        items = items[start:end]
+    items, pool = await _collect_unique_page_items(
+        pool,
+        filters=filters,
+        sort_by=sort_by,
+        page=page,
+        per_page=per_page,
+        apply_listing_filter=apply_listing_filter,
+    )
+    slots = list(pool.get("slots") or [])
+    if model_post_filter:
         market_total = None
-    else:
-        page_slots = slots[start:end]
-        items = await _hydrate_page_slots(page_slots)
-        if _search_needs_listing_filter(filters):
-            from app.services.telegram_channels.mapper import listing_out_matches_filters
-
-            items = [item for item in items if listing_out_matches_filters(item, filters)]
-
-    items = await _apply_vin_mirrors_to_page(items)
 
     total, pages, offer_count, duplicate_count = collapse_pool_totals(
         slot_total=total,

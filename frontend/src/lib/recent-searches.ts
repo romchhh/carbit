@@ -1,4 +1,4 @@
-import { DEFAULT_FILTERS, type SearchFilterState } from "@/lib/search-catalog";
+import { DEFAULT_FILTERS, sanitizeFilterSources, type SearchFilterState } from "@/lib/search-catalog";
 import {
   buildSearchName,
   searchFiltersMatchUi,
@@ -28,7 +28,8 @@ export type RecentSearchEntry = {
 
 function normalizeFilters(raw: unknown): SearchFilterState | null {
   if (!raw || typeof raw !== "object") return null;
-  return syncSearchFilterArrays({ ...DEFAULT_FILTERS, ...(raw as Partial<SearchFilterState>) });
+  const merged = { ...DEFAULT_FILTERS, ...(raw as Partial<SearchFilterState>) };
+  return syncSearchFilterArrays({ ...merged, sources: sanitizeFilterSources(merged.sources) });
 }
 
 function normalizeEntry(raw: unknown): RecentSearchEntry | null {

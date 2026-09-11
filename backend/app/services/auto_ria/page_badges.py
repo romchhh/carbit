@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any
@@ -12,9 +13,16 @@ from app.services.auto_ria.constants import AUTO_RIA_SITE_URL
 
 logger = logging.getLogger(__name__)
 
+_USA_ORIGIN_RE = re.compile(r"сша|usa|америк|штати|copart|iaai", re.IGNORECASE)
+
 _BADGE_VISIBLE_RE = re.compile(
     r'"id"\s*:\s*"(?P<id>badgesOrderFrom|badgesDamaged)"\s*,\s*"isHide"\s*:\s*false',
     re.IGNORECASE,
+)
+_BADGE_CONTENT_RE = re.compile(
+    r'"id"\s*:\s*"(?P<id>badgesOrderFrom|badgesDamaged)"\s*,\s*"isHide"\s*:\s*false'
+    r'.{0,1200}?"content"\s*:\s*"(?P<content>(?:\\.|[^"\\])*)"',
+    re.IGNORECASE | re.DOTALL,
 )
 
 _SITE_CLIENT: httpx.AsyncClient | None = None
@@ -31,18 +39,30 @@ async def _site_client() -> httpx.AsyncClient:
     return _SITE_CLIENT
 
 
+def _unescape_badge_content(value: str) -> str:
+    try:
+        parsed = json.loads(f'"{value}"')
+    except json.JSONDecodeError:
+        parsed = value
+    return parsed if isinstance(parsed, str) else str(parsed)
+
+
 def parse_page_badges_html(html: str) -> dict[str, bool]:
     """Парсить видимі бейджі з SSR-розмітки сторінки оголошення."""
     visible: set[str] = set()
+    contents: dict[str, str] = {}
     for match in _BADGE_VISIBLE_RE.finditer(html or ""):
         visible.add(match.group("id").lower())
+    for match in _BADGE_CONTENT_RE.finditer(html or ""):
+        contents[match.group("id").lower()] = _unescape_badge_content(match.group("content"))
 
     if not visible:
         return {}
 
     out: dict[str, bool] = {}
     if "badgesorderfrom" in visible:
-        out["usa_import"] = True
+        origin = contents.get("badgesorderfrom") or ""
+        out["usa_import"] = bool(_USA_ORIGIN_RE.search(origin))
     if "badgesdamaged" in visible:
         out["had_accident"] = True
     return out

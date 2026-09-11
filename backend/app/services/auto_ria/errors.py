@@ -27,7 +27,13 @@ def raise_auto_ria_http(exc: AutoRiaError) -> None:
         elif status == 404:
             status = 502
             raw = str(exc).lower()
-            if "httpoison" in raw or ":closed" in raw:
+            if (
+                "httpoison" in raw
+                or ":closed" in raw
+                or "html error page" in raw
+                or "<!doctype" in raw
+                or "<html" in raw
+            ):
                 message = "AUTO.RIA тимчасово обірвав з'єднання. Спробуйте ще раз."
             else:
                 message = "AUTO.RIA тимчасово недоступний. Спробуйте пізніше."

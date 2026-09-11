@@ -393,6 +393,20 @@ export const listings = {
       seller_phone?: string | null;
       seller_telegram?: string | null;
       seller_url?: string | null;
+      vin?: string | null;
+      plate?: string | null;
+      vin_checked?: boolean | null;
+      vin_check_url?: string | null;
+      description?: string | null;
+      had_accident?: boolean | null;
+      usa_import?: boolean | null;
+      engine_volume_l?: number | null;
+      fuel?: string | null;
+      transmission?: string | null;
+      year?: number | null;
+      mileage?: number | null;
+      region?: string | null;
+      source_data?: Record<string, unknown> | null;
     }>("/listings/gallery", {
       method: "POST",
       body: JSON.stringify(body),

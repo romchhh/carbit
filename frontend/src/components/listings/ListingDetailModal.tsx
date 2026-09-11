@@ -22,7 +22,7 @@ import {
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { useAuth } from "@/contexts/AuthProvider";
-import { getAutoRiaHighlights } from "@/lib/auto-ria-details";
+import { getAutoRiaHighlights, listingHasAutoRiaDetails } from "@/lib/auto-ria-details";
 import {
   listingAttributionUrl,
   listingIsNewCar,
@@ -145,11 +145,9 @@ export function ListingDetailModal({
         if (listingShouldFetchGallery(listingProp)) {
           const enriched = await ensureListingGallery(listingProp);
           if (cancelled) return;
-          if (enriched.images?.length) {
-            const merged = keepListingMirrors(enriched, listingProp);
-            setLiveListing(merged);
-            onListingUpdate?.(merged);
-          }
+          const merged = keepListingMirrors(enriched, listingProp);
+          setLiveListing(merged);
+          onListingUpdate?.(merged);
           setPhotosLoading(false);
           return;
         }
@@ -279,10 +277,7 @@ export function ListingDetailModal({
   if (!listing) return null;
 
   const photos = resolveListingImages(listing.images);
-  const hasAutoRiaDetails =
-    listing.source === "auto_ria" &&
-    listing.source_data &&
-    Object.keys(listing.source_data).length > 0;
+  const hasAutoRiaDetails = listingHasAutoRiaDetails(listing);
   const descriptionText = (() => {
     const fromListing = (listing.description || "").trim();
     if (fromListing) return fromListing;
@@ -752,7 +747,8 @@ export function ListingDetailModal({
             {hasAutoRiaDetails && (
               <AutoRiaListingDetails listing={listing} omitDescription={Boolean(descriptionText)} />
             )}
-            {listing.vin_checked && listing.source === "auto_ria" && (
+            {listing.vin_checked &&
+              (listing.source === "auto_ria" || listing.source === "auto_ria_beta") && (
               <p className="text-center text-[12px] font-medium text-emerald-dark">
                 VIN-код перевірено на AUTO.RIA
               </p>

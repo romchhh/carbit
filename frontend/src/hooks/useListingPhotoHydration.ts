@@ -33,23 +33,26 @@ function listingNeedsPhotoHydration(listing: Listing): boolean {
   return !telegramPhotosUnavailable();
 }
 
-/** Підвантажує галерею для видимих карток (AUTO.RIA, OLX, Імперія, REONO, Telegram). */
+/** Підвантажує галерею та деталі для видимих карток. */
 export function useListingPhotoHydration(listing: Listing) {
   const rootRef = useRef<HTMLElement | null>(null);
   const [visible, setVisible] = useState(false);
+  const [liveListing, setLiveListing] = useState<Listing>(listing);
   const [images, setImages] = useState<string[]>(applyImages(listing.images));
   const [photosPending, setPhotosPending] = useState(false);
 
   useEffect(() => {
+    setLiveListing(listing);
     setImages(applyImages(listing.images));
   }, [listing.id]);
 
   useEffect(() => {
     if (listing.images?.length && !listingNeedsGalleryHydration(listing)) {
+      setLiveListing(prev => ({ ...prev, ...listing, images: listing.images }));
       setImages(applyImages(listing.images));
       setPhotosPending(false);
     }
-  }, [listing.id, listing.images, listing.source, listing.url]);
+  }, [listing.id, listing.images, listing.source, listing.url, listing.vin, listing.plate]);
 
   useEffect(() => {
     const node = rootRef.current;
@@ -84,6 +87,7 @@ export function useListingPhotoHydration(listing: Listing) {
         if (listingNeedsGalleryHydration(listing)) {
           const enriched = await ensureListingGallery(listing);
           if (cancelled) return;
+          setLiveListing(enriched);
           if (enriched.images?.length) {
             setImages(applyImages(enriched.images));
           }
@@ -136,5 +140,5 @@ export function useListingPhotoHydration(listing: Listing) {
     };
   }, [listing.id, listing.source, listing.url, listing.images?.length, visible]);
 
-  return { images, rootRef, photosPending };
+  return { images, rootRef, photosPending, listing: liveListing };
 }

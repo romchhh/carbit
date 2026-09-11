@@ -446,13 +446,18 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
             return False
 
     if filters.year_from or filters.year_to:
-        # year=0 = невідомий рік → не проходить, коли користувач задав діапазон
+        # year=0 = невідомий рік → не проходить, коли користувач задав діапазон.
+        # HTML-картка пошуку вже відфільтрована year[0].gte на auto.ria.com.
+        sd = item.source_data if isinstance(item.source_data, dict) else {}
+        html_card = bool(sd.get("html_search") or sd.get("auto_ria_beta"))
         if not item.year:
-            return False
-        if filters.year_from and item.year < filters.year_from:
-            return False
-        if filters.year_to and item.year > filters.year_to:
-            return False
+            if not html_card:
+                return False
+        else:
+            if filters.year_from and item.year < filters.year_from:
+                return False
+            if filters.year_to and item.year > filters.year_to:
+                return False
 
     if filters.price_from or filters.price_to:
         from app.services.currency import filter_price_to_uah, listing_price_uah

@@ -38,7 +38,7 @@ function sourceLabel(source: string): string {
   const key = (source || "").trim().toLowerCase();
   if (key === "olx") return "OLX";
   if (key === "auto_ria") return "AUTO.RIA";
-  if (key === "auto_ria_beta") return "AUTO.RIA test beta";
+  if (key === "auto_ria_beta") return "AUTO.RIA";
   if (key === "imperiya") return "Імперія Авто";
   if (key === "udrive") return "uDrive";
   if (key === "telegram") return "Telegram";

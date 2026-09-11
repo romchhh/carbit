@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from app.core.timezone import KYIV_TZ
 from app.schemas.schemas import ListingOut, PaginatedListings
@@ -219,6 +220,39 @@ class CollapsePoolTotalsTests(unittest.TestCase):
         self.assertEqual(offers, 2)
         self.assertEqual(dups, 0)
         self.assertEqual(pages, 1)
+
+
+class SlicePoolUniquePageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_backfills_duplicates_and_sorts_by_published_at(self):
+        vin = "WBA8E9C50HK123456"
+        slots: list[dict] = []
+        for i in range(8):
+            item = _listing(f"auto_ria_{i}", "auto_ria", minutes_ago=24 * 60)
+            item = item.model_copy(update={"vin": vin})
+            slots.append({"s": "o", "d": item.model_dump(mode="json")})
+        for i, mins in enumerate((180, 5, 60, 10_000), start=10):
+            item = _listing(f"auto_ria_{i}", "auto_ria", minutes_ago=mins)
+            slots.append({"s": "o", "d": item.model_dump(mode="json")})
+
+        async def no_db(items):
+            from app.services.listings.duplicates import mark_duplicates_in_pool
+
+            return mark_duplicates_in_pool(items)
+
+        with patch.object(pool_cache, "_apply_vin_mirrors_to_page", no_db):
+            result = await pool_cache.slice_pool(
+                {"slots": slots, "total": len(slots), "market_total": 40},
+                page=1,
+                per_page=5,
+                filters=None,
+                sort_by="newest",
+            )
+
+        self.assertEqual(len(result.items), 5)
+        self.assertEqual(
+            [item.id for item in result.items],
+            ["auto_ria_11", "auto_ria_12", "auto_ria_10", "auto_ria_0", "auto_ria_13"],
+        )
 
 
 if __name__ == "__main__":

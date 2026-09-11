@@ -46,6 +46,20 @@ class ListingGalleryResponse(BaseModel):
     seller_phone: str | None = None
     seller_telegram: str | None = None
     seller_url: str | None = None
+    vin: str | None = None
+    plate: str | None = None
+    vin_checked: bool | None = None
+    vin_check_url: str | None = None
+    description: str | None = None
+    had_accident: bool | None = None
+    usa_import: bool | None = None
+    engine_volume_l: float | None = None
+    fuel: str | None = None
+    transmission: str | None = None
+    year: int | None = None
+    mileage: int | None = None
+    region: str | None = None
+    source_data: dict | None = None
 
 
 @router.get("/search/{search_id}", response_model=PaginatedListings)
@@ -94,6 +108,28 @@ async def reono_listing_photos(body: ReonoPhotosRequest):
     return ReonoPhotosResponse(images=images)
 
 
+def _gallery_listing_patch(result) -> dict:
+    patch = {
+        "seller_name": result.seller_name,
+        "seller_phone": result.seller_phone,
+        "seller_telegram": result.seller_telegram,
+        "seller_url": result.seller_url,
+        "vin": result.vin,
+        "plate": result.plate,
+        "vin_checked": result.vin_checked,
+        "vin_check_url": result.vin_check_url,
+        "description": result.description,
+        "engine_volume_l": result.engine_volume_l,
+        "fuel": result.fuel,
+        "transmission": result.transmission,
+        "year": result.year,
+        "mileage": result.mileage,
+        "region": result.region,
+        "source_data": result.source_data,
+    }
+    return {key: value for key, value in patch.items() if value not in (None, "", [], {})}
+
+
 async def _apply_gallery_to_listing(db: AsyncSession, listing: Listing) -> ListingOut:
     source = (listing.source or "").strip().lower()
     if gallery_needs_fetch(source, list(listing.images or [])):
@@ -112,6 +148,11 @@ async def _apply_gallery_to_listing(db: AsyncSession, listing: Listing) -> Listi
             "seller_url": result.seller_url,
         }
         out = await listing_out_with_mirrors(db, listing)
+        patch = _gallery_listing_patch(result)
+        if patch.get("source_data") and isinstance(out.source_data, dict):
+            patch["source_data"] = {**out.source_data, **patch["source_data"]}
+        if patch:
+            out = out.model_copy(update=patch)
         return apply_seller_contact_fields(out, contact)
     return await listing_out_with_mirrors(db, listing)
 
@@ -120,7 +161,7 @@ async def _apply_gallery_to_listing(db: AsyncSession, listing: Listing) -> Listi
 async def listing_gallery(body: ListingGalleryRequest):
     """Повна галерея + контакти продавця для live-пошуку (без запису в БД)."""
     source = body.source.strip().lower()
-    if source not in ("auto_ria", "olx", "imperiya"):
+    if source not in ("auto_ria", "auto_ria_beta", "olx", "imperiya"):
         raise HTTPException(status_code=400, detail="Джерело не підтримується")
     result = await fetch_listing_gallery(
         source,
@@ -134,6 +175,20 @@ async def listing_gallery(body: ListingGalleryRequest):
         seller_phone=result.seller_phone,
         seller_telegram=result.seller_telegram,
         seller_url=result.seller_url,
+        vin=result.vin,
+        plate=result.plate,
+        vin_checked=result.vin_checked,
+        vin_check_url=result.vin_check_url,
+        description=result.description,
+        had_accident=result.had_accident,
+        usa_import=result.usa_import,
+        engine_volume_l=result.engine_volume_l,
+        fuel=result.fuel,
+        transmission=result.transmission,
+        year=result.year,
+        mileage=result.mileage,
+        region=result.region,
+        source_data=result.source_data,
     )
 
 

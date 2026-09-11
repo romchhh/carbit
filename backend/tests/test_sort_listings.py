@@ -45,7 +45,7 @@ class SortListingsTests(unittest.TestCase):
         newer = _item(now - timedelta(hours=2))
         self.assertIs(sort_listings([newer, older], "published_asc")[0], older)
 
-    def test_newest_prefers_refreshed_at_when_present(self):
+    def test_newest_uses_published_at_not_refreshed_at(self):
         now = now_kyiv()
         old_pub_fresh_refresh = _item(
             now - timedelta(weeks=4),
@@ -54,8 +54,14 @@ class SortListingsTests(unittest.TestCase):
         recent_pub_no_refresh = _item(now - timedelta(hours=5))
         self.assertIs(
             sort_listings([recent_pub_no_refresh, old_pub_fresh_refresh], "newest")[0],
-            old_pub_fresh_refresh,
+            recent_pub_no_refresh,
         )
+
+    def test_newest_ignores_epoch_placeholder_published_at(self):
+        now = now_kyiv()
+        placeholder = _item(datetime(1970, 1, 1, tzinfo=UTC))
+        real = _item(now - timedelta(hours=2))
+        self.assertIs(sort_listings([placeholder, real], "newest")[0], real)
 
 
 if __name__ == "__main__":

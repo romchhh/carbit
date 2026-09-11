@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -10,9 +11,11 @@ from app.services.auto_ria.catalog import resolve_mark_id, resolve_model_id
 from app.services.auto_ria.client import AutoRiaClient
 from app.services.auto_ria.constants import REGION_TO_STATE_CITY
 from app.services.auto_ria.mapper import sort_listings
-from app.services.auto_ria_beta.constants import AUTO_RIA_BETA_SOURCE, CATEGORY_LEGKOVI, PAGE_SIZE
-from app.services.auto_ria_beta.parser import ScrapedCar
+from app.services.auto_ria_beta.constants import BASE_URL, CATEGORY_LEGKOVI, PAGE_SIZE
+from app.services.auto_ria_beta.parser import VIN_RE, ScrapedCar, is_usa_import_text
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
+from app.services.listings.engine_volume import parse_engine_volume_from_text
+from app.services.listings.plate import normalize_ua_plate
 from app.services.search.filter_multi import effective_brands, effective_models, effective_regions
 from app.services.telegram_channels.mapper import listing_out_matches_filters
 
@@ -42,6 +45,19 @@ def _title_bits(car: ScrapedCar, brand_hint: str | None, model_hint: str | None)
     return brand, model, title or f"AUTO.RIA {car.car_id}"
 
 
+def _clean_vin(value: str | None) -> str | None:
+    compact = re.sub(r"[^A-HJ-NPR-Z0-9]", "", (value or "").upper())
+    return compact if VIN_RE.fullmatch(compact) else None
+
+
+def _drop_empty(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in payload.items() if value not in (None, {}, [], "")}
+
+
+def _vin_check_url(car_id: int) -> str:
+    return f"{BASE_URL}/vin-check/auto/{car_id}/"
+
+
 def car_to_listing(
     car: ScrapedCar,
     *,
@@ -61,20 +77,103 @@ def car_to_listing(
     if not images and car.photo_url:
         images = [car.photo_url]
 
-    seller_type = "dealer" if car.is_dealer else "private"
-    source_data = {
-        "auto_ria_beta": {
-            "car_id": car.car_id,
-            "posted": car.posted,
-            "views": car.views,
-            "details": car.details or {},
-            "parser": "html",
-        }
-    }
+    details = dict(car.details or {})
+    vin = _clean_vin(car.vin)
+    plate = normalize_ua_plate(car.plate) or normalize_ua_plate(str(details.get("plate") or ""))
+    raw_checked = details.get("vin_checked")
+    if isinstance(raw_checked, bool):
+        vin_checked = raw_checked
+    elif details.get("vin_check") or vin:
+        vin_checked = True
+    else:
+        vin_checked = None
 
+    usa_import = details.get("usa_import")
+    if usa_import is None and details.get("import_origin"):
+        usa_import = is_usa_import_text(str(details.get("import_origin")))
+    had_accident = details.get("had_accident")
+
+    ria_page_badges: dict[str, bool] = {}
+    if usa_import is True:
+        ria_page_badges["usa_import"] = True
+    elif usa_import is False:
+        ria_page_badges["usa_import"] = False
+    if had_accident is True:
+        ria_page_badges["had_accident"] = True
+
+    condition_flags: dict[str, bool] = {}
+    if had_accident is True:
+        condition_flags["had_accident"] = True
+    elif had_accident is False:
+        condition_flags["had_accident"] = False
+        condition_flags["not_damaged"] = True
+    if usa_import is True:
+        condition_flags["usa_import"] = True
+
+    fuel_name = car.fuel or ""
+    engine_volume_l = parse_engine_volume_from_text(fuel_name) if fuel_name else None
+    auto_data = _drop_empty(
+        {
+            "year": car.year,
+            "fuelName": fuel_name or None,
+            "gearboxName": car.transmission or None,
+            "driveName": car.drive or None,
+            "description": car.description,
+            "raceInt": int(car.mileage_km / 1000) if car.mileage_km else None,
+            "custom": 0 if details.get("not_customs") else None,
+            "engineVolume": engine_volume_l,
+            "generationName": details.get("generation_trim"),
+        }
+    )
+
+    checked_vin = None
+    if vin or vin_checked:
+        checked_vin = _drop_empty(
+            {
+                "vin": vin,
+                "isChecked": True if vin_checked else None,
+                "isShow": True if vin else None,
+                "linkToReport": _vin_check_url(car.car_id),
+            }
+        )
+
+    display = details.get("display") if isinstance(details.get("display"), dict) else {}
+    details_for_source = {key: value for key, value in details.items() if key != "photos"}
+
+    source_data = _drop_empty(
+        {
+            "html_search": _drop_empty(
+                {
+                    "car_id": car.car_id,
+                    "posted": car.posted,
+                    "views": car.views,
+                    "details": details_for_source,
+                    "parser": "html",
+                    "catalog": "new" if car.is_new else "used",
+                }
+            ),
+            **display,
+            "VIN": vin,
+            "plateNumber": plate,
+            "locationCityName": car.city,
+            "USD": car.price_usd,
+            "UAH": car.price_uah,
+            "subCategoryName": car.body_type,
+            "autoData": auto_data or None,
+            "color": {"name": car.color} if car.color else None,
+            "checkedVin": checked_vin,
+            "ria_page_badges": ria_page_badges or None,
+            "condition_flags": condition_flags or None,
+            "autoInfoBar": {"damage": had_accident} if had_accident is not None else None,
+            "technicalCondition": details.get("technical_condition"),
+        }
+    )
+
+    seller_type = "dealer" if car.is_dealer else "private"
+    listing_id = f"new_auto_ria_{car.car_id}" if car.is_new else f"auto_ria_{car.car_id}"
     return ListingOut(
-        id=f"auto_ria_beta_{car.car_id}",
-        source=AUTO_RIA_BETA_SOURCE,
+        id=listing_id,
+        source="auto_ria",
         title=title,
         brand=brand,
         model=model,
@@ -89,10 +188,16 @@ def car_to_listing(
         images=images,
         url=car.url,
         seller_type=seller_type,
-        vin=car.vin if car.vin and len(car.vin) == 17 else None,
+        seller_name=car.seller_name,
+        vin=vin,
+        plate=plate,
+        vin_checked=True if vin_checked else None,
+        vin_check_url=_vin_check_url(car.car_id) if vin or vin_checked else None,
+        engine_volume_l=engine_volume_l,
         source_data=source_data,
         price_history=[],
         is_duplicate=False,
+        is_new=True if car.is_new else None,
         published_at=_parse_posted(car.posted),
         found_at=now_kyiv(),
     )
@@ -103,12 +208,17 @@ async def filters_to_html_params(
     *,
     page: int,
     size: int = PAGE_SIZE,
+    sort_by: str = "newest",
 ) -> dict[str, Any]:
     params: dict[str, Any] = {
         "categories.main.id": CATEGORY_LEGKOVI,
         "page": max(page, 0),
         "size": min(max(size, 10), 100),
     }
+    if sort_by in ("newest", "published_desc"):
+        params["sort[0].order"] = "dates.created.desc"
+    elif sort_by == "published_asc":
+        params["sort[0].order"] = "dates.created.asc"
 
     brand = (effective_brands(filters)[:1] or [""])[0]
     model = (effective_models(filters)[:1] or [""])[0]
@@ -141,12 +251,16 @@ async def filters_to_html_params(
 
     for region in effective_regions(filters):
         region_key = norm_text(region)
-        if region_key in REGION_TO_STATE_CITY:
-            state_id, city_id = REGION_TO_STATE_CITY[region_key]
-            params["state[0].id"] = state_id
-            if city_id:
-                params["city[0].id"] = city_id
+        if region_key not in REGION_TO_STATE_CITY:
+            continue
+        state_id, city_id = REGION_TO_STATE_CITY[region_key]
+        # Сайт /uk/search/ ігнорує state[0].id / city[0].id (як у JSON API brand.id),
+        # натомість фільтрує за state[0] / city[0] — ті самі ключі, що й у paid /auto/search.
+        params["state[0]"] = state_id
+        if city_id:
+            params["city[0]"] = city_id
             break
+        params.pop("city[0]", None)
 
     category = (filters.category or "all").strip().lower()
     if filters.not_customs:
@@ -204,4 +318,6 @@ def listings_from_cars(
         for car in cars
     ]
     listings = [item for item in listings if listing_out_matches_filters(item, filters)]
-    return sort_listings(listings, sort_by)
+    from app.services.listings.duplicates import mark_duplicates_in_pool
+
+    return mark_duplicates_in_pool(sort_listings(listings, sort_by))

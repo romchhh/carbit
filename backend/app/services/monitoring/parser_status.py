@@ -60,6 +60,20 @@ def is_transient_partial_source_error(error: str | None) -> bool:
         return True
     if "403" in err or "заблок" in err or "blocked" in err:
         return True
+    # AUTO.RIA інколи віддає 404 з HTML шлюзу / HTTPoison — не спамимо адміна.
+    if "404" in err and (
+        "html" in err
+        or "doctype" in err
+        or "httpoison" in err
+        or ":closed" in err
+        or "обірвав" in err
+        or "тимчасово" in err
+    ):
+        return True
+    if "обірвав" in err or "тимчасово" in err:
+        return True
+    if "перемкнуто на api" in err:
+        return True
     return False
 
 

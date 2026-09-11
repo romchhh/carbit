@@ -1,3 +1,5 @@
+import type { Listing } from "@/types/api";
+
 export type AutoRiaDetailRow = {
   label: string;
   value: string;
@@ -18,6 +20,11 @@ const HIDDEN_SECTIONS = new Set([
   "badges",
   "optionStyles",
   "userPhoneData",
+  "auto_ria_beta",
+  "html_search",
+  "ria_page_badges",
+  "condition_flags",
+  "autoInfoBar",
 ]);
 
 const HIDDEN_FIELDS = new Set([
@@ -52,6 +59,8 @@ const HIDDEN_FIELDS = new Set([
   "version",
   "onModeration",
   "fromArchive",
+  "from_usa",
+  "fromUsa",
   "statusId",
   "subCategoryNameEng",
 ]);
@@ -436,4 +445,18 @@ export function getAutoRiaHighlights(sourceData: Record<string, unknown> | null 
     .map(item => (typeof item === "string" ? item.trim() : item))
     .filter((item): item is string => Boolean(item))
     .filter((item, index, arr) => arr.indexOf(item) === index);
+}
+
+export function listingHasAutoRiaDetails(listing: Listing): boolean {
+  const source = (listing.source || "").toLowerCase();
+  const sourceData = listing.source_data;
+  if (!sourceData || Object.keys(sourceData).length === 0) return false;
+  if (source === "auto_ria") return true;
+  if (source !== "auto_ria_beta") return false;
+  return Boolean(
+    sourceData.VIN ||
+      sourceData.plateNumber ||
+      sourceData.checkedVin ||
+      sourceData.autoData,
+  );
 }

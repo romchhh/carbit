@@ -7,7 +7,7 @@ import type {
   SellerFilterValue,
   TriFilterValue,
 } from "@/lib/search-catalog";
-import { DEFAULT_FILTERS } from "@/lib/search-catalog";
+import { DEFAULT_FILTERS, sanitizeFilterSources } from "@/lib/search-catalog";
 import {
   effectiveBrands,
   effectiveModels,
@@ -70,7 +70,7 @@ export type BackendSearchFilters = {
 
 const SOURCE_TO_BACKEND: Record<string, string> = {
   "AUTO.RIA": "auto_ria",
-  "AUTO.RIA test beta": "auto_ria_beta",
+  "AUTO.RIA test beta": "auto_ria",
   OLX: "olx",
   "Імперія Авто": "imperiya",
   "Car Market": "car_market",
@@ -106,9 +106,14 @@ function mapTri(value: TriFilterValue): string | null {
 }
 
 function mapSources(sources: string[]): string[] | null {
-  const mapped = sources
-    .map(source => SOURCE_TO_BACKEND[source])
-    .filter((source): source is string => Boolean(source));
+  const mapped: string[] = [];
+  const seen = new Set<string>();
+  for (const source of sources) {
+    const key = SOURCE_TO_BACKEND[source];
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    mapped.push(key);
+  }
 
   return mapped.length ? mapped : null;
 }
@@ -217,6 +222,7 @@ function formatPlainNumber(value: number | null | undefined): string {
 
 const BACKEND_SOURCE_TO_UI: Record<string, string> = {
   auto_ria: "AUTO.RIA",
+  auto_ria_beta: "AUTO.RIA",
   olx: "OLX",
   imperiya: "Імперія Авто",
   car_market: "Car Market",
@@ -390,10 +396,8 @@ export function fromBackendSearchFilters(
       : "USD";
 
   const sourcesRaw = Array.isArray(raw.sources) ? raw.sources.map(String) : [];
-  const sourcesMapped = sourcesRaw
-    .map(s => BACKEND_SOURCE_TO_UI[s] || s)
-    .filter(Boolean);
-  const sources = sourcesMapped.length ? sourcesMapped : [...base.sources];
+  const sourcesMapped = sourcesRaw.map(s => BACKEND_SOURCE_TO_UI[s] || s);
+  const sources = sourcesRaw.length ? sanitizeFilterSources(sourcesMapped) : [...base.sources];
 
   const zeroMileage = Boolean(raw.zero_mileage);
 

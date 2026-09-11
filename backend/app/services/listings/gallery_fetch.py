@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
 from app.services.auto_ria_beta.client import AutoRiaBetaClient
 from app.services.auto_ria_beta.errors import AutoRiaBetaError
+from app.services.auto_ria_beta.mapper import car_to_listing
 from app.services.auto_ria_beta.parser import ScrapedCar
 from app.services.auto_ria.details import extract_image_urls
 from app.services.auto_ria.mapper import _new_auto_photo_urls
@@ -29,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 GALLERY_COMPLETE_MIN_IMAGES = 2
 _SUPPORTED = frozenset({"auto_ria", "auto_ria_beta", "olx", "imperiya"})
+_BETA_GALLERY_SEM = asyncio.Semaphore(4)
 
 _AUTO_RIA_ID_RE = re.compile(r"^auto_ria_(\d+)$")
 _AUTO_RIA_BETA_ID_RE = re.compile(r"^auto_ria_beta_(\d+)$")
@@ -43,6 +47,20 @@ class GalleryFetchResult:
     seller_phone: str | None = None
     seller_telegram: str | None = None
     seller_url: str | None = None
+    vin: str | None = None
+    plate: str | None = None
+    vin_checked: bool | None = None
+    vin_check_url: str | None = None
+    description: str | None = None
+    had_accident: bool | None = None
+    usa_import: bool | None = None
+    engine_volume_l: float | None = None
+    fuel: str | None = None
+    transmission: str | None = None
+    year: int | None = None
+    mileage: int | None = None
+    region: str | None = None
+    source_data: dict[str, Any] | None = None
 
 
 def gallery_needs_fetch(source: str, images: list[str] | None) -> bool:
@@ -98,6 +116,34 @@ async def fetch_auto_ria_gallery(
     return GalleryFetchResult(images=images, **_contact_from_dict(contact))
 
 
+def _brand_hint_from_url(url: str | None) -> str | None:
+    match = re.search(r"/auto_([a-z0-9]+)_", url or "", re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1).replace("-", " ").title()
+
+
+def _result_from_beta_listing(listing, images: list[str]) -> GalleryFetchResult:
+    return GalleryFetchResult(
+        images=images,
+        seller_name=listing.seller_name,
+        vin=listing.vin,
+        plate=listing.plate,
+        vin_checked=listing.vin_checked,
+        vin_check_url=listing.vin_check_url,
+        description=listing.description,
+        had_accident=listing.had_accident,
+        usa_import=listing.usa_import,
+        engine_volume_l=listing.engine_volume_l,
+        fuel=listing.fuel or None,
+        transmission=listing.transmission or None,
+        year=listing.year or None,
+        mileage=listing.mileage or None,
+        region=listing.region or None,
+        source_data=listing.source_data if isinstance(listing.source_data, dict) else None,
+    )
+
+
 async def fetch_auto_ria_beta_gallery(
     *,
     listing_id: str | None,
@@ -111,13 +157,16 @@ async def fetch_auto_ria_beta_gallery(
         return GalleryFetchResult(images=images)
 
     try:
-        client = AutoRiaBetaClient()
-        car = ScrapedCar(car_id=car_id, url=url)
-        await client.enrich_car(car)
+        async with _BETA_GALLERY_SEM:
+            client = AutoRiaBetaClient()
+            car = ScrapedCar(car_id=car_id, url=url)
+            await client.enrich_car(car)
         if car.photos:
             images = list(car.photos)
         elif car.photo_url:
             images = [car.photo_url]
+        listing = car_to_listing(car, brand_hint=_brand_hint_from_url(url))
+        return _result_from_beta_listing(listing, images)
     except AutoRiaBetaError:
         logger.debug("AUTO.RIA beta gallery fetch failed for %s", listing_id, exc_info=True)
     except Exception:

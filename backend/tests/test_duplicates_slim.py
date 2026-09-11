@@ -103,6 +103,101 @@ class DuplicatesTests(unittest.TestCase):
         )
         self.assertFalse(listings_look_same(a, b))
 
+    def test_auto_ria_new_stock_same_spec_collapses_without_vin(self):
+        a = _item(
+            id="new_auto_ria_2073874",
+            is_new=True,
+            brand="Zeekr",
+            model="7X",
+            year=2026,
+            price=54465,
+            mileage=543,
+            url="https://auto.ria.com/uk/newauto/auto-zeekr-7x-2073874.html",
+        )
+        b = _item(
+            id="new_auto_ria_2084883",
+            is_new=True,
+            brand="Zeekr",
+            model="7X",
+            year=2026,
+            price=54465,
+            mileage=0,
+            url="https://auto.ria.com/uk/newauto/auto-zeekr-7x-2084883.html",
+            vin="LRW3E7EK5SG123456",
+        )
+        self.assertTrue(listings_look_same(a, b))
+        items = mark_duplicates_in_pool([a, b])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].id, "new_auto_ria_2073874")
+
+    def test_auto_ria_new_stock_different_price_stays(self):
+        a = _item(
+            id="new_auto_ria_1",
+            is_new=True,
+            brand="Zeekr",
+            model="7X",
+            year=2026,
+            price=54465,
+        )
+        b = _item(
+            id="new_auto_ria_2",
+            is_new=True,
+            brand="Zeekr",
+            model="7X",
+            year=2026,
+            price=61100,
+        )
+        self.assertFalse(listings_look_same(a, b))
+
+    def test_used_auto_ria_same_spec_not_collapsed_without_vin(self):
+        a = _item(id="auto_ria_1", brand="Zeekr", model="7X", year=2026, price=54465)
+        b = _item(id="auto_ria_2", brand="Zeekr", model="7X", year=2026, price=54465)
+        self.assertFalse(listings_look_same(a, b))
+
+    def test_fresh_used_auto_ria_stock_collapses_same_spec(self):
+        from datetime import date
+
+        year = date.today().year
+        a = _item(
+            id="auto_ria_40157493",
+            brand="BYD",
+            model="Qin Plus",
+            year=year,
+            price=20500,
+            mileage=3000,
+            url="https://auto.ria.com/uk/auto_byd_qin-plus_40157493.html",
+        )
+        b = _item(
+            id="auto_ria_40157515",
+            brand="BYD",
+            model="Qin Plus",
+            year=year,
+            price=20500,
+            mileage=3000,
+            url="https://auto.ria.com/uk/auto_byd_qin-plus_40157515.html",
+        )
+        self.assertTrue(listings_look_same(a, b))
+        self.assertEqual(len(mark_duplicates_in_pool([a, b])), 1)
+
+    def test_older_used_auto_ria_same_spec_not_collapsed_without_vin(self):
+        a = _item(
+            id="auto_ria_1",
+            brand="BMW",
+            model="X5",
+            year=2019,
+            price=25000,
+            mileage=80000,
+        )
+        b = _item(
+            id="auto_ria_2",
+            brand="BMW",
+            model="X5",
+            year=2019,
+            price=25000,
+            mileage=80000,
+        )
+        self.assertFalse(listings_look_same(a, b))
+
     def test_prefer_id_keeps_url_on_detail(self):
         vin = "WBA8E9C50HK123456"
         items = mark_duplicates_in_pool(

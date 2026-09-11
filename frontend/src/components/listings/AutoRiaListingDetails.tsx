@@ -12,7 +12,8 @@ type Props = {
 };
 
 export function AutoRiaListingDetails({ listing, omitDescription = false }: Props) {
-  if (!listing.source_data || listing.source !== "auto_ria") return null;
+  if (!listing.source_data) return null;
+  if (listing.source !== "auto_ria" && listing.source !== "auto_ria_beta") return null;
 
   const sourceData = {
     ...listing.source_data,

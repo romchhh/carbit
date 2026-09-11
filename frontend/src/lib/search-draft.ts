@@ -1,5 +1,5 @@
 import type { SearchFilterState } from "@/lib/search-catalog";
-import { DEFAULT_FILTERS } from "@/lib/search-catalog";
+import { DEFAULT_FILTERS, sanitizeFilterSources } from "@/lib/search-catalog";
 import type { SearchFreshness } from "@/lib/search-preview";
 
 const KEY = "carbit:search-draft";
@@ -18,12 +18,20 @@ function parseDraft(raw: string): SearchDraft | null {
     const parsed = JSON.parse(raw) as Partial<SearchDraft & SearchFilterState>;
     if (parsed && typeof parsed === "object" && parsed.filters && typeof parsed.filters === "object") {
       return {
-        filters: { ...DEFAULT_FILTERS, ...parsed.filters },
+        filters: {
+          ...DEFAULT_FILTERS,
+          ...parsed.filters,
+          sources: sanitizeFilterSources(parsed.filters.sources),
+        },
         freshness: parsed.freshness === "new" ? "new" : "all",
       };
     }
     return {
-      filters: { ...DEFAULT_FILTERS, ...parsed },
+      filters: {
+        ...DEFAULT_FILTERS,
+        ...parsed,
+        sources: sanitizeFilterSources((parsed as Partial<SearchFilterState>).sources),
+      },
       freshness: "all",
     };
   } catch {
