@@ -120,6 +120,9 @@ def test_html_card_from_lviv_does_not_match_kyiv_filter():
         brand_hint="Zeekr",
         model_hint="001",
     )
-    filters = SearchFilters(brand="Zeekr", model="001", region="м. Київ")
-    assert listing_out_matches_filters(kyiv, filters)
-    assert not listing_out_matches_filters(lviv, filters)
+    city_filters = SearchFilters(brand="Zeekr", model="001", region="м. Київ")
+    oblast_filters = SearchFilters(brand="Zeekr", model="001", region="Київська область")
+    assert listing_out_matches_filters(kyiv, city_filters)
+    assert not listing_out_matches_filters(lviv, city_filters)
+    assert listing_out_matches_filters(kyiv, oblast_filters)
+    assert not listing_out_matches_filters(lviv, oblast_filters)

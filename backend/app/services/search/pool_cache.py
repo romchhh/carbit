@@ -37,7 +37,7 @@ from app.services.parser.filter_groups import filters_group_key
 
 logger = logging.getLogger(__name__)
 
-LIVE_POOL_PREFIX = "live-pool:v7:"
+LIVE_POOL_PREFIX = "live-pool:v8:"
 LIVE_POOL_TTL_SECONDS = 600  # 10 хвилин — повторний пошук без нових AR-запитів
 # Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
 LIVE_POOL_SIZE = 2500

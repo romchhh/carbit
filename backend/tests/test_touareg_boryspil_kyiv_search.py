@@ -24,6 +24,23 @@ Vin: WVGEP9BP9ED013812
 
 
 class TouaregBoryspilSearchTests(unittest.TestCase):
+    def test_kyiv_city_matches_kyiv_oblast_filter(self) -> None:
+        self.assertTrue(listing_region_matches_filter("Київ", "Київська область"))
+        self.assertTrue(listing_region_matches_filter("Киев", "Київська область"))
+        self.assertTrue(listing_region_matches_filter("м. Київ", "Київська область"))
+
+    def test_kyiv_city_does_not_match_other_oblasts(self) -> None:
+        from app.services.search.region_voice import CANONICAL_UA_REGIONS
+
+        allowed = {"Вся Україна", "м. Київ", "Київська область"}
+        for region in CANONICAL_UA_REGIONS:
+            if region in allowed:
+                continue
+            self.assertFalse(
+                listing_region_matches_filter("Київ", region),
+                msg=region,
+            )
+
     def test_boryspil_matches_kyiv_oblast_filter(self) -> None:
         self.assertTrue(
             listing_region_matches_filter("Бориспіль", "Київська область"),
