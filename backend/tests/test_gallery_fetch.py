@@ -32,8 +32,14 @@ class GalleryFetchTests(unittest.IsolatedAsyncioTestCase):
             }
         }
         info_payload = {
-            "autoData": {"autoId": 123},
+            "autoData": {"autoId": 123, "year": 2020, "raceInt": 50, "fuelName": "Бензин", "gearboxName": "Автомат"},
             "dealer": {"name": "Test Dealer", "link": "/dealers/test"},
+            "VIN": "WBA8E9C50HK123456",
+            "checkedVin": {"isChecked": True, "vin": "WBA8E9C50HK123456"},
+            "markName": "BMW",
+            "modelName": "X5",
+            "title": "BMW X5",
+            "USD": 25000,
         }
 
         with patch("app.services.listings.gallery_fetch.AutoRiaClient") as client_cls:
@@ -49,6 +55,11 @@ class GalleryFetchTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(result.images), 2)
         self.assertEqual(result.seller_name, "Test Dealer")
+        self.assertEqual(result.vin, "WBA8E9C50HK123456")
+        self.assertTrue(result.vin_checked)
+        self.assertIsInstance(result.source_data, dict)
+        self.assertIn("autoData", result.source_data)
+        self.assertIn("checkedVin", result.source_data)
 
     async def test_fetch_olx_always_loads_detail_gallery(self):
         olx_listing = type(

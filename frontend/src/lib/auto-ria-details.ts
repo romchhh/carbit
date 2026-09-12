@@ -451,8 +451,8 @@ export function listingHasAutoRiaDetails(listing: Listing): boolean {
   const source = (listing.source || "").toLowerCase();
   const sourceData = listing.source_data;
   if (!sourceData || Object.keys(sourceData).length === 0) return false;
-  if (source === "auto_ria") return true;
-  if (source !== "auto_ria_beta") return false;
+  if (source !== "auto_ria" && source !== "auto_ria_beta") return false;
+  // HTML-картка видачі / обрізаний list payload не замінює офіційний /auto/info.
   return Boolean(
     sourceData.VIN ||
       sourceData.plateNumber ||

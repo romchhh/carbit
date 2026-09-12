@@ -13,6 +13,7 @@ from app.services.search.http_proxy import (
     WebshareUsage,
     fetch_webshare_usage,
     format_bytes_gb,
+    humanize_proxy_error,
     proxy_configured,
 )
 
@@ -68,10 +69,11 @@ async def notify_proxy_problem(*, source: str, error: str) -> None:
     """Проблема на запиті (407, тунель, ліміт). Cooldown 15 хв."""
     if not await _mark_once(f"fail:{source}", _FAIL_COOLDOWN_SECONDS):
         return
+    detail = humanize_proxy_error(error or "")
     await notify_monitor_admins(
         "⚠️ <b>Проксі Webshare</b>\n"
         f"Джерело: <b>{html.escape(source)}</b>\n"
-        f"<code>{html.escape((error or '')[:400])}</code>"
+        f"{html.escape(detail)}"
     )
 
 

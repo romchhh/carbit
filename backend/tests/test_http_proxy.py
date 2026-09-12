@@ -107,7 +107,43 @@ def test_webshare_rotating_url_uses_country():
     asyncio.run(run())
 
 
-def test_html_response_blocked():
+def test_invalidate_sticky_creates_new_session():
+    async def run():
+        with (
+            patch.object(http_proxy.settings, "SEARCH_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "OLX_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "WEBSHARE_API_KEY", "token"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_COUNTRY", "UA"),
+            patch.object(
+                http_proxy,
+                "_webshare_json",
+                new=AsyncMock(return_value={"username": "demo", "password": "secret"}),
+            ),
+        ):
+            first = await http_proxy.resolve_search_proxy_url(sticky=True)
+            http_proxy.invalidate_sticky_proxy()
+            second = await http_proxy.resolve_search_proxy_url(sticky=True)
+        assert first != second
+        assert first.startswith("http://demo-ua-")
+        assert second.startswith("http://demo-ua-")
+
+    asyncio.run(run())
+
+
+def test_proxy_tunnel_failure_detects_curl_56():
+    assert http_proxy.is_proxy_tunnel_failure(
+        "Failed to perform, curl: (56) CONNECT tunnel failed, response 502"
+    )
+    assert http_proxy.is_proxy_tunnel_failure("проксі HTTP 502")
+    assert not http_proxy.is_proxy_tunnel_failure("OLX JSON parse error")
+
+
+def test_humanize_proxy_error_hides_curl():
+    text = http_proxy.humanize_proxy_error(
+        "Failed to perform, curl: (56) CONNECT tunnel failed, response 502"
+    )
+    assert "CONNECT" in text
+    assert "curl: (56)" not in text
     assert http_proxy.html_response_blocked(403, "ok")
     assert http_proxy.html_response_blocked(200, "<html>cf-challenge</html>")
     assert not http_proxy.html_response_blocked(200, "<html>Zeekr 001 Київ</html>")

@@ -34,10 +34,18 @@ from app.services.olx.transport import (
     system_curl_get,
     transport_summary,
 )
-from app.services.search.http_proxy import httpx_proxy_kwargs, resolve_search_proxy_url
+from app.services.search.http_proxy import (
+    humanize_proxy_error,
+    httpx_proxy_kwargs,
+    invalidate_sticky_proxy,
+    is_proxy_tunnel_failure,
+    resolve_search_proxy_url,
+)
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 
 logger = logging.getLogger(__name__)
+
+_PROXY_ROTATES = 3
 
 try:
     from curl_cffi.requests import AsyncSession as CurlAsyncSession
@@ -66,6 +74,22 @@ class OlxClient:
             return
         self._proxy = await resolve_search_proxy_url(sticky=True)
         self._proxy_ready = True
+
+    async def _rotate_proxy(self) -> None:
+        """Нова sticky-сесія після CONNECT 502 / 407."""
+        invalidate_sticky_proxy()
+        self._proxy_ready = False
+        if self._httpx is not None:
+            await self._httpx.aclose()
+            self._httpx = None
+        await self._ensure_proxy()
+        if self._httpx is None and not _CURL_CFFI:
+            self._httpx = httpx.AsyncClient(
+                timeout=REQUEST_TIMEOUT,
+                follow_redirects=True,
+                **httpx_proxy_kwargs(self._proxy),
+            )
+        logger.warning("OLX rotated Webshare session proxy=%s", bool(self._proxy))
 
     async def __aenter__(self) -> OlxClient:
         await self._ensure_proxy()
@@ -134,86 +158,119 @@ class OlxClient:
         from app.services.admin.api_usage import olx_operation, record_api_request
 
         operation = olx_operation(url)
-        last_response: HttpResponse | None = None
+        last_exc: BaseException | None = None
         await self._ensure_proxy()
 
-        try:
-            if self._curl is not None:
-                for imp in impersonate_candidates(self._impersonate):
+        for rotate in range(_PROXY_ROTATES):
+            try:
+                return await self._get_once(url, headers=headers, params=params, operation=operation)
+            except OlxError:
+                await record_api_request("olx", operation, success=False)
+                raise
+            except Exception as exc:
+                last_exc = exc
+                if (
+                    self._proxy
+                    and is_proxy_tunnel_failure(exc)
+                    and rotate + 1 < _PROXY_ROTATES
+                ):
+                    logger.warning(
+                        "OLX proxy tunnel failed (%s), rotating session %s/%s",
+                        humanize_proxy_error(str(exc)),
+                        rotate + 1,
+                        _PROXY_ROTATES,
+                    )
+                    await self._rotate_proxy()
+                    continue
+                await record_api_request("olx", operation, success=False)
+                if self._proxy and is_proxy_tunnel_failure(exc):
+                    from app.services.search.proxy_alerts import schedule_proxy_problem
+
+                    schedule_proxy_problem(source="OLX", error=humanize_proxy_error(str(exc)))
+                raise
+
+        await record_api_request("olx", operation, success=False)
+        assert last_exc is not None
+        raise last_exc
+
+    async def _get_once(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        params: dict | None,
+        operation: str,
+    ) -> HttpResponse:
+        from app.services.admin.api_usage import record_api_request
+
+        last_response: HttpResponse | None = None
+        if self._curl is not None:
+            for imp in impersonate_candidates(self._impersonate):
+                try:
                     response = await self._curl_cffi_get(
                         url,
                         headers=headers,
                         params=params,
                         impersonate=imp,
                     )
-                    last_response = response
-                    if response.status_code == 200:
-                        self._impersonate = imp
-                        self._transport_label = f"curl_cffi:{imp}"
-                        await record_api_request("olx", operation, success=True)
-                        self._last_referer = url
-                        return response
-                    if response.status_code not in RETRYABLE_STATUS:
-                        break
-                logger.warning(
-                    "OLX curl_cffi blocked (%s) for %s — trying system curl",
-                    last_response.status_code if last_response else "?",
-                    url[:120],
-                )
-
-            try:
-                response = await system_curl_get(
-                    url,
-                    headers=headers,
-                    params=params,
-                    proxy=self._proxy,
-                )
+                except Exception as exc:
+                    if is_proxy_tunnel_failure(exc):
+                        raise
+                    logger.warning("OLX curl_cffi %s failed: %s", imp, exc)
+                    continue
+                last_response = response
                 if response.status_code == 200:
-                    self._transport_label = "system_curl"
+                    self._impersonate = imp
+                    self._transport_label = f"curl_cffi:{imp}"
                     await record_api_request("olx", operation, success=True)
                     self._last_referer = url
                     return response
-                last_response = response
-            except Exception as exc:
-                logger.warning("OLX system curl failed: %s", exc)
-
-            if self._httpx is not None:
-                raw = await self._httpx.get(url, headers=headers, params=params)
-                response = HttpResponse(status_code=raw.status_code, text=raw.text)
-                last_response = response
-                if response.status_code == 200:
-                    self._transport_label = "httpx"
-                    await record_api_request("olx", operation, success=True)
-                    self._last_referer = url
-                    return response
-
-            await record_api_request(
-                "olx",
-                operation,
-                success=bool(last_response and last_response.status_code < 400),
+                if response.status_code not in RETRYABLE_STATUS:
+                    break
+            logger.warning(
+                "OLX curl_cffi blocked (%s) for %s — trying system curl",
+                last_response.status_code if last_response else "?",
+                url[:120],
             )
-            if last_response is not None:
-                if last_response.status_code in (407, 502) and self._proxy:
-                    from app.services.search.proxy_alerts import schedule_proxy_problem
 
-                    schedule_proxy_problem(
-                        source="OLX",
-                        error=f"проксі HTTP {last_response.status_code}",
-                    )
-                return last_response
-            raise OlxError("Не вдалося виконати запит до OLX")
-        except OlxError:
-            await record_api_request("olx", operation, success=False)
-            raise
+        try:
+            response = await system_curl_get(
+                url,
+                headers=headers,
+                params=params,
+                proxy=self._proxy,
+            )
+            if response.status_code == 200:
+                self._transport_label = "system_curl"
+                await record_api_request("olx", operation, success=True)
+                self._last_referer = url
+                return response
+            last_response = response
         except Exception as exc:
-            await record_api_request("olx", operation, success=False)
-            if self._proxy:
-                low = str(exc).lower()
-                if any(token in low for token in ("407", "proxy", "tunnel", "connect")):
-                    from app.services.search.proxy_alerts import schedule_proxy_problem
+            if is_proxy_tunnel_failure(exc):
+                raise
+            logger.warning("OLX system curl failed: %s", exc)
 
-                    schedule_proxy_problem(source="OLX", error=str(exc)[:300])
-            raise
+        if self._httpx is not None:
+            raw = await self._httpx.get(url, headers=headers, params=params)
+            response = HttpResponse(status_code=raw.status_code, text=raw.text)
+            last_response = response
+            if response.status_code == 200:
+                self._transport_label = "httpx"
+                await record_api_request("olx", operation, success=True)
+                self._last_referer = url
+                return response
+
+        await record_api_request(
+            "olx",
+            operation,
+            success=bool(last_response and last_response.status_code < 400),
+        )
+        if last_response is not None:
+            if last_response.status_code in (407, 502) and self._proxy:
+                raise RuntimeError(f"проксі HTTP {last_response.status_code}")
+            return last_response
+        raise OlxError("Не вдалося виконати запит до OLX")
 
     @staticmethod
     def _retry_delay(status: int, attempt: int) -> float:
@@ -247,7 +304,11 @@ class OlxClient:
                 continue
             except Exception as exc:
                 if attempt == MAX_RETRIES:
-                    message = f"Помилка запиту до OLX: {exc}"
+                    message = (
+                        f"Помилка запиту до OLX: {humanize_proxy_error(str(exc))}"
+                        if is_proxy_tunnel_failure(exc)
+                        else f"Помилка запиту до OLX: {exc}"
+                    )
                     await notify_admin_parsing_error(source="OLX", error=message, url=url)
                     raise OlxError(message) from exc
                 await asyncio.sleep(self._retry_delay(502, attempt))

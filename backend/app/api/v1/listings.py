@@ -119,6 +119,8 @@ def _gallery_listing_patch(result) -> dict:
         "vin_checked": result.vin_checked,
         "vin_check_url": result.vin_check_url,
         "description": result.description,
+        "had_accident": result.had_accident,
+        "usa_import": result.usa_import,
         "engine_volume_l": result.engine_volume_l,
         "fuel": result.fuel,
         "transmission": result.transmission,
@@ -130,14 +132,29 @@ def _gallery_listing_patch(result) -> dict:
     return {key: value for key, value in patch.items() if value not in (None, "", [], {})}
 
 
+def _auto_ria_needs_official_info(source: str, listing_id: str | None, source_data: dict | None) -> bool:
+    key = (source or "").strip().lower()
+    lid = listing_id or ""
+    if key not in ("auto_ria",) and not lid.startswith(("auto_ria_", "new_auto_ria_")):
+        return False
+    sd = source_data if isinstance(source_data, dict) else {}
+    return not (sd.get("autoData") or sd.get("checkedVin"))
+
+
 async def _apply_gallery_to_listing(db: AsyncSession, listing: Listing) -> ListingOut:
     source = (listing.source or "").strip().lower()
-    if gallery_needs_fetch(source, list(listing.images or [])):
+    images = list(listing.images or [])
+    needs_info = _auto_ria_needs_official_info(
+        source,
+        listing.id,
+        getattr(listing, "source_data", None),
+    )
+    if needs_info or gallery_needs_fetch(source, images):
         result = await fetch_listing_gallery(
             source,
             listing_id=listing.id,
             url=listing.url,
-            images=list(listing.images or []),
+            images=images,
         )
         if result.images:
             listing.images = result.images
@@ -217,8 +234,12 @@ async def get_listing(
                 max_photos=1,
                 telethon_timeout=12.0,
             )
-    elif auto_ria_needs_gallery(listing):
-        await attach_auto_ria_gallery(db, listing)
+    elif auto_ria_needs_gallery(listing) or _auto_ria_needs_official_info(
+        listing.source.value if hasattr(listing.source, "value") else str(listing.source),
+        listing.id,
+        getattr(listing, "source_data", None),
+    ):
+        return await _apply_gallery_to_listing(db, listing)
     elif gallery_needs_fetch((listing.source or "").lower(), list(listing.images or [])):
         return await _apply_gallery_to_listing(db, listing)
     return await listing_out_with_mirrors(db, listing)

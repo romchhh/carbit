@@ -89,7 +89,7 @@ async def _get_proxy_client() -> httpx.AsyncClient | None:
 
 async def _get_html(url: str, *, params: dict | None = None) -> httpx.Response:
     """Проксі не додає очікування: гонка з direct, далі лише переможець."""
-    global _html_route
+    global _html_route, _proxy_client
     request_label = http_request_label("GET", url, params=params)
 
     if _html_route == "direct":
@@ -107,8 +107,16 @@ async def _get_html(url: str, *, params: dict | None = None) -> httpx.Response:
         response = await _fetch_html(proxy_client, url, params)
         if response is not None:
             return response
+        from app.services.search.http_proxy import invalidate_sticky_proxy
         from app.services.search.proxy_alerts import schedule_proxy_problem
 
+        invalidate_sticky_proxy()
+        if _proxy_client is not None:
+            try:
+                await _proxy_client.aclose()
+            except Exception:
+                pass
+            _proxy_client = None
         schedule_proxy_problem(source="AUTO.RIA", error="проксі не віддав HTML")
         raise AutoRiaBetaError("AUTO.RIA HTML proxy failed", request=request_label)
 

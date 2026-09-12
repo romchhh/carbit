@@ -14,14 +14,13 @@ from app.services.auto_ria_beta.errors import AutoRiaBetaError
 from app.services.auto_ria_beta.mapper import car_to_listing
 from app.services.auto_ria_beta.parser import ScrapedCar
 from app.services.auto_ria.details import extract_image_urls
-from app.services.auto_ria.mapper import _new_auto_photo_urls
+from app.services.auto_ria.mapper import _new_auto_photo_urls, info_to_listing, new_info_to_listing
 from app.services.imperiya.client import ImperiyaClient
 from app.services.imperiya.errors import ImperiyaError
 from app.services.imperiya.mapper import _extract_images as imperiya_extract_images
 from app.services.listings.seller_contact import (
     extract_phone_from_text,
     merge_seller_contact,
-    seller_contact_from_auto_ria,
     seller_contact_from_imperiya,
     seller_contact_from_olx_details,
 )
@@ -35,6 +34,7 @@ _SUPPORTED = frozenset({"auto_ria", "auto_ria_beta", "olx", "imperiya"})
 _BETA_GALLERY_SEM = asyncio.Semaphore(4)
 
 _AUTO_RIA_ID_RE = re.compile(r"^auto_ria_(\d+)$")
+_NEW_AUTO_RIA_ID_RE = re.compile(r"^new_auto_ria_(\d+)$")
 _AUTO_RIA_BETA_ID_RE = re.compile(r"^auto_ria_beta_(\d+)$")
 _OLX_ID_RE = re.compile(r"^olx_(.+)$")
 _IMPERIYA_ID_RE = re.compile(r"^imperiya_(\d+)$")
@@ -74,59 +74,14 @@ def _contact_from_dict(contact: dict[str, str | None]) -> dict[str, str | None]:
     return {k: v for k, v in contact.items() if v}
 
 
-async def fetch_auto_ria_gallery(
-    *,
-    listing_id: str | None,
-    url: str | None,
-    current_images: list[str] | None = None,
-) -> GalleryFetchResult:
-    match = _AUTO_RIA_ID_RE.match(listing_id or "")
-    auto_id = match.group(1) if match else None
-    images = list(current_images or [])
-    contact: dict[str, str | None] = {}
-
-    try:
-        client = AutoRiaClient()
-        if auto_id:
-            try:
-                fotos = await client.get_fotos(auto_id)
-                fetched = extract_image_urls({}, fotos)
-                if fetched:
-                    images = fetched
-            except AutoRiaError:
-                logger.debug("AUTO.RIA fotos failed for %s", auto_id, exc_info=True)
-
-            try:
-                info = await client.get_info(auto_id)
-                contact = merge_seller_contact(contact, seller_contact_from_auto_ria(info))
-                if len(images) < GALLERY_COMPLETE_MIN_IMAGES:
-                    info_images = extract_image_urls(info, None)
-                    if info_images:
-                        images = info_images
-                    photos = info.get("photos")
-                    if isinstance(photos, list) and len(images) < GALLERY_COMPLETE_MIN_IMAGES:
-                        new_urls = _new_auto_photo_urls(photos)
-                        if new_urls:
-                            images = new_urls
-            except AutoRiaError:
-                logger.debug("AUTO.RIA info failed for %s", auto_id, exc_info=True)
-    except Exception:
-        logger.exception("AUTO.RIA gallery fetch error for %s", listing_id)
-
-    return GalleryFetchResult(images=images, **_contact_from_dict(contact))
-
-
-def _brand_hint_from_url(url: str | None) -> str | None:
-    match = re.search(r"/auto_([a-z0-9]+)_", url or "", re.IGNORECASE)
-    if not match:
-        return None
-    return match.group(1).replace("-", " ").title()
-
-
-def _result_from_beta_listing(listing, images: list[str]) -> GalleryFetchResult:
+def _result_from_listing(listing, images: list[str]) -> GalleryFetchResult:
+    """Поля з офіційного /auto/info (VIN, autoData) для сторінки авто."""
     return GalleryFetchResult(
-        images=images,
+        images=images or list(listing.images or []),
         seller_name=listing.seller_name,
+        seller_phone=listing.seller_phone,
+        seller_telegram=listing.seller_telegram,
+        seller_url=listing.seller_url,
         vin=listing.vin,
         plate=listing.plate,
         vin_checked=listing.vin_checked,
@@ -142,6 +97,70 @@ def _result_from_beta_listing(listing, images: list[str]) -> GalleryFetchResult:
         region=listing.region or None,
         source_data=listing.source_data if isinstance(listing.source_data, dict) else None,
     )
+
+
+async def fetch_auto_ria_gallery(
+    *,
+    listing_id: str | None,
+    url: str | None,
+    current_images: list[str] | None = None,
+) -> GalleryFetchResult:
+    used_match = _AUTO_RIA_ID_RE.match(listing_id or "")
+    new_match = _NEW_AUTO_RIA_ID_RE.match(listing_id or "")
+    auto_id = (used_match or new_match).group(1) if (used_match or new_match) else None
+    is_new = bool(new_match)
+    images = list(current_images or [])
+    listing = None
+
+    try:
+        client = AutoRiaClient()
+        if auto_id and not is_new:
+            try:
+                fotos = await client.get_fotos(auto_id)
+                fetched = extract_image_urls({}, fotos)
+                if fetched:
+                    images = fetched
+            except AutoRiaError:
+                logger.debug("AUTO.RIA fotos failed for %s", auto_id, exc_info=True)
+
+        if auto_id:
+            try:
+                if is_new:
+                    info = await client.get_new_info(auto_id)
+                    listing = new_info_to_listing(info)
+                else:
+                    info = await client.get_info(auto_id)
+                    listing = info_to_listing(info, fotos=None)
+                    if len(images) < GALLERY_COMPLETE_MIN_IMAGES:
+                        info_images = extract_image_urls(info, None)
+                        if info_images:
+                            images = info_images
+                        photos = info.get("photos")
+                        if isinstance(photos, list) and len(images) < GALLERY_COMPLETE_MIN_IMAGES:
+                            new_urls = _new_auto_photo_urls(photos)
+                            if new_urls:
+                                images = new_urls
+            except AutoRiaError:
+                logger.debug("AUTO.RIA info failed for %s", auto_id, exc_info=True)
+    except Exception:
+        logger.exception("AUTO.RIA gallery fetch error for %s", listing_id)
+
+    if listing is not None:
+        if len(images) < GALLERY_COMPLETE_MIN_IMAGES and listing.images:
+            images = list(listing.images)
+        return _result_from_listing(listing, images)
+    return GalleryFetchResult(images=images)
+
+
+def _brand_hint_from_url(url: str | None) -> str | None:
+    match = re.search(r"/auto_([a-z0-9]+)_", url or "", re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1).replace("-", " ").title()
+
+
+def _result_from_beta_listing(listing, images: list[str]) -> GalleryFetchResult:
+    return _result_from_listing(listing, images)
 
 
 async def fetch_auto_ria_beta_gallery(

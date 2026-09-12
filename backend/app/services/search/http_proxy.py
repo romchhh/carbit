@@ -85,6 +85,45 @@ def proxy_configured() -> bool:
     return bool(_explicit_proxy_url() or _webshare_api_key())
 
 
+def invalidate_sticky_proxy() -> None:
+    """Скинути sticky-сесію: після CONNECT 502 той самий вузол не тримаємо 6 годин."""
+    global _sticky_cache
+    _sticky_cache = None
+
+
+def is_proxy_tunnel_failure(exc: BaseException | str) -> bool:
+    text = str(exc or "").lower()
+    return any(
+        token in text
+        for token in (
+            "connect tunnel",
+            "tunnel failed",
+            "proxy connect",
+            "failed to perform",
+            "curl: (56)",
+            "curl: (7)",
+            "curl: (97)",
+            "407",
+            "proxy authentication",
+            "проксі http",
+        )
+    )
+
+
+def humanize_proxy_error(error: str) -> str:
+    low = (error or "").lower()
+    if "connect tunnel" in low or "curl: (56)" in low or "tunnel failed" in low:
+        return "тунель CONNECT 502: вузол Webshare не дістався сайту, змінюємо IP"
+    if "проксі http 502" in low or "http 502" in low:
+        return "проксі повернув 502, змінюємо IP"
+    if "407" in low or "proxy authentication" in low:
+        return "проксі відхилив авторизацію (407). Перевірте ключ Webshare"
+    if "curl: (7)" in low:
+        return "проксі Webshare недоступний (немає зʼєднання)"
+    text = (error or "").strip()
+    return text[:240] if text else "помилка проксі"
+
+
 def _proxy_url(username: str, password: str, host: str, port: int) -> str:
     user = quote(username, safe="")
     secret = quote(password, safe="")
