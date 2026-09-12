@@ -39,6 +39,12 @@ class NewCategorySourcesTests(unittest.TestCase):
         self.assertIn("reono", sources)
         self.assertIn("udrive", sources)
 
+    def test_lubeavto_ui_label_is_exclusive_source(self):
+        sources = sources_for_filters(SearchFilters(sources=["Любе Авто"]))
+        self.assertEqual(sources, ["lubeavto"])
+        sources = sources_for_filters(SearchFilters(sources=["любе авто"]))
+        self.assertEqual(sources, ["lubeavto"])
+
 
 class NewCategoryLivePoolTests(unittest.IsolatedAsyncioTestCase):
     async def test_build_pool_skips_olx_for_new(self):

@@ -201,7 +201,7 @@ async def run_live_search(
         partial = any(s.error for s in sources) and any(s.item_count > 0 for s in sources)
 
         model_post_filter = False
-        if (filters.model or "").strip():
+        if (filters.model or "").strip() and not beta_cursor:
             try:
                 from app.services.auto_ria.client import AutoRiaClient
 

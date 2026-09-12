@@ -85,6 +85,11 @@ class AutoRiaHtmlMergeTests(unittest.TestCase):
         self.assertEqual(normalize_sources(["auto_ria_beta"]), ["auto_ria"])
         self.assertEqual(normalize_sources(["auto_ria", "AUTO.RIA test beta"]), ["auto_ria"])
 
+    def test_normalize_sources_lubeavto_aliases(self):
+        self.assertEqual(normalize_sources(["Любе Авто"]), ["lubeavto"])
+        self.assertEqual(normalize_sources(["любе авто"]), ["lubeavto"])
+        self.assertEqual(normalize_sources(["lubeavto"]), ["lubeavto"])
+
 
 class AutoRiaDiscoverTests(unittest.IsolatedAsyncioTestCase):
     async def test_discover_falls_back_to_api_when_html_fails(self):

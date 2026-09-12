@@ -135,7 +135,11 @@ export const SOURCE_OPTIONS = [
 
 export function sanitizeFilterSources(sources: readonly string[] | null | undefined): string[] {
   const mapped = (sources ?? []).map(source =>
-    source === "AUTO.RIA test beta" || source === "auto_ria_beta" ? "AUTO.RIA" : source,
+    source === "AUTO.RIA test beta" || source === "auto_ria_beta"
+      ? "AUTO.RIA"
+      : source === "Любе авто" || source === "lubeavto"
+        ? "Любе Авто"
+        : source,
   );
   const allowed = new Set<string>(SOURCE_OPTIONS);
   const out: string[] = [];

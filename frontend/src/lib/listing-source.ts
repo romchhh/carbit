@@ -32,6 +32,7 @@ const SOURCE_FILTER_LABEL_TO_KEY: Record<string, ListingSourceKey> = {
   "Імперія Авто": "imperiya",
   "Car Market": "car_market",
   "Любе Авто": "lubeavto",
+  "Любе авто": "lubeavto",
   REONO: "reono",
   uDrive: "udrive",
   Telegram: "telegram",

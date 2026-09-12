@@ -29,7 +29,7 @@ from app.services.telegram_channels.ingest import search_telegram_listings
 
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram", "imperiya", "udrive", "car_market", "lubeavto", "reono"}
 # Бюджет лише на HTTP-сканування після acquire_olx_slot (черга не входить у wait_for).
-OLX_SEARCH_TIMEOUT_SECONDS = 22.0
+OLX_SEARCH_TIMEOUT_SECONDS = 12.0
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
 SOURCE_POOL_CAP = 2500
 TELEGRAM_POOL_CAP = 500
@@ -39,23 +39,25 @@ AUTO_RIA_PAGE_SIZE = 50
 # Гідратація — лише поточна сторінка в slice_pool.
 AUTO_RIA_ID_COLLECT_CAP = 2500
 # Live pool збирає лише IDs — для 2500 ID потрібно більше часу на пагінацію search API.
-AUTO_RIA_POOL_TIMEOUT_SECONDS = 90.0
-IMPERIYA_POOL_TIMEOUT_SECONDS = 25.0
+AUTO_RIA_POOL_TIMEOUT_SECONDS = 25.0
+IMPERIYA_POOL_TIMEOUT_SECONDS = 12.0
 IMPERIYA_PAGE_SIZE = 50
 # Не тягнемо 10+ сторінок API в один wait_for(25s) — це головна причина таймаутів.
 IMPERIYA_POOL_MAX_PAGES = 3
-UDRIVE_POOL_TIMEOUT_SECONDS = 25.0
+UDRIVE_POOL_TIMEOUT_SECONDS = 12.0
 UDRIVE_PAGE_SIZE = 50
 UDRIVE_POOL_MAX_PAGES = 3
-CAR_MARKET_POOL_TIMEOUT_SECONDS = 20.0
+CAR_MARKET_POOL_TIMEOUT_SECONDS = 12.0
 CAR_MARKET_PAGE_SIZE = 20
-LUBEAVTO_POOL_TIMEOUT_SECONDS = 20.0
+LUBEAVTO_POOL_TIMEOUT_SECONDS = 12.0
 LUBEAVTO_PAGE_SIZE = 24
-REONO_POOL_TIMEOUT_SECONDS = 20.0
-AUTO_RIA_BETA_POOL_TIMEOUT_SECONDS = 90.0
+REONO_POOL_TIMEOUT_SECONDS = 12.0
+AUTO_RIA_BETA_POOL_TIMEOUT_SECONDS = 25.0
 REONO_PAGE_SIZE = 40
 # TG — лише БД (без keyword refresh на live-пошуку).
 TELEGRAM_POOL_TIMEOUT_SECONDS = 12.0
+# Перший live-пошук: одна-дві сторінки з кожного майданчика, не весь каталог.
+LIVE_SOURCE_FIRST_CAP = 48
 # У змішаній видачі спочатку OLX/Telegram, щоб перші картки не були лише з AUTO.RIA.
 _SOURCE_BLEND_ORDER = {
     "olx": 0,
@@ -112,6 +114,21 @@ class SearchListingsOutcome:
     sources: list[SourceSearchStatus]
 
 
+def _source_token(raw: str) -> str:
+    return raw.strip().lower().replace(".", "_").replace(" ", "_").replace("-", "_")
+
+
+_LUBEAVTO_SOURCE_KEYS = frozenset(
+    {
+        "lubeavto",
+        "lube_avto",
+        "любе_авто",
+        "любеавто",
+        "lubeavto_com_ua",
+    }
+)
+
+
 def normalize_sources(sources: list[str] | None) -> list[str]:
     default = ["auto_ria", "olx", "car_market", "lubeavto", "reono", "imperiya", "udrive"]
     if app_settings.TELEGRAM_ENABLED:
@@ -122,22 +139,22 @@ def normalize_sources(sources: list[str] | None) -> list[str]:
 
     normalized: list[str] = []
     for raw in sources:
-        key = raw.strip().lower().replace(".", "_").replace(" ", "_")
+        key = _source_token(raw)
         if key in ("auto_ria", "autoria"):
             normalized.append("auto_ria")
         elif key in ("auto_ria_beta", "autoria_beta", "auto_ria_test_beta", "autoria_test_beta"):
             normalized.append("auto_ria")
         elif key == "olx":
             normalized.append("olx")
-        elif key in ("imperiya", "imperiya_auto", "imperiya-auto", "iautos"):
+        elif key in ("imperiya", "imperiya_auto", "iautos"):
             normalized.append("imperiya")
-        elif key in ("udrive", "u_drive", "u-drive"):
+        elif key in ("udrive", "u_drive"):
             normalized.append("udrive")
-        elif key in ("car_market", "carmarket", "car-market", "car_market_net"):
+        elif key in ("car_market", "carmarket", "car_market_net"):
             normalized.append("car_market")
-        elif key in ("lubeavto", "lube_avto", "lube-avto", "любе авто"):
+        elif key in _LUBEAVTO_SOURCE_KEYS:
             normalized.append("lubeavto")
-        elif key in ("reono", "reono_ua", "reono-ua"):
+        elif key in ("reono", "reono_ua"):
             normalized.append("reono")
         elif key == "telegram":
             normalized.append("telegram")
@@ -1626,6 +1643,20 @@ async def _build_globally_sorted_slots(
     return slots[:limit]
 
 
+def _ar_listings_from_html_cards(
+    auto_ria_ids: list[str],
+    html_cards: dict[str, ListingOut] | None,
+) -> list[ListingOut]:
+    cards = html_cards or {}
+    items: list[ListingOut] = []
+    for aid in auto_ria_ids:
+        raw = aid[2:] if aid.startswith("n:") else aid
+        card = cards.get(raw) or cards.get(aid)
+        if card is not None:
+            items.append(card)
+    return items
+
+
 async def _build_vin_aware_slots(
     *,
     auto_ria_ids: list[str],
@@ -1904,6 +1935,7 @@ async def build_live_search_pool(
     reono_result = _empty_page(1, max_ids)
     telegram_result = _empty_page(1, max_ids)
     olx_error: str | None = None
+    source_need = min(max(max_ids, 1), LIVE_SOURCE_FIRST_CAP)
 
     async def run_auto_ria():
         try:
@@ -1936,7 +1968,7 @@ async def build_live_search_pool(
                     _search_olx_body(
                         filters,
                         page=1,
-                        per_page=max_ids,
+                        per_page=source_need,
                         sort_by=sort_by,
                         enrich_details=olx_enrich_details,
                         use_cache=True,
@@ -1958,7 +1990,7 @@ async def build_live_search_pool(
                 _fetch_source_pool(
                     "imperiya",
                     filters,
-                    need=max_ids,
+                    need=source_need,
                     sort_by=sort_by,
                     keyword_refresh=keyword_refresh,
                 ),
@@ -1976,7 +2008,7 @@ async def build_live_search_pool(
                 _fetch_source_pool(
                     "udrive",
                     filters,
-                    need=max_ids,
+                    need=source_need,
                     sort_by=sort_by,
                     keyword_refresh=keyword_refresh,
                 ),
@@ -1993,7 +2025,7 @@ async def build_live_search_pool(
             return await asyncio.wait_for(
                 fetch_car_market_pool(
                     filters,
-                    need=max_ids,
+                    need=source_need,
                     sort_by=sort_by,
                 ),
                 timeout=CAR_MARKET_POOL_TIMEOUT_SECONDS,
@@ -2009,7 +2041,7 @@ async def build_live_search_pool(
             return await asyncio.wait_for(
                 fetch_lubeavto_pool(
                     filters,
-                    need=max_ids,
+                    need=source_need,
                     sort_by=sort_by,
                 ),
                 timeout=LUBEAVTO_POOL_TIMEOUT_SECONDS,
@@ -2025,7 +2057,7 @@ async def build_live_search_pool(
             return await asyncio.wait_for(
                 fetch_reono_pool(
                     filters,
-                    need=max_ids,
+                    need=source_need,
                     sort_by=sort_by,
                 ),
                 timeout=REONO_POOL_TIMEOUT_SECONDS,
@@ -2209,7 +2241,7 @@ async def build_live_search_pool(
 
     brand_model_filter = bool((filters.brand or "").strip() or (filters.model or "").strip())
     model_post_filter = False
-    if brand_model_filter and (filters.model or "").strip():
+    if brand_model_filter and (filters.model or "").strip() and not html_cards:
         try:
             model_post_filter = await model_filter_needs_post_filter(AutoRiaClient(), filters)
         except Exception:
@@ -2295,13 +2327,32 @@ async def build_live_search_pool(
         or udrive_sorted
         or telegram_sorted
     ):
-        # Глобальне сортування між джерелами (дата, ціна, пробіг) після VIN-dedup.
-        slots = await _build_vin_aware_slots(
-            auto_ria_ids=auto_ria_ids,
-            ot_items=ot_merged,
-            limit=POOL_LIMIT,
-            sort_by=sort_by,
-        )
+        ar_html_items = _ar_listings_from_html_cards(auto_ria_ids, html_cards)
+        if ar_html_items:
+            merged = mark_duplicates_in_pool([*ot_merged, *ar_html_items])
+            slots = [
+                _listing_to_slot(item)
+                for item in sort_listings(merged, sort_by)[:POOL_LIMIT]
+            ]
+            represented: set[str] = set()
+            for slot in slots:
+                if slot.get("s") == "n" and slot.get("i"):
+                    represented.add(f"n:{slot['i']}")
+                elif slot.get("s") == "r" and slot.get("i"):
+                    represented.add(str(slot["i"]))
+            for aid in auto_ria_ids:
+                if len(slots) >= POOL_LIMIT:
+                    break
+                if aid in represented:
+                    continue
+                slots.extend(_make_ar_slots([aid], html_cards)[:1])
+        else:
+            slots = await _build_vin_aware_slots(
+                auto_ria_ids=auto_ria_ids,
+                ot_items=ot_merged,
+                limit=POOL_LIMIT,
+                sort_by=sort_by,
+            )
     elif auto_ria_ids and sort_by in ("newest", "published_desc", "published_asc"):
         slots = _make_ar_slots(auto_ria_ids, html_cards)[:POOL_LIMIT]
     elif auto_ria_ids:
@@ -2339,6 +2390,14 @@ async def build_live_search_pool(
     slots = _attach_html_cards(slots, html_cards)
 
     nav_total = len(slots)
+    extra = max(0, int(auto_ria_market_total or 0) - len(auto_ria_ids))
+    if extra:
+        if not isinstance(beta_cursor, dict):
+            beta_cursor = {"next_html_page": 1, "exhausted": False}
+        else:
+            beta_cursor = {**beta_cursor, "exhausted": False}
+        nav_total += extra
+
     market_total = (
         auto_ria_market_total
         + olx_result.total
@@ -2349,9 +2408,6 @@ async def build_live_search_pool(
         + udrive_result.total
         + telegram_result.total
     )
-    if beta_cursor and not beta_cursor.get("exhausted"):
-        extra = max(0, int(auto_ria_market_total or 0) - len(auto_ria_ids))
-        nav_total += extra
 
     if brand_model_filter:
         source_statuses = [

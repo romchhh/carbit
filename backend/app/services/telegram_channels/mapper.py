@@ -484,9 +484,25 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
         )
 
         own_region = item.region or ""
-        if not is_generic_location(own_region):
+        src = (item.source or "").lower()
+        selected_sources = [
+            value.strip().lower().replace(".", "_").replace(" ", "_").replace("-", "_")
+            for value in (filters.sources or [])
+            if str(value).strip()
+        ]
+        lubeavto_only = src == "lubeavto" and selected_sources == ["lubeavto"]
+        if not lubeavto_only and src == "lubeavto" and len(selected_sources) == 1:
+            lubeavto_only = selected_sources[0] in {
+                "lubeavto",
+                "lube_avto",
+                "любе_авто",
+                "любеавто",
+            }
+        if lubeavto_only:
+            ok = True
+        elif not is_generic_location(own_region):
             ok = any(listing_region_matches_filter(own_region, r) for r in regions)
-        elif (item.source or "").lower() == "telegram":
+        elif src == "telegram":
             # У пості міста в окремому полі немає — шукаємо його в тексті, а
             # якщо там теж немає, показуємо: краще так, ніж втратити оголошення.
             text = f"{item.title or ''} {item.description or ''}"

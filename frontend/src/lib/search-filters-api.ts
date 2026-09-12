@@ -75,6 +75,7 @@ const SOURCE_TO_BACKEND: Record<string, string> = {
   "Імперія Авто": "imperiya",
   "Car Market": "car_market",
   "Любе Авто": "lubeavto",
+  "Любе авто": "lubeavto",
   REONO: "reono",
   uDrive: "udrive",
   Telegram: "telegram",

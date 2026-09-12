@@ -441,18 +441,23 @@ def _slot_listing(slot: dict) -> ListingOut | None:
 async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
     """Перетворює слоти сторінки на повні ListingOut об'єкти.
 
-    {"s":"r","i":"...","d":?} — AUTO.RIA вживані: завжди /auto/info, HTML-картка зливається.
-    {"s":"n","i":"..."} — AUTO.RIA нові,   гідрат через /auto/new/auto.
-    {"s":"o"/"t","d":{...}} — OLX/Telegram, розпаковуються напряму.
+    HTML-картка видачі вже має ціну/фото/бейджі — /auto/info лише якщо картки немає.
     """
     from app.services.auto_ria.html_merge import merge_html_card_with_api
 
     used_ids = [
         s["i"]
         for s in slots
-        if s.get("s") == "r" and "i" in s and not str(s.get("i", "")).startswith("beta_")
+        if s.get("s") == "r"
+        and "i" in s
+        and not str(s.get("i", "")).startswith("beta_")
+        and _slot_listing(s) is None
     ]
-    new_ids = [s["i"] for s in slots if s.get("s") == "n" and "i" in s]
+    new_ids = [
+        s["i"]
+        for s in slots
+        if s.get("s") == "n" and "i" in s and _slot_listing(s) is None
+    ]
 
     hydrated_used, hydrated_new = await asyncio.gather(
         _batch_hydrate_auto_ria(used_ids),
@@ -593,14 +598,19 @@ def collapse_pool_totals(
     page: int,
     per_page: int,
     slot_count: int,
+    remote_more: bool = False,
 ) -> tuple[int, int, int, int | None]:
     """Пагінація після VIN-склеювання.
 
     Повертає (total карток, pages, offer_count, duplicate_count).
     Якщо весь пул вмістився на сторінку — total = унікальні картки,
     а не сирі слоти джерел (інакше «знайдено 3 / показано 2» і фейкова «Показати ще»).
+    HTML AUTO.RIA довантажується далі — тоді не стискаємо до однієї сторінки.
     """
     offer_count = slot_total
+    if remote_more or slot_total > slot_count:
+        pages = (slot_total + per_page - 1) // per_page if slot_total else 0
+        return slot_total, pages, offer_count, None
     if page == 1 and slot_count <= per_page:
         dups = max(0, offer_count - unique_count)
         pages = 1 if unique_count else 0
@@ -707,16 +717,18 @@ async def slice_pool(
     if model_post_filter:
         market_total = None
 
+    sources_raw = pool.get("sources") or []
+    sources = [SourceStatusOut.model_validate(row) for row in sources_raw]
+    cursor = pool.get("beta_cursor")
+    remote_more = isinstance(cursor, dict) and not cursor.get("exhausted")
     total, pages, offer_count, duplicate_count = collapse_pool_totals(
         slot_total=total,
         unique_count=len(items),
         page=page,
         per_page=per_page,
         slot_count=len(slots),
+        remote_more=remote_more or bool(market_total and market_total > len(slots)),
     )
-
-    sources_raw = pool.get("sources") or []
-    sources = [SourceStatusOut.model_validate(row) for row in sources_raw]
 
     return PaginatedListings(
         items=items,

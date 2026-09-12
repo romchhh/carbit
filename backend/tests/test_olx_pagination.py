@@ -19,10 +19,10 @@ class OlxPaginationTests(unittest.TestCase):
         filtered = _olx_max_scan_pages(collect_target=40, needs_post_filter=True, pool_size=False)
         self.assertGreaterEqual(filtered, plain)
 
-    def test_pool_mode_allows_more_pages(self):
+    def test_pool_mode_stays_on_first_pages(self):
         pool = _olx_max_scan_pages(collect_target=200, needs_post_filter=True, pool_size=True)
-        ui = _olx_max_scan_pages(collect_target=80, needs_post_filter=True, pool_size=False)
-        self.assertGreaterEqual(pool, ui)
+        self.assertLessEqual(pool, 2)
+        self.assertGreaterEqual(pool, 1)
 
     def test_pool_mode_collect_not_inflated_by_live_pool_size(self):
         # LIVE_POOL_SIZE=500 не повинен вимагати 500+ оголошень з OLX.
@@ -32,8 +32,8 @@ class OlxPaginationTests(unittest.TestCase):
             needs_post_filter=False,
             pool_mode=True,
         )
-        self.assertLessEqual(target, 240)
-        self.assertGreaterEqual(target, 120)
+        self.assertLessEqual(target, 80)
+        self.assertGreaterEqual(target, 40)
 
     def test_has_next_page_full_batch(self):
         self.assertTrue(

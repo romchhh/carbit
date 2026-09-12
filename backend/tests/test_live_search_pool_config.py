@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from app.core.timezone import KYIV_TZ
 from app.schemas.schemas import ListingOut, PaginatedListings
@@ -220,6 +220,54 @@ class CollapsePoolTotalsTests(unittest.TestCase):
         self.assertEqual(offers, 2)
         self.assertEqual(dups, 0)
         self.assertEqual(pages, 1)
+
+    def test_remote_html_more_keeps_pagination(self):
+        total, pages, offers, dups = pool_cache.collapse_pool_totals(
+            slot_total=28,
+            unique_count=20,
+            page=1,
+            per_page=20,
+            slot_count=28,
+            remote_more=True,
+        )
+        self.assertEqual(total, 28)
+        self.assertEqual(pages, 2)
+        self.assertIsNone(dups)
+
+    def test_market_extra_slots_keep_pagination(self):
+        total, pages, offers, dups = pool_cache.collapse_pool_totals(
+            slot_total=1573,
+            unique_count=20,
+            page=1,
+            per_page=20,
+            slot_count=28,
+        )
+        self.assertEqual(total, 1573)
+        self.assertEqual(pages, 79)
+        self.assertIsNone(dups)
+
+
+class HydrateHtmlCardSkipInfoTests(unittest.IsolatedAsyncioTestCase):
+    async def test_html_card_skips_auto_ria_info(self):
+        html = _listing("auto_ria_40307001", "auto_ria")
+        html = html.model_copy(
+            update={"source_data": {"html_search": True, "title": "HTML"}}
+        )
+        slots = [{"s": "r", "i": "40307001", "d": html.model_dump(mode="json")}]
+        with patch(
+            "app.services.search.pool_cache._batch_hydrate_auto_ria",
+            new_callable=AsyncMock,
+            return_value={},
+        ) as used_mock, patch(
+            "app.services.search.pool_cache._batch_hydrate_new_auto_ria",
+            new_callable=AsyncMock,
+            return_value={},
+        ) as new_mock:
+            items = await pool_cache._hydrate_page_slots(slots)
+        used_mock.assert_awaited_once_with([])
+        new_mock.assert_awaited_once_with([])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].id, "auto_ria_40307001")
 
 
 class SlicePoolUniquePageTests(unittest.IsolatedAsyncioTestCase):
