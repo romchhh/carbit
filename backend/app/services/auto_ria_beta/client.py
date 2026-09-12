@@ -181,7 +181,6 @@ class AutoRiaBetaClient:
 
     async def fetch_search_page(self, params: dict) -> tuple[list, int]:
         response = await _get_html(SEARCH_URL, params=params)
-        await asyncio.sleep(REQUEST_DELAY_SECONDS)
         cars, total = parse_search_page(response.text)
         return cars, total
 

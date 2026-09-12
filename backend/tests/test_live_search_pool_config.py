@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 from app.core.timezone import KYIV_TZ
 from app.schemas.schemas import ListingOut, PaginatedListings
 from app.services.search import multi_source, pool_cache
+from app.services.search.search_endpoint import _pool_market_total_for_cache
 
 
 def _listing(listing_id: str, source: str, *, minutes_ago: int = 0) -> ListingOut:
@@ -181,6 +182,33 @@ class LiveSearchPoolConfigTests(unittest.TestCase):
         self.assertEqual(len(page_items), 2)
 
 
+class AutoRiaHtmlRemainingTests(unittest.TestCase):
+    def test_html_remaining_ignores_other_sources(self):
+        slots = (
+            [{"s": "r", "i": str(i)} for i in range(40)]
+            + [{"s": "o", "d": {}} for _ in range(21)]
+        )
+        self.assertEqual(pool_cache.auto_ria_slot_count(slots), 40)
+        self.assertEqual(pool_cache.auto_ria_html_remaining(slots, 110), 70)
+
+    def test_html_remaining_zero_when_catalog_loaded(self):
+        slots = [{"s": "r", "i": str(i)} for i in range(110)]
+        self.assertEqual(pool_cache.auto_ria_html_remaining(slots, 110), 0)
+
+    def test_pool_market_total_for_cache_hides_equal_headline(self):
+        self.assertIsNone(
+            _pool_market_total_for_cache(model_post_filter=False, market_total=61, nav_total=61)
+        )
+        self.assertEqual(
+            _pool_market_total_for_cache(model_post_filter=False, market_total=110, nav_total=61),
+            110,
+        )
+        self.assertEqual(
+            _pool_market_total_for_cache(model_post_filter=False, market_total=110, nav_total=131),
+            110,
+        )
+
+
 class CollapsePoolTotalsTests(unittest.TestCase):
     def test_small_pool_counts_unique_cards_not_raw_slots(self):
         total, pages, offers, dups = pool_cache.collapse_pool_totals(
@@ -245,6 +273,15 @@ class CollapsePoolTotalsTests(unittest.TestCase):
         self.assertEqual(total, 1573)
         self.assertEqual(pages, 79)
         self.assertIsNone(dups)
+
+
+class HtmlExtendPagesTests(unittest.TestCase):
+    def test_deficit_maps_to_one_or_two_pages(self):
+        self.assertEqual(pool_cache.html_pages_for_deficit(0), 0)
+        self.assertEqual(pool_cache.html_pages_for_deficit(12), 1)
+        self.assertEqual(pool_cache.html_pages_for_deficit(20), 1)
+        self.assertEqual(pool_cache.html_pages_for_deficit(40), 2)
+        self.assertEqual(pool_cache.html_pages_for_deficit(200), 2)
 
 
 class HydrateHtmlCardSkipInfoTests(unittest.IsolatedAsyncioTestCase):

@@ -112,7 +112,6 @@ export function SearchPreviewResults({
   loadingMore,
   hasMore,
   total,
-  marketTotal,
   results,
   sort,
   freshness,
@@ -129,7 +128,6 @@ export function SearchPreviewResults({
   const { cardCompareProps, compareHint } = useCompareOnListingCard();
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const exportItems = useMemo(() => listingsToExportItems(results), [results]);
-  const catalogTotal = marketTotal && marketTotal > total ? marketTotal : total;
   const remaining = Math.max(0, total - results.length);
   const nextBatch = Math.min(SEARCH_PAGE_SIZE, remaining);
   const canLoadMore = Boolean(hasMore && onLoadMore && remaining > 0);
@@ -158,7 +156,7 @@ export function SearchPreviewResults({
         {running && (
           <SearchResultsToolbar
             running={running}
-            total={catalogTotal}
+            total={total}
             shown={results.length}
             sort={sort}
             onSortChange={onSortChange}
@@ -167,7 +165,6 @@ export function SearchPreviewResults({
             offerCount={offerStats.offers}
             duplicateCount={offerStats.duplicates}
             hasMore={canLoadMore}
-            browsableTotal={total}
           />
         )}
 

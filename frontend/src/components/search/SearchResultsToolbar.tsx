@@ -3,6 +3,7 @@
 import { ExportMenu } from "@/components/search/ExportMenu";
 import type { ExportListing } from "@/lib/export-listings";
 import type { SortOption } from "@/lib/search-catalog";
+import { SEARCH_PAGE_SIZE } from "@/lib/search-preview";
 import { ukPlural } from "@/lib/utils";
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
@@ -31,8 +32,6 @@ type Props = {
   offerCount?: number;
   duplicateCount?: number;
   hasMore?: boolean;
-  /** Скільки карток реально є в пулі для пагінації (може бути менше за total). */
-  browsableTotal?: number;
 };
 
 export function SearchResultsToolbar({
@@ -50,7 +49,6 @@ export function SearchResultsToolbar({
   offerCount,
   duplicateCount,
   hasMore = false,
-  browsableTotal,
 }: Props) {
   return (
     <div className="mb-3 rounded-2xl border border-border bg-white p-2.5 sm:mb-4 sm:p-3.5 lg:mb-5 lg:px-6 lg:py-4">
@@ -90,7 +88,6 @@ export function SearchResultsToolbar({
                   offers={offerCount}
                   duplicates={duplicateCount}
                   hasMore={hasMore}
-                  browsableTotal={browsableTotal}
                 />
               </span>
               {typeof newCount === "number" && newCount > 0 && (
@@ -105,7 +102,7 @@ export function SearchResultsToolbar({
                   <span className="font-semibold text-rose-700">{priceDropCount} зі зниженням</span>
                 </>
               )}
-              {hasMore && shown < total && (
+              {hasMore && shown + SEARCH_PAGE_SIZE <= total && (
                 <span className="w-full text-[12px] text-muted sm:hidden">
                   Показано {shown} з {total.toLocaleString("uk-UA")}
                 </span>
@@ -143,26 +140,20 @@ function FoundCount({
   offers,
   duplicates,
   hasMore,
-  browsableTotal,
 }: {
   cards: number;
   shown: number;
   offers?: number;
   duplicates?: number;
   hasMore: boolean;
-  browsableTotal?: number;
 }) {
   const dups = Math.max(0, duplicates ?? 0);
   const offerTotal = offers ?? cards;
-  const poolTotal = browsableTotal ?? cards;
-  const moreHint = hasMore && shown < poolTotal && (
-    <span className="hidden sm:inline"> · показано {shown}</span>
-  );
-  const catalogHint =
-    browsableTotal != null && cards > browsableTotal ? (
-      <span className="text-muted">
+  const moreHint =
+    hasMore && shown + SEARCH_PAGE_SIZE <= cards ? (
+      <span className="hidden sm:inline">
         {" "}
-        · доступно для перегляду {browsableTotal.toLocaleString("uk-UA")}
+        · показано {shown.toLocaleString("uk-UA")} з {cards.toLocaleString("uk-UA")}
       </span>
     ) : null;
 
@@ -176,7 +167,6 @@ function FoundCount({
         {dups.toLocaleString("uk-UA")} {ukPlural(dups, "дубль", "дублі", "дублів")}
         {" · "}
         {cards.toLocaleString("uk-UA")} {ukPlural(cards, "картка", "картки", "карток")}
-        {catalogHint}
         {moreHint}
       </>
     );
@@ -185,7 +175,6 @@ function FoundCount({
   return (
     <>
       Знайдено <strong className="text-ink">{cards.toLocaleString("uk-UA")}</strong>
-      {catalogHint}
       {moreHint}
     </>
   );

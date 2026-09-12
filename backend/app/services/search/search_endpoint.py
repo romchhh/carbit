@@ -37,9 +37,10 @@ def _pool_market_total_for_cache(
     market_total: int,
     nav_total: int,
 ) -> int | None:
-    if model_post_filter:
+    """Каталог AUTO.RIA в Redis для HTML-extend. Клієнту slice віддає лише total."""
+    if model_post_filter or market_total <= 0:
         return None
-    if market_total <= 0:
+    if market_total == nav_total:
         return None
     return market_total
 
@@ -266,5 +267,28 @@ async def run_live_search(
             asyncio.create_task(refresh_process_rates())
         except Exception:
             pass
+        try:
+            asyncio.create_task(_prefetch_next_html_page(filters, sort_by))
+        except Exception:
+            logger.debug("Failed to schedule HTML prefetch", exc_info=True)
 
     return results
+
+
+async def _prefetch_next_html_page(filters: SearchFilters, sort_by: str) -> None:
+    """Поки користувач дивиться першу сторінку — підтягуємо наступну HTML-порцію AUTO.RIA."""
+    try:
+        from app.services.search.pool_cache import ensure_beta_pool_covers, get_live_pool
+
+        pool = await get_live_pool(filters, sort_by)
+        if not pool:
+            return
+        slots = pool.get("slots") or []
+        await ensure_beta_pool_covers(
+            pool,
+            filters=filters,
+            sort_by=sort_by,
+            need=len(slots) + 24,
+        )
+    except Exception:
+        logger.debug("AUTO.RIA HTML prefetch failed", exc_info=True)

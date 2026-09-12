@@ -321,6 +321,27 @@ export function usePreviewSearch(
     [],
   );
 
+  const prefetchNextPage = useCallback(
+    async (
+      gen: number,
+      nextFilters: SearchFilterState,
+      nextFreshness: SearchFreshness,
+      nextSort: SortOption,
+    ) => {
+      try {
+        const data = await searchSlice(nextFilters, nextSort, nextFreshness, 2);
+        if (gen !== searchGen.current || !data.items.length) return;
+        fullPoolRef.current = appendUniqueToPool(fullPoolRef.current, data.items);
+        lastApiPageRef.current = Math.max(lastApiPageRef.current, 2);
+        setPoolSize(fullPoolRef.current.length);
+        setLoadedApiPage(lastApiPageRef.current);
+      } catch {
+        // prefetch — best-effort, «Показати ще» все одно довантажить.
+      }
+    },
+    [searchSlice],
+  );
+
   const fetchInitial = useCallback(
     async (
       nextFilters: SearchFilterState,
@@ -382,6 +403,9 @@ export function usePreviewSearch(
           setSearching(false);
         });
         persistSearchCache(nextFilters, nextFreshness, nextSort, first);
+        if (!guestMode) {
+          void prefetchNextPage(gen, nextFilters, nextFreshness, nextSort);
+        }
       } catch (err) {
         // AbortError — новий пошук вже запущений; мовчки ігноруємо.
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -416,7 +440,7 @@ export function usePreviewSearch(
         }
       }
     },
-    [applyRecentCache, persistSearchCache, scrollToProgress, searchSlice],
+    [applyRecentCache, guestMode, persistSearchCache, prefetchNextPage, scrollToProgress, searchSlice],
   );
 
   const fetchMoreFromServer = useCallback(
@@ -440,7 +464,7 @@ export function usePreviewSearch(
       let lastMeta: PageResult | null = null;
       let emptyPages = 0;
 
-      for (let attempt = 0; attempt < 6; attempt += 1) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
         if (fullPoolRef.current.length >= targetDisplay) break;
         if (emptyPages >= 2) break;
         const data = await searchSlice(nextFilters, apiSort, nextFreshness, apiPage);

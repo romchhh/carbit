@@ -13,8 +13,8 @@ Slot-based pool format (Redis):
       {"s": "t", "d": {...listing}},      # Telegram — повний об'єкт
       ...
     ],
-    "total": 310,           # кількість слотів (для пагінації)
-    "market_total": 292,    # реальна кількість оголошень в AUTO.RIA API
+    "total": 310,           # скільки можна гортати (слоти + залишок HTML AUTO.RIA)
+    "market_total": 292,    # каталог AUTO.RIA HTML, лише щоб довантажити ще сторінки
     "sources": [...],
     "partial": false
   }
@@ -37,10 +37,14 @@ from app.services.parser.filter_groups import filters_group_key
 
 logger = logging.getLogger(__name__)
 
-LIVE_POOL_PREFIX = "live-pool:v8:"
+LIVE_POOL_PREFIX = "live-pool:v9:"
 LIVE_POOL_TTL_SECONDS = 600  # 10 хвилин — повторний пошук без нових AR-запитів
 # Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
 LIVE_POOL_SIZE = 2500
+# AUTO.RIA HTML на «Показати ще»: сайт віддає ~20 карток/стор., більше 2 сторінок за клік не тягнемо.
+_HTML_SITE_PAGE_CARDS = 20
+_HTML_EXTEND_PAGES_MAX = 2
+_HTML_EXTEND_WAVES_MAX = 2
 
 # Кеш окремих AUTO.RIA-оголошень (щоб не гідратувати одне й те саме двічі)
 _AR_INFO_PREFIX = "ar-info:"
@@ -110,6 +114,16 @@ async def set_live_pool(
 
 
 _beta_extend_locks: dict[str, asyncio.Lock] = {}
+_AUTO_RIA_SLOT_SOURCES = frozenset({"r", "n", "b"})
+
+
+def auto_ria_slot_count(slots: list[dict]) -> int:
+    return sum(1 for slot in slots if isinstance(slot, dict) and slot.get("s") in _AUTO_RIA_SLOT_SOURCES)
+
+
+def auto_ria_html_remaining(slots: list[dict], ar_market_total: int) -> int:
+    """Скільки ще AUTO.RIA HTML можна довантажити, не плутаючи з OLX/іншими слотами."""
+    return max(0, int(ar_market_total or 0) - auto_ria_slot_count(slots))
 
 
 def _html_slot_keys(slots: list[dict]) -> set[str]:
@@ -155,6 +169,12 @@ def _html_slot_new_stock_fps(slots: list[dict]) -> set[str]:
     return fps
 
 
+def html_pages_for_deficit(deficit: int) -> int:
+    if deficit <= 0:
+        return 0
+    return min(_HTML_EXTEND_PAGES_MAX, max(1, (deficit + _HTML_SITE_PAGE_CARDS - 1) // _HTML_SITE_PAGE_CARDS))
+
+
 async def ensure_beta_pool_covers(
     pool: dict[str, Any],
     *,
@@ -189,27 +209,12 @@ async def ensure_beta_pool_covers(
         seen_fps = _html_slot_new_stock_fps(slots)
         next_html = int(cursor.get("next_html_page") or 0)
         market_total = int(pool.get("market_total") or 0)
-        while len(slots) < need and next_html < MAX_PAGES and len(slots) < POOL_MAX_ITEMS:
-            batch = await fetch_auto_ria_beta_batch(
-                filters,
-                sort_by=sort_by,
-                start_page=next_html,
-                html_pages=1,
-                need=PAGE_SIZE,
-                seen_ids=seen,
-            )
-            next_html = batch.next_html_page
-            market_total = max(market_total, batch.market_total)
-            if batch.error:
-                cursor = {
-                    "next_html_page": next_html,
-                    "exhausted": True,
-                }
-                break
+
+        def _append_listings(listings: list) -> None:
             from app.services.auto_ria.html_merge import listing_numeric_id
             from app.services.listings.duplicates import auto_ria_new_stock_fingerprint
 
-            for listing in batch.listings:
+            for listing in listings:
                 aid = listing_numeric_id(listing)
                 if not aid or aid in seen:
                     continue
@@ -223,29 +228,75 @@ async def ensure_beta_pool_covers(
                     slots.append({"s": "n", "i": aid[2:], "d": listing.model_dump(mode="json")})
                 else:
                     slots.append({"s": "r", "i": aid, "d": listing.model_dump(mode="json")})
-            cursor = {
-                "next_html_page": next_html,
-                "exhausted": bool(batch.exhausted),
-            }
-            if batch.exhausted:
+
+        waves = 0
+        while (
+            len(slots) < need
+            and next_html < MAX_PAGES
+            and len(slots) < POOL_MAX_ITEMS
+            and waves < _HTML_EXTEND_WAVES_MAX
+        ):
+            waves += 1
+            pages_n = html_pages_for_deficit(need - len(slots))
+            starts = [next_html + i for i in range(pages_n) if next_html + i < MAX_PAGES]
+            if not starts:
                 break
-            if not batch.listings:
+            raw_batches = await asyncio.gather(
+                *(
+                    fetch_auto_ria_beta_batch(
+                        filters,
+                        sort_by=sort_by,
+                        start_page=start,
+                        html_pages=1,
+                        need=PAGE_SIZE,
+                        seen_ids=seen,
+                    )
+                    for start in starts
+                ),
+                return_exceptions=True,
+            )
+            stop = False
+            added_any = False
+            for start, batch in zip(starts, raw_batches):
+                if isinstance(batch, BaseException):
+                    logger.warning("AUTO.RIA HTML extend page=%s failed: %s", start, batch)
+                    cursor = {"next_html_page": start, "exhausted": True}
+                    stop = True
+                    break
+                next_html = max(next_html, int(batch.next_html_page or start + 1))
+                market_total = max(market_total, batch.market_total)
+                if batch.error:
+                    cursor = {"next_html_page": next_html, "exhausted": True}
+                    stop = True
+                    break
+                before_len = len(slots)
+                _append_listings(list(batch.listings))
+                added_any = added_any or len(slots) > before_len
                 cursor = {
                     "next_html_page": next_html,
-                    "exhausted": True,
+                    "exhausted": bool(batch.exhausted),
                 }
+                if batch.exhausted:
+                    stop = True
+                    break
+            if stop:
+                break
+            if not added_any:
+                cursor = {"next_html_page": next_html, "exhausted": True}
                 break
 
         extra = 0
         if cursor and not cursor.get("exhausted"):
-            extra = max(0, market_total - len(slots))
+            extra = auto_ria_html_remaining(slots, market_total)
         nav_total = len(slots) + extra
+        # Окремий market_total лише поки є що довантажити з HTML.
+        pool_market = market_total if extra else None
         pool = {
             **pool,
             "slots": slots,
             "beta_cursor": cursor,
             "total": nav_total,
-            "market_total": market_total or pool.get("market_total"),
+            "market_total": pool_market,
         }
         await set_live_pool(
             filters,
@@ -649,7 +700,7 @@ async def _collect_unique_page_items(
                 pool,
                 filters=filters,
                 sort_by=sort_by,
-                need=before + 1,
+                need=max(want, before + per_page),
             )
             slots = list(pool.get("slots") or [])
             if len(slots) <= before:
@@ -688,7 +739,7 @@ async def slice_pool(
         return _slice_legacy_pool(pool, page=page, per_page=per_page)
 
     if filters is not None:
-        need = page * per_page * 2
+        need = page * per_page
         pool = await ensure_beta_pool_covers(
             pool, filters=filters, sort_by=sort_by, need=need
         )
@@ -733,7 +784,8 @@ async def slice_pool(
     return PaginatedListings(
         items=items,
         total=total,
-        market_total=market_total if market_total and market_total > total else None,
+        # Лічильник у відповіді один: total. market_total лишається в Redis для HTML-extend.
+        market_total=None,
         page=page,
         per_page=per_page,
         pages=pages,

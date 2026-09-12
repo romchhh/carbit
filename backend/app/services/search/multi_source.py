@@ -2390,24 +2390,13 @@ async def build_live_search_pool(
     slots = _attach_html_cards(slots, html_cards)
 
     nav_total = len(slots)
-    extra = max(0, int(auto_ria_market_total or 0) - len(auto_ria_ids))
-    if extra:
-        if not isinstance(beta_cursor, dict):
-            beta_cursor = {"next_html_page": 1, "exhausted": False}
-        else:
-            beta_cursor = {**beta_cursor, "exhausted": False}
+    extra = 0
+    if beta_cursor and not beta_cursor.get("exhausted"):
+        extra = max(0, int(auto_ria_market_total or 0) - len(auto_ria_ids))
         nav_total += extra
 
-    market_total = (
-        auto_ria_market_total
-        + olx_result.total
-        + car_market_result.total
-        + lubeavto_result.total
-        + reono_result.total
-        + imperiya_result.total
-        + udrive_result.total
-        + telegram_result.total
-    )
+    # total = що можна гортати. market_total — каталог AUTO.RIA для HTML-extend.
+    market_total = int(auto_ria_market_total or 0) if extra else nav_total
 
     if brand_model_filter:
         source_statuses = [
