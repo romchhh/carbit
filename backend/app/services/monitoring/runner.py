@@ -5,6 +5,7 @@ import logging
 
 from app.core.config import settings
 from app.services.monitoring.alerts import run_daily_report_if_due, run_monitoring_tick
+from app.services.search.proxy_alerts import check_webshare_alerts
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ async def monitoring_loop() -> None:
     while True:
         try:
             await run_monitoring_tick()
+            await check_webshare_alerts()
             await run_daily_report_if_due()
         except Exception:
             logger.exception("Monitoring loop tick failed")

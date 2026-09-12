@@ -233,6 +233,30 @@ async def _check_telegram_parser() -> ComponentStatus:
     )
 
 
+async def _check_webshare_proxy() -> ComponentStatus:
+    from app.services.search.http_proxy import fetch_webshare_usage, format_bytes_gb, proxy_configured
+
+    if not proxy_configured():
+        return ComponentStatus("webshare", "Проксі Webshare", HealthLevel.UNKNOWN, "не налаштовано")
+    usage = await fetch_webshare_usage()
+    if usage is None:
+        return ComponentStatus(
+            "webshare",
+            "Проксі Webshare",
+            HealthLevel.DEGRADED,
+            "немає даних про трафік",
+        )
+    detail = (
+        f"{format_bytes_gb(usage.used_bytes)} з {usage.limit_gb:g} ГБ "
+        f"(лишилось {usage.remaining_pct:.0f}%)"
+    )
+    if usage.limit_bytes > 0 and usage.remaining_bytes <= 0:
+        return ComponentStatus("webshare", "Проксі Webshare", HealthLevel.DOWN, "трафік вичерпано")
+    if usage.remaining_pct <= 20:
+        return ComponentStatus("webshare", "Проксі Webshare", HealthLevel.DEGRADED, detail)
+    return ComponentStatus("webshare", "Проксі Webshare", HealthLevel.OK, detail)
+
+
 async def collect_system_status(*, touch_backend_heartbeat: bool = False) -> SystemStatus:
     if touch_backend_heartbeat:
         try:
@@ -246,6 +270,7 @@ async def collect_system_status(*, touch_backend_heartbeat: bool = False) -> Sys
         await _check_heartbeat_service("bot", "Telegram бот", max_age=180.0),
         await _check_worker_fallback(),
         await _check_telegram_parser(),
+        await _check_webshare_proxy(),
     ]
 
     for source in WEB_PARSER_SOURCES:

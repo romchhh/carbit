@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     # curl_cffi impersonate (chrome136) — обходить CloudFront 403 для httpx/system curl
     OLX_IMPERSONATE: str = "chrome136"
     OLX_PROXY_URL: str = ""
+    # Webshare (https://dashboard.webshare.io/) — HTML-пошук OLX і AUTO.RIA
+    WEBSHARE_API_KEY: str = ""
+    WEBSHARE_PROXY_COUNTRY: str = "UA"
+    SEARCH_PROXY_URL: str = ""
+    # Залишок трафіку Webshare, %: сповіщення в Telegram
+    WEBSHARE_BANDWIDTH_WARN_REMAINING: str = "50,20,5"
 
     # База ДАІ (baza-gai.com.ua) — VIN / номери
     BAZA_GAI_API_KEY: str = ""

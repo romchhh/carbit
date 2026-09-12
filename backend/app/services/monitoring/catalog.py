@@ -48,6 +48,7 @@ INFRA_COMPONENTS: tuple[str, ...] = (
     "bot",
     "worker",
     "telegram_worker",
+    "webshare",
 )
 
 # Загальний статус DOWN лише якщо падає інфраструктура, не окремий парсер.

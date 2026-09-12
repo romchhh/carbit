@@ -26,13 +26,15 @@ _BADGE_CONTENT_RE = re.compile(
 )
 
 _SITE_CLIENT: httpx.AsyncClient | None = None
+_BADGES_DIRECT_OK: bool | None = None
 
 
 async def _site_client() -> httpx.AsyncClient:
     global _SITE_CLIENT
     if _SITE_CLIENT is None or _SITE_CLIENT.is_closed:
+        # Короткий таймаут: бейджі не блокують гідратацію сторінки.
         _SITE_CLIENT = httpx.AsyncClient(
-            timeout=12.0,
+            timeout=2.5,
             follow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0 (compatible; Carbit/1.0)"},
         )
@@ -70,6 +72,9 @@ def parse_page_badges_html(html: str) -> dict[str, bool]:
 
 async def fetch_page_badges(listing_url: str) -> dict[str, bool]:
     """Завантажує публічну сторінку та витягує бейджі USA / ДТП."""
+    global _BADGES_DIRECT_OK
+    if _BADGES_DIRECT_OK is False:
+        return {}
     url = (listing_url or "").strip()
     if not url.startswith("http"):
         return {}
@@ -79,9 +84,11 @@ async def fetch_page_badges(listing_url: str) -> dict[str, bool]:
         response = await client.get(url)
         response.raise_for_status()
     except Exception:
+        _BADGES_DIRECT_OK = False
         logger.debug("AUTO.RIA page badges fetch failed for %s", url, exc_info=True)
         return {}
 
+    _BADGES_DIRECT_OK = True
     return parse_page_badges_html(response.text)
 
 

@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
@@ -133,3 +134,71 @@ class AutoRiaDiscoverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.market_total, 87)
         self.assertEqual(result.cards["40307001"].id, "auto_ria_40307001")
         self.assertEqual(result.html_cursor, {"next_html_page": 1, "exhausted": False})
+
+
+class AutoRiaHtmlRaceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncTearDown(self) -> None:
+        from app.services.auto_ria_beta import client as ar
+
+        ar._html_route = None
+
+    async def test_html_race_does_not_wait_for_slower_leg(self):
+        import time
+        from types import SimpleNamespace
+
+        from app.services.auto_ria_beta import client as ar
+
+        ar._html_route = None
+        direct = SimpleNamespace(name="direct")
+        proxy = SimpleNamespace(name="proxy")
+
+        async def fetch(client, url, params):
+            if client is direct:
+                await asyncio.sleep(0.25)
+                return SimpleNamespace(status_code=200, text="direct")
+            return SimpleNamespace(status_code=200, text="proxy")
+
+        with (
+            patch.object(ar, "_fetch_html", new=fetch),
+            patch.object(ar, "proxy_configured", return_value=True),
+            patch.object(ar, "_get_direct_client", new=AsyncMock(return_value=direct)),
+            patch.object(ar, "_get_proxy_client", new=AsyncMock(return_value=proxy)),
+        ):
+            started = time.monotonic()
+            response = await ar._get_html("https://auto.ria.com/uk/search/")
+            elapsed = time.monotonic() - started
+
+        self.assertLess(elapsed, 0.2)
+        self.assertEqual(response.text, "proxy")
+        self.assertEqual(ar._html_route, "proxy")
+
+    async def test_html_race_does_not_wait_for_proxy_setup(self):
+        import time
+        from types import SimpleNamespace
+
+        from app.services.auto_ria_beta import client as ar
+
+        ar._html_route = None
+        direct = SimpleNamespace(name="direct")
+        proxy = SimpleNamespace(name="proxy")
+
+        async def fetch(client, url, params):
+            return SimpleNamespace(status_code=200, text=client.name)
+
+        async def slow_proxy_client():
+            await asyncio.sleep(0.25)
+            return proxy
+
+        with (
+            patch.object(ar, "_fetch_html", new=fetch),
+            patch.object(ar, "proxy_configured", return_value=True),
+            patch.object(ar, "_get_direct_client", new=AsyncMock(return_value=direct)),
+            patch.object(ar, "_get_proxy_client", new=slow_proxy_client),
+        ):
+            started = time.monotonic()
+            response = await ar._get_html("https://auto.ria.com/uk/search/")
+            elapsed = time.monotonic() - started
+
+        self.assertLess(elapsed, 0.2)
+        self.assertEqual(response.text, "direct")
+        self.assertEqual(ar._html_route, "direct")

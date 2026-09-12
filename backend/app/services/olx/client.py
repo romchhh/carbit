@@ -34,6 +34,7 @@ from app.services.olx.transport import (
     system_curl_get,
     transport_summary,
 )
+from app.services.search.http_proxy import httpx_proxy_kwargs, resolve_search_proxy_url
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 
 logger = logging.getLogger(__name__)
@@ -56,10 +57,18 @@ class OlxClient:
         self._warmed = False
         self._last_referer = f"{BASE_URL}/"
         self._impersonate = (settings.OLX_IMPERSONATE or "chrome136").strip() or "chrome136"
-        self._proxy = (settings.OLX_PROXY_URL or "").strip() or None
+        self._proxy: str | None = None
+        self._proxy_ready = False
         self._transport_label = "unknown"
 
+    async def _ensure_proxy(self) -> None:
+        if self._proxy_ready:
+            return
+        self._proxy = await resolve_search_proxy_url(sticky=True)
+        self._proxy_ready = True
+
     async def __aenter__(self) -> OlxClient:
+        await self._ensure_proxy()
         if _CURL_CFFI:
             self._curl = CurlAsyncSession()
             self._transport_label = "curl_cffi"
@@ -70,8 +79,11 @@ class OlxClient:
                 transport_summary(impersonate=self._impersonate, proxy=self._proxy),
             )
             self._transport_label = "system_curl"
-            self._httpx = httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True)
-        await self._warm_session()
+            self._httpx = httpx.AsyncClient(
+                timeout=REQUEST_TIMEOUT,
+                follow_redirects=True,
+                **httpx_proxy_kwargs(self._proxy),
+            )
         return self
 
     async def __aexit__(
@@ -99,22 +111,6 @@ class OlxClient:
             headers["User-Agent"] = random.choice(USER_AGENTS)
         return headers
 
-    async def _warm_session(self) -> None:
-        if self._warmed:
-            return
-        try:
-            response = await self._get(
-                f"{BASE_URL}{CATEGORY_PATH}/",
-                headers=self._browser_headers(
-                    accept="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    referer=f"{BASE_URL}/",
-                ),
-            )
-            if response.status_code == 200:
-                self._warmed = True
-        except Exception:
-            logger.debug("OLX session warm-up failed", exc_info=True)
-
     async def _curl_cffi_get(
         self,
         url: str,
@@ -139,6 +135,7 @@ class OlxClient:
 
         operation = olx_operation(url)
         last_response: HttpResponse | None = None
+        await self._ensure_proxy()
 
         try:
             if self._curl is not None:
@@ -196,13 +193,26 @@ class OlxClient:
                 success=bool(last_response and last_response.status_code < 400),
             )
             if last_response is not None:
+                if last_response.status_code in (407, 502) and self._proxy:
+                    from app.services.search.proxy_alerts import schedule_proxy_problem
+
+                    schedule_proxy_problem(
+                        source="OLX",
+                        error=f"проксі HTTP {last_response.status_code}",
+                    )
                 return last_response
             raise OlxError("Не вдалося виконати запит до OLX")
         except OlxError:
             await record_api_request("olx", operation, success=False)
             raise
-        except Exception:
+        except Exception as exc:
             await record_api_request("olx", operation, success=False)
+            if self._proxy:
+                low = str(exc).lower()
+                if any(token in low for token in ("407", "proxy", "tunnel", "connect")):
+                    from app.services.search.proxy_alerts import schedule_proxy_problem
+
+                    schedule_proxy_problem(source="OLX", error=str(exc)[:300])
             raise
 
     @staticmethod
@@ -215,7 +225,7 @@ class OlxClient:
         if not CURL_CFFI_AVAILABLE:
             hint += "; rebuild backend: docker compose build backend"
         if not self._proxy:
-            hint += "; або OLX_PROXY_URL у .env"
+            hint += "; або WEBSHARE_API_KEY / SEARCH_PROXY_URL у .env"
         return f"OLX повернув статус 403 ({hint})"
 
     async def fetch_html(self, url: str) -> str:

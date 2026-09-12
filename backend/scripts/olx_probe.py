@@ -5,17 +5,19 @@ from __future__ import annotations
 import asyncio
 import sys
 
+from app.core.config import settings
 from app.services.olx.client import OlxClient
 from app.services.olx.transport import CURL_CFFI_AVAILABLE, system_curl_get, transport_summary
-from app.core.config import settings
+from app.services.search.http_proxy import resolve_search_proxy_url
 
 
 async def main() -> int:
     url = "https://www.olx.ua/uk/transport/legkovye-avtomobili/"
+    proxy = await resolve_search_proxy_url(sticky=True)
     print("=== OLX probe ===")
     print(transport_summary(
         impersonate=settings.OLX_IMPERSONATE or "chrome136",
-        proxy=(settings.OLX_PROXY_URL or "").strip() or None,
+        proxy=proxy,
     ))
     print("curl_cffi installed:", CURL_CFFI_AVAILABLE)
 
@@ -26,7 +28,7 @@ async def main() -> int:
     }
 
     try:
-        r = await system_curl_get(url, headers=headers, proxy=(settings.OLX_PROXY_URL or "").strip() or None)
+        r = await system_curl_get(url, headers=headers, proxy=proxy)
         print("system curl:", r.status_code, "bytes", len(r.text))
     except Exception as exc:
         print("system curl ERROR:", exc)
