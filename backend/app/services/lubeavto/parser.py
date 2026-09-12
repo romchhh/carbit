@@ -14,7 +14,14 @@ TRANS_WORDS = ("Автомат", "Механіка", "Робот", "Варіат
 DRIVE_WORDS = ("Передній", "Задній", "Повний")
 
 VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
-CARD_ID_RE = re.compile(r"^/store/(?:instore|instoreusers|auction)/(\d+)$")
+CARD_HREF_RE = re.compile(
+    r"^/store/(?P<catalog>instore|instoreusers|auction)/(?P<slug>[A-Za-z0-9-]+)$"
+)
+# HTML: Знайдено<!-- --> <!-- -->1<!-- --> результатів
+_TOTAL_RE = re.compile(
+    r"Знайдено(?:\s|<!--.*?-->)*([0-9]{1,5})(?:\s|<!--.*?-->)*результат",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 @dataclass
@@ -34,7 +41,7 @@ class LubeAvtoCar:
     badge: Optional[str]
     url: str
     image_url: Optional[str]
-    car_id: Optional[int]
+    car_id: Optional[int | str]
     catalog: str = "instore"
     details: dict = field(default_factory=dict)
 
@@ -68,11 +75,12 @@ def _find_card_container(title_a: Tag) -> Tag:
 
 def _parse_card(title_a: Tag, container: Tag, *, catalog: str) -> Optional[LubeAvtoCar]:
     href = title_a.get("href", "")
-    match = CARD_ID_RE.match(href)
+    match = CARD_HREF_RE.match(href)
     if not match:
         return None
 
-    car_id = int(match.group(1))
+    slug = match.group("slug")
+    car_id: int | str = int(slug) if slug.isdigit() else slug
     url = href if href.startswith("http") else urljoin(LUBEAVTO_BASE_URL, href)
 
     h4 = title_a.find("h4") or title_a
@@ -123,8 +131,10 @@ def _parse_card(title_a: Tag, container: Tag, *, catalog: str) -> Optional[LubeA
     mil_match = re.search(r"([\d\s]+)\s*тис\.?\s*км", full_text)
     if mil_match:
         mileage_raw = mil_match.group(0).strip()
-        num = float(mil_match.group(1).replace(" ", "").replace("\xa0", ""))
-        mileage_km = int(num * 1000) if num < 1500 else int(num)
+        raw_num = mil_match.group(1).replace(" ", "").replace("\xa0", "")
+        if raw_num:
+            num = float(raw_num)
+            mileage_km = int(num * 1000) if num < 1500 else int(num)
 
     fuel = next((word for word in FUEL_WORDS if word in full_text), None)
     transmission = next((word for word in TRANS_WORDS if word in full_text), None)
@@ -158,30 +168,36 @@ def _parse_card(title_a: Tag, container: Tag, *, catalog: str) -> Optional[LubeA
 
 def parse_catalog_page(html: str, *, catalog: str = "instore") -> tuple[list[LubeAvtoCar], int]:
     soup = BeautifulSoup(html, "html.parser")
-    total = 0
-    total_match = re.search(r"Знайдено\s+([\d\s]+)\s+результат", soup.get_text())
-    if total_match:
-        total = int(total_match.group(1).replace(" ", ""))
-
+    total = _parse_result_total(html)
     cars: list[LubeAvtoCar] = []
-    seen_ids: set[int] = set()
+    seen_ids: set[str] = set()
 
     for anchor in soup.find_all("a", href=True):
         href = anchor["href"]
-        match = CARD_ID_RE.match(href)
+        match = CARD_HREF_RE.match(href)
         if not match or not anchor.find("h4"):
             continue
 
-        car_id = int(match.group(1))
-        if car_id in seen_ids:
+        slug = match.group("slug")
+        if slug in seen_ids:
             continue
 
         container = _find_card_container(anchor)
-        car = _parse_card(anchor, container, catalog=catalog)
+        try:
+            car = _parse_card(anchor, container, catalog=catalog)
+        except Exception:
+            continue
         if car:
             cars.append(car)
-            seen_ids.add(car_id)
+            seen_ids.add(slug)
 
     if not total:
         total = len(cars)
     return cars, total
+
+
+def _parse_result_total(html: str) -> int:
+    match = _TOTAL_RE.search(html or "")
+    if not match:
+        return 0
+    return int(match.group(1))

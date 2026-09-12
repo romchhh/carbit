@@ -9,6 +9,8 @@ CATALOGS = {
 }
 
 DEFAULT_CATALOG = "instore"
+# «В наявності» + «В дорозі». Аукціон ігнорує марку в URL (~650к лотів).
+STOCK_CATALOGS = ("instore", "instoreusers")
 
 LUBEAVTO_PAGE_SIZE = 24
 LUBEAVTO_MAX_PAGES = 3

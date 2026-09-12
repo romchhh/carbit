@@ -1,5 +1,8 @@
+import asyncio
+from unittest.mock import AsyncMock, patch
+
+from app.services.lubeavto.parser import LubeAvtoCar, parse_catalog_page
 from app.services.lubeavto.mapper import car_to_listing, filters_to_catalog_path
-from app.services.lubeavto.parser import parse_catalog_page
 from app.schemas.schemas import SearchFilters
 
 SAMPLE_HTML = """
@@ -55,3 +58,87 @@ def test_filters_to_catalog_path_brand_model():
         catalog="instore",
     )
     assert path == "store/instore/audi/a4"
+
+
+def test_parse_result_total_ignores_html_comments():
+    html = "Знайдено<!-- --> <!-- -->1<!-- --> результатів"
+    from app.services.lubeavto.parser import _parse_result_total
+
+    assert _parse_result_total(html) == 1
+
+
+def test_parse_auction_href_and_empty_mileage():
+    html = """
+    <html><body>
+    <a href="/store/auction/44970651-2">
+      <h4>Zeekr 001 2026</h4>
+    </a>
+    <span> - тис. км</span>
+    <span>21 000 $</span>
+    </body></html>
+    """
+    cars, total = parse_catalog_page(html, catalog="auction")
+    assert total == 1
+    assert len(cars) == 1
+    assert cars[0].car_id == "44970651-2"
+    assert cars[0].title.startswith("Zeekr")
+    assert cars[0].mileage_km is None
+
+
+def test_catalog_paths_do_not_fall_back_to_root():
+    from app.services.lubeavto.service import _catalog_paths
+
+    paths = _catalog_paths(SearchFilters(brand="Zeekr", model="001"), "instore")
+    assert paths == ["store/instore/zeekr/001", "store/instore/zeekr"]
+    assert "store/instore" not in paths
+
+
+def test_search_uses_in_transit_catalog_not_full_lot():
+    from app.services.lubeavto.service import _search_lubeavto_body
+
+    zeekr = LubeAvtoCar(
+        title="ZEEKR 001 2026",
+        brand="ZEEKR",
+        model="001",
+        year=2026,
+        price_usd=21000,
+        mileage_km=8000,
+        mileage_raw="8 тис. км",
+        fuel="Електро",
+        engine=None,
+        transmission="Автомат",
+        drive="Повний",
+        vin=None,
+        badge="НОВЕ",
+        url="https://lubeavto.com.ua/store/instoreusers/27682",
+        image_url=None,
+        car_id=27682,
+        catalog="instoreusers",
+    )
+
+    async def fetch(path, *, page_number=0, catalog="instore"):
+        if catalog == "instoreusers" and "zeekr" in path:
+            return [zeekr], 1
+        return [], 0
+
+    async def run():
+        with patch("app.services.lubeavto.service.LubeAvtoClient") as client_cls:
+            client_cls.return_value.fetch_catalog = AsyncMock(side_effect=fetch)
+            return await _search_lubeavto_body(
+                SearchFilters(
+                    brand="Zeekr",
+                    model="001",
+                    year_from=2024,
+                    year_to=2026,
+                    sources=["lubeavto"],
+                ),
+                per_page=20,
+            )
+
+    page = asyncio.run(run())
+    assert len(page.items) == 1
+    assert page.items[0].title == "ZEEKR 001 2026"
+    assert page.total == 1
+    assert page.market_total == 1
+
+

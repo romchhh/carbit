@@ -7,9 +7,9 @@ from app.services.auto_ria.cache import get_or_fetch
 from app.services.auto_ria.mapper import sort_listings
 from app.services.lubeavto.client import LubeAvtoClient
 from app.services.lubeavto.constants import (
-    DEFAULT_CATALOG,
     LUBEAVTO_MAX_PAGES,
     LUBEAVTO_PAGE_SIZE,
+    STOCK_CATALOGS,
 )
 from app.services.lubeavto.errors import LubeAvtoError
 from app.services.lubeavto.mapper import car_to_listing, filters_to_catalog_path
@@ -20,13 +20,48 @@ from app.services.telegram_channels.mapper import listing_out_matches_filters
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
     payload = {
         "source": "lubeavto",
-        "lubeavto_v": "card-v1",
+        "lubeavto_v": "stock-v2",
         "filters": filters.model_dump(mode="json"),
         "page": page,
         "per_page": per_page,
         "sort_by": sort_by,
     }
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+
+
+def _catalog_paths(filters: SearchFilters, catalog: str) -> list[str]:
+    """Бренд/модель, потім лише бренд. Без кореневого каталогу — він дає 1500 чужих авто."""
+    paths: list[str] = []
+    primary = filters_to_catalog_path(filters, catalog=catalog)
+    paths.append(primary)
+    if effective_brands(filters) and (filters.model or filters.models):
+        brand_only = filters_to_catalog_path(
+            filters.model_copy(update={"model": None, "models": None}),
+            catalog=catalog,
+        )
+        if brand_only not in paths:
+            paths.append(brand_only)
+    return paths
+
+
+async def _fetch_catalog_cars(
+    client: LubeAvtoClient,
+    filters: SearchFilters,
+    *,
+    catalog: str,
+    page_number: int,
+) -> tuple[list, int]:
+    last_total = 0
+    for path in _catalog_paths(filters, catalog):
+        cars, total = await client.fetch_catalog(
+            path,
+            page_number=page_number,
+            catalog=catalog,
+        )
+        last_total = total
+        if cars:
+            return cars, total
+    return [], last_total if not effective_brands(filters) else 0
 
 
 async def _search_lubeavto_body(
@@ -38,25 +73,26 @@ async def _search_lubeavto_body(
 ) -> PaginatedListings:
     client = LubeAvtoClient()
     brand_hint = (effective_brands(filters) or [None])[0]
-    catalog_path = filters_to_catalog_path(filters, catalog=DEFAULT_CATALOG)
     page_number = max(page - 1, 0)
 
+    cars: list = []
+    seen: set[str] = set()
+    site_total = 0
     try:
-        cars, total = await client.fetch_catalog(
-            catalog_path,
-            page_number=page_number,
-            catalog=DEFAULT_CATALOG,
-        )
-        if not cars and (filters.brand or filters.brands):
-            fallback_path = filters_to_catalog_path(
-                filters.model_copy(update={"brand": None, "brands": None, "model": None, "models": None}),
-                catalog=DEFAULT_CATALOG,
-            )
-            cars, total = await client.fetch_catalog(
-                fallback_path,
+        for catalog in STOCK_CATALOGS:
+            chunk, total = await _fetch_catalog_cars(
+                client,
+                filters,
+                catalog=catalog,
                 page_number=page_number,
-                catalog=DEFAULT_CATALOG,
             )
+            site_total += total
+            for car in chunk:
+                key = f"{car.catalog}:{car.car_id}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                cars.append(car)
     except ValueError as exc:
         raise LubeAvtoError(str(exc)) from exc
 
@@ -66,9 +102,11 @@ async def _search_lubeavto_body(
 
     listings = [item for item in listings if listing_out_matches_filters(item, filters)]
     listings = sort_listings(listings, sort_by)
+    matched = len(listings)
     if per_page > 0:
         listings = listings[:per_page]
 
+    total = matched if effective_brands(filters) else max(site_total, matched)
     pages = (total + LUBEAVTO_PAGE_SIZE - 1) // LUBEAVTO_PAGE_SIZE if total else 0
     return PaginatedListings(
         items=listings,
@@ -121,12 +159,12 @@ async def fetch_lubeavto_pool(
         chunk = await search_lubeavto(
             filters,
             page=page,
-            per_page=LUBEAVTO_PAGE_SIZE,
+            per_page=max(need, LUBEAVTO_PAGE_SIZE),
             sort_by=sort_by,
             use_cache=use_cache,
             cache_ttl_seconds=cache_ttl_seconds,
         )
-        total = max(total, chunk.total)
+        total = max(total, chunk.total, chunk.market_total or 0)
         for item in chunk.items:
             if item.id in seen:
                 continue
@@ -139,10 +177,12 @@ async def fetch_lubeavto_pool(
         page += 1
 
     collected = sort_listings(collected[:need], sort_by)
+    matched = len(collected)
+    total = matched if effective_brands(filters) else max(total, matched)
     pages = (total + need - 1) // need if total else 0
     return PaginatedListings(
         items=collected,
-        total=max(total, len(collected)),
+        total=total,
         page=1,
         per_page=need,
         pages=pages,
