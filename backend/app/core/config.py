@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     # Webshare (https://dashboard.webshare.io/) — HTML-пошук OLX і AUTO.RIA
     WEBSHARE_API_KEY: str = ""
     WEBSHARE_PROXY_COUNTRY: str = "UA"
+    # direct = Proxy List (IP:port), rotate = p.webshare.io rotating endpoint
+    WEBSHARE_PROXY_MODE: str = "direct"
     SEARCH_PROXY_URL: str = ""
     # Залишок трафіку Webshare, %: сповіщення в Telegram
     WEBSHARE_BANDWIDTH_WARN_REMAINING: str = "50,20,5"

@@ -146,8 +146,9 @@ class AutoRiaHtmlRaceTests(unittest.IsolatedAsyncioTestCase):
         from app.services.auto_ria_beta import client as ar
 
         ar._html_route = None
+        ar._proxy_client = None
 
-    async def test_html_race_does_not_wait_for_slower_leg(self):
+    async def test_html_prefers_direct_even_if_proxy_is_faster(self):
         import time
         from types import SimpleNamespace
 
@@ -159,7 +160,7 @@ class AutoRiaHtmlRaceTests(unittest.IsolatedAsyncioTestCase):
 
         async def fetch(client, url, params):
             if client is direct:
-                await asyncio.sleep(0.25)
+                await asyncio.sleep(0.12)
                 return SimpleNamespace(status_code=200, text="direct")
             return SimpleNamespace(status_code=200, text="proxy")
 
@@ -173,7 +174,32 @@ class AutoRiaHtmlRaceTests(unittest.IsolatedAsyncioTestCase):
             response = await ar._get_html("https://auto.ria.com/uk/search/")
             elapsed = time.monotonic() - started
 
-        self.assertLess(elapsed, 0.2)
+        self.assertLess(elapsed, 0.4)
+        self.assertEqual(response.text, "direct")
+        self.assertEqual(ar._html_route, "direct")
+
+    async def test_html_uses_proxy_when_direct_fails(self):
+        from types import SimpleNamespace
+
+        from app.services.auto_ria_beta import client as ar
+
+        ar._html_route = None
+        direct = SimpleNamespace(name="direct")
+        proxy = SimpleNamespace(name="proxy")
+
+        async def fetch(client, url, params):
+            if client is direct:
+                return None
+            return SimpleNamespace(status_code=200, text="proxy")
+
+        with (
+            patch.object(ar, "_fetch_html", new=fetch),
+            patch.object(ar, "proxy_configured", return_value=True),
+            patch.object(ar, "_get_direct_client", new=AsyncMock(return_value=direct)),
+            patch.object(ar, "_get_proxy_client", new=AsyncMock(return_value=proxy)),
+        ):
+            response = await ar._get_html("https://auto.ria.com/uk/search/")
+
         self.assertEqual(response.text, "proxy")
         self.assertEqual(ar._html_route, "proxy")
 
@@ -207,3 +233,31 @@ class AutoRiaHtmlRaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(elapsed, 0.2)
         self.assertEqual(response.text, "direct")
         self.assertEqual(ar._html_route, "direct")
+
+    async def test_proxy_latch_falls_back_to_direct_without_alert(self):
+        from types import SimpleNamespace
+
+        from app.services.auto_ria_beta import client as ar
+
+        ar._html_route = "proxy"
+        direct = SimpleNamespace(name="direct")
+        proxy = SimpleNamespace(name="proxy", aclose=AsyncMock())
+
+        async def fetch(client, url, params):
+            if client is proxy:
+                return None
+            return SimpleNamespace(status_code=200, text="direct")
+
+        with (
+            patch.object(ar, "_fetch_html", new=fetch),
+            patch.object(ar, "proxy_configured", return_value=True),
+            patch.object(ar, "_get_direct_client", new=AsyncMock(return_value=direct)),
+            patch.object(ar, "_get_proxy_client", new=AsyncMock(return_value=proxy)),
+            patch.object(ar, "_alert_html_failed") as alert,
+        ):
+            ar._proxy_client = proxy
+            response = await ar._get_html("https://auto.ria.com/uk/search/")
+
+        self.assertEqual(response.text, "direct")
+        self.assertEqual(ar._html_route, "direct")
+        alert.assert_not_called()

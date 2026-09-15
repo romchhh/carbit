@@ -3,13 +3,18 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.services.search import http_proxy
 
 
-def setup_function() -> None:
+@pytest.fixture(autouse=True)
+def _reset_proxy_caches() -> None:
     http_proxy._list_cache = None
     http_proxy._rotating_cache = None
     http_proxy._sticky_cache = None
+    http_proxy._last_sticky_url = None
+    http_proxy._dead_until.clear()
     http_proxy._usage_cache = None
 
 
@@ -35,6 +40,44 @@ def test_explicit_search_proxy_wins():
     asyncio.run(run())
 
 
+def test_webshare_uses_direct_proxy_list():
+    async def run():
+        payload = {
+            "results": [
+                {
+                    "valid": True,
+                    "proxy_address": "82.23.209.165",
+                    "port": 6006,
+                    "username": "demo",
+                    "password": "secret",
+                    "country_code": "UA",
+                },
+                {
+                    "valid": True,
+                    "proxy_address": "46.203.159.167",
+                    "port": 6768,
+                    "username": "demo",
+                    "password": "secret",
+                    "country_code": "UA",
+                },
+            ]
+        }
+        with (
+            patch.object(http_proxy.settings, "SEARCH_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "OLX_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "WEBSHARE_API_KEY", "token"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_COUNTRY", "UA"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_MODE", "direct"),
+            patch.object(http_proxy, "_webshare_json", new=AsyncMock(return_value=payload)),
+        ):
+            url = await http_proxy.resolve_search_proxy_url(sticky=True)
+        assert "@p.webshare.io" not in url
+        assert url.startswith("http://demo:secret@")
+        assert url.split("@")[1] in {"82.23.209.165:6006", "46.203.159.167:6768"}
+
+    asyncio.run(run())
+
+
 def test_webshare_sticky_uses_rotating_session():
     async def run():
         with (
@@ -42,6 +85,7 @@ def test_webshare_sticky_uses_rotating_session():
             patch.object(http_proxy.settings, "OLX_PROXY_URL", ""),
             patch.object(http_proxy.settings, "WEBSHARE_API_KEY", "token"),
             patch.object(http_proxy.settings, "WEBSHARE_PROXY_COUNTRY", "UA"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_MODE", "rotate"),
             patch.object(
                 http_proxy,
                 "_webshare_json",
@@ -90,6 +134,7 @@ def test_webshare_rotating_url_uses_country():
             patch.object(http_proxy.settings, "OLX_PROXY_URL", ""),
             patch.object(http_proxy.settings, "WEBSHARE_API_KEY", "token"),
             patch.object(http_proxy.settings, "WEBSHARE_PROXY_COUNTRY", "UA"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_MODE", "rotate"),
             patch.object(
                 http_proxy,
                 "_webshare_direct_urls",
@@ -107,6 +152,114 @@ def test_webshare_rotating_url_uses_country():
     asyncio.run(run())
 
 
+def test_invalidate_sticky_picks_another_list_ip():
+    async def run():
+        payload = {
+            "results": [
+                {
+                    "valid": True,
+                    "proxy_address": "82.23.209.165",
+                    "port": 6006,
+                    "username": "demo",
+                    "password": "secret",
+                    "country_code": "UA",
+                },
+                {
+                    "valid": True,
+                    "proxy_address": "46.203.159.167",
+                    "port": 6768,
+                    "username": "demo",
+                    "password": "secret",
+                    "country_code": "UA",
+                },
+            ]
+        }
+        with (
+            patch.object(http_proxy.settings, "SEARCH_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "OLX_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "WEBSHARE_API_KEY", "token"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_COUNTRY", "UA"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_MODE", "direct"),
+            patch.object(http_proxy, "_webshare_json", new=AsyncMock(return_value=payload)),
+        ):
+            first = await http_proxy.resolve_search_proxy_url(sticky=True)
+            http_proxy.invalidate_sticky_proxy()
+            second = await http_proxy.resolve_search_proxy_url(sticky=True)
+        assert first != second
+        assert {first.split("@")[1], second.split("@")[1]} == {
+            "82.23.209.165:6006",
+            "46.203.159.167:6768",
+        }
+
+
+def test_dead_proxy_stays_in_cooldown():
+    async def run():
+        payload = {
+            "results": [
+                {
+                    "valid": True,
+                    "proxy_address": "82.23.209.165",
+                    "port": 6006,
+                    "username": "demo",
+                    "password": "secret",
+                    "country_code": "UA",
+                },
+                {
+                    "valid": True,
+                    "proxy_address": "46.203.159.167",
+                    "port": 6768,
+                    "username": "demo",
+                    "password": "secret",
+                    "country_code": "UA",
+                },
+            ]
+        }
+        with (
+            patch.object(http_proxy.settings, "SEARCH_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "OLX_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "WEBSHARE_API_KEY", "token"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_COUNTRY", "UA"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_MODE", "direct"),
+            patch.object(http_proxy, "_webshare_json", new=AsyncMock(return_value=payload)),
+        ):
+            first = await http_proxy.resolve_search_proxy_url(sticky=True)
+            http_proxy.invalidate_sticky_proxy()
+            second = await http_proxy.resolve_search_proxy_url(sticky=True)
+            third = await http_proxy.resolve_search_proxy_url(sticky=True)
+        assert first != second
+        assert third == second
+        assert first in http_proxy._dead_until
+
+    asyncio.run(run())
+
+
+def test_invalidate_refreshes_stale_list():
+    async def run():
+        fetches = {"n": 0}
+
+        async def fake_urls(*, force: bool = False) -> list[str]:
+            fetches["n"] += 1
+            return [f"http://demo:secret@10.0.0.{fetches['n']}:8080"]
+
+        with (
+            patch.object(http_proxy.settings, "SEARCH_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "OLX_PROXY_URL", ""),
+            patch.object(http_proxy.settings, "WEBSHARE_API_KEY", "token"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_MODE", "direct"),
+            patch.object(http_proxy, "_webshare_direct_urls", new=fake_urls),
+            patch.object(http_proxy, "_webshare_rotating_url", new=AsyncMock(return_value=None)),
+        ):
+            first = await http_proxy.resolve_search_proxy_url(sticky=True)
+            after_first = fetches["n"]
+            http_proxy.invalidate_sticky_proxy()
+            second = await http_proxy.resolve_search_proxy_url(sticky=True)
+        assert first != second
+        assert after_first >= 1
+        assert fetches["n"] > after_first
+
+    asyncio.run(run())
+
+
 def test_invalidate_sticky_creates_new_session():
     async def run():
         with (
@@ -114,6 +267,7 @@ def test_invalidate_sticky_creates_new_session():
             patch.object(http_proxy.settings, "OLX_PROXY_URL", ""),
             patch.object(http_proxy.settings, "WEBSHARE_API_KEY", "token"),
             patch.object(http_proxy.settings, "WEBSHARE_PROXY_COUNTRY", "UA"),
+            patch.object(http_proxy.settings, "WEBSHARE_PROXY_MODE", "rotate"),
             patch.object(
                 http_proxy,
                 "_webshare_json",

@@ -22,11 +22,16 @@ _WEBSHARE_PLAN_URL = "https://proxy.webshare.io/api/v2/subscription/plan/"
 _WEBSHARE_SUB_URL = "https://proxy.webshare.io/api/v2/subscription/"
 _WEBSHARE_STATS_URL = "https://proxy.webshare.io/api/v2/stats/"
 _CRED_TTL_SECONDS = 6 * 3600
+_LIST_TTL_SECONDS = 90
+_STICKY_TTL_SECONDS = 180
+_DEAD_TTL_SECONDS = 20 * 60
 _GB = 1024**3
 
 _rotating_cache: tuple[float, str] | None = None
 _sticky_cache: tuple[float, str] | None = None
+_last_sticky_url: str | None = None
 _list_cache: tuple[float, list[str]] | None = None
+_dead_until: dict[str, float] = {}
 _usage_cache: tuple[float, "WebshareUsage"] | None = None
 _USAGE_TTL_SECONDS = 120.0
 
@@ -86,9 +91,12 @@ def proxy_configured() -> bool:
 
 
 def invalidate_sticky_proxy() -> None:
-    """Скинути sticky-сесію: після CONNECT 502 той самий вузол не тримаємо 6 годин."""
-    global _sticky_cache
+    """Мертвий IP у cooldown, список оновлюємо з API — Webshare часто міняє вузли."""
+    global _sticky_cache, _list_cache
+    if _last_sticky_url:
+        _mark_dead(_last_sticky_url)
     _sticky_cache = None
+    _list_cache = None
 
 
 def is_proxy_tunnel_failure(exc: BaseException | str) -> bool:
@@ -141,39 +149,89 @@ def _cache_get(cache: tuple[float, Any] | None, ttl: float) -> Any | None:
     return None
 
 
+def _proxy_mode() -> str:
+    raw = (getattr(settings, "WEBSHARE_PROXY_MODE", None) or "direct").strip().lower()
+    return "rotate" if raw in {"rotate", "rotating", "backbone"} else "direct"
+
+
+def _mark_dead(url: str) -> None:
+    if not url:
+        return
+    _dead_until[url] = time.monotonic() + _DEAD_TTL_SECONDS
+    logger.info("Webshare proxy cooldown %s", redact_proxy_url(url))
+
+
+def _cooldown_set() -> set[str]:
+    now = time.monotonic()
+    for url, until in list(_dead_until.items()):
+        if until <= now:
+            _dead_until.pop(url, None)
+    return set(_dead_until)
+
+
+def _pick_direct_url(
+    urls: list[str],
+    *,
+    exclude: set[str] | None = None,
+    allow_blocked: bool = False,
+) -> str | None:
+    blocked = exclude or set()
+    pool = [item for item in urls if item and item not in blocked]
+    if not pool and allow_blocked:
+        pool = [item for item in urls if item]
+    return random.choice(pool) if pool else None
+
+
 async def resolve_search_proxy_url(*, sticky: bool = False) -> str | None:
-    """Один sticky URL на процес — keep-alive без зайвих сесій і list-запитів."""
-    global _sticky_cache
+    """Direct Proxy List (IP:port). Rotate-endpoint — лише якщо список порожній."""
+    global _sticky_cache, _last_sticky_url
     explicit = _explicit_proxy_url()
     if explicit:
         return explicit
     if not _webshare_api_key():
         return None
 
+    blocked = _cooldown_set()
     if sticky:
-        cached = _cache_get(_sticky_cache, _CRED_TTL_SECONDS)
-        if cached:
+        cached = _cache_get(_sticky_cache, _STICKY_TTL_SECONDS)
+        if cached and cached not in blocked:
             return cached
+        if _last_sticky_url:
+            blocked.add(_last_sticky_url)
 
-    rotating = await _webshare_rotating_url()
-    chosen = rotating
-    if rotating and sticky:
-        parsed = urlparse(rotating)
-        user = parsed.username or ""
-        if user.endswith("-rotate"):
-            user = user[: -len("-rotate")]
-        sid = random.randint(10_000, 99_999_999)
-        chosen = _proxy_url(
-            f"{user}-{sid}",
-            parsed.password or "",
-            parsed.hostname or "p.webshare.io",
-            parsed.port or 80,
-        )
-    if not chosen:
+    chosen: str | None = None
+    if _proxy_mode() == "direct":
         urls = await _webshare_direct_urls()
-        chosen = random.choice(urls) if urls else None
+        chosen = _pick_direct_url(urls, exclude=blocked)
+        if not chosen:
+            urls = await _webshare_direct_urls(force=True)
+            chosen = _pick_direct_url(urls, exclude=blocked)
+        if chosen:
+            live = sum(1 for item in urls if item not in blocked)
+            logger.debug(
+                "Webshare direct proxy %s live=%s/%s",
+                redact_proxy_url(chosen),
+                live,
+                len(urls),
+            )
+    if not chosen:
+        rotating = await _webshare_rotating_url()
+        chosen = rotating
+        if rotating and sticky:
+            parsed = urlparse(rotating)
+            user = parsed.username or ""
+            if user.endswith("-rotate"):
+                user = user[: -len("-rotate")]
+            sid = random.randint(10_000, 99_999_999)
+            chosen = _proxy_url(
+                f"{user}-{sid}",
+                parsed.password or "",
+                parsed.hostname or "p.webshare.io",
+                parsed.port or 80,
+            )
     if sticky and chosen:
         _sticky_cache = (time.monotonic(), chosen)
+        _last_sticky_url = chosen
     return chosen
 
 
@@ -197,17 +255,30 @@ async def _webshare_rotating_url() -> str | None:
     return url
 
 
-async def _webshare_direct_urls() -> list[str]:
+async def _webshare_direct_urls(*, force: bool = False) -> list[str]:
     global _list_cache
-    cached = _cache_get(_list_cache, _CRED_TTL_SECONDS)
-    if cached:
-        return list(cached)
+    if not force:
+        cached = _cache_get(_list_cache, _LIST_TTL_SECONDS)
+        if cached:
+            return list(cached)
 
+    country = _country_code()
     payload = await _webshare_json(
         "GET",
         _WEBSHARE_LIST_URL,
-        params={"mode": "direct", "page": 1, "page_size": 20},
+        params={
+            "mode": "direct",
+            "page": 1,
+            "page_size": 100,
+            "country_code__in": country.upper(),
+        },
     )
+    if not isinstance(payload, dict) or not payload.get("results"):
+        payload = await _webshare_json(
+            "GET",
+            _WEBSHARE_LIST_URL,
+            params={"mode": "direct", "page": 1, "page_size": 100},
+        )
     if not isinstance(payload, dict) or not payload.get("results"):
         payload = await _webshare_json(
             "GET",
@@ -220,7 +291,12 @@ async def _webshare_direct_urls() -> list[str]:
     for row in payload.get("results") or []:
         if not isinstance(row, dict) or row.get("valid") is False:
             continue
-        host = str(row.get("proxy_address") or "").strip() or "p.webshare.io"
+        row_country = str(row.get("country_code") or "").strip().lower()
+        if row_country and row_country != country:
+            continue
+        host = str(row.get("proxy_address") or "").strip()
+        if not host or host == "p.webshare.io":
+            continue
         port = row.get("port") or 80
         username = str(row.get("username") or "").strip()
         password = str(row.get("password") or "").strip()
@@ -229,6 +305,7 @@ async def _webshare_direct_urls() -> list[str]:
         urls.append(_proxy_url(username, password, host, int(port)))
     if urls:
         _list_cache = (time.monotonic(), urls)
+        logger.info("Webshare Proxy List loaded count=%s country=%s", len(urls), country.upper())
     return list(urls)
 
 

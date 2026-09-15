@@ -27,8 +27,10 @@ logger = logging.getLogger(__name__)
 _direct_client: httpx.AsyncClient | None = None
 _proxy_client: httpx.AsyncClient | None = None
 _client_lock = asyncio.Lock()
-# Після першої відповіді 200 — лише цей шлях. Без очікування фейлу.
+# Після успішного direct — лише direct (не палимо Webshare).
+# proxy — лише якщо direct був заблокований.
 _html_route: str | None = None
+_PROXY_YIELD_TO_DIRECT_SECONDS = 0.45
 
 
 def _client_kwargs(proxy: str | None = None) -> dict:
@@ -87,84 +89,117 @@ async def _get_proxy_client() -> httpx.AsyncClient | None:
         return _proxy_client
 
 
+async def _reset_proxy_client() -> None:
+    global _proxy_client
+    from app.services.search.http_proxy import invalidate_sticky_proxy
+
+    invalidate_sticky_proxy()
+    if _proxy_client is None:
+        return
+    try:
+        await _proxy_client.aclose()
+    except Exception:
+        pass
+    _proxy_client = None
+
+
+def _alert_html_failed() -> None:
+    from app.services.search.proxy_alerts import schedule_proxy_problem
+
+    schedule_proxy_problem(source="AUTO.RIA", error="direct і проксі не віддали HTML")
+
+
 async def _get_html(url: str, *, params: dict | None = None) -> httpx.Response:
-    """Проксі не додає очікування: гонка з direct, далі лише переможець."""
-    global _html_route, _proxy_client
+    """Direct першим. Проксі — лише якщо AUTO.RIA з VPS недоступний або заблокований."""
+    global _html_route
     request_label = http_request_label("GET", url, params=params)
 
+    async def try_direct() -> httpx.Response | None:
+        return await _fetch_html(await _get_direct_client(), url, params)
+
+    async def try_proxy() -> httpx.Response | None:
+        if not proxy_configured():
+            return None
+        proxy_client = await _get_proxy_client()
+        if proxy_client is None:
+            return None
+        return await _fetch_html(proxy_client, url, params)
+
     if _html_route == "direct":
-        response = await _fetch_html(await _get_direct_client(), url, params)
+        response = await try_direct()
         if response is not None:
             return response
         _html_route = None
+
     elif _html_route == "proxy":
-        proxy_client = await _get_proxy_client()
-        if proxy_client is None:
-            raise AutoRiaBetaError(
-                "AUTO.RIA HTML blocked and proxy is not configured",
-                request=request_label,
-            )
-        response = await _fetch_html(proxy_client, url, params)
+        response = await try_proxy()
         if response is not None:
             return response
-        from app.services.search.http_proxy import invalidate_sticky_proxy
-        from app.services.search.proxy_alerts import schedule_proxy_problem
-
-        invalidate_sticky_proxy()
-        if _proxy_client is not None:
-            try:
-                await _proxy_client.aclose()
-            except Exception:
-                pass
-            _proxy_client = None
-        schedule_proxy_problem(source="AUTO.RIA", error="проксі не віддав HTML")
+        await _reset_proxy_client()
+        _html_route = None
+        response = await try_direct()
+        if response is not None:
+            _html_route = "direct"
+            logger.warning("AUTO.RIA HTML: proxy failed, fell back to direct")
+            return response
+        _alert_html_failed()
         raise AutoRiaBetaError("AUTO.RIA HTML proxy failed", request=request_label)
 
     if not proxy_configured():
-        response = await _fetch_html(await _get_direct_client(), url, params)
+        response = await try_direct()
         if response is None:
             raise AutoRiaBetaError("AUTO.RIA HTML failed", request=request_label)
         _html_route = "direct"
         return response
 
     async def _direct_leg() -> tuple[str, httpx.Response | None]:
-        return "direct", await _fetch_html(await _get_direct_client(), url, params)
+        return "direct", await try_direct()
 
     async def _proxy_leg() -> tuple[str, httpx.Response | None]:
-        proxy_client = await _get_proxy_client()
-        if proxy_client is None:
-            return "proxy", None
-        return "proxy", await _fetch_html(proxy_client, url, params)
+        return "proxy", await try_proxy()
 
     tasks = [
         asyncio.create_task(_direct_leg()),
         asyncio.create_task(_proxy_leg()),
     ]
     pending: set[asyncio.Task] = set(tasks)
+    proxy_hit: httpx.Response | None = None
     try:
         while pending:
-            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            timeout = _PROXY_YIELD_TO_DIRECT_SECONDS if proxy_hit is not None else None
+            done, pending = await asyncio.wait(
+                pending,
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=timeout,
+            )
+            if timeout is not None and not done:
+                break
             for task in done:
                 if task.cancelled() or task.exception() is not None:
                     continue
                 name, response = task.result()
                 if response is None:
                     continue
-                _html_route = name
-                for leftover in pending:
-                    leftover.cancel()
-                if pending:
-                    await asyncio.gather(*pending, return_exceptions=True)
-                logger.info("AUTO.RIA HTML via %s", name)
-                return response
+                if name == "direct":
+                    _html_route = "direct"
+                    for leftover in pending:
+                        leftover.cancel()
+                    if pending:
+                        await asyncio.gather(*pending, return_exceptions=True)
+                    logger.info("AUTO.RIA HTML via direct")
+                    return response
+                proxy_hit = response
+        if proxy_hit is not None:
+            _html_route = "proxy"
+            logger.info("AUTO.RIA HTML via proxy (direct unavailable)")
+            return proxy_hit
     finally:
         for task in tasks:
             if not task.done():
                 task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
-    from app.services.search.proxy_alerts import schedule_proxy_problem
-
-    schedule_proxy_problem(source="AUTO.RIA", error="direct і проксі не віддали HTML")
+    _alert_html_failed()
     raise AutoRiaBetaError("AUTO.RIA HTML failed", request=request_label)
 
 

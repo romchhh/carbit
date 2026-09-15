@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
+import time
 from datetime import datetime, timezone
 
 from app.core.config import settings
@@ -22,6 +24,8 @@ logger = logging.getLogger(__name__)
 _WARN_TTL_SECONDS = 60 * 60 * 24 * 40
 _FAIL_COOLDOWN_SECONDS = 900
 _SUB_SOON_DAYS = 3
+_mark_lock = asyncio.Lock()
+_local_until: dict[str, float] = {}
 
 
 def _parse_remaining_thresholds(raw: str) -> tuple[int, ...]:
@@ -40,6 +44,13 @@ def _parse_remaining_thresholds(raw: str) -> tuple[int, ...]:
 
 
 async def _mark_once(key: str, ttl: int) -> bool:
+    """Атомарно в процесі + Redis. Інакше 3 паралельні фейли = 3 телеграми."""
+    now = time.monotonic()
+    async with _mark_lock:
+        until = _local_until.get(key, 0.0)
+        if now < until:
+            return False
+        _local_until[key] = now + ttl
     try:
         redis = await get_redis()
         full = f"webshare:alert:{key}"
