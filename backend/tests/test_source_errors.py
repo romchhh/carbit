@@ -213,6 +213,34 @@ def test_olx_error_without_request_still_works() -> None:
     assert is_benign_parser_error(status.error) is True
 
 
+def test_olx_410_is_benign_listing_gone() -> None:
+    exc = OlxError("OLX: оголошення знято (410)", status_code=410)
+    assert is_benign_parser_error(str(exc)) is True
+
+
+def test_olx_fetch_listing_details_returns_empty_on_410():
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.olx.client import OlxClient
+    from app.services.olx.errors import OlxError
+
+    async def run():
+        client = OlxClient()
+        with patch.object(
+            client,
+            "fetch_html",
+            new=AsyncMock(
+                side_effect=OlxError("OLX: оголошення знято (410)", status_code=410),
+            ),
+        ):
+            return await client.fetch_listing_details(
+                "https://www.olx.ua/d/uk/obyavlenie/test-ID10VGKH.html"
+            )
+
+    assert asyncio.run(run()) == {}
+
+
 @pytest.mark.parametrize(
     "message",
     [

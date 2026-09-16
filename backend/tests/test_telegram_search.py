@@ -61,6 +61,59 @@ class TelegramSearchTests(unittest.TestCase):
         })
         self.assertFalse(listing_out_matches_filters(item, filters))
 
+    def test_udrive_generic_ukraine_passes_kyiv_region_filter(self):
+        item = type("Item", (), {
+            "id": "udrive_abc",
+            "brand": "Zeekr",
+            "model": "001",
+            "title": "Zeekr 001 Ultra 2026",
+            "year": 2026,
+            "price": 50_000,
+            "currency": "USD",
+            "mileage": 0,
+            "region": "Україна",
+            "source": "udrive",
+            "fuel": "Електро",
+            "transmission": "Автомат",
+            "description": "",
+            "source_data": {"udrive": {}},
+        })()
+        filters = SearchFilters.model_validate({
+            "brand": "Zeekr",
+            "model": "001",
+            "year_from": 2026,
+            "year_to": 2026,
+            "region": "м. Київ",
+            "regions": ["м. Київ"],
+            "sources": ["udrive"],
+        })
+        self.assertTrue(listing_out_matches_filters(item, filters))
+
+    def test_udrive_specific_city_still_filtered_by_region(self):
+        item = type("Item", (), {
+            "id": "udrive_xyz",
+            "brand": "BMW",
+            "model": "X5",
+            "title": "BMW X5 2018",
+            "year": 2018,
+            "price": 30_000,
+            "currency": "USD",
+            "mileage": 100,
+            "region": "Одеса",
+            "source": "udrive",
+            "fuel": "Бензин",
+            "transmission": "Автомат",
+            "description": "",
+            "source_data": {"udrive": {}},
+        })()
+        filters = SearchFilters.model_validate({
+            "brand": "BMW",
+            "region": "м. Київ",
+            "regions": ["м. Київ"],
+            "sources": ["udrive"],
+        })
+        self.assertFalse(listing_out_matches_filters(item, filters))
+
     def test_region_blocks_non_telegram_without_city(self):
         item = type("Item", (), {
             "brand": "Porsche",

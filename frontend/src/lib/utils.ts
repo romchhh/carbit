@@ -56,10 +56,14 @@ export const PLAN_LABELS: Record<string, string> = {
   pro: "Бізнес",
 };
 
+const UNKNOWN_PUBLISHED_CUTOFF_MS = Date.UTC(1971, 0, 1);
+
 export function timeAgo(date: string | null | undefined) {
   if (!date) return "";
-  const diff = Date.now() - new Date(date).getTime();
-  if (Number.isNaN(diff) || diff < 0) return "";
+  const ts = new Date(date).getTime();
+  if (Number.isNaN(ts) || ts < UNKNOWN_PUBLISHED_CUTOFF_MS) return "";
+  const diff = Date.now() - ts;
+  if (diff < 0) return "";
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "щойно";
   if (mins < 60) return `${mins} хв тому`;

@@ -261,10 +261,13 @@ def _telegram_sql_prefilters(filters: SearchFilters, *, found_after: datetime | 
 
     if filters.year_from or filters.year_to:
         clauses.append(Listing.year > 0)
-        if filters.year_from:
-            clauses.append(Listing.year >= filters.year_from)
-        if filters.year_to:
-            clauses.append(Listing.year <= filters.year_to)
+        from app.services.search.category import effective_year_bounds
+
+        year_from, year_to = effective_year_bounds(filters.year_from, filters.year_to)
+        if year_from is not None:
+            clauses.append(Listing.year >= year_from)
+        if year_to is not None:
+            clauses.append(Listing.year <= year_to)
 
     if filters.mileage_from:
         clauses.append(

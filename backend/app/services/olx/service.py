@@ -27,7 +27,7 @@ from app.services.olx.parser import (
     parse_listing_page,
     passes_olx_filters,
 )
-from app.services.olx.errors import OlxError
+from app.services.olx.errors import OlxError, is_olx_listing_gone
 from app.services.search.concurrency import acquire_olx_slot
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 
@@ -156,7 +156,8 @@ async def _fetch_olx_search_html(
         return html, params, url
     except OlxError as exc:
         if (
-            exc.status_code == 404
+            is_olx_listing_gone(exc.status_code)
+            and exc.status_code == 404
             and not params.text_query
             and (filters.brand or filters.model)
         ):
@@ -174,8 +175,8 @@ async def _fetch_olx_search_html(
                     details=f"Перший URL: {bad_url}",
                 )
                 raise
-        if exc.status_code == 404:
-            # Не спамимо в Telegram на «голий» 404 без fallback (already tried or N/A)
+        if is_olx_listing_gone(exc.status_code):
+            # 404/410 — не спамимо в Telegram (зняте оголошення або порожній шлях)
             pass
         raise
 
@@ -227,7 +228,7 @@ async def _collect_from_params(
                     client, active, filters, page=current_page
                 )
             except OlxError as exc:
-                if exc.status_code == 404 and pages_scanned > 0:
+                if is_olx_listing_gone(exc.status_code) and pages_scanned > 0:
                     break
                 if pages_scanned == 0:
                     raise

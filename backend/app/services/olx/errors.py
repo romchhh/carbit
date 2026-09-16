@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
+# 404 — не знайдено; 410 Gone — оголошення знято з OLX (не помилка парсера).
+OLX_GONE_HTTP_STATUS = frozenset({404, 410})
+
+
+def is_olx_listing_gone(status: int | None) -> bool:
+    return status in OLX_GONE_HTTP_STATUS
+
 
 class OlxError(Exception):
     def __init__(self, message: str, *, status_code: int | None = None) -> None:

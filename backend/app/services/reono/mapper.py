@@ -69,10 +69,13 @@ def apply_client_filters(cars: list[ReonoCar], filters: SearchFilters) -> list[R
         out = [car for car in out if car.price_usd is not None and car.price_usd >= filters.price_from]
     if filters.price_to is not None:
         out = [car for car in out if car.price_usd is not None and car.price_usd <= filters.price_to]
-    if filters.year_from is not None:
-        out = [car for car in out if car.year is not None and car.year >= filters.year_from]
-    if filters.year_to is not None:
-        out = [car for car in out if car.year is not None and car.year <= filters.year_to]
+    from app.services.search.category import effective_year_bounds
+
+    year_from, year_to = effective_year_bounds(filters.year_from, filters.year_to)
+    if year_from is not None:
+        out = [car for car in out if car.year is not None and car.year >= year_from]
+    if year_to is not None:
+        out = [car for car in out if car.year is not None and car.year <= year_to]
     if filters.mileage_from is not None:
         out = [car for car in out if car.mileage_km is not None and car.mileage_km >= filters.mileage_from]
     if filters.mileage_to is not None:

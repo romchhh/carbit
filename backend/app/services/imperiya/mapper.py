@@ -163,10 +163,13 @@ async def filters_to_search_params(
                 params["modelId"] = model_id
             # Якщо modelId не знайдено — лишаємо пошук лише по makeId + пост-фільтр у Python.
 
-    if filters.year_from:
-        params["yearFrom"] = filters.year_from
-    if filters.year_to:
-        params["yearTo"] = filters.year_to
+    from app.services.search.category import effective_year_bounds
+
+    year_from, year_to = effective_year_bounds(filters.year_from, filters.year_to)
+    if year_from is not None:
+        params["yearFrom"] = year_from
+    if year_to is not None:
+        params["yearTo"] = year_to
 
     if (filters.category or "").strip().lower() == "new":
         from app.services.search.category import new_category_year_bounds

@@ -37,7 +37,7 @@ from app.services.parser.filter_groups import filters_group_key
 
 logger = logging.getLogger(__name__)
 
-LIVE_POOL_PREFIX = "live-pool:v9:"
+LIVE_POOL_PREFIX = "live-pool:v12:"
 LIVE_POOL_TTL_SECONDS = 600  # 10 хвилин — повторний пошук без нових AR-запитів
 # Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
 LIVE_POOL_SIZE = 2500
@@ -489,10 +489,21 @@ def _slot_listing(slot: dict) -> ListingOut | None:
         return None
 
 
+def _slot_needs_api_hydrate(slot: dict) -> bool:
+    """HTML-картка без дати (1970) — дотягуємо /auto/info лише для published_at."""
+    html = _slot_listing(slot)
+    if html is None:
+        return True
+    from app.services.listings.sort_dates import usable_sort_datetime
+
+    return usable_sort_datetime(html.published_at) is None
+
+
 async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
     """Перетворює слоти сторінки на повні ListingOut об'єкти.
 
-    HTML-картка видачі вже має ціну/фото/бейджі — /auto/info лише якщо картки немає.
+    HTML-картка видачі вже має ціну/фото/бейджі — /auto/info якщо картки немає
+    або published_at невідомий (placeholder 1970).
     """
     from app.services.auto_ria.html_merge import merge_html_card_with_api
 
@@ -502,12 +513,12 @@ async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
         if s.get("s") == "r"
         and "i" in s
         and not str(s.get("i", "")).startswith("beta_")
-        and _slot_listing(s) is None
+        and _slot_needs_api_hydrate(s)
     ]
     new_ids = [
         s["i"]
         for s in slots
-        if s.get("s") == "n" and "i" in s and _slot_listing(s) is None
+        if s.get("s") == "n" and "i" in s and _slot_needs_api_hydrate(s)
     ]
 
     hydrated_used, hydrated_new = await asyncio.gather(

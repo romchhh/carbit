@@ -30,6 +30,18 @@ LD_JSON_RE = re.compile(
     r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
     re.IGNORECASE | re.DOTALL,
 )
+_PINIA_RE = re.compile(r"window\.__PINIA__\s*=\s*(\{.*?\})\s*;\s*</script>", re.DOTALL)
+_UA_MONTHS_RE = (
+    r"січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|"
+    r"жовтня|листопада|грудня"
+)
+_CARD_POSTED_RE = re.compile(
+    r"(сьогодні(?:\s+о\s+\d{1,2}:\d{2})?|вчора(?:\s+о\s+\d{1,2}:\d{2})?|"
+    rf"\d+\s*(?:хв|год|день|дня|днів|тиждень|тижні|тижнів)\s*тому|"
+    r"\d{1,2}\.\d{2}\.\d{4}|"
+    rf"\d{{1,2}}\s+(?:{_UA_MONTHS_RE}))",
+    re.IGNORECASE,
+)
 
 FUEL_WORDS = ["Електро", "Бензин", "Дизель", "Гібрид", "Газ"]
 TRANS_WORDS = ["Автомат", "Механіка", "Ручна", "Типтронік", "Робот", "Варіатор"]
@@ -204,8 +216,60 @@ def parse_total_count(html: str) -> int:
     return max(counts) if counts else 0
 
 
+def _card_publish_time(html: str, start: int) -> str | None:
+    chunk = html[start : start + 15000]
+    date_match = re.search(r'"publishTime"\s*:\s*"([^"]+)"', chunk)
+    if not date_match:
+        return None
+    return date_match.group(1).strip() or None
+
+
+def _parse_search_embedded_dates(html: str) -> dict[int, str]:
+    """Дати з SSR пошуку: publishTime у картках Auto/NewAuto + addDate у PINIA."""
+    out: dict[int, str] = {}
+    for prefix in ("Auto", "NewAuto"):
+        for match in re.finditer(rf'"id"\s*:\s*"{prefix}(\d+)"', html):
+            car_id = int(match.group(1))
+            posted = _card_publish_time(html, match.start())
+            if posted:
+                out[car_id] = posted
+
+    pinia = _PINIA_RE.search(html)
+    if pinia:
+        raw = pinia.group(1)
+        for auto_match in re.finditer(r'"autoId"\s*:\s*(\d+)', raw):
+            car_id = int(auto_match.group(1))
+            if car_id in out:
+                continue
+            posted = _card_publish_time(raw, auto_match.start())
+            if not posted:
+                chunk = raw[auto_match.start() : auto_match.start() + 2500]
+                date_match = re.search(r'"addDate"\s*:\s*"([^"]+)"', chunk)
+                posted = date_match.group(1).strip() if date_match else ""
+            if posted:
+                out[car_id] = posted
+    return out
+
+
+def _posted_text_usable(text: str | None) -> bool:
+    from app.services.auto_ria_beta.mapper import _parse_posted
+    from app.services.listings.sort_dates import usable_sort_datetime
+
+    return usable_sort_datetime(_parse_posted(text)) is not None
+
+
+def _apply_search_posted_dates(cars: list[ScrapedCar], posted_by_id: dict[int, str]) -> None:
+    for car in cars:
+        if car.posted and _posted_text_usable(car.posted):
+            continue
+        posted = posted_by_id.get(car.car_id)
+        if posted:
+            car.posted = posted
+
+
 def parse_search_page(html: str) -> tuple[list[ScrapedCar], int]:
     total = parse_total_count(html)
+    posted_by_id = _parse_search_embedded_dates(html)
     soup = BeautifulSoup(html, "html.parser")
     cars: list[ScrapedCar] = []
     seen: set[str] = set()
@@ -249,6 +313,7 @@ def parse_search_page(html: str) -> tuple[list[ScrapedCar], int]:
             )
             seen.add(key)
 
+    _apply_search_posted_dates(cars, posted_by_id)
     return cars, total
 
 
@@ -315,6 +380,8 @@ def _parse_search_card(anchor) -> ScrapedCar | None:
     fuel = fuel_match.group(0).strip() if fuel_match else next((word for word in FUEL_WORDS if word in text), None)
     body_type = next((word for word in BODY_WORDS if word in text), None)
     plate_match = PLATE_RE.search(text)
+    posted_match = _CARD_POSTED_RE.search(text)
+    posted = posted_match.group(0).strip() if posted_match else None
     return ScrapedCar(
         car_id=car_id,
         url=url,
@@ -332,6 +399,7 @@ def _parse_search_card(anchor) -> ScrapedCar | None:
         plate=plate_match.group(0) if plate_match else None,
         is_dealer="Перевірений дилер" in text or "Офіційний дилер" in text,
         photo_url=photo_url,
+        posted=posted,
         details=details,
         is_new=is_new,
     )

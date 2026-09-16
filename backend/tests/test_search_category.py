@@ -11,7 +11,10 @@ from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.search.category import (
     NEW_YEAR_MAX,
     NEW_YEAR_MIN,
+    effective_year_bounds,
     listing_matches_category,
+    listing_matches_year_bounds,
+    listing_year_value,
     new_category_year_bounds,
 )
 
@@ -52,6 +55,43 @@ class CategoryYearBoundsTests(unittest.TestCase):
     def test_clamps_user_range(self):
         self.assertEqual(new_category_year_bounds(2018, 2024), (2025, 2026))
         self.assertEqual(new_category_year_bounds(2025, 2027), (2025, 2026))
+
+
+class EffectiveYearBoundsTests(unittest.TestCase):
+    def test_same_year_is_from_only(self):
+        self.assertEqual(effective_year_bounds(2026, 2026), (2026, None))
+        self.assertEqual(effective_year_bounds(2026, None), (2026, None))
+
+    def test_explicit_range_unchanged(self):
+        self.assertEqual(effective_year_bounds(2020, 2024), (2020, 2024))
+
+    def test_swaps_inverted_range(self):
+        self.assertEqual(effective_year_bounds(2024, 2018), (2018, 2024))
+
+    def test_none_stays_open(self):
+        self.assertEqual(effective_year_bounds(None, None), (None, None))
+
+
+class ListingYearMatchTests(unittest.TestCase):
+    def test_year_from_title_when_field_zero(self):
+        item = _item(year=0, title="Zeekr 001 2026 Premium")
+        self.assertEqual(listing_year_value(item), 2026)
+
+    def test_html_card_without_year_passes_when_bounds_set(self):
+        item = _item(
+            year=0,
+            title="Zeekr 001",
+            source_data={"html_search": True},
+        )
+        self.assertTrue(listing_matches_year_bounds(item, 2026, 2026))
+
+    def test_rejects_year_before_from(self):
+        item = _item(year=2024, title="Zeekr 001 2024")
+        self.assertFalse(listing_matches_year_bounds(item, 2026, 2026))
+
+    def test_same_year_range_allows_future_year(self):
+        item = _item(year=2027, title="Zeekr 001 2027")
+        self.assertTrue(listing_matches_year_bounds(item, 2026, 2026))
 
 
 class CategoryMatchTests(unittest.TestCase):

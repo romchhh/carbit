@@ -7,6 +7,7 @@ from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
 from app.services.listings.engine_volume import normalize_engine_litres
 from app.services.listings.seller_contact import apply_seller_contact_fields
+from app.services.search.filter_multi import effective_brands, effective_models
 from app.services.search.subbrand_split import split_huawei_subbrand
 from app.services.udrive.catalog import get_makes_by_id, resolve_make, resolve_model_ids
 from app.services.udrive.client import UdriveClient
@@ -211,8 +212,8 @@ async def filters_to_query_body(
     page: int,
     per_page: int,
 ) -> tuple[dict[str, Any], str]:
-    brand = (filters.brand or "").strip()
-    model = (filters.model or "").strip()
+    brand = (effective_brands(filters)[:1] or [""])[0].strip()
+    model = (effective_models(filters)[:1] or [""])[0].strip()
     brand, model = split_huawei_subbrand(brand, model)
 
     if not brand:
@@ -246,14 +247,15 @@ async def filters_to_query_body(
     if model_ids:
         body["modelId"] = model_ids
 
-    year_from = filters.year_from
-    year_to = filters.year_to
+    from app.services.search.category import effective_year_bounds
 
-    if year_from or year_to:
+    year_from, year_to = effective_year_bounds(filters.year_from, filters.year_to)
+
+    if year_from is not None or year_to is not None:
         year_filter: dict[str, int] = {}
-        if year_from:
+        if year_from is not None:
             year_filter["from"] = year_from
-        if year_to:
+        if year_to is not None:
             year_filter["to"] = year_to
         body["productionYear"] = year_filter
 

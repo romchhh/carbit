@@ -75,10 +75,13 @@ def filters_to_search_params(filters: SearchFilters, *, page: int) -> dict[str, 
         params["min_price"] = str(filters.price_from)
     if filters.price_to is not None:
         params["max_price"] = str(filters.price_to)
-    if filters.year_from:
-        params["year_from"] = str(filters.year_from)
-    if filters.year_to:
-        params["year_to"] = str(filters.year_to)
+    from app.services.search.category import effective_year_bounds
+
+    year_from, year_to = effective_year_bounds(filters.year_from, filters.year_to)
+    if year_from is not None:
+        params["year_from"] = str(year_from)
+    if year_to is not None:
+        params["year_to"] = str(year_to)
 
     fuel_code = _first_code(filters.fuel, FUEL_CODES)
     if fuel_code:

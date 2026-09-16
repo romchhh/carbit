@@ -105,8 +105,11 @@ def filters_to_olx_params(filters: SearchFilters, *, max_pages: int = 2) -> OlxS
         params.price_from = filter_price_to_uah(filters.price_from, filter_cur)
         params.price_to = filter_price_to_uah(filters.price_to, filter_cur)
         params.currency = "UAH"
-    params.year_from = filters.year_from
-    params.year_to = filters.year_to
+    from app.services.search.category import effective_year_bounds
+
+    year_from, year_to = effective_year_bounds(filters.year_from, filters.year_to)
+    params.year_from = year_from
+    params.year_to = year_to
 
     if filters.zero_mileage:
         params.mileage_to = 0

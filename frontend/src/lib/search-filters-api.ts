@@ -7,7 +7,7 @@ import type {
   SellerFilterValue,
   TriFilterValue,
 } from "@/lib/search-catalog";
-import { DEFAULT_FILTERS, sanitizeFilterSources } from "@/lib/search-catalog";
+import { DEFAULT_FILTERS, effectiveYearBounds, sanitizeFilterSources } from "@/lib/search-catalog";
 import {
   effectiveBrands,
   effectiveModels,
@@ -153,6 +153,10 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
   const mileageTo = synced.zeroMileage ? 500 : parseThousandsKm(synced.mileageTo);
   const customPublished =
     Boolean(synced.publishedFrom.trim()) || Boolean(synced.publishedTo.trim());
+  const { from: yearFrom, to: yearTo } = effectiveYearBounds(
+    parseNumber(synced.yearFrom),
+    parseNumber(synced.yearTo),
+  );
 
   return {
     brand: brands[0] || null,
@@ -160,8 +164,8 @@ export function toBackendSearchFilters(filters: SearchFilterState): BackendSearc
     brands: brands.length ? brands : null,
     models: models.length ? models : null,
     regions: regions.length ? regions : null,
-    year_from: parseNumber(synced.yearFrom),
-    year_to: parseNumber(synced.yearTo),
+    year_from: yearFrom,
+    year_to: yearTo,
     price_from: parseNumber(synced.priceFrom),
     price_to: parseNumber(synced.priceTo),
     currency: synced.currency || "USD",

@@ -19,7 +19,7 @@ from app.services.olx.constants import (
     RETRYABLE_STATUS,
     USER_AGENTS,
 )
-from app.services.olx.errors import OlxError
+from app.services.olx.errors import OlxError, is_olx_listing_gone
 from app.services.olx.parser import (
     OlxListing,
     OlxSearchParams,
@@ -322,12 +322,13 @@ class OlxClient:
                 await asyncio.sleep(self._retry_delay(response.status_code, attempt))
                 continue
 
-            message = (
-                self._forbidden_message(url)
-                if response.status_code == 403
-                else f"OLX повернув статус {response.status_code}"
-            )
-            if response.status_code != 404:
+            if response.status_code == 410:
+                message = "OLX: оголошення знято (410)"
+            elif response.status_code == 403:
+                message = self._forbidden_message(url)
+            else:
+                message = f"OLX повернув статус {response.status_code}"
+            if not is_olx_listing_gone(response.status_code):
                 await notify_admin_parsing_error(source="OLX", error=message, url=url)
             raise OlxError(message, status_code=response.status_code)
 
@@ -422,5 +423,11 @@ class OlxClient:
         return parsed[0] if parsed else None
 
     async def fetch_listing_details(self, url: str) -> dict:
-        html = await self.fetch_html(url)
+        try:
+            html = await self.fetch_html(url)
+        except OlxError as exc:
+            if is_olx_listing_gone(exc.status_code):
+                logger.debug("OLX listing gone url=%s status=%s", url, exc.status_code)
+                return {}
+            raise
         return await asyncio.to_thread(parse_listing_details, html)

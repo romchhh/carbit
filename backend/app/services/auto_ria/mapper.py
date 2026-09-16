@@ -78,10 +78,13 @@ async def filters_to_search_params(
         else:
             params["model_id[0]"] = model_id or 0
 
-    if filters.year_from:
-        params["s_yers[0]"] = filters.year_from
-    if filters.year_to:
-        params["po_yers[0]"] = filters.year_to
+    from app.services.search.category import effective_year_bounds
+
+    year_from, year_to = effective_year_bounds(filters.year_from, filters.year_to)
+    if year_from is not None:
+        params["s_yers[0]"] = year_from
+    if year_to is not None:
+        params["po_yers[0]"] = year_to
 
     if filters.price_from is not None or filters.price_to is not None:
         # AUTO.RIA: currency=1 → USD, currency=3 → UAH.

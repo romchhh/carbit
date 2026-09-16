@@ -7,8 +7,12 @@ uDrive — лише нові з салону (будь-який рік/проб�
 
 from __future__ import annotations
 
+import re
+
 from app.core.text import norm_text
 from app.schemas.schemas import ListingOut
+
+_YEAR_IN_TEXT_RE = re.compile(r"\b(19[5-9]\d|20[0-3]\d)\b")
 
 NEW_MILEAGE_MAX_KM = 1000
 NEW_YEAR_MIN = 2025
@@ -39,6 +43,54 @@ IMPORT_MARKERS = (
     "під замовлення",
     "под заказ",
 )
+
+
+def effective_year_bounds(
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> tuple[int | None, int | None]:
+    """Діапазон року для запитів і пост-фільтра.
+
+    «2026–2026» = лише «від 2026» (без верхньої межі), як на AUTO.RIA.
+    Лічильник і видача не занижуються штучною lte.
+    """
+    yf = int(year_from) if year_from is not None else None
+    yt = int(year_to) if year_to is not None else None
+    if yf is not None and yt is not None:
+        if yf > yt:
+            yf, yt = yt, yf
+        elif yf == yt:
+            yt = None
+    return yf, yt
+
+
+def listing_year_value(item: ListingOut) -> int:
+    year = int(getattr(item, "year", 0) or 0)
+    if year > 0:
+        return year
+    match = _YEAR_IN_TEXT_RE.search(str(getattr(item, "title", "") or ""))
+    return int(match.group(1)) if match else 0
+
+
+def listing_matches_year_bounds(
+    item: ListingOut,
+    year_from: int | None,
+    year_to: int | None,
+) -> bool:
+    yf, yt = effective_year_bounds(year_from, year_to)
+    if yf is None and yt is None:
+        return True
+    year = listing_year_value(item)
+    if not year:
+        sd = item.source_data if isinstance(item.source_data, dict) else {}
+        if sd.get("html_search") or sd.get("auto_ria_beta"):
+            return True
+        return False
+    if yf is not None and year < yf:
+        return False
+    if yt is not None and year > yt:
+        return False
+    return True
 
 
 def new_category_year_bounds(

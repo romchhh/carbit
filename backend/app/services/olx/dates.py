@@ -133,6 +133,9 @@ def parse_olx_published_text(text: str, *, now: datetime | None = None) -> datet
     if normalized in {"щойно", "just now"}:
         return current
 
+    if normalized in {"день тому", "один день тому", "1 день тому"}:
+        return current - timedelta(days=1)
+
     relative_minutes = re.match(
         r"^(\d+)\s*(хв|хвилин|хвилини|хвилину|min|mins|minutes?)\s*тому$",
         normalized,
@@ -160,6 +163,13 @@ def parse_olx_published_text(text: str, *, now: datetime | None = None) -> datet
     )
     if relative_weeks:
         return current - timedelta(weeks=int(relative_weeks.group(1)))
+
+    relative_months = re.match(
+        r"^(\d+)\s*(міс|місяц|місяці|місяців|month|months?)\s*тому$",
+        normalized,
+    )
+    if relative_months:
+        return current - timedelta(days=int(relative_months.group(1)) * 30)
 
     time_match = re.search(r"о\s*(\d{1,2}):(\d{2})", normalized)
 

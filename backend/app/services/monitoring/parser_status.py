@@ -34,7 +34,9 @@ def is_benign_parser_error(error: str | None) -> bool:
     if not error:
         return False
     err = error.strip().lower()
-    if "404" in err:
+    if "404" in err or "410" in err:
+        return True
+    if "знято" in err:
         return True
     if "not found" in err:
         return True

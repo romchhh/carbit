@@ -16,6 +16,7 @@ from app.services.auto_ria_beta.parser import VIN_RE, ScrapedCar, is_usa_import_
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
 from app.services.listings.engine_volume import parse_engine_volume_from_text
 from app.services.listings.plate import normalize_ua_plate
+from app.services.search.category import effective_year_bounds
 from app.services.search.filter_multi import effective_brands, effective_models, effective_regions
 from app.services.telegram_channels.mapper import listing_out_matches_filters
 
@@ -26,11 +27,20 @@ def _parse_posted(value: str | None) -> datetime:
     text = (value or "").strip()
     if not text:
         return AUTO_RIA_BETA_UNKNOWN_PUBLISHED_AT
+    from app.services.olx.dates import parse_olx_published_text
+
+    parsed = parse_olx_published_text(text)
+    if parsed is not None:
+        return parsed
     for fmt in ("%d.%m.%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
         try:
             return datetime.strptime(text, fmt).replace(tzinfo=KYIV_TZ)
         except ValueError:
             continue
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(KYIV_TZ)
+    except ValueError:
+        pass
     return AUTO_RIA_BETA_UNKNOWN_PUBLISHED_AT
 
 
@@ -231,10 +241,11 @@ async def filters_to_html_params(
         if model_id:
             params["model.id[0]"] = model_id
 
-    if filters.year_from:
-        params["year[0].gte"] = filters.year_from
-    if filters.year_to:
-        params["year[0].lte"] = filters.year_to
+    year_from, year_to = effective_year_bounds(filters.year_from, filters.year_to)
+    if year_from is not None:
+        params["year[0].gte"] = year_from
+    if year_to is not None:
+        params["year[0].lte"] = year_to
 
     if filters.price_from is not None or filters.price_to is not None:
         filter_cur = resolve_filter_currency(filters.currency)

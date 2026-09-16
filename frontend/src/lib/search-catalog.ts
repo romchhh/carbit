@@ -420,9 +420,29 @@ function regionMatches(listingRegion: string, filterRegion: string): boolean {
   return regionMatchesListing(listingRegion, filterRegion);
 }
 
+/** «2026–2026» = лише «від 2026» (без верхньої межі), як на AUTO.RIA. */
+export function effectiveYearBounds(
+  yearFrom: number | null,
+  yearTo: number | null,
+): { from: number | null; to: number | null } {
+  let from = yearFrom;
+  let to = yearTo;
+  if (from != null && to != null) {
+    if (from > to) {
+      return { from: to, to: from === to ? null : from };
+    }
+    if (from === to) {
+      return { from, to: null };
+    }
+  }
+  return { from, to };
+}
+
 export function filterListings(items: SearchResult[], filters: SearchFilterState): SearchResult[] {
-  const yearFrom = parseNumberInput(filters.yearFrom);
-  const yearTo = parseNumberInput(filters.yearTo);
+  const { from: yearFrom, to: yearTo } = effectiveYearBounds(
+    parseNumberInput(filters.yearFrom),
+    parseNumberInput(filters.yearTo),
+  );
   const rawPriceFrom = parseNumberInput(filters.priceFrom);
   const rawPriceTo = parseNumberInput(filters.priceTo);
   const filterCur = resolveDisplayCurrency(filters.currency);
