@@ -103,6 +103,7 @@ def auto_ria_new_stock_fingerprint(item: ListingOut | Listing) -> str | None:
 
     Newauto: пробіг не входить (HTML — км до салону, API ставить 0).
     Свіжі used-URL: пробіг входить, щоб не склеювати звичайні б/у з округленими тис. км.
+    Регіон не входить: салони клонують той самий лот по містах.
     """
     brand = norm_text(getattr(item, "brand", None) or "")
     model = norm_text(getattr(item, "model", None) or "")
@@ -115,11 +116,11 @@ def auto_ria_new_stock_fingerprint(item: ListingOut | Listing) -> str | None:
     if not brand or not model or year < 1990 or price <= 0:
         return None
     currency = (getattr(item, "currency", None) or "USD").strip().upper() or "USD"
-    region = norm_text(str(getattr(item, "region", None) or "").split(",")[0])
+    # Регіон не входить: салони клонують той самий лот по містах.
     if _is_auto_ria_new_stock(item):
-        return f"arnew:{brand}:{model}:{year}:{price}:{currency}:{region}"
+        return f"arnew:{brand}:{model}:{year}:{price}:{currency}"
     if _is_auto_ria_fresh_used_stock(item):
-        return f"arused:{brand}:{model}:{year}:{price}:{currency}:{region}:{mileage}"
+        return f"arused:{brand}:{model}:{year}:{price}:{currency}:{mileage}"
     return None
 
 
@@ -492,10 +493,13 @@ def mark_duplicates_in_pool(
         if canonical.source == "telegram" and canon_url:
             canonical = canonical.model_copy(update={"url": canon_url})
 
+        canon_src = (canonical.source or "").strip().lower()
         for member in sorted(group, key=lambda row: (_source_rank(row.source), row.id)):
             if member.id != canonical.id:
+                member_src = (member.source or "").strip().lower()
+                skip_same_ria = member_src in _AUTO_RIA_SOURCES and canon_src in _AUTO_RIA_SOURCES
                 url = _telegram_url_for(member)
-                if url:
+                if url and not skip_same_ria:
                     url_key = url.rstrip("/").split("?", 1)[0]
                     if url_key not in seen_urls:
                         seen_urls.add(url_key)
@@ -506,6 +510,8 @@ def mark_duplicates_in_pool(
             # повторний прохід (пул → collapse_listings_with_db_mirrors) їх стирає.
             for link in member.alternate_sources or []:
                 if not link.url:
+                    continue
+                if (link.source or "").strip().lower() in _AUTO_RIA_SOURCES and canon_src in _AUTO_RIA_SOURCES:
                     continue
                 url_key = link.url.rstrip("/").split("?", 1)[0]
                 if url_key in seen_urls:

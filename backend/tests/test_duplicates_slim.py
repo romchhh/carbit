@@ -129,6 +129,47 @@ class DuplicatesTests(unittest.TestCase):
         items = mark_duplicates_in_pool([a, b])
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].id, "new_auto_ria_2073874")
+        self.assertEqual(items[0].alternate_sources, [])
+
+    def test_auto_ria_new_stock_city_clones_collapse(self):
+        a = _item(
+            id="auto_ria_1",
+            is_new=True,
+            brand="Zeekr",
+            model="007 GT",
+            year=2026,
+            price=53460,
+            mileage=730,
+            region="Київ",
+            url="https://auto.ria.com/uk/auto_zeekr_007-gt_1.html",
+        )
+        b = _item(
+            id="auto_ria_2",
+            is_new=True,
+            brand="Zeekr",
+            model="007 GT",
+            year=2026,
+            price=53460,
+            mileage=730,
+            region="Одеса",
+            url="https://auto.ria.com/uk/auto_zeekr_007-gt_2.html",
+        )
+        c = _item(
+            id="auto_ria_3",
+            is_new=True,
+            brand="Zeekr",
+            model="007 GT",
+            year=2026,
+            price=53460,
+            mileage=730,
+            region="Львів",
+            url="https://auto.ria.com/uk/auto_zeekr_007-gt_3.html",
+        )
+        self.assertTrue(listings_look_same(a, b))
+        self.assertTrue(listings_look_same(a, c))
+        items = mark_duplicates_in_pool([a, b, c])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].alternate_sources, [])
 
     def test_auto_ria_new_stock_different_price_stays(self):
         a = _item(
@@ -178,6 +219,35 @@ class DuplicatesTests(unittest.TestCase):
         )
         self.assertTrue(listings_look_same(a, b))
         self.assertEqual(len(mark_duplicates_in_pool([a, b])), 1)
+
+    def test_fresh_used_auto_ria_city_clones_collapse(self):
+        from datetime import date
+
+        year = date.today().year
+        a = _item(
+            id="auto_ria_40157493",
+            brand="Zeekr",
+            model="007 GT",
+            year=year,
+            price=53460,
+            mileage=730,
+            region="Київ",
+            url="https://auto.ria.com/uk/auto_zeekr_007-gt_40157493.html",
+        )
+        b = _item(
+            id="auto_ria_40157515",
+            brand="Zeekr",
+            model="007 GT",
+            year=year,
+            price=53460,
+            mileage=730,
+            region="Вінниця",
+            url="https://auto.ria.com/uk/auto_zeekr_007-gt_40157515.html",
+        )
+        self.assertTrue(listings_look_same(a, b))
+        items = mark_duplicates_in_pool([a, b])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].alternate_sources, [])
 
     def test_older_used_auto_ria_same_spec_not_collapsed_without_vin(self):
         a = _item(

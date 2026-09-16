@@ -15,75 +15,8 @@ import { listingOfferCount } from "@/components/listings/SourceLinks";
 import { SEARCH_PAGE_SIZE, type SearchFreshness } from "@/lib/search-preview";
 import { flavorForLoadMore, flavorForRefresh } from "@/lib/search-flavor";
 import { isSearchRateLimitMessage } from "@/components/search/SearchRateLimitNotice";
-import type { Listing, SourceStatus } from "@/types/api";
+import type { Listing } from "@/types/api";
 import { cn } from "@/lib/utils";
-
-function sourceLabel(source: string): string {
-  if (source === "olx" || source === "OLX") return "OLX";
-  if (source === "auto_ria" || source === "AUTO.RIA") return "AUTO.RIA";
-  if (source === "auto_ria_beta" || source === "AUTO.RIA test beta") return "AUTO.RIA";
-  if (source === "imperiya" || source === "Імперія Авто") return "Імперія Авто";
-  if (source === "car_market" || source === "Car Market") return "Car Market";
-  if (source === "lubeavto" || source === "Любе Авто") return "Любе Авто";
-  if (source === "reono" || source === "REONO") return "REONO";
-  if (source === "udrive" || source === "uDrive") return "uDrive";
-  if (source === "telegram" || source === "Telegram") return "Telegram";
-  return source.toUpperCase();
-}
-
-function isOlxSource(source: string): boolean {
-  return source === "olx" || source === "OLX";
-}
-
-/** Повідомлення про збій джерела з текстом помилки та запитом. */
-function sourceFailureMessage(status: SourceStatus): string {
-  const label = sourceLabel(status.source);
-  const raw = (status.error || "").trim();
-  const request = (status.request || "").trim();
-
-  if (isOlxSource(status.source)) {
-    if (/обмежує|429|rate/i.test(raw)) {
-      return "OLX тимчасово обмежує запити. Показуємо результати з інших джерел.";
-    }
-    if (/timeout|час очікування|timed?\s*out/i.test(raw)) {
-      return "OLX не відповів вчасно. Показуємо результати з інших джерел.";
-    }
-    if (raw && request) {
-      return `OLX: ${raw}\nЗапит: ${request}`;
-    }
-    return "OLX тимчасово недоступний. Показуємо результати з інших джерел.";
-  }
-
-  const parts: string[] = [];
-  if (raw) {
-    parts.push(`${label}: ${raw}`);
-  } else {
-    parts.push(`${label} тимчасово недоступний.`);
-  }
-  if (request) {
-    parts.push(`Запит: ${request}`);
-  }
-  if (!raw) {
-    parts.push("Показуємо результати з інших джерел.");
-  }
-  return parts.join("\n");
-}
-
-function buildPartialHint(
-  statuses: SourceStatus[] | undefined,
-  partial: boolean | undefined,
-  fromCache: boolean | undefined,
-): string | null {
-  if (!partial) return null;
-  const failed = (statuses ?? []).filter(s => s.error);
-  if (failed.length === 0) return null;
-
-  const lines = failed.map(sourceFailureMessage);
-  if (fromCache) {
-    lines.push("Частина результатів з кешу.");
-  }
-  return lines.join("\n\n");
-}
 
 type Props = {
   resultsRef: React.RefObject<HTMLDivElement | null>;
@@ -97,9 +30,6 @@ type Props = {
   sort: SortOption;
   freshness: SearchFreshness;
   error?: string | null;
-  sourceStatuses?: SourceStatus[];
-  partial?: boolean;
-  fromCache?: boolean;
   onSortChange: (sort: SortOption) => void;
   onFreshnessChange: (freshness: SearchFreshness) => void;
   onLoadMore?: () => void;
@@ -116,9 +46,6 @@ export function SearchPreviewResults({
   sort,
   freshness,
   error,
-  sourceStatuses,
-  partial,
-  fromCache,
   onSortChange,
   onLoadMore,
 }: Props) {
@@ -141,7 +68,6 @@ export function SearchPreviewResults({
     };
   }, [results]);
 
-  const partialHint = buildPartialHint(sourceStatuses, partial, fromCache);
   const loadMoreLabel = useMemo(() => flavorForLoadMore(results.length), [results.length]);
   const refreshLabel = useMemo(() => flavorForRefresh(total), [total]);
 
@@ -174,15 +100,6 @@ export function SearchPreviewResults({
             className="mb-4 rounded-2xl border border-border/80 bg-surface/70 px-4 py-3 text-[13px] leading-relaxed text-muted"
           >
             <span className="font-medium text-ink/80">{error}</span>
-          </div>
-        )}
-
-        {partialHint && !error && (
-          <div
-            role="status"
-            className="mb-4 whitespace-pre-wrap rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900"
-          >
-            {partialHint}
           </div>
         )}
 

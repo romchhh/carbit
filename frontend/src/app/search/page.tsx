@@ -79,9 +79,6 @@ export default function PublicSearchPage() {
     hasMore,
     error,
     errorRetryAfter,
-    sourceStatuses,
-    partial,
-    fromCache,
     resultsRef,
     runSearch,
     changeSort,
@@ -294,9 +291,6 @@ export default function PublicSearchPage() {
       sort={sort}
       freshness={freshness}
       error={displayError}
-      sourceStatuses={sourceStatuses}
-      partial={partial}
-      fromCache={fromCache}
       onSortChange={changeSort}
       onFreshnessChange={changeFreshness}
       onLoadMore={loadMore}
