@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from app.core.timezone import now_kyiv
@@ -119,6 +120,12 @@ def _mileage_km(car: dict[str, Any]) -> int:
     return max(value, 0)
 
 
+def _parse_udrive_datetime(value: Any) -> datetime | None:
+    from app.services.olx.dates import _parse_iso_datetime
+
+    return _parse_iso_datetime(value)
+
+
 def car_to_listing(
     car: dict[str, Any],
     *,
@@ -199,7 +206,10 @@ def car_to_listing(
         source_data={"udrive": car},
         price_history=[],
         is_duplicate=False,
-        published_at=now_kyiv(),
+        published_at=_parse_udrive_datetime(
+            car.get("publishedDate") or car.get("createdDate")
+        )
+        or now_kyiv(),
         found_at=now_kyiv(),
     )
     return apply_seller_contact_fields(listing, contact_payload)

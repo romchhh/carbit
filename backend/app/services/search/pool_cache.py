@@ -37,7 +37,7 @@ from app.services.parser.filter_groups import filters_group_key
 
 logger = logging.getLogger(__name__)
 
-LIVE_POOL_PREFIX = "live-pool:v12:"
+LIVE_POOL_PREFIX = "live-pool:v14:"
 LIVE_POOL_TTL_SECONDS = 600  # 10 хвилин — повторний пошук без нових AR-запитів
 # Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
 LIVE_POOL_SIZE = 2500
@@ -570,7 +570,7 @@ def _filter_listings_by_brand_model(
     items: list[ListingOut],
     filters: SearchFilters,
 ) -> list[ListingOut]:
-    if not _search_needs_listing_filter(filters):
+    if not _search_needs_listing_filter(filters) and filters.year_from is None and filters.year_to is None:
         return items
     from app.services.telegram_channels.mapper import listing_out_matches_filters
 

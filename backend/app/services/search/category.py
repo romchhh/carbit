@@ -51,16 +51,13 @@ def effective_year_bounds(
 ) -> tuple[int | None, int | None]:
     """Діапазон року для запитів і пост-фільтра.
 
-    «2026–2026» = лише «від 2026» (без верхньої межі), як на AUTO.RIA.
-    Лічильник і видача не занижуються штучною lte.
+    Обидві межі задані (включно з 2024–2024) — закритий діапазон.
+    Лише year_from — без верхньої межі (як «від 2024» на AUTO.RIA).
     """
     yf = int(year_from) if year_from is not None else None
     yt = int(year_to) if year_to is not None else None
-    if yf is not None and yt is not None:
-        if yf > yt:
-            yf, yt = yt, yf
-        elif yf == yt:
-            yt = None
+    if yf is not None and yt is not None and yf > yt:
+        yf, yt = yt, yf
     return yf, yt
 
 
@@ -82,9 +79,6 @@ def listing_matches_year_bounds(
         return True
     year = listing_year_value(item)
     if not year:
-        sd = item.source_data if isinstance(item.source_data, dict) else {}
-        if sd.get("html_search") or sd.get("auto_ria_beta"):
-            return True
         return False
     if yf is not None and year < yf:
         return False

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from app.core.text import norm_text
@@ -38,18 +38,11 @@ def _mileage_km(raw: Any) -> int:
 
 
 def _parse_datetime(value: Any) -> datetime:
-    if not value:
-        return now_kyiv()
-    text = str(value).strip()
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        dt = datetime.fromisoformat(text)
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=UTC)
-        return dt
-    except ValueError:
-        return now_kyiv()
+    from app.services.olx.dates import _parse_iso_datetime
+    from app.core.timezone import now_kyiv
+
+    parsed = _parse_iso_datetime(value)
+    return parsed if parsed is not None else now_kyiv()
 
 
 def _pick_price(ad: dict[str, Any], currency: str) -> tuple[int, str]:

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
-from app.core.timezone import KYIV_TZ, as_kyiv, now_kyiv
+from app.core.timezone import KYIV_TZ, now_kyiv
 from typing import Any
 
 from app.core.text import norm_text
@@ -253,22 +253,10 @@ def _parse_datetime(value: Any) -> datetime:
     """Парсить дату AUTO.RIA. Невідоме значення → далеке минуле (не «зараз»),
     щоб старі/биті дати не проходили фільтр свіжості для Telegram."""
     fallback = datetime(1970, 1, 1, tzinfo=KYIV_TZ)
-    if not value:
-        return fallback
-    if isinstance(value, (int, float)):
-        return as_kyiv(datetime.fromtimestamp(value, tz=UTC))
-    if isinstance(value, str):
-        text = value.strip()
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-            try:
-                return datetime.strptime(text, fmt).replace(tzinfo=KYIV_TZ)
-            except ValueError:
-                continue
-        try:
-            return as_kyiv(datetime.fromisoformat(text.replace("Z", "+00:00")))
-        except ValueError:
-            return fallback
-    return fallback
+    from app.services.olx.dates import _parse_iso_datetime
+
+    parsed = _parse_iso_datetime(value)
+    return parsed if parsed is not None else fallback
 
 
 def _pick_vin_value(value: Any) -> str | None:
@@ -526,7 +514,9 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
         source_data=sanitize_source_data(info, fotos),
         price_history=[],
         is_duplicate=False,
-        published_at=_parse_datetime(info.get("addDate")),
+        published_at=_parse_datetime(
+            info.get("addDate") or info.get("firstTime") or info.get("updateDate")
+        ),
         found_at=now_kyiv(),
         ),
         seller_contact_from_auto_ria(info),
@@ -612,6 +602,7 @@ def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
         published_at=_parse_datetime(
             info.get("addDate")
             or info.get("createdDate")
+            or info.get("createdAt")
             or info.get("date")
             or info.get("updatedDate")
         ),

@@ -36,11 +36,17 @@ def _merge_flag_maps(api_map: Any, html_map: Any) -> dict[str, Any] | None:
 
 
 def _best_published_at(*values: Any) -> Any:
+    """Обираємо найранішу реальну дату публікації, не updatedDate/1970."""
     from app.services.listings.sort_dates import usable_sort_datetime
 
+    usable: list[Any] = []
     for value in values:
-        if usable_sort_datetime(value) is not None:
-            return value
+        parsed = usable_sort_datetime(value)
+        if parsed is not None:
+            usable.append((parsed, value))
+    if usable:
+        usable.sort(key=lambda row: row[0])
+        return usable[0][1]
     for value in values:
         if value is not None:
             return value

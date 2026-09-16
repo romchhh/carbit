@@ -15,9 +15,17 @@ class OlxPublishedDateTests(unittest.TestCase):
     def setUp(self):
         self.now = datetime(2026, 7, 7, 15, 30, tzinfo=KYIV_TZ)
 
-    def test_minutes_ago(self):
-        dt = parse_olx_published_text("5 хвилин тому", now=self.now)
-        self.assertEqual(dt, self.now - timedelta(minutes=5))
+    def test_month_ago_without_number(self):
+        dt = parse_olx_published_text("Місяць тому", now=self.now)
+        self.assertEqual(dt, self.now - timedelta(days=30))
+
+    def test_week_ago_without_number(self):
+        dt = parse_olx_published_text("Тиждень тому", now=self.now)
+        self.assertEqual(dt, self.now - timedelta(weeks=1))
+
+    def test_months_ago_counted(self):
+        dt = parse_olx_published_text("4 місяці тому", now=self.now)
+        self.assertEqual(dt, self.now - timedelta(days=120))
 
     def test_hours_ago(self):
         dt = parse_olx_published_text("1 годину тому", now=self.now)

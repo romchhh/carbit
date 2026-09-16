@@ -46,32 +46,6 @@ def filters_group_key(filters: SearchFilters | dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:20]
 
 
-def _normalized_sources(sources: list[str] | None) -> tuple[str, ...]:
-    default = ("auto_ria", "olx", "car_market", "lubeavto", "reono", "imperiya", "udrive", "telegram")
-    if not sources:
-        return default
-    out: list[str] = []
-    for raw in sources:
-        key = raw.strip().lower().replace(".", "_").replace(" ", "_")
-        if key in ("auto_ria", "autoria") and "auto_ria" not in out:
-            out.append("auto_ria")
-        elif key == "olx" and "olx" not in out:
-            out.append("olx")
-        elif key in ("imperiya", "imperiya_auto", "imperiya-auto", "iautos") and "imperiya" not in out:
-            out.append("imperiya")
-        elif key in ("udrive", "u_drive", "u-drive") and "udrive" not in out:
-            out.append("udrive")
-        elif key in ("car_market", "carmarket", "car-market", "car_market_net") and "car_market" not in out:
-            out.append("car_market")
-        elif key in ("lubeavto", "lube_avto", "lube-avto", "любе_авто", "любеавто") and "lubeavto" not in out:
-            out.append("lubeavto")
-        elif key in ("reono", "reono_ua", "reono-ua") and "reono" not in out:
-            out.append("reono")
-        elif key == "telegram" and "telegram" not in out:
-            out.append("telegram")
-    return tuple(out or default)
-
-
 def similar_fetch_signature(filters: SearchFilters) -> str | None:
     """
     Ключ для групування «схожих» пошуків (та сама марка/модель/категорія/джерела).
@@ -82,7 +56,9 @@ def similar_fetch_signature(filters: SearchFilters) -> str | None:
         return None
     model = norm_text(filters.model or "")
     category = (filters.category or "all").strip().lower()
-    sources = _normalized_sources(filters.sources)
+    from app.services.search.multi_source import sources_for_filters
+
+    sources = tuple(sources_for_filters(filters))
     payload = f"{brand}|{model}|{category}|{'|'.join(sources)}"
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
@@ -181,9 +157,11 @@ def merge_filters_for_fetch(filters_list: list[SearchFilters]) -> SearchFilters:
         merged.price_from = None
         merged.price_to = None
 
+    from app.services.search.multi_source import sources_for_filters
+
     source_union: set[str] = set()
     for f in filters_list:
-        source_union.update(_normalized_sources(f.sources))
+        source_union.update(sources_for_filters(f))
     merged.sources = sorted(source_union)
     return merged
 

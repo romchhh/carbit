@@ -420,20 +420,15 @@ function regionMatches(listingRegion: string, filterRegion: string): boolean {
   return regionMatchesListing(listingRegion, filterRegion);
 }
 
-/** «2026–2026» = лише «від 2026» (без верхньої межі), як на AUTO.RIA. */
+/** Закритий діапазон (включно з 2024–2024). Лише «від» — без верхньої межі. */
 export function effectiveYearBounds(
   yearFrom: number | null,
   yearTo: number | null,
 ): { from: number | null; to: number | null } {
   let from = yearFrom;
   let to = yearTo;
-  if (from != null && to != null) {
-    if (from > to) {
-      return { from: to, to: from === to ? null : from };
-    }
-    if (from === to) {
-      return { from, to: null };
-    }
+  if (from != null && to != null && from > to) {
+    return { from: to, to: from };
   }
   return { from, to };
 }

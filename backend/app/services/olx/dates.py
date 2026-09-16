@@ -63,8 +63,12 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
         text = value.strip()
         if not text:
             return None
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        # uDrive / .NET: 7 знаків дробової секунди — ISO допускає лише до 6.
+        text = re.sub(r"(\.\d{6})\d+", r"\1", text)
         try:
-            return as_kyiv(datetime.fromisoformat(text.replace("Z", "+00:00")))
+            return as_kyiv(datetime.fromisoformat(text))
         except ValueError:
             pass
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%d.%m.%Y %H:%M", "%d.%m.%Y"):
@@ -133,8 +137,22 @@ def parse_olx_published_text(text: str, *, now: datetime | None = None) -> datet
     if normalized in {"щойно", "just now"}:
         return current
 
-    if normalized in {"день тому", "один день тому", "1 день тому"}:
-        return current - timedelta(days=1)
+    singular_relative = {
+        "день тому": timedelta(days=1),
+        "один день тому": timedelta(days=1),
+        "1 день тому": timedelta(days=1),
+        "тиждень тому": timedelta(weeks=1),
+        "один тиждень тому": timedelta(weeks=1),
+        "1 тиждень тому": timedelta(weeks=1),
+        "місяць тому": timedelta(days=30),
+        "один місяць тому": timedelta(days=30),
+        "1 місяць тому": timedelta(days=30),
+        "рік тому": timedelta(days=365),
+        "один рік тому": timedelta(days=365),
+        "1 рік тому": timedelta(days=365),
+    }
+    if normalized in singular_relative:
+        return current - singular_relative[normalized]
 
     relative_minutes = re.match(
         r"^(\d+)\s*(хв|хвилин|хвилини|хвилину|min|mins|minutes?)\s*тому$",
@@ -151,25 +169,32 @@ def parse_olx_published_text(text: str, *, now: datetime | None = None) -> datet
         return current - timedelta(hours=int(relative_hours.group(1)))
 
     relative_days = re.match(
-        r"^(\d+)\s*(дн|дні|днів|день|day|days?)\s*тому$",
+        r"^(\d+)\s*(днів|дні|день|дн|day|days?)\s*тому$",
         normalized,
     )
     if relative_days:
         return current - timedelta(days=int(relative_days.group(1)))
 
     relative_weeks = re.match(
-        r"^(\d+)\s*(тиж|тижн|тижні|тижнів|тиждень|week|weeks?)\s*тому$",
+        r"^(\d+)\s*(тижнів|тижні|тиждень|тижн|тиж|week|weeks?)\s*тому$",
         normalized,
     )
     if relative_weeks:
         return current - timedelta(weeks=int(relative_weeks.group(1)))
 
     relative_months = re.match(
-        r"^(\d+)\s*(міс|місяц|місяці|місяців|month|months?)\s*тому$",
+        r"^(\d+)\s*(місяців|місяці|місяць|місяц|міс|month|months?)\s*тому$",
         normalized,
     )
     if relative_months:
         return current - timedelta(days=int(relative_months.group(1)) * 30)
+
+    relative_years = re.match(
+        r"^(\d+)\s*(років|роки|рік|year|years?)\s*тому$",
+        normalized,
+    )
+    if relative_years:
+        return current - timedelta(days=int(relative_years.group(1)) * 365)
 
     time_match = re.search(r"о\s*(\d{1,2}):(\d{2})", normalized)
 

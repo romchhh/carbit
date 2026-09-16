@@ -120,7 +120,7 @@ def test_search_page_parses_embedded_publish_time():
     html = (
         "<html><body>"
         '{"id":"Auto39830536","component":{"publishTime":"Сьогодні о 12:01"}}'
-        '{"id":"NewAuto2071226","component":{"publishTime":"25 травня"}}'
+        '{"id":"NewAuto2071226","component":{"publishTime":"Місяць тому"}}'
         '<a href="/uk/auto_zeekr_001_39830536.html">Zeekr 001 2025 55 000 $ Київ</a>'
         '<a href="/uk/newauto/auto-zeekr-007-gt-2071226.html">'
         "Zeekr 007 GT 2026 45 555 $ Київ"
@@ -133,11 +133,12 @@ def test_search_page_parses_embedded_publish_time():
     used = next(car for car in cars if not car.is_new)
     new_car = next(car for car in cars if car.is_new)
     assert used.posted == "Сьогодні о 12:01"
-    assert new_car.posted == "25 травня"
+    assert new_car.posted == "Місяць тому"
     used_listing = car_to_listing(used, brand_hint="Zeekr")
     new_listing = car_to_listing(new_car, brand_hint="Zeekr")
     assert used_listing.published_at.year >= 2025
     assert new_listing.published_at.year >= 2025
+    assert (used_listing.found_at - new_listing.published_at).days >= 25
 
 
 def test_search_page_parses_newauto_dealer_cards():

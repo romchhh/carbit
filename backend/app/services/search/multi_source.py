@@ -1511,7 +1511,12 @@ def _filter_listings_by_brand_model(
     items: list[ListingOut],
     filters: SearchFilters,
 ) -> list[ListingOut]:
-    if not ((filters.brand or "").strip() or (filters.model or "").strip()):
+    if not (
+        (filters.brand or "").strip()
+        or (filters.model or "").strip()
+        or filters.year_from is not None
+        or filters.year_to is not None
+    ):
         return items
     from app.services.telegram_channels.mapper import listing_out_matches_filters
 
@@ -1728,9 +1733,13 @@ def _make_ar_slots(auto_ria_ids: list[str], cards: dict[str, ListingOut] | None 
     slots = []
     for aid in auto_ria_ids:
         if aid.startswith("n:"):
-            slots.append({"s": "n", "i": aid[2:]})
+            slot = {"s": "n", "i": aid[2:]}
+            card = cards.get(aid) or cards.get(aid[2:])
+            if card is not None:
+                slot["d"] = card.model_dump(mode="json")
+            slots.append(slot)
             continue
-        slot: dict = {"s": "r", "i": aid}
+        slot = {"s": "r", "i": aid}
         card = cards.get(aid)
         if card is not None:
             slot["d"] = card.model_dump(mode="json")

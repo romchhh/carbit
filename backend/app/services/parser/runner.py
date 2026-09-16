@@ -23,7 +23,11 @@ from app.services.parser.linking import link_listing_to_search
 from app.services.parser.settings import get_filter_cache, get_parser_settings, set_filter_cache
 from app.services.notifications.freshness import coerce_notification_max_hours
 from app.services.monitoring.parser_status import is_benign_parser_error, is_transient_partial_source_error
-from app.services.search.multi_source import normalize_sources, search_listings_outcome
+from app.services.search.multi_source import (
+    normalize_sources,
+    search_listings_outcome,
+    sources_for_filters,
+)
 from app.services.search.pool_cache import try_load_pool_listings
 from app.services.telegram_channels.ingest import (
     mark_searches_checked,
@@ -71,17 +75,16 @@ def _sources_for_group(
     *,
     sources_only: list[str] | None,
 ) -> list[str]:
-    """Об'єднання джерел усіх пошуків групи — не тягнемо зайве AUTO.RIA/OLX/TG."""
-    if sources_only:
-        return normalize_sources(sources_only)
-
+    """Джерела як у живому пошуку: category + sources_for_filters, не сирий список."""
     union: set[str] = set()
     for search in searches:
-        union.update(normalize_sources(parse_search_filters(search.filters).sources))
-
-    if union:
-        return sorted(union)
-    return normalize_sources(group.filters.sources)
+        union.update(sources_for_filters(parse_search_filters(search.filters)))
+    if not union:
+        union.update(sources_for_filters(group.filters))
+    if sources_only:
+        allowed = set(normalize_sources(sources_only))
+        return sorted(union & allowed) or sorted(allowed)
+    return sorted(union)
 
 
 async def _link_listings_to_searches(
@@ -100,10 +103,10 @@ async def _link_listings_to_searches(
 
     for item, listing in upserted:
         for search in searches:
-            search_sources = normalize_sources(parse_search_filters(search.filters).sources)
+            search_filters = parse_search_filters(search.filters)
+            search_sources = sources_for_filters(search_filters)
             if item.source not in search_sources:
                 continue
-            search_filters = parse_search_filters(search.filters)
             if not listing_out_matches_filters(item, search_filters):
                 continue
             if search.user_id not in users_cache:
@@ -470,7 +473,7 @@ async def run_parser_cycle(
 
             for group in groups:
                 if sources_only == ["telegram"]:
-                    group_sources = normalize_sources(group.filters.sources)
+                    group_sources = sources_for_filters(group.filters)
                     if "telegram" not in group_sources:
                         log.append(
                             f"  ⊘ Група {group.key[:8]}… — telegram не у джерелах пошуку"

@@ -97,6 +97,20 @@ class FilterGroupTests(unittest.TestCase):
         self.assertIn("reono", merged.sources or [])
         self.assertIn("udrive", merged.sources or [])
 
+    def test_new_category_merge_matches_search_sources(self):
+        merged = merge_filters_for_fetch(
+            [
+                SearchFilters(brand="Zeekr", category="new", year_from=2024, year_to=2024),
+                SearchFilters(brand="Zeekr", category="new", year_from=2026, year_to=2026),
+            ]
+        )
+        self.assertNotIn("olx", merged.sources or [])
+        self.assertNotIn("car_market", merged.sources or [])
+        self.assertIn("udrive", merged.sources or [])
+        self.assertIn("auto_ria", merged.sources or [])
+        self.assertEqual(merged.year_from, 2024)
+        self.assertEqual(merged.year_to, 2026)
+
 
 if __name__ == "__main__":
     unittest.main()

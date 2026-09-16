@@ -58,8 +58,11 @@ class CategoryYearBoundsTests(unittest.TestCase):
 
 
 class EffectiveYearBoundsTests(unittest.TestCase):
-    def test_same_year_is_from_only(self):
-        self.assertEqual(effective_year_bounds(2026, 2026), (2026, None))
+    def test_same_year_stays_closed(self):
+        self.assertEqual(effective_year_bounds(2024, 2024), (2024, 2024))
+        self.assertEqual(effective_year_bounds(2026, 2026), (2026, 2026))
+
+    def test_year_from_only_stays_open(self):
         self.assertEqual(effective_year_bounds(2026, None), (2026, None))
 
     def test_explicit_range_unchanged(self):
@@ -77,21 +80,56 @@ class ListingYearMatchTests(unittest.TestCase):
         item = _item(year=0, title="Zeekr 001 2026 Premium")
         self.assertEqual(listing_year_value(item), 2026)
 
-    def test_html_card_without_year_passes_when_bounds_set(self):
+    def test_html_card_without_year_rejected_when_bounds_set(self):
         item = _item(
             year=0,
             title="Zeekr 001",
             source_data={"html_search": True},
         )
-        self.assertTrue(listing_matches_year_bounds(item, 2026, 2026))
+        self.assertFalse(listing_matches_year_bounds(item, 2024, 2024))
 
     def test_rejects_year_before_from(self):
         item = _item(year=2024, title="Zeekr 001 2024")
         self.assertFalse(listing_matches_year_bounds(item, 2026, 2026))
 
-    def test_same_year_range_allows_future_year(self):
-        item = _item(year=2027, title="Zeekr 001 2027")
+    def test_same_year_range_rejects_other_years(self):
+        item = _item(year=2026, title="Zeekr 001 2026")
+        self.assertFalse(listing_matches_year_bounds(item, 2024, 2024))
         self.assertTrue(listing_matches_year_bounds(item, 2026, 2026))
+        self.assertTrue(listing_matches_year_bounds(item, 2024, None))
+
+
+class MonitorMatchesSearchFiltersTests(unittest.TestCase):
+    def test_zeekr_2024_monitor_rejects_2026(self):
+        from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+        item = _item(year=2026, title="Zeekr 001 2026", brand="Zeekr", model="001")
+        closed = SearchFilters(brand="Zeekr", year_from=2024, year_to=2024)
+        open_from = SearchFilters(brand="Zeekr", year_from=2024)
+        exact_2026 = SearchFilters(brand="Zeekr", year_from=2026, year_to=2026)
+        self.assertFalse(listing_out_matches_filters(item, closed))
+        self.assertTrue(listing_out_matches_filters(item, open_from))
+        self.assertTrue(listing_out_matches_filters(item, exact_2026))
+
+    def test_udrive_2026_rejected_for_closed_2024(self):
+        from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+        item = _item(
+            id="udrive_1",
+            source="udrive",
+            year=2026,
+            title="Zeekr 001",
+            brand="Zeekr",
+            model="001",
+            mileage=0,
+        )
+        closed = SearchFilters(brand="Zeekr", year_from=2024, year_to=2024)
+        self.assertFalse(listing_out_matches_filters(item, closed))
+        self.assertTrue(
+            listing_out_matches_filters(
+                item, SearchFilters(brand="Zeekr", year_from=2024)
+            )
+        )
 
 
 class CategoryMatchTests(unittest.TestCase):
