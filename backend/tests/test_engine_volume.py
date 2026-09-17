@@ -143,3 +143,52 @@ class NewAutoRiaEngineVolumeTests(unittest.TestCase):
         )
         self.assertEqual(listing.engine_volume_l, 2.49)
         self.assertEqual(listing.source_data.get("mainParams", {}).get("volume"), 2487)
+
+    def test_electric_drops_placeholder_litres(self):
+        from app.services.listings.engine_volume import parse_engine_volume_from_text
+
+        self.assertIsNone(parse_engine_volume_from_text("Електро, 2 л."))
+        self.assertIsNone(parse_engine_volume_from_text("Електро 2.0 л"))
+        item = _item(
+            brand="Zeekr",
+            model="001",
+            title="Zeekr 001 2026",
+            fuel="Електро",
+            engine_volume_l=2.0,
+            source_data={"autoData": {"fuelName": "Електро", "engineVolume": 2.0}},
+        )
+        self.assertIsNone(extract_listing_engine_volume(item))
+
+    def test_new_info_electric_drops_dummy_volume(self):
+        from app.services.auto_ria.mapper import new_info_to_listing
+
+        listing = new_info_to_listing(
+            {
+                "autoId": 2085932,
+                "marka": "Zeekr",
+                "model": "001",
+                "year": 2026,
+                "priceUsd": 61700,
+                "priceUah": 0,
+                "mainParams": {
+                    "fuel": "Електро",
+                    "gear": "Редуктор",
+                    "volume": 2000,
+                },
+                "salon": {"city": "Черкаси"},
+                "photos": [],
+            }
+        )
+        self.assertIsNone(listing.engine_volume_l)
+        self.assertEqual(listing.fuel, "Електро")
+
+    def test_hybrid_keeps_litres_from_fuel_text(self):
+        from app.services.listings.engine_volume import parse_engine_volume_from_text
+
+        self.assertEqual(parse_engine_volume_from_text("Гібрид, 2.5 л."), 2.5)
+        item = _item(
+            fuel="Гібрид",
+            engine_volume_l=2.49,
+            source_data={"autoData": {"fuelName": "Гібрид", "engineVolume": 2.49}},
+        )
+        self.assertEqual(extract_listing_engine_volume(item), 2.49)

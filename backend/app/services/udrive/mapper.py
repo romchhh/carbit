@@ -6,7 +6,7 @@ from typing import Any
 from app.core.timezone import now_kyiv
 from app.schemas.schemas import ListingOut, SearchFilters
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
-from app.services.listings.engine_volume import normalize_engine_litres
+from app.services.listings.engine_volume import normalize_engine_litres, text_is_pure_electric
 from app.services.listings.seller_contact import apply_seller_contact_fields
 from app.services.search.filter_multi import effective_brands, effective_models
 from app.services.search.subbrand_split import split_huawei_subbrand
@@ -169,12 +169,15 @@ def car_to_listing(
     city = str(addr.get("city") or "").strip()
     region = city or "Україна"
 
+    fuel_label = _map_fuel(fuel.get("type"))
     engine_volume_l = normalize_engine_litres(volume.get("l"))
     if engine_volume_l is None and volume.get("cm3"):
         try:
             engine_volume_l = round(float(volume["cm3"]) / 1000, 1)
         except (TypeError, ValueError):
             engine_volume_l = None
+    if text_is_pure_electric(fuel_label):
+        engine_volume_l = None
 
     vin = spec.get("vin")
     seller_type = "dealer" if dealer.get("name") else "private"
@@ -194,7 +197,7 @@ def car_to_listing(
         price=price_amount,
         currency=price_currency,
         mileage=_mileage_km(car),
-        fuel=_map_fuel(fuel.get("type")),
+        fuel=fuel_label,
         transmission=_map_gearbox(gearbox.get("type")),
         region=region,
         description=None,

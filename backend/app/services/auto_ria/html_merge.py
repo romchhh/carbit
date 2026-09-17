@@ -65,6 +65,17 @@ def _first_text(*values: Any) -> Any:
     return None
 
 
+def _merged_engine_volume_l(api: ListingOut, html: ListingOut) -> float | None:
+    from app.services.listings.engine_volume import text_is_pure_electric
+
+    volume = api.engine_volume_l if api.engine_volume_l is not None else html.engine_volume_l
+    if volume is None:
+        return None
+    if text_is_pure_electric(api.fuel, html.fuel):
+        return None
+    return volume
+
+
 def merge_html_card_with_api(html: ListingOut, api: ListingOut) -> ListingOut:
     """API — джерело VIN/дат/autoData; HTML заповнює прогалини і True-бейджі з видачі."""
     html_sd = _as_dict(html.source_data)
@@ -107,7 +118,7 @@ def merge_html_card_with_api(html: ListingOut, api: ListingOut) -> ListingOut:
         vin_check_url=_first_text(api.vin_check_url, html.vin_check_url),
         seller_name=_first_text(api.seller_name, html.seller_name),
         description=_first_text(api.description, html.description),
-        engine_volume_l=api.engine_volume_l if api.engine_volume_l is not None else html.engine_volume_l,
+        engine_volume_l=_merged_engine_volume_l(api, html),
         fuel=_first_text(api.fuel, html.fuel) or "",
         transmission=_first_text(api.transmission, html.transmission) or "",
         region=_first_text(api.region, html.region) or "",

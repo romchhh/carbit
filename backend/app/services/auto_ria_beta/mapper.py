@@ -14,7 +14,7 @@ from app.services.auto_ria.mapper import sort_listings
 from app.services.auto_ria_beta.constants import BASE_URL, CATEGORY_LEGKOVI, PAGE_SIZE
 from app.services.auto_ria_beta.parser import VIN_RE, ScrapedCar, is_usa_import_text
 from app.services.currency import filter_price_to_uah, resolve_filter_currency
-from app.services.listings.engine_volume import parse_engine_volume_from_text
+from app.services.listings.engine_volume import parse_engine_volume_from_text, text_is_pure_electric
 from app.services.listings.plate import normalize_ua_plate
 from app.services.search.category import effective_year_bounds
 from app.services.search.filter_multi import effective_brands, effective_models, effective_regions
@@ -122,6 +122,8 @@ def car_to_listing(
 
     fuel_name = car.fuel or ""
     engine_volume_l = parse_engine_volume_from_text(fuel_name) if fuel_name else None
+    if text_is_pure_electric(fuel_name):
+        engine_volume_l = None
     auto_data = _drop_empty(
         {
             "year": car.year,

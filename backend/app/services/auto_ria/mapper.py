@@ -470,6 +470,7 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
     from app.services.listings.engine_volume import (
         normalize_engine_litres,
         parse_engine_volume_from_text,
+        text_is_pure_electric,
     )
 
     engine_volume_l = None
@@ -480,6 +481,8 @@ def info_to_listing(info: dict[str, Any], *, fotos: Any | None = None) -> Listin
         engine_volume_l = parse_engine_volume_from_text(raw_volume)
     if engine_volume_l is None and fuel_raw:
         engine_volume_l = parse_engine_volume_from_text(fuel_raw)
+    if text_is_pure_electric(fuel, fuel_raw):
+        engine_volume_l = None
 
     dealer = info.get("dealer") if isinstance(info.get("dealer"), dict) else {}
     seller_type = "dealer" if dealer.get("id") or dealer.get("name") else "private"
@@ -558,16 +561,18 @@ def new_info_to_listing(info: dict[str, Any]) -> ListingOut:
     from app.services.listings.engine_volume import (
         normalize_engine_litres,
         parse_engine_volume_from_text,
+        text_is_pure_electric,
     )
 
     # /auto/new/auto/{id}: mainParams.volume — см³ (1998 → 2.0 л).
+    fuel_raw = str(main_params.get("fuel") or "")
     engine_volume_l = normalize_engine_litres(main_params.get("volume"))
-    if engine_volume_l is None:
-        fuel_raw = str(main_params.get("fuel") or "")
-        if fuel_raw:
-            engine_volume_l = parse_engine_volume_from_text(fuel_raw)
+    if engine_volume_l is None and fuel_raw:
+        engine_volume_l = parse_engine_volume_from_text(fuel_raw)
     if engine_volume_l is None and description:
         engine_volume_l = parse_engine_volume_from_text(description)
+    if text_is_pure_electric(fuel_raw):
+        engine_volume_l = None
 
     return apply_seller_contact_fields(
         ListingOut(

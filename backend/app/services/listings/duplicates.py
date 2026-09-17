@@ -68,6 +68,7 @@ def listing_vin_for_dedup(item: ListingOut | Listing) -> str | None:
 
 _AUTO_RIA_SOURCES = {"auto_ria", "auto_ria_beta", "autoria", "auto.ria"}
 _FRESH_USED_STOCK_MAX_KM = 5000
+_RIA_PHOTO_ID_RE = re.compile(r"__(\d+)")
 
 
 def _auto_ria_source(item: ListingOut | Listing) -> str:
@@ -98,13 +99,25 @@ def _is_auto_ria_fresh_used_stock(item: ListingOut | Listing) -> bool:
     return year >= date.today().year - 1 and 0 <= mileage <= _FRESH_USED_STOCK_MAX_KM
 
 
-def auto_ria_new_stock_fingerprint(item: ListingOut | Listing) -> str | None:
-    """Однакові дилерські лоти AUTO.RIA (різні ID) — без VIN.
+def _auto_ria_photo_key(item: ListingOut | Listing) -> str | None:
+    """ID фото з CDN AUTO.RIA — різні лоти тієї самої комплектації мають різні __id."""
+    for raw in getattr(item, "images", None) or []:
+        match = _RIA_PHOTO_ID_RE.search(str(raw or ""))
+        if match:
+            return match.group(1)
+    return None
 
+
+def auto_ria_new_stock_fingerprint(item: ListingOut | Listing) -> str | None:
+    """Клон того самого дилерського лота (інше місто / ID) — без VIN.
+
+    Не склеюємо всі Zeekr 001 однієї ціни: у салону десятки різних авто з одним MSRP.
+    Склеюємо лише коли збігається фото (міські копії того самого оголошення).
     Newauto: пробіг не входить (HTML — км до салону, API ставить 0).
-    Свіжі used-URL: пробіг входить, щоб не склеювати звичайні б/у з округленими тис. км.
-    Регіон не входить: салони клонують той самий лот по містах.
     """
+    photo = _auto_ria_photo_key(item)
+    if not photo:
+        return None
     brand = norm_text(getattr(item, "brand", None) or "")
     model = norm_text(getattr(item, "model", None) or "")
     try:
@@ -116,11 +129,10 @@ def auto_ria_new_stock_fingerprint(item: ListingOut | Listing) -> str | None:
     if not brand or not model or year < 1990 or price <= 0:
         return None
     currency = (getattr(item, "currency", None) or "USD").strip().upper() or "USD"
-    # Регіон не входить: салони клонують той самий лот по містах.
     if _is_auto_ria_new_stock(item):
-        return f"arnew:{brand}:{model}:{year}:{price}:{currency}"
+        return f"arnew:{brand}:{model}:{year}:{price}:{currency}:{photo}"
     if _is_auto_ria_fresh_used_stock(item):
-        return f"arused:{brand}:{model}:{year}:{price}:{currency}:{mileage}"
+        return f"arused:{brand}:{model}:{year}:{price}:{currency}:{mileage}:{photo}"
     return None
 
 

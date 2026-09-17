@@ -2400,12 +2400,14 @@ async def build_live_search_pool(
 
     nav_total = len(slots)
     extra = 0
-    if beta_cursor and not beta_cursor.get("exhausted"):
-        extra = max(0, int(auto_ria_market_total or 0) - len(auto_ria_ids))
+    ar_catalog = int(auto_ria_market_total or 0)
+    cursor_exhausted = bool(beta_cursor and beta_cursor.get("exhausted"))
+    if ar_catalog > len(auto_ria_ids) and not cursor_exhausted:
+        extra = ar_catalog - len(auto_ria_ids)
         nav_total += extra
 
     # total = що можна гортати. market_total — каталог AUTO.RIA для HTML-extend.
-    market_total = int(auto_ria_market_total or 0) if extra else nav_total
+    market_total = ar_catalog if extra else nav_total
 
     if brand_model_filter:
         source_statuses = [

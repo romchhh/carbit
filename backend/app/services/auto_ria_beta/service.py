@@ -47,7 +47,7 @@ class AutoRiaBetaBatch:
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
     payload = {
         "source": "auto_ria_beta",
-        "beta_v": "html-v12",
+        "beta_v": "html-v13",
         "filters": filters.model_dump(mode="json"),
         "page": page,
         "per_page": per_page,

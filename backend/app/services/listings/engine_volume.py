@@ -18,6 +18,27 @@ _ENGINE_TRANS_HINT = (
     rf"at|mt|cvt|dsg|tiptronic|автомат|мех|tsi|tdi|tdci|hdi|mpi|fsi|gdi|hybrid|plug|"
     rf"{_FUEL_WORD}"
 )
+_ELECTRIC_FUEL_RE = re.compile(r"(?:електро|электро|electric|electro)\b", re.I)
+_HYBRID_FUEL_RE = re.compile(r"гібрид|гибрид|hybrid|phev|plug[\s-]?in", re.I)
+
+
+def text_is_pure_electric(*parts: object) -> bool:
+    """Чисте електро (не гібрид): обʼєм у літрах не показуємо."""
+    blob = " ".join(str(part).strip() for part in parts if str(part or "").strip())
+    if not blob or _HYBRID_FUEL_RE.search(blob):
+        return False
+    return bool(_ELECTRIC_FUEL_RE.search(blob))
+
+
+def listing_is_pure_electric(item: ListingOut) -> bool:
+    sd = item.source_data if isinstance(item.source_data, dict) else {}
+    auto = sd.get("autoData") if isinstance(sd.get("autoData"), dict) else {}
+    main = sd.get("mainParams") if isinstance(sd.get("mainParams"), dict) else {}
+    return text_is_pure_electric(
+        getattr(item, "fuel", None),
+        auto.get("fuelName") if isinstance(auto, dict) else None,
+        main.get("fuel") if isinstance(main, dict) else None,
+    )
 
 
 def _normalize_spec_key(key: str) -> str:
@@ -131,6 +152,8 @@ def _from_text(text: str) -> float | None:
     blob = norm_text(text)
     if not blob:
         return None
+    if text_is_pure_electric(blob):
+        return None
 
     for pattern in (
         r"(?:об['ʼ]?єм|двигун|мотор|engine|motor)\s*[:\-]?\s*(\d+[.,]?\d*)",
@@ -174,6 +197,8 @@ def parse_engine_volume_from_text(text: str) -> float | None:
 
 
 def extract_listing_engine_volume(item: ListingOut) -> float | None:
+    if listing_is_pure_electric(item):
+        return None
     if getattr(item, "engine_volume_l", None):
         try:
             volume = float(item.engine_volume_l)

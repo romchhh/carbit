@@ -70,3 +70,27 @@ def test_ad_to_listing_empty_engine_volume_electric():
     assert listing.brand == "Zeekr"
     assert listing.model == "001"
     assert listing.engine_volume_l is None
+
+
+def test_ad_to_listing_drops_dummy_electric_volume():
+    listing = ad_to_listing(
+        {
+            "id": 50185,
+            "url": "https://imperiya-auto.com.ua/listing/zeekr-001-50185",
+            "title": "Zeekr 001",
+            "productionYear": 2026,
+            "make": "Zeekr",
+            "model": "001",
+            "mileage": 1,
+            "engineType": "Електро",
+            "engineVolume": "2.0",
+            "price": {"usd": 61700, "uah": 0},
+            "images": [],
+            "city": "Черкаси",
+            "region": "Черкаська",
+            "createdAt": "2026-04-20T12:00:00.000Z",
+        },
+        currency="USD",
+    )
+    assert listing.fuel == "Електро"
+    assert listing.engine_volume_l is None

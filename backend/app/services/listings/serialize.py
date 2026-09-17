@@ -74,7 +74,7 @@ def listing_to_out(listing: Listing) -> ListingOut:
 
     out = enrich_listing_seller_contact(out)
     volume = extract_listing_engine_volume(out)
-    if volume is not None:
+    if volume != out.engine_volume_l:
         out = out.model_copy(update={"engine_volume_l": volume})
 
     from app.services.listings.plate import enrich_listing_plate

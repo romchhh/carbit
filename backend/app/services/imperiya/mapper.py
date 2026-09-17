@@ -17,7 +17,11 @@ from app.services.imperiya.constants import IMPERIYA_MAX_LIMIT, SORT_TO_IMPERIYA
 from app.services.imperiya.errors import ImperiyaBrandNotFound
 from app.services.search.subbrand_split import split_huawei_subbrand
 from app.services.listings.seller_contact import apply_seller_contact_fields, seller_contact_from_imperiya
-from app.services.listings.engine_volume import normalize_engine_litres, parse_engine_volume_from_text
+from app.services.listings.engine_volume import (
+    normalize_engine_litres,
+    parse_engine_volume_from_text,
+    text_is_pure_electric,
+)
 
 
 def sort_to_imperiya(sort_by: str) -> str:
@@ -91,9 +95,12 @@ def ad_to_listing(ad: dict[str, Any], *, currency: str = "USD") -> ListingOut:
     region = ", ".join(part for part in (city, region_name) if part) or "Україна"
 
     price_amount, price_currency = _pick_price(ad, currency)
+    fuel = str(ad.get("engineType") or "").strip()
     engine_volume_l = parse_engine_volume_from_text(str(ad.get("engineVolume") or ""))
     if engine_volume_l is None:
         engine_volume_l = normalize_engine_litres(ad.get("engineVolume"))
+    if text_is_pure_electric(fuel):
+        engine_volume_l = None
 
     dealer = ad.get("dealer") if isinstance(ad.get("dealer"), dict) else None
     seller_type = "dealer" if dealer and dealer.get("name") else "private"
@@ -109,7 +116,7 @@ def ad_to_listing(ad: dict[str, Any], *, currency: str = "USD") -> ListingOut:
         price=price_amount,
         currency=price_currency,
         mileage=_mileage_km(ad.get("mileage")),
-        fuel=str(ad.get("engineType") or "").strip(),
+        fuel=fuel,
         transmission=str(ad.get("transmission") or "").strip(),
         region=region,
         description=(str(ad.get("description") or "").strip() or None),

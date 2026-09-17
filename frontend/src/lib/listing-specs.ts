@@ -81,9 +81,16 @@ function inEngineRange(parsed: number | null): number | null {
   return parsed;
 }
 
+function textIsPureElectric(blob: string): boolean {
+  if (!blob) return false;
+  if (/гібрид|гибрид|hybrid|phev|plug[\s-]?in/i.test(blob)) return false;
+  return /(?:електро|электро|electric|electro)\b/i.test(blob);
+}
+
 function readEngineFromText(text: string): number | null {
   const blob = text.toLowerCase().replace(/\s+/g, " ").trim();
   if (!blob) return null;
+  if (textIsPureElectric(blob)) return null;
 
   for (const pattern of [
     /(?:об['ʼ]?єм|двигун|мотор|engine|motor)\s*[:\-]?\s*(\d+[.,]?\d*)/i,
@@ -118,7 +125,18 @@ function readEngineFromText(text: string): number | null {
   return null;
 }
 
+export function listingIsPureElectric(listing: Listing): boolean {
+  const sd = asRecord(listing.source_data);
+  const auto = asRecord(sd.autoData);
+  const mainParams = asRecord(sd.mainParams);
+  const blob = [listing.fuel, auto.fuelName, mainParams.fuel]
+    .filter(value => typeof value === "string" && value.trim())
+    .join(" ");
+  return textIsPureElectric(blob);
+}
+
 export function resolveListingEngineVolume(listing: Listing): number | null {
+  if (listingIsPureElectric(listing)) return null;
   if (typeof listing.engine_volume_l === "number" && listing.engine_volume_l > 0) {
     return listing.engine_volume_l;
   }

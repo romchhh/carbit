@@ -109,10 +109,13 @@ def sanitize_listing_out(item: ListingOut) -> ListingOut | None:
         if data.get("source_data") is not None:
             data["source_data"] = json_safe(data["source_data"])
 
-        from app.services.listings.engine_volume import extract_listing_engine_volume
+        from app.services.listings.engine_volume import extract_listing_engine_volume, listing_is_pure_electric
 
         validated = ListingOut.model_validate(data)
-        if validated.engine_volume_l is None:
+        if listing_is_pure_electric(validated):
+            if validated.engine_volume_l is not None:
+                validated = validated.model_copy(update={"engine_volume_l": None})
+        elif validated.engine_volume_l is None:
             volume = extract_listing_engine_volume(validated)
             if volume is not None:
                 validated = validated.model_copy(update={"engine_volume_l": volume})

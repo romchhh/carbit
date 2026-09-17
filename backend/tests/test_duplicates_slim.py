@@ -104,6 +104,7 @@ class DuplicatesTests(unittest.TestCase):
         self.assertFalse(listings_look_same(a, b))
 
     def test_auto_ria_new_stock_same_spec_collapses_without_vin(self):
+        photo = ["https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/zeekr-7x__4281893-620x465.jpg"]
         a = _item(
             id="new_auto_ria_2073874",
             is_new=True,
@@ -112,6 +113,7 @@ class DuplicatesTests(unittest.TestCase):
             year=2026,
             price=54465,
             mileage=543,
+            images=photo,
             url="https://auto.ria.com/uk/newauto/auto-zeekr-7x-2073874.html",
         )
         b = _item(
@@ -122,6 +124,7 @@ class DuplicatesTests(unittest.TestCase):
             year=2026,
             price=54465,
             mileage=0,
+            images=photo,
             url="https://auto.ria.com/uk/newauto/auto-zeekr-7x-2084883.html",
             vin="LRW3E7EK5SG123456",
         )
@@ -131,7 +134,34 @@ class DuplicatesTests(unittest.TestCase):
         self.assertEqual(items[0].id, "new_auto_ria_2073874")
         self.assertEqual(items[0].alternate_sources, [])
 
+    def test_auto_ria_new_stock_same_price_different_photos_stay(self):
+        a = _item(
+            id="new_auto_ria_1",
+            is_new=True,
+            brand="Zeekr",
+            model="001",
+            year=2026,
+            price=61700,
+            mileage=762,
+            region="Київ",
+            images=["https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/zeekr-001__4264535-620x465.jpg"],
+        )
+        b = _item(
+            id="new_auto_ria_2",
+            is_new=True,
+            brand="Zeekr",
+            model="001",
+            year=2026,
+            price=61700,
+            mileage=762,
+            region="Одеса",
+            images=["https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/zeekr-001__4264372-620x465.jpg"],
+        )
+        self.assertFalse(listings_look_same(a, b))
+        self.assertEqual(len(mark_duplicates_in_pool([a, b])), 2)
+
     def test_auto_ria_new_stock_city_clones_collapse(self):
+        photo = ["https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/zeekr-007-gt__4280001-620x465.jpg"]
         a = _item(
             id="auto_ria_1",
             is_new=True,
@@ -141,6 +171,7 @@ class DuplicatesTests(unittest.TestCase):
             price=53460,
             mileage=730,
             region="Київ",
+            images=photo,
             url="https://auto.ria.com/uk/auto_zeekr_007-gt_1.html",
         )
         b = _item(
@@ -152,6 +183,7 @@ class DuplicatesTests(unittest.TestCase):
             price=53460,
             mileage=730,
             region="Одеса",
+            images=photo,
             url="https://auto.ria.com/uk/auto_zeekr_007-gt_2.html",
         )
         c = _item(
@@ -163,6 +195,7 @@ class DuplicatesTests(unittest.TestCase):
             price=53460,
             mileage=730,
             region="Львів",
+            images=photo,
             url="https://auto.ria.com/uk/auto_zeekr_007-gt_3.html",
         )
         self.assertTrue(listings_look_same(a, b))
@@ -199,6 +232,7 @@ class DuplicatesTests(unittest.TestCase):
         from datetime import date
 
         year = date.today().year
+        photo = ["https://cdn.riastatic.com/photosnew/auto/photo/byd_qin-plus__40157493fx.jpg"]
         a = _item(
             id="auto_ria_40157493",
             brand="BYD",
@@ -206,6 +240,7 @@ class DuplicatesTests(unittest.TestCase):
             year=year,
             price=20500,
             mileage=3000,
+            images=photo,
             url="https://auto.ria.com/uk/auto_byd_qin-plus_40157493.html",
         )
         b = _item(
@@ -215,6 +250,7 @@ class DuplicatesTests(unittest.TestCase):
             year=year,
             price=20500,
             mileage=3000,
+            images=photo,
             url="https://auto.ria.com/uk/auto_byd_qin-plus_40157515.html",
         )
         self.assertTrue(listings_look_same(a, b))
@@ -224,6 +260,7 @@ class DuplicatesTests(unittest.TestCase):
         from datetime import date
 
         year = date.today().year
+        photo = ["https://cdn.riastatic.com/photosnew/auto/photo/zeekr_007-gt__40157493fx.jpg"]
         a = _item(
             id="auto_ria_40157493",
             brand="Zeekr",
@@ -232,6 +269,7 @@ class DuplicatesTests(unittest.TestCase):
             price=53460,
             mileage=730,
             region="Київ",
+            images=photo,
             url="https://auto.ria.com/uk/auto_zeekr_007-gt_40157493.html",
         )
         b = _item(
@@ -242,6 +280,7 @@ class DuplicatesTests(unittest.TestCase):
             price=53460,
             mileage=730,
             region="Вінниця",
+            images=photo,
             url="https://auto.ria.com/uk/auto_zeekr_007-gt_40157515.html",
         )
         self.assertTrue(listings_look_same(a, b))
