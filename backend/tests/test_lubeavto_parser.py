@@ -93,6 +93,123 @@ def test_catalog_paths_do_not_fall_back_to_root():
     assert "store/instore" not in paths
 
 
+def test_catalog_paths_skip_multiword_model_slug():
+    from app.services.lubeavto.service import _catalog_paths
+
+    paths = _catalog_paths(SearchFilters(brand="Tesla", model="Model S"), "instore")
+    assert paths == ["store/instore/tesla"]
+    assert "model-s" not in paths[0]
+
+
+def test_lubeavto_region_filter_ignored_in_multisource():
+    from app.services.lubeavto.parser import LubeAvtoCar
+    from app.services.telegram_channels.mapper import listing_out_matches_filters
+
+    listing = car_to_listing(
+        LubeAvtoCar(
+            title="Tesla Model S 2024",
+            brand="Tesla",
+            model="Model S",
+            year=2024,
+            price_usd=45000,
+            mileage_km=12000,
+            mileage_raw="12 тис. км",
+            fuel="Електро",
+            engine=None,
+            transmission="Автомат",
+            drive="Повний",
+            vin=None,
+            badge=None,
+            url="https://lubeavto.com.ua/store/instore/21136",
+            image_url=None,
+            car_id=21136,
+            catalog="instore",
+        )
+    )
+    filters = SearchFilters(
+        brand="Tesla",
+        model="Model S",
+        region="м. Київ",
+        sources=["auto_ria", "lubeavto"],
+    )
+    assert listing_out_matches_filters(listing, filters) is True
+
+
+def test_client_fetch_catalog_treats_404_as_empty():
+    from app.services.lubeavto.client import LubeAvtoClient
+
+    class FakeResponse:
+        status_code = 404
+        url = "https://lubeavto.com.ua/store/instore/tesla/model-s"
+
+        @property
+        def text(self):
+            return ""
+
+    async def run():
+        with patch("app.services.lubeavto.client.get_shared_http_client") as get_client:
+            client = AsyncMock()
+            client.get = AsyncMock(return_value=FakeResponse())
+            get_client.return_value = client
+            with patch("app.services.lubeavto.client._ensure_warmup", new=AsyncMock()):
+                return await LubeAvtoClient().fetch_catalog("store/instore/tesla/model-s")
+
+    cars, total = asyncio.run(run())
+    assert cars == []
+    assert total == 0
+
+
+def test_fetch_catalog_skips_model_path_404_and_falls_back_to_brand():
+    from app.services.lubeavto.errors import LubeAvtoError
+    from app.services.lubeavto.service import _fetch_catalog_cars
+
+    tesla_s = LubeAvtoCar(
+        title="Tesla Model S 2024",
+        brand="Tesla",
+        model="Model S",
+        year=2024,
+        price_usd=45000,
+        mileage_km=12000,
+        mileage_raw="12 тис. км",
+        fuel="Електро",
+        engine=None,
+        transmission="Автомат",
+        drive="Повний",
+        vin=None,
+        badge=None,
+        url="https://lubeavto.com.ua/store/instore/21136",
+        image_url=None,
+        car_id=21136,
+        catalog="instore",
+    )
+
+    async def fetch(path, *, page_number=0, catalog="instore"):
+        if path.endswith("/tesla/model-s"):
+            raise LubeAvtoError(
+                "Любе Авто: помилка 404",
+                status_code=404,
+                request="GET https://lubeavto.com.ua/store/instore/tesla/model-s",
+            )
+        if path.endswith("/tesla"):
+            return [tesla_s], 1
+        return [], 0
+
+    async def run():
+        with patch("app.services.lubeavto.service.LubeAvtoClient") as client_cls:
+            client_cls.return_value.fetch_catalog = AsyncMock(side_effect=fetch)
+            return await _fetch_catalog_cars(
+                client_cls.return_value,
+                SearchFilters(brand="Tesla", model="Model S"),
+                catalog="instore",
+                page_number=0,
+            )
+
+    cars, total = asyncio.run(run())
+    assert len(cars) == 1
+    assert cars[0].model == "Model S"
+    assert total == 1
+
+
 def test_search_uses_in_transit_catalog_not_full_lot():
     from app.services.lubeavto.service import _search_lubeavto_body
 

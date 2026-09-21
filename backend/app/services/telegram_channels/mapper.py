@@ -490,7 +490,7 @@ def listing_out_matches_filters(item: ListingOut, filters: SearchFilters) -> boo
                 "любе_авто",
                 "любеавто",
             }
-        if lubeavto_only:
+        if lubeavto_only or src == "lubeavto":
             ok = True
         elif not is_generic_location(own_region):
             ok = any(listing_region_matches_filter(own_region, r) for r in regions)

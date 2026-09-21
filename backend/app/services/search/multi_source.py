@@ -23,7 +23,10 @@ from app.services.udrive.service import search_udrive
 from app.services.olx.errors import OlxError
 from app.services.olx.service import _search_olx_body
 from app.services.search.concurrency import acquire_olx_slot
-from app.services.monitoring.parser_status import is_transient_partial_source_error
+from app.services.monitoring.parser_status import (
+    is_benign_parser_error,
+    is_transient_partial_source_error,
+)
 from app.services.telegram.admin_alerts import notify_admin_parsing_error
 from app.services.telegram_channels.ingest import search_telegram_listings
 
@@ -948,9 +951,10 @@ async def _notify_partial_source_failures(
         return
 
     details = f"Частковий пошук: {_search_filters_summary(filters)}"
+    notified: set[tuple[str, str]] = set()
     for status in failed:
         err = status.error or "невідома помилка"
-        if is_transient_partial_source_error(err):
+        if is_transient_partial_source_error(err) or is_benign_parser_error(err):
             logger.warning(
                 "%s partial failure (skipped admin alert): %s | %s",
                 status.source,
@@ -958,6 +962,10 @@ async def _notify_partial_source_failures(
                 details,
             )
             continue
+        alert_key = (status.source, err)
+        if alert_key in notified:
+            continue
+        notified.add(alert_key)
         await notify_admin_parsing_error(
             source=status.source,
             error=err,

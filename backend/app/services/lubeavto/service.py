@@ -20,7 +20,7 @@ from app.services.telegram_channels.mapper import listing_out_matches_filters
 def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str) -> str:
     payload = {
         "source": "lubeavto",
-        "lubeavto_v": "stock-v2",
+        "lubeavto_v": "stock-v4",
         "filters": filters.model_dump(mode="json"),
         "page": page,
         "per_page": per_page,
@@ -29,18 +29,31 @@ def _cache_key(filters: SearchFilters, *, page: int, per_page: int, sort_by: str
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
 
+def _model_supports_catalog_path(filters: SearchFilters) -> bool:
+    """URL /brand/model на lubeavto є лише для однослівних моделей (a4, x5, 001)."""
+    models: list[str] = []
+    if filters.model and filters.model.strip():
+        models.append(filters.model.strip())
+    if filters.models:
+        models.extend(value.strip() for value in filters.models if value and value.strip())
+    if not models:
+        return False
+    return all(" " not in model and "/" not in model for model in models)
+
+
 def _catalog_paths(filters: SearchFilters, catalog: str) -> list[str]:
-    """Бренд/модель, потім лише бренд. Без кореневого каталогу — він дає 1500 чужих авто."""
+    """Бренд/модель (якщо підтримується), потім лише бренд. Без кореневого каталогу."""
     paths: list[str] = []
-    primary = filters_to_catalog_path(filters, catalog=catalog)
-    paths.append(primary)
-    if effective_brands(filters) and (filters.model or filters.models):
-        brand_only = filters_to_catalog_path(
-            filters.model_copy(update={"model": None, "models": None}),
-            catalog=catalog,
-        )
-        if brand_only not in paths:
-            paths.append(brand_only)
+    brand_only = filters_to_catalog_path(
+        filters.model_copy(update={"model": None, "models": None}),
+        catalog=catalog,
+    )
+    if effective_brands(filters) and _model_supports_catalog_path(filters):
+        primary = filters_to_catalog_path(filters, catalog=catalog)
+        if primary not in paths:
+            paths.append(primary)
+    if brand_only not in paths:
+        paths.append(brand_only)
     return paths
 
 
@@ -53,11 +66,17 @@ async def _fetch_catalog_cars(
 ) -> tuple[list, int]:
     last_total = 0
     for path in _catalog_paths(filters, catalog):
-        cars, total = await client.fetch_catalog(
-            path,
-            page_number=page_number,
-            catalog=catalog,
-        )
+        try:
+            cars, total = await client.fetch_catalog(
+                path,
+                page_number=page_number,
+                catalog=catalog,
+            )
+        except LubeAvtoError as exc:
+            # Деякі марки/моделі не мають окремого URL (напр. tesla/model-s → 404).
+            if exc.status_code == 404:
+                continue
+            raise
         last_total = total
         if cars:
             return cars, total

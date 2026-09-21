@@ -20,8 +20,8 @@ def _dedupe_key(source: str, error: str) -> str:
     err = (error or "").strip().lower()
     if "таймаут" in err or "timeout" in err:
         return f"{source}:timeout"
-    if "404" in err and ("html" in err or "doctype" in err or "httpoison" in err or ":closed" in err):
-        return f"{source}:html404"
+    if "404" in err:
+        return f"{source}:404"
     if "обірвав" in err or "тимчасово недоступ" in err:
         return f"{source}:transient"
     return f"{source}:{error[:160]}"

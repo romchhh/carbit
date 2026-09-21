@@ -82,6 +82,9 @@ class LubeAvtoClient:
 
             request_label = http_request_label("GET", str(response.url))
             if response.status_code >= 400:
+                # Відсутній шлях бренд/модель — порожня видача, не помилка парсера.
+                if response.status_code in (404, 410):
+                    return [], 0
                 err = LubeAvtoError(
                     f"Любе Авто: помилка {response.status_code}",
                     status_code=response.status_code,
