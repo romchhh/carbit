@@ -85,7 +85,7 @@ export function timeAgo(date: string | null | undefined) {
     month: "short",
     year: "numeric",
     timeZone: "Europe/Kyiv",
-  }).format(new Date(date));
+  }).format(new Date(date!));
 }
 
 export function publishedAgoLabel(date: string | null | undefined) {
