@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # Спільний шар pip — кешується між backend / worker / bot (поки не змінився requirements.txt).
 FROM python:3.13-slim AS python-deps
 
