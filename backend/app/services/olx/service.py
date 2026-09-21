@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
+
+logger = logging.getLogger(__name__)
 
 from app.schemas.schemas import PaginatedListings, SearchFilters
 from app.services.auto_ria.cache import get_or_fetch
@@ -338,7 +341,7 @@ def _cache_key(
         "per_page": per_page,
         "sort_by": sort_by,
         "enrich": enrich_details,
-        "olx_q": "api-first-filters-v2-photos",
+        "olx_q": "api-first-filters-v3-noncar",
     }
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 

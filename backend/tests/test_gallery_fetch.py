@@ -16,50 +16,56 @@ class GalleryFetchTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(gallery_needs_fetch("olx", ["https://a/1.jpg", "https://a/2.jpg"]))
         self.assertFalse(gallery_needs_fetch("reono", []))
 
-    async def test_fetch_auto_ria_uses_fotos_and_contact(self):
-        fotos_payload = {
-            "data": {
-                "123": {
-                    "1": {
-                        "photo_id": 1,
-                        "formats": {"f": "https://cdn.example.com/1f.jpg"},
-                    },
-                    "2": {
-                        "photo_id": 2,
-                        "formats": {"f": "https://cdn.example.com/2f.jpg"},
-                    },
-                }
-            }
-        }
-        info_payload = {
-            "autoData": {"autoId": 123, "year": 2020, "raceInt": 50, "fuelName": "Бензин", "gearboxName": "Автомат"},
-            "dealer": {"name": "Test Dealer", "link": "/dealers/test"},
-            "VIN": "WBA8E9C50HK123456",
-            "checkedVin": {"isChecked": True, "vin": "WBA8E9C50HK123456"},
-            "markName": "BMW",
-            "modelName": "X5",
-            "title": "BMW X5",
-            "USD": 25000,
-        }
+    async def test_fetch_auto_ria_uses_html_enrich(self):
+        from datetime import datetime
 
-        with patch("app.services.listings.gallery_fetch.AutoRiaClient") as client_cls:
-            client = client_cls.return_value
-            client.get_fotos = AsyncMock(return_value=fotos_payload)
-            client.get_info = AsyncMock(return_value=info_payload)
+        from app.core.timezone import KYIV_TZ
+        from app.schemas.schemas import ListingOut
 
+        enriched = ListingOut(
+            id="auto_ria_123",
+            source="auto_ria",
+            title="BMW X5",
+            url="https://auto.ria.com/uk/auto_bmw_x5_123.html",
+            brand="BMW",
+            model="X5",
+            year=2020,
+            price=25000,
+            currency="USD",
+            mileage=50000,
+            fuel="Бензин",
+            transmission="Автомат",
+            region="Київ",
+            description=None,
+            images=["https://cdn.example.com/1f.jpg", "https://cdn.example.com/2f.jpg"],
+            seller_type="dealer",
+            seller_name="Test Dealer",
+            vin="WBA8E9C50HK123456",
+            vin_checked=True,
+            source_data={"html_search": {"posted": "сьогодні"}},
+            price_history=[],
+            is_duplicate=False,
+            published_at=datetime(2026, 7, 1, tzinfo=KYIV_TZ),
+            found_at=datetime(2026, 7, 1, tzinfo=KYIV_TZ),
+        )
+
+        with patch(
+            "app.services.listings.gallery_fetch.enrich_listing_from_html",
+            new_callable=AsyncMock,
+            return_value=enriched,
+        ) as enrich_mock:
             result = await fetch_auto_ria_gallery(
                 listing_id="auto_ria_123",
                 url="https://auto.ria.com/auto_123.html",
                 current_images=["https://cdn.example.com/cover.jpg"],
             )
 
+        enrich_mock.assert_called_once()
         self.assertEqual(len(result.images), 2)
         self.assertEqual(result.seller_name, "Test Dealer")
         self.assertEqual(result.vin, "WBA8E9C50HK123456")
         self.assertTrue(result.vin_checked)
         self.assertIsInstance(result.source_data, dict)
-        self.assertIn("autoData", result.source_data)
-        self.assertIn("checkedVin", result.source_data)
 
     async def test_fetch_olx_always_loads_detail_gallery(self):
         olx_listing = type(

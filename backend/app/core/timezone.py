@@ -34,6 +34,10 @@ def format_time_ago(dt: datetime | None) -> str | None:
     """Відносний час публікації: «5 хв тому», «1 год тому» тощо."""
     if dt is None:
         return None
+    from app.services.listings.sort_dates import usable_sort_datetime
+
+    if usable_sort_datetime(dt) is None:
+        return None
     diff = (now_kyiv() - as_kyiv(dt)).total_seconds()
     if diff < 0:
         return None

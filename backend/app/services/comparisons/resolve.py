@@ -38,26 +38,18 @@ async def _resolve_live_listing(listing_id: str) -> ListingOut | None:
             logger.exception("Failed to fetch OLX listing id=%s", lid)
         return None
 
-    if lid.startswith("new_auto_ria_"):
-        auto_id = lid.removeprefix("new_auto_ria_")
+    if lid.startswith(("new_auto_ria_", "auto_ria_")):
         try:
-            from app.services.auto_ria.client import AutoRiaClient
-            from app.services.auto_ria.mapper import new_info_to_listing
+            from app.services.auto_ria.html_hydrate import auto_ria_listing_url, enrich_listing_from_html, parse_auto_ria_listing_id
 
-            client = AutoRiaClient()
-            info = await client.get_new_info(auto_id)
-            return new_info_to_listing(info)
-        except Exception:
-            logger.exception("Failed to hydrate new AUTO.RIA listing id=%s", lid)
-        return None
-
-    if lid.startswith("auto_ria_"):
-        auto_id = lid.removeprefix("auto_ria_")
-        try:
-            from app.services.auto_ria.service import hydrate_auto_ria_ids
-
-            items = await hydrate_auto_ria_ids([auto_id])
-            return items[0] if items else None
+            car_id, is_new = parse_auto_ria_listing_id(lid)
+            if car_id is None:
+                return None
+            return await enrich_listing_from_html(
+                url=auto_ria_listing_url(car_id, is_new=is_new),
+                car_id=car_id,
+                is_new=is_new,
+            )
         except Exception:
             logger.exception("Failed to hydrate AUTO.RIA listing id=%s", lid)
         return None

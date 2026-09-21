@@ -20,8 +20,15 @@ LISTING_ID_RAW_RE = re.compile(r"auto_[a-z0-9_\-]+_(\d+)\.html", re.IGNORECASE)
 KM_EXACT_RE = re.compile(r"(\d[\d\s]*)\s*км", re.IGNORECASE)
 VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 PLATE_RE = re.compile(r"\b[A-ZА-ЯІЇЄ]{2}\s?\d{4}\s?[A-ZА-ЯІЇЄ]{2}\b")
-PRICE_USD_UAH_RE = re.compile(r"([\d\s]{3,})\s*\$\s*[•·]\s*([\d\s]{3,})\s*грн")
-PRICE_USD_ONLY_RE = re.compile(r"([\d\s]{3,})\s*\$")
+_PRICE_TOKEN = r"(?:\d{1,3}(?:[\s\xa0\u202f\u2009]\d{3})+|\d{3,7})"
+PRICE_USD_UAH_RE = re.compile(
+    rf"(?<![\d/])({_PRICE_TOKEN})\s*\$\s*[•·]\s*({_PRICE_TOKEN})\s*грн",
+    re.IGNORECASE,
+)
+PRICE_USD_ONLY_RE = re.compile(
+    rf"(?<![\d/])({_PRICE_TOKEN})(?![\d/])\s*\$",
+    re.IGNORECASE,
+)
 MILEAGE_RE = re.compile(r"([\d\s]+)\s*тис\.?\s*км")
 YEAR_RE = re.compile(r"\b(19[5-9]\d|20[0-3]\d)\b")
 JSON_CONTENT_RE = re.compile(r'"content"\s*:\s*"((?:\\.|[^"\\])*)"')
@@ -44,6 +51,35 @@ _CARD_POSTED_RE = re.compile(
     rf"\d{{1,2}}\s+(?:{_UA_MONTHS_RE}))",
     re.IGNORECASE,
 )
+
+def _parse_price_token(raw: str) -> int:
+    return int(re.sub(r"[\s\xa0\u202f\u2009]", "", raw))
+
+
+def _is_reasonable_usd_price(value: int) -> bool:
+    return 300 <= value <= 2_000_000
+
+
+def _is_reasonable_uah_price(value: int) -> bool:
+    return 5_000 <= value <= 80_000_000
+
+
+def _extract_card_prices(text: str) -> tuple[int | None, int | None]:
+    """Ціна з картки видачі; не зливаємо модель «12» і рік «2025» з «45 000 $»."""
+    pair = PRICE_USD_UAH_RE.search(text)
+    if pair:
+        price_usd = _parse_price_token(pair.group(1))
+        price_uah = _parse_price_token(pair.group(2))
+        if _is_reasonable_usd_price(price_usd) and _is_reasonable_uah_price(price_uah):
+            return price_usd, price_uah
+        return None, None
+
+    for match in reversed(list(PRICE_USD_ONLY_RE.finditer(text))):
+        price_usd = _parse_price_token(match.group(1))
+        if _is_reasonable_usd_price(price_usd):
+            return price_usd, None
+    return None, None
+
 
 FUEL_WORDS = ["Електро", "Бензин", "Дизель", "Гібрид", "Газ"]
 TRANS_WORDS = ["Автомат", "Механіка", "Ручна", "Типтронік", "Робот", "Варіатор"]
@@ -347,15 +383,7 @@ def _parse_search_card(anchor) -> ScrapedCar | None:
     year_match = YEAR_RE.search(text)
     year = int(year_match.group()) if year_match else None
 
-    price_usd = price_uah = None
-    price_match = PRICE_USD_UAH_RE.search(text)
-    if price_match:
-        price_usd = int(price_match.group(1).replace(" ", "").replace("\xa0", ""))
-        price_uah = int(price_match.group(2).replace(" ", "").replace("\xa0", ""))
-    else:
-        usd_only = PRICE_USD_ONLY_RE.search(text)
-        if usd_only:
-            price_usd = int(usd_only.group(1).replace(" ", "").replace("\xa0", ""))
+    price_usd, price_uah = _extract_card_prices(text)
 
     mileage_km = None
     mileage_match = MILEAGE_RE.search(text)
@@ -839,10 +867,11 @@ def _apply_text_fallbacks(full_text: str, lines: list[str], car: ScrapedCar, det
         if plate_match:
             car.plate = plate_match.group(0)
 
-    price_match = PRICE_USD_UAH_RE.search(full_text)
-    if price_match:
-        car.price_usd = int(price_match.group(1).replace(" ", "").replace("\xa0", ""))
-        car.price_uah = int(price_match.group(2).replace(" ", "").replace("\xa0", ""))
+    price_usd, price_uah = _extract_card_prices(full_text)
+    if price_usd is not None:
+        car.price_usd = price_usd
+    if price_uah is not None:
+        car.price_uah = price_uah
 
     if car.mileage_km is None:
         mileage_match = MILEAGE_RE.search(full_text)

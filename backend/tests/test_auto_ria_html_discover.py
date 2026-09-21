@@ -111,12 +111,36 @@ class AutoRiaDiscoverTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ) as fallback,
         ):
-            result = await discover_auto_ria(filters, sort_by="newest")
+            result = await discover_auto_ria(
+                filters,
+                sort_by="newest",
+                allow_api_fallback=True,
+            )
 
         self.assertTrue(result.fallback)
         self.assertEqual(result.ids, ["111"])
         self.assertIn("Перемкнуто на API", result.error or "")
         fallback.assert_awaited_once()
+
+    async def test_discover_without_fallback_returns_empty_when_html_fails(self):
+        filters = SearchFilters(brand="BYD")
+        with (
+            patch(
+                "app.services.auto_ria.discover.fetch_auto_ria_beta_batch",
+                new=AsyncMock(side_effect=RuntimeError("html down")),
+            ),
+            patch(
+                "app.services.auto_ria.discover._fallback_api",
+                new=AsyncMock(),
+            ) as fallback,
+        ):
+            result = await discover_auto_ria(filters, sort_by="newest")
+
+        self.assertFalse(result.fallback)
+        self.assertEqual(result.ids, [])
+        self.assertIn("html down", result.error or "")
+        self.assertNotIn("Перемкнуто на API", result.error or "")
+        fallback.assert_not_awaited()
 
     async def test_discover_uses_html_cards_when_parser_works(self):
         listing = _html_listing()

@@ -58,10 +58,17 @@ export const PLAN_LABELS: Record<string, string> = {
 
 const UNKNOWN_PUBLISHED_CUTOFF_MS = Date.UTC(1971, 0, 1);
 
+function isUnknownPublishedDate(date: string | null | undefined): boolean {
+  if (!date) return true;
+  const parsed = new Date(date);
+  const ts = parsed.getTime();
+  if (Number.isNaN(ts) || ts < UNKNOWN_PUBLISHED_CUTOFF_MS) return true;
+  return parsed.getFullYear() <= 1971;
+}
+
 export function timeAgo(date: string | null | undefined) {
-  if (!date) return "";
-  const ts = new Date(date).getTime();
-  if (Number.isNaN(ts) || ts < UNKNOWN_PUBLISHED_CUTOFF_MS) return "";
+  if (isUnknownPublishedDate(date)) return "";
+  const ts = new Date(date!).getTime();
   const diff = Date.now() - ts;
   if (diff < 0) return "";
   const mins = Math.floor(diff / 60000);

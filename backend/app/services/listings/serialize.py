@@ -22,8 +22,14 @@ def listing_to_out(listing: Listing) -> ListingOut:
     url = listing.url
     if source == "telegram":
         url = fix_telegram_listing_url(listing.id, url, images=images)
-    published_at = as_kyiv(listing.published_at) if listing.published_at else now_kyiv()
     found_at = as_kyiv(listing.found_at) if listing.found_at else now_kyiv()
+    from app.services.listings.sort_dates import coalesce_listing_published_at
+
+    published_at = coalesce_listing_published_at(
+        as_kyiv(listing.published_at) if listing.published_at else None,
+        refreshed_at=as_kyiv(listing.refreshed_at) if getattr(listing, "refreshed_at", None) else None,
+        found_at=found_at,
+    )
     # Старі записи в БД — грн; нові — оригінальна валюта з джерела.
     raw_currency = listing.currency or "UAH"
     currency = normalize_currency(raw_currency)

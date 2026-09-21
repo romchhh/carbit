@@ -301,8 +301,14 @@ class HydrateHtmlCardSkipInfoTests(unittest.IsolatedAsyncioTestCase):
             return_value={},
         ) as new_mock:
             items = await pool_cache._hydrate_page_slots(slots)
-        used_mock.assert_awaited_once_with([])
-        new_mock.assert_awaited_once_with([])
+        used_mock.assert_awaited_once()
+        new_mock.assert_awaited_once()
+        self.assertEqual(used_mock.await_args.args[0], [])
+        self.assertEqual(new_mock.await_args.args[0], [])
+        self.assertEqual(
+            used_mock.await_args.kwargs["html_cards"]["40307001"].id,
+            "auto_ria_40307001",
+        )
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].id, "auto_ria_40307001")
 

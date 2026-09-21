@@ -3,8 +3,8 @@
 Slot-based pool format (Redis):
   {
     "slots": [
-      {"s": "r", "i": "12345", "d": {...}?},  # AUTO.RIA: ID + опційна HTML-картка; деталі — /auto/info
-      {"s": "n", "i": "1928969"},         # AUTO.RIA нові   — тільки ID, гідратується через /auto/new/auto
+      {"s": "r", "i": "12345", "d": {...}?},  # AUTO.RIA: ID + опційна HTML-картка; деталі — HTML сторінка
+      {"s": "n", "i": "1928969"},         # AUTO.RIA нові   — тільки ID, гідратується через HTML newauto
       {"s": "o", "d": {...listing}},      # OLX      — повний об'єкт
       {"s": "i", "d": {...listing}},      # Імперія  — повний об'єкт
       {"s": "u", "d": {...listing}},      # uDrive   — повний об'єкт
@@ -37,7 +37,7 @@ from app.services.parser.filter_groups import filters_group_key
 
 logger = logging.getLogger(__name__)
 
-LIVE_POOL_PREFIX = "live-pool:v17:"
+LIVE_POOL_PREFIX = "live-pool:v18:"
 LIVE_POOL_TTL_SECONDS = 600  # 10 хвилин — повторний пошук без нових AR-запитів
 # Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
 LIVE_POOL_SIZE = 2500
@@ -49,7 +49,7 @@ _HTML_EXTEND_WAVES_MAX = 2
 # Кеш окремих AUTO.RIA-оголошень (щоб не гідратувати одне й те саме двічі)
 _AR_INFO_PREFIX = "ar-info:"
 _AR_NEW_INFO_PREFIX = "ar-new-info:"
-_AR_INFO_TTL_SECONDS = 1800  # 30 хвилин — /auto/info платний, тримаємо довше
+_AR_INFO_TTL_SECONDS = 1800  # 30 хвилин — HTML-гідратація дорога, тримаємо довше
 
 
 def live_pool_cache_key(filters: SearchFilters, sort_by: str) -> str:
@@ -317,68 +317,21 @@ async def ensure_beta_pool_covers(
 # ---------------------------------------------------------------------------
 
 
-async def _batch_hydrate_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
-    """Гідратує AUTO.RIA оголошення за ID. Використовує окремий Redis-кеш на 10 хвилин."""
-    if not ids:
-        return {}
+async def _batch_hydrate_auto_ria(
+    ids: list[str],
+    *,
+    html_cards: dict[str, ListingOut] | None = None,
+) -> dict[str, ListingOut]:
+    """Гідратує вживані AUTO.RIA через HTML сторінку оголошення."""
+    from app.services.auto_ria.html_hydrate import batch_enrich_auto_ria_html
 
-    from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
-    from app.services.auto_ria.mapper import info_to_listing
-
-    result: dict[str, ListingOut] = {}
-    to_fetch: list[str] = []
-
-    # Читаємо весь батч за один MGET замість N окремих GET
-    try:
-        redis = await get_redis()
-        keys = [f"{_AR_INFO_PREFIX}{aid}" for aid in ids]
-        raws = await redis.mget(*keys)
-        for aid, raw in zip(ids, raws):
-            if raw:
-                try:
-                    result[aid] = ListingOut.model_validate(json.loads(raw))
-                except Exception:
-                    to_fetch.append(aid)
-            else:
-                to_fetch.append(aid)
-    except Exception:
-        logger.exception("AR info cache read failed")
-        to_fetch = list(ids)
-
-    if not to_fetch:
-        return result
-
-    # Гідратуємо некешовані
-    client = AutoRiaClient()
-    sem = asyncio.Semaphore(10)
-
-    async def fetch_one(aid: str) -> tuple[str, ListingOut | None]:
-        async with sem:
-            try:
-                info = await client.get_info(aid)
-                listing = info_to_listing(info, fotos=None)
-                return aid, listing
-            except (AutoRiaError, Exception):
-                # Вживані ID не пробуємо /auto/new/auto — це другий платний запит на промах.
-                return aid, None
-
-    fetched = await asyncio.gather(*(fetch_one(aid) for aid in to_fetch))
-
-    # Зберігаємо в кеш через pipeline — один round-trip замість N
-    for aid, listing in fetched:
-        if listing:
-            result[aid] = listing
-    try:
-        redis = await get_redis()
-        pipe = redis.pipeline(transaction=False)
-        for aid, listing in fetched:
-            if listing:
-                pipe.setex(f"{_AR_INFO_PREFIX}{aid}", _AR_INFO_TTL_SECONDS, listing.model_dump_json())
-        await pipe.execute()
-    except Exception:
-        pass
-
-    return result
+    return await batch_enrich_auto_ria_html(
+        ids,
+        html_cards=html_cards,
+        cache_prefix=_AR_INFO_PREFIX,
+        cache_ttl=_AR_INFO_TTL_SECONDS,
+        is_new=False,
+    )
 
 
 async def hydrate_tagged_auto_ria_ids(
@@ -396,9 +349,11 @@ async def hydrate_tagged_auto_ria_ids(
     cards = html_cards or {}
     used_ids = [aid for aid in tagged if not aid.startswith("n:")]
     new_ids = [aid[2:] for aid in tagged if aid.startswith("n:")]
+    used_cards = {aid: cards[aid] for aid in used_ids if aid in cards}
+    new_cards = {aid: cards[aid] for aid in new_ids if aid in cards}
     hydrated_used, hydrated_new = await asyncio.gather(
-        _batch_hydrate_auto_ria(used_ids),
-        _batch_hydrate_new_auto_ria(new_ids),
+        _batch_hydrate_auto_ria(used_ids, html_cards=used_cards),
+        _batch_hydrate_new_auto_ria(new_ids, html_cards=new_cards),
     )
     items: list[ListingOut] = []
     seen: set[str] = set()
@@ -417,66 +372,21 @@ async def hydrate_tagged_auto_ria_ids(
     return items
 
 
-async def _batch_hydrate_new_auto_ria(ids: list[str]) -> dict[str, ListingOut]:
-    """Гідратує нові AUTO.RIA авто через /auto/new/auto/{id}. Кеш: ar-new-info:{id}."""
-    if not ids:
-        return {}
+async def _batch_hydrate_new_auto_ria(
+    ids: list[str],
+    *,
+    html_cards: dict[str, ListingOut] | None = None,
+) -> dict[str, ListingOut]:
+    """Гідратує нові AUTO.RIA через HTML сторінку newauto."""
+    from app.services.auto_ria.html_hydrate import batch_enrich_auto_ria_html
 
-    from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
-    from app.services.auto_ria.mapper import new_info_to_listing
-
-    result: dict[str, ListingOut] = {}
-    to_fetch: list[str] = []
-
-    # Читаємо весь батч за один MGET замість N окремих GET
-    try:
-        redis = await get_redis()
-        keys = [f"{_AR_NEW_INFO_PREFIX}{aid}" for aid in ids]
-        raws = await redis.mget(*keys)
-        for aid, raw in zip(ids, raws):
-            if raw:
-                try:
-                    result[aid] = ListingOut.model_validate(json.loads(raw))
-                except Exception:
-                    to_fetch.append(aid)
-            else:
-                to_fetch.append(aid)
-    except Exception:
-        logger.exception("AR new info cache read failed")
-        to_fetch = list(ids)
-
-    if not to_fetch:
-        return result
-
-    client = AutoRiaClient()
-    sem = asyncio.Semaphore(10)
-
-    async def fetch_one(aid: str) -> tuple[str, ListingOut | None]:
-        async with sem:
-            try:
-                info = await client.get_new_info(aid)
-                listing = new_info_to_listing(info)
-                return aid, listing
-            except (AutoRiaError, Exception):
-                return aid, None
-
-    fetched = await asyncio.gather(*(fetch_one(aid) for aid in to_fetch))
-
-    # Зберігаємо в кеш через pipeline
-    for aid, listing in fetched:
-        if listing:
-            result[aid] = listing
-    try:
-        redis = await get_redis()
-        pipe = redis.pipeline(transaction=False)
-        for aid, listing in fetched:
-            if listing:
-                pipe.setex(f"{_AR_NEW_INFO_PREFIX}{aid}", _AR_INFO_TTL_SECONDS, listing.model_dump_json())
-        await pipe.execute()
-    except Exception:
-        pass
-
-    return result
+    return await batch_enrich_auto_ria_html(
+        ids,
+        html_cards=html_cards,
+        cache_prefix=_AR_NEW_INFO_PREFIX,
+        cache_ttl=_AR_INFO_TTL_SECONDS,
+        is_new=True,
+    )
 
 
 def _slot_listing(slot: dict) -> ListingOut | None:
@@ -490,7 +400,7 @@ def _slot_listing(slot: dict) -> ListingOut | None:
 
 
 def _slot_needs_api_hydrate(slot: dict) -> bool:
-    """HTML-картка без дати (1970) — дотягуємо /auto/info лише для published_at."""
+    """HTML-картка без дати (1970) — дотягуємо HTML сторінку для published_at."""
     html = _slot_listing(slot)
     if html is None:
         return True
@@ -502,10 +412,20 @@ def _slot_needs_api_hydrate(slot: dict) -> bool:
 async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
     """Перетворює слоти сторінки на повні ListingOut об'єкти.
 
-    HTML-картка видачі вже має ціну/фото/бейджі — /auto/info якщо картки немає
+    HTML-картка видачі вже має ціну/фото/бейджі — HTML сторінка якщо картки немає
     або published_at невідомий (placeholder 1970).
     """
     from app.services.auto_ria.html_merge import merge_html_card_with_api
+
+    def _html_cards_for(src: str) -> dict[str, ListingOut]:
+        out: dict[str, ListingOut] = {}
+        for slot in slots:
+            if slot.get("s") != src or "i" not in slot:
+                continue
+            html = _slot_listing(slot)
+            if html is not None:
+                out[str(slot["i"])] = html
+        return out
 
     used_ids = [
         s["i"]
@@ -521,9 +441,11 @@ async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
         if s.get("s") == "n" and "i" in s and _slot_needs_api_hydrate(s)
     ]
 
+    used_cards = _html_cards_for("r")
+    new_cards = _html_cards_for("n")
     hydrated_used, hydrated_new = await asyncio.gather(
-        _batch_hydrate_auto_ria(used_ids),
-        _batch_hydrate_new_auto_ria(new_ids),
+        _batch_hydrate_auto_ria(used_ids, html_cards=used_cards),
+        _batch_hydrate_new_auto_ria(new_ids, html_cards=new_cards),
     )
 
     items: list[ListingOut] = []

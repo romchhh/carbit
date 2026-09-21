@@ -195,6 +195,14 @@ def test_listings_from_cars_collapses_identical_newauto_stock():
     from app.schemas.schemas import SearchFilters
     from app.services.auto_ria_beta.mapper import listings_from_cars
 
+    shared_photo = (
+        "https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/"
+        "zeekr-7x__4281893-620x465.jpg"
+    )
+    other_photo = (
+        "https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/"
+        "zeekr-7x__4281999-620x465.jpg"
+    )
     cars = [
         ScrapedCar(
             car_id=2073874,
@@ -205,6 +213,8 @@ def test_listings_from_cars_collapses_identical_newauto_stock():
             price_usd=54465,
             mileage_km=543,
             is_new=True,
+            photo_url=shared_photo,
+            photos=[shared_photo],
         ),
         ScrapedCar(
             car_id=2084883,
@@ -215,6 +225,8 @@ def test_listings_from_cars_collapses_identical_newauto_stock():
             price_usd=54465,
             mileage_km=543,
             is_new=True,
+            photo_url=shared_photo,
+            photos=[shared_photo],
         ),
         ScrapedCar(
             car_id=2084920,
@@ -225,6 +237,8 @@ def test_listings_from_cars_collapses_identical_newauto_stock():
             price_usd=61100,
             mileage_km=715,
             is_new=True,
+            photo_url=other_photo,
+            photos=[other_photo],
         ),
     ]
     listings = listings_from_cars(cars, SearchFilters(), sort_by="price_asc")
@@ -233,6 +247,25 @@ def test_listings_from_cars_collapses_identical_newauto_stock():
         "new_auto_ria_2073874",
         "new_auto_ria_2084920",
     }
+
+
+def test_search_card_price_ignores_numeric_model_and_year():
+    from bs4 import BeautifulSoup
+
+    from app.services.auto_ria_beta.parser import _extract_card_prices, _parse_search_card
+
+    text = "Avatr 12 2025 45 000 $ • 1 980 000 грн"
+    assert _extract_card_prices(text) == (45_000, 1_980_000)
+
+    html = (
+        '<a href="/uk/auto_avatr_12_2025_12345.html">'
+        "Avatr 12 2025 45 000 $ • 1 980 000 грн 10 тис. км Електро"
+        "</a>"
+    )
+    car = _parse_search_card(BeautifulSoup(html, "html.parser").find("a"))
+    assert car is not None
+    assert car.price_usd == 45_000
+    assert car.price_uah == 1_980_000
 
 
 def test_parse_total_count_ignores_empty_space_match():

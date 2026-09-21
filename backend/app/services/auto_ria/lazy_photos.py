@@ -6,8 +6,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Listing
-from app.services.auto_ria.client import AutoRiaClient, AutoRiaError
-from app.services.auto_ria.details import extract_image_urls
+from app.services.listings.gallery_fetch import fetch_auto_ria_gallery
 
 logger = logging.getLogger(__name__)
 
@@ -29,22 +28,21 @@ def auto_ria_needs_gallery(listing: Listing | str, *, images: list[str] | None =
 
 
 async def attach_auto_ria_gallery(db: AsyncSession, listing: Listing) -> list[str]:
-    """Тягне /auto/fotos і оновлює Listing.images (якщо є повна галерея)."""
+    """Тягне повну галерею з HTML сторінки оголошення."""
     if not auto_ria_needs_gallery(listing):
         return list(listing.images or [])
 
-    auto_id = listing.id.removeprefix("auto_ria_")
     try:
-        client = AutoRiaClient()
-        fotos = await client.get_fotos(auto_id)
-    except AutoRiaError:
-        logger.warning("AUTO.RIA fotos failed for %s", listing.id)
-        return list(listing.images or [])
+        result = await fetch_auto_ria_gallery(
+            listing_id=listing.id,
+            url=listing.url,
+            current_images=list(listing.images or []),
+        )
     except Exception:
-        logger.exception("AUTO.RIA fotos error for %s", listing.id)
+        logger.exception("AUTO.RIA HTML gallery error for %s", listing.id)
         return list(listing.images or [])
 
-    urls = extract_image_urls({}, fotos)
+    urls = list(result.images or [])
     if not urls:
         return list(listing.images or [])
 

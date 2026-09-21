@@ -408,17 +408,13 @@ async def hydrate_auto_ria_ids(
     *,
     sort_by: str = "newest",
 ) -> list[ListingOut]:
-    """Hydrate a list of AUTO.RIA IDs → full ListingOut objects (for on-demand page hydration)."""
+    """Hydrate a list of AUTO.RIA IDs → full ListingOut objects (HTML сторінка оголошення)."""
     if not ids:
         return []
-    client = AutoRiaClient()
-    sem = asyncio.Semaphore(10)
+    from app.services.search.pool_cache import _batch_hydrate_auto_ria
 
-    async def fetch_one(auto_id: str) -> ListingOut | None:
-        async with sem:
-            return await _hydrate_single_auto_ria_id(client, auto_id)
-
-    listings = [item for item in await asyncio.gather(*(fetch_one(aid) for aid in ids)) if item]
+    hydrated = await _batch_hydrate_auto_ria(ids)
+    listings = [hydrated[aid] for aid in ids if aid in hydrated]
     return sort_listings(listings, sort_by)
 
 

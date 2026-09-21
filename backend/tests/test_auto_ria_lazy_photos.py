@@ -7,7 +7,7 @@ from app.services.auto_ria.details import extract_image_urls
 from app.services.auto_ria.lazy_photos import auto_ria_needs_gallery
 
 
-class AutoRiaLazyPhotosTests(unittest.TestCase):
+class AutoRiaLazyPhotosTests(unittest.IsolatedAsyncioTestCase):
     def test_cover_from_info_without_fotos(self):
         info = {
             "autoData": {"autoId": 123},
@@ -28,6 +28,34 @@ class AutoRiaLazyPhotosTests(unittest.TestCase):
                 images=["https://a/1.jpg", "https://a/2.jpg"],
             )
         )
+
+    async def test_attach_gallery_uses_html_fetch(self):
+        from unittest.mock import MagicMock
+
+        from app.services.auto_ria.lazy_photos import attach_auto_ria_gallery
+        from app.services.listings.gallery_fetch import GalleryFetchResult
+
+        listing = MagicMock()
+        listing.id = "auto_ria_123"
+        listing.url = "https://auto.ria.com/auto/123.html"
+        listing.images = ["https://cdn/cover.jpg"]
+
+        db = MagicMock()
+        db.flush = AsyncMock()
+
+        with patch(
+            "app.services.auto_ria.lazy_photos.fetch_auto_ria_gallery",
+            new=AsyncMock(
+                return_value=GalleryFetchResult(
+                    images=["https://cdn/1.jpg", "https://cdn/2.jpg"],
+                )
+            ),
+        ) as fetch_mock:
+            urls = await attach_auto_ria_gallery(db, listing)
+
+        fetch_mock.assert_awaited_once()
+        self.assertEqual(urls, ["https://cdn/1.jpg", "https://cdn/2.jpg"])
+        self.assertEqual(listing.images, ["https://cdn/1.jpg", "https://cdn/2.jpg"])
 
     def test_search_hydrate_skips_fotos_endpoint(self):
         import asyncio

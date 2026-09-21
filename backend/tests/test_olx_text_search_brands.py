@@ -131,6 +131,23 @@ class OlxTextSearchBrandTests(unittest.TestCase):
         )
         self.assertFalse(passes_olx_filters(scooter, nio))
 
+    def test_rejects_avatr_fragrance_refills(self):
+        params = filters_to_olx_params(
+            SearchFilters(brand="Avatr", model="07", currency="USD")
+        )
+        fragrance = OlxListing(
+            title="ОРИГІНАЛ!!! Ароматизація AVATR 07, 11 (змінні флакони",
+            price="109",
+            currency="USD",
+        )
+        car = OlxListing(
+            title="Avatr 07 2025",
+            price="45000",
+            currency="USD",
+        )
+        self.assertFalse(passes_olx_filters(fragrance, params))
+        self.assertTrue(passes_olx_filters(car, params))
+
     def test_rejects_xiaomi_su7_trunk_organizer(self):
         params = filters_to_olx_params(
             SearchFilters(brand="Xiaomi", model="SU7", currency="USD")

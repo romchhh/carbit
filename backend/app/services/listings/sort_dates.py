@@ -34,4 +34,20 @@ def listing_sort_date(item: ListingOut) -> datetime:
     return datetime(1970, 1, 1, tzinfo=KYIV_TZ)
 
 
-__all__ = ["listing_sort_date", "usable_sort_datetime"]
+def coalesce_listing_published_at(
+    published_at: datetime | None,
+    *,
+    refreshed_at: datetime | None = None,
+    found_at: datetime | None = None,
+) -> datetime:
+    """Для API/UI: placeholder 1970 з парсера не показуємо клієнту."""
+    from app.core.timezone import now_kyiv
+
+    for candidate in (published_at, refreshed_at, found_at):
+        usable = usable_sort_datetime(candidate)
+        if usable is not None:
+            return usable
+    return now_kyiv()
+
+
+__all__ = ["coalesce_listing_published_at", "listing_sort_date", "usable_sort_datetime"]

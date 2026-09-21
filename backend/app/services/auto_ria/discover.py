@@ -1,4 +1,4 @@
-"""AUTO.RIA live-пошук: HTML-картки/ID, деталі — через платне API; фолбек на /auto/search."""
+"""AUTO.RIA live-пошук: HTML-картки/ID; деталі — HTML сторінка; фолбек на /auto/search."""
 
 from __future__ import annotations
 
@@ -15,7 +15,14 @@ from app.services.auto_ria_beta.service import fetch_auto_ria_beta_batch
 logger = logging.getLogger(__name__)
 
 HTML_DISCOVER_TIMEOUT_SECONDS = 25.0
-HTML_FALLBACK_MESSAGE = "HTML-парсер AUTO.RIA недоступний. Перемкнуто на API."
+HTML_FALLBACK_MESSAGE = "HTML-парсер AUTO.RIA недоступний."
+_API_FALLBACK_SUFFIX = " Перемкнуто на API."
+
+
+def _html_discover_error(message: str, *, allow_api_fallback: bool) -> str:
+    if allow_api_fallback:
+        return f"{message}{_API_FALLBACK_SUFFIX}"
+    return message
 
 
 @dataclass
@@ -85,9 +92,9 @@ async def discover_auto_ria(
     html_timeout: float = HTML_DISCOVER_TIMEOUT_SECONDS,
     api_timeout: float = 90.0,
     api_max_ids: int = 2500,
-    allow_api_fallback: bool = True,
+    allow_api_fallback: bool = False,
 ) -> AutoRiaDiscoverResult:
-    """Картки, count і ID — з HTML; /auto/search лише якщо парсер впав."""
+    """Картки, count і ID — з HTML; API fallback лише якщо явно дозволено."""
     error: str | None = None
     batch = None
     try:
@@ -103,18 +110,33 @@ async def discover_auto_ria(
             timeout=html_timeout,
         )
     except asyncio.TimeoutError:
-        error = f"HTML-парсер: таймаут {html_timeout:.0f}s. Перемкнуто на API."
+        error = _html_discover_error(
+            f"HTML-парсер: таймаут {html_timeout:.0f}s",
+            allow_api_fallback=allow_api_fallback,
+        )
     except AutoRiaBetaError as exc:
-        error = f"HTML-парсер: {exc}. Перемкнуто на API."
+        error = _html_discover_error(
+            f"HTML-парсер: {exc}",
+            allow_api_fallback=allow_api_fallback,
+        )
     except Exception as exc:
         logger.warning("AUTO.RIA HTML discover failed: %s", exc, exc_info=True)
-        error = f"HTML-парсер: {exc}. Перемкнуто на API."
+        error = _html_discover_error(
+            f"HTML-парсер: {exc}",
+            allow_api_fallback=allow_api_fallback,
+        )
 
     if batch is not None:
         if batch.error:
-            error = f"HTML-парсер: {batch.error}. Перемкнуто на API."
+            error = _html_discover_error(
+                f"HTML-парсер: {batch.error}",
+                allow_api_fallback=allow_api_fallback,
+            )
         elif start_page == 0 and not batch.listings and batch.market_total > 0:
-            error = "HTML-парсер не розібрав картки. Перемкнуто на API."
+            error = _html_discover_error(
+                "HTML-парсер не розібрав картки",
+                allow_api_fallback=allow_api_fallback,
+            )
 
         if not error:
             ids, cards = cards_from_listings(list(batch.listings))
@@ -134,7 +156,8 @@ async def discover_auto_ria(
             sort_by=sort_by,
             max_ids=api_max_ids,
             timeout=api_timeout,
-            error=error or HTML_FALLBACK_MESSAGE,
+            error=error
+            or _html_discover_error(HTML_FALLBACK_MESSAGE, allow_api_fallback=True),
         )
 
     return AutoRiaDiscoverResult(

@@ -120,7 +120,17 @@ def sanitize_listing_out(item: ListingOut) -> ListingOut | None:
             if volume is not None:
                 validated = validated.model_copy(update={"engine_volume_l": volume})
         from app.services.listings.plate import enrich_listing_plate
+        from app.services.listings.sort_dates import coalesce_listing_published_at
 
+        validated = validated.model_copy(
+            update={
+                "published_at": coalesce_listing_published_at(
+                    validated.published_at,
+                    refreshed_at=validated.refreshed_at,
+                    found_at=validated.found_at,
+                )
+            }
+        )
         return enrich_listing_plate(validated)
     except Exception:
         logger.exception("Dropping listing that failed response sanitize: %s", getattr(item, "id", "?"))

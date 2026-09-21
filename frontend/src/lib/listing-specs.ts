@@ -84,7 +84,8 @@ function inEngineRange(parsed: number | null): number | null {
 function textIsPureElectric(blob: string): boolean {
   if (!blob) return false;
   if (/гібрид|гибрид|hybrid|phev|plug[\s-]?in/i.test(blob)) return false;
-  return /(?:електро|электро|electric|electro)\b/i.test(blob);
+  // JS \b is ASCII-only, so «Електро» never matched a word boundary.
+  return /(?:електро|электро|electric|electro)(?!\p{L})/iu.test(blob);
 }
 
 function readEngineFromText(text: string): number | null {
