@@ -249,6 +249,34 @@ def test_listings_from_cars_collapses_identical_newauto_stock():
     }
 
 
+def test_search_card_prefers_embedded_date_over_future_card_text():
+    from app.services.auto_ria_beta.parser import ScrapedCar, _apply_search_posted_dates
+
+    car = ScrapedCar(car_id=1, url="https://auto.ria.com/uk/auto_test_1.html", posted="15.11.2026")
+    _apply_search_posted_dates([car], {1: "18 годин тому"})
+    assert car.posted == "18 годин тому"
+
+
+def test_listing_details_extracts_publish_time_from_embedded_json():
+    html = (
+        "<html><body>"
+        '{"autoId":40351832,"publishTime":"Сьогодні о 14:30","addDate":"2026-03-21 14:30:00"}'
+        "<span>BYD Song Ultra Ev 2026</span>"
+        "</body></html>"
+    )
+    car = ScrapedCar(
+        car_id=40351832,
+        url="https://auto.ria.com/uk/auto_byd_song-ultra-ev_40351832.html",
+        brand="BYD",
+        model="Song Ultra Ev",
+        year=2026,
+        is_dealer=True,
+    )
+    parse_listing_details(html, car)
+    listing = car_to_listing(car, brand_hint="BYD")
+    assert listing.published_at.year >= 2026
+
+
 def test_search_card_price_ignores_numeric_model_and_year():
     from bs4 import BeautifulSoup
 
@@ -266,6 +294,45 @@ def test_search_card_price_ignores_numeric_model_and_year():
     assert car is not None
     assert car.price_usd == 45_000
     assert car.price_uah == 1_980_000
+
+
+def test_extract_photos_scopes_to_gallery_and_dedups_sizes():
+    from app.services.auto_ria_beta.parser import _extract_photos
+
+    html = """
+    <section id="mainPhotoGallery">
+      <img src="https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/byd-sea-lion-06__4295664-186x103x70.jpg">
+      <img src="https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/byd-sea-lion-06__4295664-1920x1080x90.webp">
+      <img src="https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/byd-sea-lion-06__4295665-620x415x70.jpg">
+    </section>
+    <img src="https://cdn.riastatic.com/photosnewr/auto/new_auto_storage/toyota-rav4__1111111-1920x1080x90.webp">
+    <img src="https://cdn.riastatic.com/docs/newauto/common_photos/badge.png">
+    """
+    from bs4 import BeautifulSoup
+
+    photos = _extract_photos(html, BeautifulSoup(html, "html.parser"))
+    assert len(photos) == 2
+    assert photos[0].endswith("4295664-1920x1080x90.webp")
+    assert photos[1].endswith("4295665-620x415x70.jpg")
+
+
+def test_extract_photos_dedups_legacy_suffix_sizes():
+    from app.services.auto_ria_beta.parser import _extract_photos
+
+    html = """
+    <div id="photoSlider">
+      <img src="https://cdn0.riastatic.com/photosnew/auto/photo/byd_song-plus__654661870cx.jpg">
+      <img src="https://cdn0.riastatic.com/photosnew/auto/photo/byd_song-plus__654661870bx.webp">
+      <img src="https://cdn0.riastatic.com/photosnew/auto/photo/byd_song-plus__654661870hd.jpg">
+      <img src="https://cdn0.riastatic.com/photosnew/auto/photo/byd_song-plus__654661871fx.jpg">
+    </div>
+    """
+    from bs4 import BeautifulSoup
+
+    photos = _extract_photos(html, BeautifulSoup(html, "html.parser"))
+    assert len(photos) == 2
+    assert photos[0].endswith("654661870hd.jpg")
+    assert photos[1].endswith("654661871fx.jpg")
 
 
 def test_parse_total_count_ignores_empty_space_match():

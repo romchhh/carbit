@@ -64,6 +64,12 @@ class PublishedAtCoalesceTests(unittest.TestCase):
         self.assertIsNone(format_time_ago(datetime(1970, 1, 1, tzinfo=KYIV_TZ)))
         self.assertIsNotNone(format_time_ago(now_kyiv()))
 
+    def test_usable_sort_datetime_rejects_future_placeholder(self):
+        from app.services.listings.sort_dates import usable_sort_datetime
+
+        future = datetime(2027, 2, 20, 12, 0, tzinfo=KYIV_TZ)
+        self.assertIsNone(usable_sort_datetime(future))
+
 
 if __name__ == "__main__":
     unittest.main()

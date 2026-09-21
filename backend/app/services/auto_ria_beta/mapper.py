@@ -181,8 +181,11 @@ def car_to_listing(
         }
     )
 
+    from app.services.listings.sort_dates import coalesce_listing_published_at
+
     seller_type = "dealer" if car.is_dealer else "private"
     listing_id = f"new_auto_ria_{car.car_id}" if car.is_new else f"auto_ria_{car.car_id}"
+    found_at = now_kyiv()
     return ListingOut(
         id=listing_id,
         source="auto_ria",
@@ -210,8 +213,11 @@ def car_to_listing(
         price_history=[],
         is_duplicate=False,
         is_new=True if car.is_new else None,
-        published_at=_parse_posted(car.posted),
-        found_at=now_kyiv(),
+        published_at=coalesce_listing_published_at(
+            _parse_posted(car.posted),
+            found_at=found_at,
+        ),
+        found_at=found_at,
     )
 
 

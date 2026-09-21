@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
-from app.core.timezone import KYIV_TZ, as_kyiv
+from app.core.timezone import KYIV_TZ, as_kyiv, now_kyiv
 from app.schemas.schemas import ListingOut
 
 _SENTINEL_YEAR = 1971
@@ -18,6 +18,9 @@ def usable_sort_datetime(value: Any) -> datetime | None:
     except Exception:
         return None
     if dt.year <= _SENTINEL_YEAR:
+        return None
+    # Картка пошуку інколи ловить дату реєстрації/тощо — у UI це дає порожній timeAgo.
+    if dt > now_kyiv() + timedelta(hours=2):
         return None
     return dt
 

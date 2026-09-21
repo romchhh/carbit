@@ -138,6 +138,8 @@ def parse_olx_published_text(text: str, *, now: datetime | None = None) -> datet
         return current
 
     singular_relative = {
+        "хвилину тому": timedelta(minutes=1),
+        "годину тому": timedelta(hours=1),
         "день тому": timedelta(days=1),
         "один день тому": timedelta(days=1),
         "1 день тому": timedelta(days=1),

@@ -47,9 +47,6 @@ def _best_published_at(*values: Any) -> Any:
     if usable:
         usable.sort(key=lambda row: row[0])
         return usable[0][1]
-    for value in values:
-        if value is not None:
-            return value
     return None
 
 
@@ -108,6 +105,8 @@ def merge_html_card_with_api(html: ListingOut, api: ListingOut) -> ListingOut:
         if merged_bar:
             api_sd["autoInfoBar"] = merged_bar
 
+    from app.services.listings.sort_dates import coalesce_listing_published_at
+
     images = list(api.images or []) or list(html.images or [])
     payload = api.model_dump(mode="python")
     payload.update(
@@ -123,7 +122,11 @@ def merge_html_card_with_api(html: ListingOut, api: ListingOut) -> ListingOut:
         transmission=_first_text(api.transmission, html.transmission) or "",
         region=_first_text(api.region, html.region) or "",
         source_data=api_sd,
-        published_at=_best_published_at(api.published_at, html.published_at),
+        published_at=coalesce_listing_published_at(
+            _best_published_at(api.published_at, html.published_at),
+            refreshed_at=_first_text(api.refreshed_at, html.refreshed_at),
+            found_at=_first_text(api.found_at, html.found_at),
+        ),
         is_new=True if api.is_new or html.is_new else api.is_new,
     )
     return ListingOut.model_validate(payload)

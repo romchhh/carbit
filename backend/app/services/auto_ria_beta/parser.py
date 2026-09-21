@@ -42,12 +42,13 @@ _UA_MONTHS_RE = (
     r"січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|"
     r"жовтня|листопада|грудня"
 )
+# На картці пошуку не беремо DD.MM.YYYY — часто це не дата публікації.
 _CARD_POSTED_RE = re.compile(
     r"(сьогодні(?:\s+о\s+\d{1,2}:\d{2})?|вчора(?:\s+о\s+\d{1,2}:\d{2})?|"
+    r"(?:хвилину|годину|день|тиждень|місяць|рік)\s+тому|"
     r"(?:день|тиждень|місяць|рік)\s+тому|"
-    rf"\d+\s*(?:хв|год|день|дня|дні|днів|тиждень|тижні|тижнів|"
-    rf"місяць|місяці|місяців|рік|роки|років)\s*тому|"
-    r"\d{1,2}\.\d{2}\.\d{4}|"
+    rf"\d+\s*(?:хв|хвилин|хвилини|хвилину|год|годин|години|годину|день|дня|дні|днів|"
+    rf"тиждень|тижні|тижнів|місяць|місяці|місяців|рік|роки|років)\s*тому|"
     rf"\d{{1,2}}\s+(?:{_UA_MONTHS_RE}))",
     re.IGNORECASE,
 )
@@ -262,15 +263,39 @@ def _card_publish_time(html: str, start: int) -> str | None:
     return date_match.group(1).strip() or None
 
 
+def _nearby_embedded_date(html: str, start: int) -> str | None:
+    chunk = html[max(0, start - 500) : start + 15000]
+    for pattern in (
+        r'"publishTime"\s*:\s*"([^"]+)"',
+        r'"addDate"\s*:\s*"([^"]+)"',
+        r'"datePublished"\s*:\s*"([^"]+)"',
+        r'"createdAt"\s*:\s*"([^"]+)"',
+    ):
+        match = re.search(pattern, chunk)
+        if match:
+            text = match.group(1).strip()
+            if text:
+                return text
+    return None
+
+
 def _parse_search_embedded_dates(html: str) -> dict[int, str]:
     """Дати з SSR пошуку: publishTime у картках Auto/NewAuto + addDate у PINIA."""
     out: dict[int, str] = {}
+
+    def store(car_id: int, posted: str | None) -> None:
+        if not posted or car_id in out:
+            return
+        out[car_id] = posted
+
     for prefix in ("Auto", "NewAuto"):
         for match in re.finditer(rf'"id"\s*:\s*"{prefix}(\d+)"', html):
-            car_id = int(match.group(1))
-            posted = _card_publish_time(html, match.start())
-            if posted:
-                out[car_id] = posted
+            store(int(match.group(1)), _card_publish_time(html, match.start()))
+
+    for auto_match in re.finditer(r'"autoId"\s*:\s*(\d+)', html):
+        car_id = int(auto_match.group(1))
+        posted = _nearby_embedded_date(html, auto_match.start())
+        store(car_id, posted)
 
     pinia = _PINIA_RE.search(html)
     if pinia:
@@ -279,14 +304,37 @@ def _parse_search_embedded_dates(html: str) -> dict[int, str]:
             car_id = int(auto_match.group(1))
             if car_id in out:
                 continue
-            posted = _card_publish_time(raw, auto_match.start())
-            if not posted:
-                chunk = raw[auto_match.start() : auto_match.start() + 2500]
-                date_match = re.search(r'"addDate"\s*:\s*"([^"]+)"', chunk)
-                posted = date_match.group(1).strip() if date_match else ""
-            if posted:
-                out[car_id] = posted
+            posted = _nearby_embedded_date(raw, auto_match.start())
+            store(car_id, posted)
     return out
+
+
+def _extract_posted_from_embedded(html: str, car_id: int | None = None) -> str | None:
+    """Дата публікації з JSON на сторінці оголошення або пошуку."""
+    if car_id is not None:
+        posted = _parse_search_embedded_dates(html).get(car_id)
+        if posted and _posted_text_usable(posted):
+            return posted
+    for pattern in (
+        r'"publishTime"\s*:\s*"([^"]+)"',
+        r'"addDate"\s*:\s*"([^"]+)"',
+        r'"datePublished"\s*:\s*"([^"]+)"',
+        r'"createdAt"\s*:\s*"([^"]+)"',
+    ):
+        match = re.search(pattern, html)
+        if match:
+            text = match.group(1).strip()
+            if _posted_text_usable(text):
+                return text
+    return None
+
+
+def _apply_posted_date(html: str, car: ScrapedCar) -> None:
+    if car.posted and _posted_text_usable(car.posted):
+        return
+    posted = _extract_posted_from_embedded(html, car.car_id)
+    if posted:
+        car.posted = posted
 
 
 def _posted_text_usable(text: str | None) -> bool:
@@ -298,11 +346,12 @@ def _posted_text_usable(text: str | None) -> bool:
 
 def _apply_search_posted_dates(cars: list[ScrapedCar], posted_by_id: dict[int, str]) -> None:
     for car in cars:
-        if car.posted and _posted_text_usable(car.posted):
-            continue
-        posted = posted_by_id.get(car.car_id)
-        if posted:
-            car.posted = posted
+        embedded = posted_by_id.get(car.car_id)
+        if embedded and _posted_text_usable(embedded):
+            if not car.posted or not _posted_text_usable(car.posted):
+                car.posted = embedded
+        elif car.posted and not _posted_text_usable(car.posted):
+            car.posted = None
 
 
 def parse_search_page(html: str) -> tuple[list[ScrapedCar], int]:
@@ -923,6 +972,10 @@ def _apply_text_fallbacks(full_text: str, lines: list[str], car: ScrapedCar, det
     created_match = re.search(r"Оголошення створене\s*(\d{2}\.\d{2}\.\d{4})", full_text)
     if created_match:
         car.posted = created_match.group(1)
+    elif not car.posted or not _posted_text_usable(car.posted):
+        posted_match = _CARD_POSTED_RE.search(full_text)
+        if posted_match:
+            car.posted = posted_match.group(0).strip()
 
     if not car.description:
         description_match = re.search(
@@ -942,6 +995,7 @@ def parse_listing_details(html: str, car: ScrapedCar) -> dict[str, Any]:
     full_text = soup.get_text(" ", strip=True)
     lines = [line.strip() for line in soup.get_text("\n", strip=True).split("\n") if line.strip()]
 
+    _apply_posted_date(raw_html, car)
     _apply_json_ld(raw_html, car, details)
     _apply_badges(raw_html, car, details)
     _apply_spec_templates(raw_html, car, details)
@@ -967,40 +1021,107 @@ def parse_listing_details(html: str, car: ScrapedCar) -> dict[str, Any]:
     return cleaned
 
 
-def _extract_photos(raw_html: str, soup: BeautifulSoup) -> list[str]:
-    photos: list[str] = []
-    seen_ids: set[str] = set()
-    size_rank = {"hd": 3, "bx": 2, "fx": 1, "cx": 0}
+_GALLERY_SELECTORS = ("#mainPhotoGallery", "#photoSlider", ".photo-slider")
+_PHOTO_URL_RE = re.compile(
+    r"(?:https?:)?//cdn\d*\.riastatic\.com/[^\s\"'\\)]+?\.(?:jpe?g|webp|png)",
+    re.IGNORECASE,
+)
+_EXCLUDED_PHOTO_PATHS = (
+    "/docs/newauto/common_photos/",
+    "/photos/auto-proverka/",
+    "/photos/design/",
+)
+_LEGACY_SIZE_RANK = {"hd": 3_000_000, "bx": 2_000_000, "fx": 1_000_000, "cx": 500_000}
 
-    def photo_id(url: str) -> str:
-        match = re.search(r"__(\d+)[a-z]{1,3}\.\w+$", url)
-        return match.group(1) if match else url
 
-    def photo_rank(url: str) -> int:
-        match = re.search(r"__\d+([a-z]{1,3})\.\w+$", url)
-        return size_rank.get(match.group(1), 0) if match else 0
+def _normalize_photo_url(url: str) -> str | None:
+    if not url:
+        return None
+    if url.startswith("//"):
+        url = "https:" + url
+    if not url.startswith("http"):
+        return None
+    lower = url.lower()
+    if not ("riastatic.com" in lower and re.search(r"\.(?:jpe?g|webp|png)(?:$|\?)", lower)):
+        return None
+    if any(path in lower for path in _EXCLUDED_PHOTO_PATHS):
+        return None
+    if "/logo" in lower or "/icon" in lower:
+        return None
+    return url
 
-    def add_photo(url: str) -> None:
+
+def _photo_id(url: str) -> str:
+    match = re.search(r"__(\d+)", url)
+    if match:
+        return match.group(1)
+    match = re.search(r"/([a-f0-9]{32})-\d+x\d+", url, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return url
+
+
+def _photo_rank(url: str) -> int:
+    match = re.search(r"-(\d+)x(\d+)", url)
+    if match:
+        return int(match.group(1)) * int(match.group(2))
+    match = re.search(r"__(\d+)([a-z]{1,3})\.\w+$", url)
+    if match:
+        return _LEGACY_SIZE_RANK.get(match.group(2), 0)
+    return 0
+
+
+def _merge_best_photos(urls: list[str]) -> list[str]:
+    best: dict[str, tuple[int, str]] = {}
+    order: list[str] = []
+    for raw_url in urls:
+        url = _normalize_photo_url(raw_url)
         if not url:
-            return
-        if url.startswith("//"):
-            url = "https:" + url
-        if not url.startswith("http"):
-            return
-        pid = photo_id(url)
-        if pid not in seen_ids:
-            photos.append(url)
-            seen_ids.add(pid)
-        else:
-            for index, existing in enumerate(photos):
-                if photo_id(existing) == pid and photo_rank(url) > photo_rank(existing):
-                    photos[index] = url
-                    break
+            continue
+        pid = _photo_id(url)
+        rank = _photo_rank(url)
+        if pid not in best:
+            order.append(pid)
+            best[pid] = (rank, url)
+        elif rank > best[pid][0]:
+            best[pid] = (rank, url)
+    return [best[pid][1] for pid in order]
+
+
+def _collect_gallery_photo_urls(soup: BeautifulSoup) -> list[str]:
+    chunks: list[str] = []
+    for selector in _GALLERY_SELECTORS:
+        for element in soup.select(selector):
+            chunks.append(str(element))
+            for img in element.find_all("img"):
+                for attr in ("src", "data-src", "data-original"):
+                    value = img.get(attr)
+                    if value:
+                        chunks.append(value)
+                srcset = img.get("srcset") or ""
+                for part in srcset.split(","):
+                    candidate = part.strip().split(" ")[0]
+                    if candidate:
+                        chunks.append(candidate)
+    if not chunks:
+        return []
+    urls: list[str] = []
+    for match in _PHOTO_URL_RE.finditer("\n".join(chunks)):
+        urls.append(match.group(0))
+    return urls
+
+
+def _extract_photos(raw_html: str, soup: BeautifulSoup) -> list[str]:
+    gallery_urls = _collect_gallery_photo_urls(soup)
+    if gallery_urls:
+        return _merge_best_photos(gallery_urls)
+
+    fallback_urls: list[str] = []
 
     def walk_json(obj: Any) -> None:
         if isinstance(obj, str):
-            if "riastatic.com" in obj and re.search(r"\.(?:jpe?g|webp|png)(?:$|\?)", obj, re.IGNORECASE):
-                add_photo(obj)
+            if "riastatic.com" in obj:
+                fallback_urls.append(obj)
         elif isinstance(obj, dict):
             for value in obj.values():
                 walk_json(value)
@@ -1020,11 +1141,7 @@ def _extract_photos(raw_html: str, soup: BeautifulSoup) -> list[str]:
         except (json.JSONDecodeError, TypeError):
             continue
 
-    for url in re.findall(
-        r"(?:https?:)?//cdn\d*\.riastatic\.com/[^\s\"'\\)]+?\.(?:jpe?g|webp|png)",
-        raw_html,
-        re.IGNORECASE,
-    ):
-        add_photo(url)
+    for match in _PHOTO_URL_RE.finditer(raw_html):
+        fallback_urls.append(match.group(0))
 
-    return photos
+    return _merge_best_photos(fallback_urls)
