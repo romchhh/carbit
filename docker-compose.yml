@@ -3,6 +3,8 @@ name: carbit
 x-python-build: &python-build
   context: .
   dockerfile: docker/python/Dockerfile
+  args:
+    PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.13-slim}
 
 x-python-slim: &python-slim
   image: carbit-python:latest
@@ -14,7 +16,7 @@ services:
   # Опційно: docker compose --profile cache up -d
   # Тоді в .env / environment постав REDIS_URL=redis://redis:6379/0
   redis:
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-public.ecr.aws/docker/library/redis:7-alpine}
     container_name: carbit-redis
     profiles: ["cache"]
     restart: unless-stopped
@@ -27,7 +29,7 @@ services:
       retries: 5
 
   postgres:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:-public.ecr.aws/docker/library/postgres:16-alpine}
     container_name: carbit-postgres
     restart: unless-stopped
     environment:
@@ -157,6 +159,7 @@ services:
       context: .
       dockerfile: docker/frontend/Dockerfile
       args:
+        NODE_IMAGE: ${NODE_IMAGE:-public.ecr.aws/docker/library/node:20-alpine}
         BACKEND_URL: ${BACKEND_URL:-http://localhost:8000/api/v1}
         BACKEND_INTERNAL_URL: http://backend:8000
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}

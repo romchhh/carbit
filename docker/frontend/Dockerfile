@@ -1,10 +1,13 @@
-FROM node:20-alpine AS deps
+# AWS ECR Public mirror — стабільніший на VPS, де docker.io дає TLS timeout.
+ARG NODE_IMAGE=public.ecr.aws/docker/library/node:20-alpine
+
+FROM ${NODE_IMAGE} AS deps
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci
 
-FROM node:20-alpine AS builder
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 
 COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
@@ -28,7 +31,7 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 WORKDIR /app/frontend
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production \

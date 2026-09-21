@@ -1,5 +1,8 @@
 # Спільний шар pip — кешується між backend / worker / bot (поки не змінився requirements.txt).
-FROM python:3.13-slim AS python-deps
+# AWS ECR Public mirror — стабільніший на VPS, де docker.io дає TLS timeout.
+ARG PYTHON_IMAGE=public.ecr.aws/docker/library/python:3.13-slim
+
+FROM ${PYTHON_IMAGE} AS python-deps
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
