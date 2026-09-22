@@ -104,9 +104,7 @@ async def _reset_proxy_client() -> None:
 
 
 def _alert_html_failed() -> None:
-    from app.services.search.proxy_alerts import schedule_proxy_problem
-
-    schedule_proxy_problem(source="AUTO.RIA", error="direct і проксі не віддали HTML")
+    logger.warning("AUTO.RIA HTML unavailable: direct and proxy returned no usable HTML")
 
 
 async def _retry_html_fetch(

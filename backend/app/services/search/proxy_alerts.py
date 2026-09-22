@@ -90,7 +90,7 @@ def _parse_end(value: str | None) -> datetime | None:
 
 
 async def notify_proxy_problem(*, source: str, error: str) -> None:
-    """Проблема на запиті (407, тунель, ліміт). Cooldown 15–30 хв."""
+    """Тимчасові збої direct/проксі на запиті — тільки в лог, без Telegram."""
     key = _fail_alert_key(source, error)
     cooldown = (
         _HTML_FAIL_COOLDOWN_SECONDS
@@ -100,11 +100,7 @@ async def notify_proxy_problem(*, source: str, error: str) -> None:
     if not await _mark_once(key, cooldown):
         return
     detail = humanize_proxy_error(error or "")
-    await notify_monitor_admins(
-        "⚠️ <b>Проксі Webshare</b>\n"
-        f"Джерело: <b>{html.escape(source)}</b>\n"
-        f"{html.escape(detail)}"
-    )
+    logger.warning("Webshare request problem source=%s: %s", source, detail)
 
 
 def schedule_proxy_problem(*, source: str, error: str) -> None:

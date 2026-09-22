@@ -51,24 +51,21 @@ def test_mark_once_is_atomic():
     asyncio.run(run())
 
 
-def test_notify_proxy_problem_sends_once_for_parallel_html_failures():
+def test_notify_proxy_problem_does_not_telegram():
     async def run():
         sent: list[str] = []
 
         async def fake_notify(text: str) -> None:
             sent.append(text)
 
-        async def fake_mark(key, ttl):
-            return key == "fail:html_unavailable" and not sent
-
         with (
-            patch("app.services.search.proxy_alerts._mark_once", new=AsyncMock(side_effect=fake_mark)),
+            patch("app.services.search.proxy_alerts._mark_once", new=AsyncMock(return_value=True)),
             patch("app.services.search.proxy_alerts.notify_monitor_admins", new=fake_notify),
         ):
             await notify_proxy_problem(source="AUTO.RIA", error="direct і проксі не віддали HTML")
-            await notify_proxy_problem(source="AUTO.RIA", error="direct і проксі не віддали HTML")
+            await notify_proxy_problem(source="OLX", error="тунель CONNECT 502")
 
-        assert len(sent) == 1
+        assert sent == []
 
     asyncio.run(run())
 
