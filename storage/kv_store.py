@@ -20,6 +20,7 @@ class KVPipeline(Protocol):
 
 class KVClient(Protocol):
     async def setex(self, key: str, ttl: int, value: str) -> None: ...
+    async def setnx_ex(self, key: str, ttl: int, value: str) -> bool: ...
     async def get(self, key: str) -> str | None: ...
     async def delete(self, key: str) -> None: ...
     async def exists(self, key: str) -> int: ...
@@ -97,6 +98,19 @@ class SQLiteKV:
                 (key, value, expires_at),
             )
 
+    def _setnx_ex_sync(self, key: str, ttl: int, value: str) -> bool:
+        expires_at = time.time() + ttl
+        with self._connect() as conn:
+            self._purge_expired(conn)
+            row = conn.execute("SELECT 1 FROM kv WHERE key = ?", (key,)).fetchone()
+            if row:
+                return False
+            conn.execute(
+                "INSERT INTO kv(key, value, expires_at) VALUES (?, ?, ?)",
+                (key, value, expires_at),
+            )
+            return True
+
     def _get_sync(self, key: str) -> str | None:
         with self._connect() as conn:
             self._purge_expired(conn)
@@ -156,6 +170,9 @@ class SQLiteKV:
 
     async def setex(self, key: str, ttl: int, value: str) -> None:
         await to_thread(self._setex_sync, key, ttl, value)
+
+    async def setnx_ex(self, key: str, ttl: int, value: str) -> bool:
+        return await to_thread(self._setnx_ex_sync, key, ttl, value)
 
     async def get(self, key: str) -> str | None:
         return await to_thread(self._get_sync, key)
@@ -398,6 +415,9 @@ class RedisKV:
 
     async def setex(self, key: str, ttl: int, value: str) -> None:
         await self._client.setex(key, ttl, value)
+
+    async def setnx_ex(self, key: str, ttl: int, value: str) -> bool:
+        return bool(await self._client.set(key, value, nx=True, ex=ttl))
 
     async def get(self, key: str) -> str | None:
         return await self._client.get(key)

@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 _WARN_TTL_SECONDS = 60 * 60 * 24 * 40
 _FAIL_COOLDOWN_SECONDS = 900
+_HTML_FAIL_COOLDOWN_SECONDS = 1800
 _SUB_SOON_DAYS = 3
 _mark_lock = asyncio.Lock()
 _local_until: dict[str, float] = {}
@@ -43,23 +44,35 @@ def _parse_remaining_thresholds(raw: str) -> tuple[int, ...]:
     return tuple(sorted(set(out), reverse=True))
 
 
+def _fail_alert_key(source: str, error: str) -> str:
+    low = (error or "").strip().lower()
+    if "не віддали html" in low or "html failed" in low or "html proxy failed" in low:
+        return "fail:html_unavailable"
+    source_key = (source or "unknown").strip().lower().replace(" ", "_")
+    return f"fail:{source_key}"
+
+
 async def _mark_once(key: str, ttl: int) -> bool:
-    """Атомарно в процесі + Redis. Інакше 3 паралельні фейли = 3 телеграми."""
+    """Атомарно в процесі + KV. Інакше паралельні фейли = кілька телеграм."""
     now = time.monotonic()
     async with _mark_lock:
-        until = _local_until.get(key, 0.0)
-        if now < until:
+        if now < _local_until.get(key, 0.0):
             return False
-        _local_until[key] = now + ttl
+
+    full = f"webshare:alert:{key}"
+    marked = False
     try:
         redis = await get_redis()
-        full = f"webshare:alert:{key}"
-        if await redis.exists(full):
-            return False
-        await redis.setex(full, ttl, "1")
-        return True
+        marked = await redis.setnx_ex(full, ttl, "1")
     except Exception:
-        return True
+        logger.debug("webshare alert mark failed key=%s", key, exc_info=True)
+
+    if not marked:
+        return False
+
+    async with _mark_lock:
+        _local_until[key] = now + ttl
+    return True
 
 
 def _period_key(usage: WebshareUsage) -> str:
@@ -77,8 +90,14 @@ def _parse_end(value: str | None) -> datetime | None:
 
 
 async def notify_proxy_problem(*, source: str, error: str) -> None:
-    """Проблема на запиті (407, тунель, ліміт). Cooldown 15 хв."""
-    if not await _mark_once(f"fail:{source}", _FAIL_COOLDOWN_SECONDS):
+    """Проблема на запиті (407, тунель, ліміт). Cooldown 15–30 хв."""
+    key = _fail_alert_key(source, error)
+    cooldown = (
+        _HTML_FAIL_COOLDOWN_SECONDS
+        if key == "fail:html_unavailable"
+        else _FAIL_COOLDOWN_SECONDS
+    )
+    if not await _mark_once(key, cooldown):
         return
     detail = humanize_proxy_error(error or "")
     await notify_monitor_admins(

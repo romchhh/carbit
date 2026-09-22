@@ -4,7 +4,12 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 from app.services.search.http_proxy import WebshareUsage
-from app.services.search.proxy_alerts import check_webshare_alerts
+from app.services.search.proxy_alerts import (
+    _fail_alert_key,
+    _mark_once,
+    check_webshare_alerts,
+    notify_proxy_problem,
+)
 
 
 def _usage(*, remaining_pct: float, remaining_bytes: int, used: int = 1, limit_gb: float = 3) -> WebshareUsage:
@@ -17,6 +22,55 @@ def _usage(*, remaining_pct: float, remaining_bytes: int, used: int = 1, limit_g
         limit_gb=limit_gb,
         period_end="2026-10-12T11:42:23.943662Z",
     )
+
+
+def test_fail_alert_key_dedupes_html_errors():
+    assert _fail_alert_key("AUTO.RIA", "direct і проксі не віддали HTML") == "fail:html_unavailable"
+    assert _fail_alert_key("OLX", "AUTO.RIA HTML failed") == "fail:html_unavailable"
+    assert _fail_alert_key("OLX", "407 proxy auth") == "fail:olx"
+
+
+def test_mark_once_is_atomic():
+    async def run():
+        calls = {"n": 0}
+
+        async def fake_setnx(key, ttl, value):
+            calls["n"] += 1
+            return calls["n"] == 1
+
+        fake_redis = AsyncMock()
+        fake_redis.setnx_ex = fake_setnx
+
+        with patch("app.services.search.proxy_alerts.get_redis", new=AsyncMock(return_value=fake_redis)):
+            first = await _mark_once("fail:html_unavailable", 60)
+            second = await _mark_once("fail:html_unavailable", 60)
+
+        assert first is True
+        assert second is False
+
+    asyncio.run(run())
+
+
+def test_notify_proxy_problem_sends_once_for_parallel_html_failures():
+    async def run():
+        sent: list[str] = []
+
+        async def fake_notify(text: str) -> None:
+            sent.append(text)
+
+        async def fake_mark(key, ttl):
+            return key == "fail:html_unavailable" and not sent
+
+        with (
+            patch("app.services.search.proxy_alerts._mark_once", new=AsyncMock(side_effect=fake_mark)),
+            patch("app.services.search.proxy_alerts.notify_monitor_admins", new=fake_notify),
+        ):
+            await notify_proxy_problem(source="AUTO.RIA", error="direct і проксі не віддали HTML")
+            await notify_proxy_problem(source="AUTO.RIA", error="direct і проксі не віддали HTML")
+
+        assert len(sent) == 1
+
+    asyncio.run(run())
 
 
 def test_bandwidth_warning_at_20_percent():

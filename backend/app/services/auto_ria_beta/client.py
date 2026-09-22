@@ -109,6 +109,30 @@ def _alert_html_failed() -> None:
     schedule_proxy_problem(source="AUTO.RIA", error="direct і проксі не віддали HTML")
 
 
+async def _retry_html_fetch(
+    *,
+    try_direct,
+    try_proxy,
+) -> httpx.Response | None:
+    """Одна повторна спроба після збою direct+proxy перед адмін-алертом."""
+    global _html_route
+
+    _html_route = None
+    await _reset_proxy_client()
+    await asyncio.sleep(0.5)
+    response = await try_direct()
+    if response is not None:
+        _html_route = "direct"
+        logger.info("AUTO.RIA HTML via direct (retry)")
+        return response
+    response = await try_proxy()
+    if response is not None:
+        _html_route = "proxy"
+        logger.info("AUTO.RIA HTML via proxy (retry)")
+        return response
+    return None
+
+
 async def _get_html(url: str, *, params: dict | None = None) -> httpx.Response:
     """Direct першим. Проксі — лише якщо AUTO.RIA з VPS недоступний або заблокований."""
     global _html_route
@@ -141,6 +165,9 @@ async def _get_html(url: str, *, params: dict | None = None) -> httpx.Response:
         if response is not None:
             _html_route = "direct"
             logger.warning("AUTO.RIA HTML: proxy failed, fell back to direct")
+            return response
+        response = await _retry_html_fetch(try_direct=try_direct, try_proxy=try_proxy)
+        if response is not None:
             return response
         _alert_html_failed()
         raise AutoRiaBetaError("AUTO.RIA HTML proxy failed", request=request_label)
@@ -199,6 +226,9 @@ async def _get_html(url: str, *, params: dict | None = None) -> httpx.Response:
                 task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
+    response = await _retry_html_fetch(try_direct=try_direct, try_proxy=try_proxy)
+    if response is not None:
+        return response
     _alert_html_failed()
     raise AutoRiaBetaError("AUTO.RIA HTML failed", request=request_label)
 
