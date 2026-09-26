@@ -37,7 +37,7 @@ from app.services.parser.filter_groups import filters_group_key
 
 logger = logging.getLogger(__name__)
 
-LIVE_POOL_PREFIX = "live-pool:v20:"
+LIVE_POOL_PREFIX = "live-pool:v21:"
 LIVE_POOL_TTL_SECONDS = 600  # 10 хвилин — повторний пошук без нових AR-запитів
 # Максимальна кількість слотів у пулі (AUTO.RIA IDs + OLX/Telegram items)
 LIVE_POOL_SIZE = 2500
@@ -479,20 +479,16 @@ async def _hydrate_page_slots(slots: list[dict]) -> list[ListingOut]:
 def _search_needs_listing_filter(filters: SearchFilters | None) -> TypeGuard[SearchFilters]:
     if not filters:
         return False
-    from app.services.search.filter_multi import effective_regions
+    from app.services.search.filter_multi import search_needs_client_listing_filter
 
-    return bool(
-        (filters.brand or "").strip()
-        or (filters.model or "").strip()
-        or effective_regions(filters)
-    )
+    return search_needs_client_listing_filter(filters)
 
 
 def _filter_listings_by_brand_model(
     items: list[ListingOut],
     filters: SearchFilters,
 ) -> list[ListingOut]:
-    if not _search_needs_listing_filter(filters) and filters.year_from is None and filters.year_to is None:
+    if not _search_needs_listing_filter(filters):
         return items
     from app.services.telegram_channels.mapper import listing_out_matches_filters
 
@@ -622,6 +618,8 @@ async def _collect_unique_page_items(
     kept: list[ListingOut] = []
     idx = 0
     max_scan = max(skip + per_page * 5, per_page * 2)
+    if filters is not None and apply_listing_filter:
+        max_scan = max(max_scan, skip + per_page * 20)
 
     while len(kept) < want:
         slots = list(pool.get("slots") or [])

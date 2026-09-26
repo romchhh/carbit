@@ -51,14 +51,23 @@ def is_listing_fresh_for_notification(
     max_hours: float,
     now: datetime | None = None,
     allow_none: bool = False,
+    discovered_at: datetime | None = None,
 ) -> bool:
     """Чи достатньо свіже оголошення для Telegram-сповіщення.
 
     allow_none=True: якщо published_at невідомий — вважаємо свіжим (щойно знайдено).
+    discovered_at: found_at у БД — якщо published_at відсутній, орієнтуємось на нього.
     """
     if max_hours <= 0:
         return False
     if published_at is None:
+        if discovered_at is not None:
+            return is_listing_fresh_for_notification(
+                discovered_at,
+                max_hours=max_hours,
+                now=now,
+                allow_none=False,
+            )
         return allow_none
 
     current = now or now_kyiv()

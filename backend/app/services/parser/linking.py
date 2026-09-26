@@ -34,6 +34,7 @@ async def link_listing_to_search(
             listing.published_at,
             max_hours=max_notification_hours,
             allow_none=False,
+            discovered_at=listing.found_at,
         ):
             mark_as_new = False
             notify = False

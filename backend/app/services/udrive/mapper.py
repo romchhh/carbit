@@ -229,36 +229,35 @@ async def filters_to_query_body(
     model = (effective_models(filters)[:1] or [""])[0].strip()
     brand, model = split_huawei_subbrand(brand, model)
 
-    if not brand:
-        raise UdriveBrandNotFound("Для пошуку в uDrive потрібна марка")
-
-    make = await resolve_make(client, brand)
-    if make is None or make.get("id") is None:
-        raise UdriveBrandNotFound(f"Марку «{brand}» не знайдено в uDrive")
-
-    make_id = int(make["id"])
-    brand_slug = str(make.get("slug") or brand).strip().lower()
-    model_ids: list[int] = []
-    if model:
-        from app.services.search.new_generation import new_generation_models
-
-        names = new_generation_models(brand, model)
-        seen: set[int] = set()
-        for name in names or (model,):
-            for mid in await resolve_model_ids(client, make_id, name, brand=brand):
-                if mid not in seen:
-                    seen.add(mid)
-                    model_ids.append(mid)
-
     body: dict[str, Any] = {
-        "makeId": [make_id],
         "fromPageNumber": max(page, 1),
         "toPageNumber": max(page, 1),
         "pageSize": min(max(per_page, 1), UDRIVE_PAGE_SIZE),
         "status": [STATUS_PUBLISHED],
     }
-    if model_ids:
-        body["modelId"] = model_ids
+    brand_slug = ""
+
+    if brand:
+        make = await resolve_make(client, brand)
+        if make is None or make.get("id") is None:
+            raise UdriveBrandNotFound(f"Марку «{brand}» не знайдено в uDrive")
+
+        make_id = int(make["id"])
+        brand_slug = str(make.get("slug") or brand).strip().lower()
+        body["makeId"] = [make_id]
+        model_ids: list[int] = []
+        if model:
+            from app.services.search.new_generation import new_generation_models
+
+            names = new_generation_models(brand, model)
+            seen: set[int] = set()
+            for name in names or (model,):
+                for mid in await resolve_model_ids(client, make_id, name, brand=brand):
+                    if mid not in seen:
+                        seen.add(mid)
+                        model_ids.append(mid)
+        if model_ids:
+            body["modelId"] = model_ids
 
     from app.services.search.category import effective_year_bounds
 

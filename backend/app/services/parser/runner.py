@@ -149,9 +149,11 @@ async def _process_group(
         settings.get("notification_max_published_hours", 6)
     )
     max_hours_int = max(1, int(round(max_hours)))
-    discover_hours = max_hours_int
+    # Ширше вікно пошуку, ніж Telegram — щоб не пропускати авто між циклами.
+    discover_hours = max(max_hours_int, 24)
     notify_hours = max_hours
     monitor_ttl = _monitor_cache_ttl(settings)
+    monitor_run = notify
 
     searches: list[SearchQuery] = []
     for search_id in group.search_ids:
@@ -183,7 +185,7 @@ async def _process_group(
         # Для моніторингу — не ховаємося в кеш довше ніж половина monitor_ttl,
         # щоб нові авто не пропускати між циклами.
         cache_reuse_max = monitor_ttl // 2
-        if not sources_only:
+        if not sources_only and not monitor_run:
             cached = await get_filter_cache(fetch_key)
             if cached and cached.get("fetched_at"):
                 try:
@@ -209,7 +211,7 @@ async def _process_group(
                         max_hours=notify_hours,
                         log=log,
                     )
-                    if new_total:
+                    if new_total or notifications:
                         await db.commit()  # зразу в кабінеті + Telegram
                     log.append(f"  ✓ З кешу: {len(upserted)} оголошень, нових {new_total}")
                     mark_searches_checked(searches)
@@ -234,7 +236,7 @@ async def _process_group(
             "published_desc",
             max_items=max_listings,
         )
-        if pooled and not sources_only and not needs_live_api:
+        if pooled and not sources_only and not needs_live_api and not monitor_run:
             log.append(f"  ↺ Live-pool ({len(pooled)} огол.) — без зовнішніх API")
             upserted.clear()
             for item in pooled:
@@ -250,7 +252,7 @@ async def _process_group(
                 max_hours=notify_hours,
                 log=log,
             )
-            if new_total:
+            if new_total or notifications:
                 await db.commit()
             await set_filter_cache(fetch_key, listing_ids, ttl_seconds=settings["cache_ttl_seconds"])
             log.append(f"  ✓ З live-pool: {len(pooled)}, нових {new_total}")
@@ -274,7 +276,7 @@ async def _process_group(
             page=1,
             per_page=max_listings,
             sort_by="published_desc",
-            use_cache=True,
+            use_cache=not monitor_run,
             cache_ttl_seconds=monitor_ttl,
             db=db,
             keyword_refresh=False,
@@ -288,7 +290,9 @@ async def _process_group(
     finally:
         reset_monitor_search_ids(monitor_ctx)
 
-    log.append(f"  · Джерела: {', '.join(parse_sources)} · Telegram ≤ {max_hours_int} год")
+    log.append(
+        f"  · Джерела: {', '.join(parse_sources)} · пошук ≤ {discover_hours} год · Telegram ≤ {max_hours_int} год"
+    )
 
     for status in outcome.sources:
         if status.error and not is_benign_parser_error(status.error):
@@ -325,11 +329,38 @@ async def _process_group(
             )
 
     results = outcome.result
-    found = len(results.items)
+    merged_items = list(results.items)
+    if monitor_run and len(merged_items) >= max_listings and (results.pages or 0) > 1:
+        try:
+            extra_outcome = await search_listings_outcome(
+                parse_filters,
+                page=2,
+                per_page=max_listings,
+                sort_by="published_desc",
+                use_cache=False,
+                cache_ttl_seconds=monitor_ttl,
+                db=db,
+                keyword_refresh=False,
+                olx_enrich_details=False,
+                telegram_found_after=tg_found_after,
+            )
+            seen = {item.id for item in merged_items}
+            for item in extra_outcome.result.items:
+                if item.id not in seen:
+                    merged_items.append(item)
+                    seen.add(item.id)
+            if len(merged_items) > len(results.items):
+                log.append(
+                    f"  · Додаткова сторінка: +{len(merged_items) - len(results.items)} оголошень"
+                )
+        except Exception as exc:
+            log.append(f"  · Додаткова сторінка: {exc}")
+
+    found = len(merged_items)
     listing_ids: list[str] = []
 
     upserted.clear()
-    for item in results.items:
+    for item in merged_items:
         listing = await upsert_listing(db, item)
         listing_ids.append(listing.id)
         upserted.append((item, listing))
@@ -343,7 +374,7 @@ async def _process_group(
         max_hours=notify_hours,
         log=log,
     )
-    if new_total:
+    if new_total or notifications:
         await db.commit()  # миттєво видно в кабінеті + Telegram вже відправлено
 
     await set_filter_cache(
@@ -567,3 +598,4 @@ async def run_parser_for_search(db: AsyncSession, search_id: str) -> None:
         notify=settings.get("notify_telegram", True),
         log=log,
     )
+    await _deliver_monitor_telegram_for_searches(db, [search], 0, log)

@@ -81,11 +81,7 @@ async def pop_parse_jobs(limit: int = 20) -> list[dict]:
 
 async def acquire_cycle_lock(owner: str, *, ttl: int = CYCLE_LOCK_TTL) -> bool:
     redis = await get_redis()
-    existing = await redis.get(CYCLE_LOCK_KEY)
-    if existing:
-        return False
-    await redis.setex(CYCLE_LOCK_KEY, ttl, owner)
-    return True
+    return await redis.setnx_ex(CYCLE_LOCK_KEY, ttl, owner)
 
 
 async def release_cycle_lock(owner: str) -> None:

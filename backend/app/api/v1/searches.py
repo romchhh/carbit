@@ -127,7 +127,14 @@ async def mark_all_searches_seen(
     marked = 0
     for sq in result.all():
         if (sq.new_count or 0) > 0:
-            await deliver_pending_monitor_telegram(db, search_ids=[sq.id], limit=50)
+            for _ in range(5):
+                batch = await deliver_pending_monitor_telegram(
+                    db,
+                    search_ids=[sq.id],
+                    limit=100,
+                )
+                if not batch:
+                    break
             await mark_search_listings_seen(db, sq)
             marked += 1
     return {"marked": marked}

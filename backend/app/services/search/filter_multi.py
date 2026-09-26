@@ -79,3 +79,31 @@ def expand_filters_for_api_fetch(filters: SearchFilters) -> list[SearchFilters]:
 
 def needs_api_fanout(filters: SearchFilters) -> bool:
     return False
+
+
+def search_needs_client_listing_filter(filters: SearchFilters) -> bool:
+    """Чи треба listing_out_matches_filters після API (рік/ціна без марки тощо)."""
+    if effective_brands(filters) or effective_models(filters):
+        return True
+    if effective_regions(filters):
+        return True
+    if filters.year_from is not None or filters.year_to is not None:
+        return True
+    if filters.price_from is not None or filters.price_to is not None:
+        return True
+    if filters.mileage_from is not None or filters.mileage_to is not None:
+        return True
+    if filters.fuel or filters.transmission:
+        return True
+    category = (filters.category or "all").strip().lower()
+    if category not in ("all", ""):
+        return True
+    if filters.accident or filters.seller_filter:
+        return True
+    if filters.zero_mileage or filters.bargain or filters.vin_verified:
+        return True
+    if filters.engine_volume_from is not None or filters.engine_volume_to is not None:
+        return True
+    if filters.body_types or filters.drivetrain or filters.colors:
+        return True
+    return False

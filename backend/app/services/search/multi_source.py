@@ -33,6 +33,14 @@ from app.services.telegram_channels.ingest import search_telegram_listings
 IMPLEMENTED_SOURCES = {"auto_ria", "olx", "telegram", "imperiya", "udrive", "car_market", "lubeavto", "reono"}
 # Бюджет лише на HTTP-сканування після acquire_olx_slot (черга не входить у wait_for).
 OLX_SEARCH_TIMEOUT_SECONDS = 12.0
+# Моніторинг (published_within_hours) — OLX через проксі часто не вкладається в 12s.
+MONITOR_OLX_TIMEOUT_SECONDS = 22.0
+
+
+def olx_timeout_seconds(filters: SearchFilters | None) -> float:
+    if filters and filters.published_within_hours:
+        return MONITOR_OLX_TIMEOUT_SECONDS
+    return OLX_SEARCH_TIMEOUT_SECONDS
 # Скільки оголошень тягнути з кожного джерела в спільний пул (режим «Шукати всі»).
 SOURCE_POOL_CAP = 2500
 TELEGRAM_POOL_CAP = 500
@@ -873,6 +881,7 @@ async def _search_olx_safe(
 
     Семафор займається заздалегідь; таймаут стосується лише фактичного HTTP-сканування.
     """
+    olx_timeout = olx_timeout_seconds(filters)
     try:
         async with acquire_olx_slot():
             result = await asyncio.wait_for(
@@ -884,11 +893,11 @@ async def _search_olx_safe(
                     use_cache=use_cache,
                     cache_ttl_seconds=cache_ttl_seconds,
                 ),
-                timeout=OLX_SEARCH_TIMEOUT_SECONDS,
+                timeout=olx_timeout,
             )
         return result, None
     except asyncio.TimeoutError:
-        return _empty_page(page, per_page), f"таймаут {OLX_SEARCH_TIMEOUT_SECONDS:.0f}s"
+        return _empty_page(page, per_page), f"таймаут {olx_timeout:.0f}s"
     except OlxError as exc:
         return _empty_page(page, per_page), str(exc)
     except Exception as exc:
@@ -1109,6 +1118,7 @@ async def search_listings_outcome(
             return exc
 
     async def run_olx() -> tuple[PaginatedListings, str | None]:
+        olx_timeout = olx_timeout_seconds(filters)
         try:
             async with acquire_olx_slot():
                 result = await asyncio.wait_for(
@@ -1121,11 +1131,11 @@ async def search_listings_outcome(
                         use_cache=use_cache,
                         cache_ttl_seconds=cache_ttl_seconds,
                     ),
-                    timeout=OLX_SEARCH_TIMEOUT_SECONDS,
+                    timeout=olx_timeout,
                 )
             return result, None
         except asyncio.TimeoutError:
-            return _empty_page(1, pool_need), f"таймаут {OLX_SEARCH_TIMEOUT_SECONDS:.0f}s"
+            return _empty_page(1, pool_need), f"таймаут {olx_timeout:.0f}s"
         except OlxError as exc:
             return _empty_page(1, pool_need), str(exc)
         except Exception as exc:
@@ -1519,15 +1529,11 @@ def _filter_listings_by_brand_model(
     items: list[ListingOut],
     filters: SearchFilters,
 ) -> list[ListingOut]:
-    if not (
-        (filters.brand or "").strip()
-        or (filters.model or "").strip()
-        or filters.year_from is not None
-        or filters.year_to is not None
-    ):
-        return items
+    from app.services.search.filter_multi import search_needs_client_listing_filter
     from app.services.telegram_channels.mapper import listing_out_matches_filters
 
+    if not search_needs_client_listing_filter(filters):
+        return items
     return [item for item in items if listing_out_matches_filters(item, filters)]
 
 
@@ -1979,6 +1985,7 @@ async def build_live_search_pool(
             )
 
     async def run_olx():
+        olx_timeout = olx_timeout_seconds(filters)
         try:
             async with acquire_olx_slot():
                 result = await asyncio.wait_for(
@@ -1991,11 +1998,11 @@ async def build_live_search_pool(
                         use_cache=True,
                         cache_ttl_seconds=120,
                     ),
-                    timeout=OLX_SEARCH_TIMEOUT_SECONDS,
+                    timeout=olx_timeout,
                 )
             return result, None
         except asyncio.TimeoutError:
-            return _empty_page(1, max_ids), f"таймаут {OLX_SEARCH_TIMEOUT_SECONDS:.0f}s"
+            return _empty_page(1, max_ids), f"таймаут {olx_timeout:.0f}s"
         except OlxError as exc:
             return _empty_page(1, max_ids), str(exc)
         except Exception as exc:

@@ -208,6 +208,7 @@ async def _attempt_listing_match_telegram(
         listing.published_at,
         max_hours=max_published_hours,
         allow_none=True,
+        discovered_at=listing.found_at,
     ):
         logger.info(
             "Skip Telegram notify for %s: published_at=%s max_hours=%s",
@@ -406,6 +407,7 @@ async def notify_monitor_listing_after_link(
         listing.published_at,
         max_hours=max_hours,
         allow_none=False,
+        discovered_at=listing.found_at,
     ):
         return False
 
@@ -496,6 +498,7 @@ async def deliver_pending_monitor_telegram(
             listing.published_at,
             max_hours=max_hours,
             allow_none=False,
+            discovered_at=listing.found_at,
         ):
             sl.is_new = False
             search.new_count = max(0, (search.new_count or 0) - 1)

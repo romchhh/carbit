@@ -31,6 +31,18 @@ class NotificationFreshnessTests(unittest.TestCase):
     def test_missing_published_at(self):
         self.assertFalse(is_listing_fresh_for_notification(None, max_hours=1))
 
+    def test_missing_published_at_uses_discovered_at(self):
+        now = now_kyiv()
+        discovered = now - timedelta(minutes=20)
+        self.assertTrue(
+            is_listing_fresh_for_notification(
+                None,
+                max_hours=1,
+                now=now,
+                discovered_at=discovered,
+            )
+        )
+
     def test_coerce_hours(self):
         self.assertEqual(coerce_notification_max_hours("2"), 2.0)
         self.assertEqual(coerce_notification_max_hours(None), DEFAULT_NOTIFICATION_MAX_HOURS)
