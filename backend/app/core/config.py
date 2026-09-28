@@ -140,6 +140,15 @@ class Settings(BaseSettings):
     # Скільки тримаємо оголошення: старші видаляються з БД разом із фото.
     LISTING_MAX_AGE_DAYS: int = 120
 
+    # Резервні копії БД (локально + Telegram адмінам)
+    DB_BACKUP_ENABLED: bool = True
+    DB_BACKUP_HOUR_KYIV: int = 4
+    DB_BACKUP_RETENTION_DAYS: int = 7
+    DB_BACKUP_DIR: str = "database/backups"
+    # Telegram Bot API: документ до 50 MB — шлемо частинами з запасом
+    DB_BACKUP_TELEGRAM_MAX_MB: int = 48
+    DB_BACKUP_INCLUDE_KV: bool = True
+
     # Observability
     SENTRY_DSN: str = ""
 
@@ -167,6 +176,15 @@ class Settings(BaseSettings):
             return ""
         text = str(value).strip().strip('"').strip("'")
         return text
+
+    @field_validator("DB_BACKUP_ENABLED", "DB_BACKUP_INCLUDE_KV", mode="before")
+    @classmethod
+    def parse_backup_bool(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
     @field_validator("SQLITE_MIGRATE_ENABLED", "SQLITE_MIGRATE_FORCE", mode="before")
     @classmethod
@@ -196,6 +214,11 @@ class Settings(BaseSettings):
                 self.PUBLIC_API_BASE = backend
             else:
                 self.PUBLIC_API_BASE = f"{self.FRONTEND_URL.rstrip('/')}/api/v1"
+        backup_dir = Path(self.DB_BACKUP_DIR)
+        if not backup_dir.is_absolute():
+            backup_dir = ROOT_DIR / backup_dir
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        self.DB_BACKUP_DIR = str(backup_dir.resolve())
         return self
 
 

@@ -17,6 +17,7 @@ htmlcov/
 *.log
 
 # Database & runtime data (SQLite, Telethon, dedupe)
+database/backups/
 database/*.db
 database/*.db-*
 database/*.db.bak.*

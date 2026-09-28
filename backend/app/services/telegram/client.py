@@ -75,11 +75,13 @@ class TelegramClient:
         method: str,
         data: dict[str, Any],
         files: dict[str, tuple],
+        *,
+        timeout: float = 30.0,
     ) -> dict | None:
         if not self.enabled:
             logger.warning("Telegram bot token not configured")
             return None
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             res = await client.post(f"{self.base}/{method}", data=data, files=files)
             from app.services.admin.api_usage import record_api_request
 
@@ -147,6 +149,34 @@ class TelegramClient:
         if result and result.get("ok"):
             return result
         return None
+
+    async def send_document(
+        self,
+        chat_id: str | int,
+        file_path: Path,
+        *,
+        caption: str = "",
+        filename: str | None = None,
+        parse_mode: str = "HTML",
+    ) -> bool:
+        if not file_path.is_file():
+            logger.error("send_document: file not found %s", file_path)
+            return False
+        data: dict[str, Any] = {"chat_id": str(chat_id)}
+        if caption:
+            data["caption"] = caption[:1024]
+            data["parse_mode"] = parse_mode
+        name = filename or file_path.name
+        size_mb = file_path.stat().st_size / (1024 * 1024)
+        upload_timeout = max(120.0, min(900.0, 60.0 + size_mb * 8.0))
+        with file_path.open("rb") as handle:
+            result = await self._call_multipart(
+                "sendDocument",
+                data,
+                {"document": (name, handle, "application/gzip")},
+                timeout=upload_timeout,
+            )
+        return bool(result and result.get("ok"))
 
     async def send_listing_card(
         self,

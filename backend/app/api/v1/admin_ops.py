@@ -332,3 +332,30 @@ async def admin_traffic(
 
     data = await build_traffic_report(hours=hours, days=days, day=focus_day, month=month)
     return AdminTrafficOut(**data)
+
+
+class AdminBackupRunOut(BaseModel):
+    ok: bool
+    timestamp: str
+    files: list[str]
+    errors: list[str]
+    source: str = ""
+    duration_seconds: float = 0.0
+
+
+@router.post("/backup/run", response_model=AdminBackupRunOut)
+async def admin_run_database_backup(
+    _: str = Depends(get_current_admin),
+):
+    """Створити дамп БД, надіслати адмінам у Telegram (частинами якщо > ліміту)."""
+    from app.services.backup.service import run_backup_and_notify
+
+    result = await run_backup_and_notify(manual=True)
+    return AdminBackupRunOut(
+        ok=result.ok,
+        timestamp=result.timestamp,
+        files=result.files,
+        errors=result.errors,
+        source=result.source,
+        duration_seconds=result.duration_seconds,
+    )
