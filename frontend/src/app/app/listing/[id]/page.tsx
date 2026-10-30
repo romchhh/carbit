@@ -28,6 +28,7 @@ import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { ListingPlateBadge } from "@/components/listings/ListingPlateBadge";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
+import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { AccidentBadge } from "@/components/listings/AccidentBadge";
 import { UsaImportBadge } from "@/components/listings/UsaImportBadge";
 import { resolveListingAccidentHad } from "@/lib/listing-accident";

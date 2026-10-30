@@ -9,6 +9,7 @@ import { ListingCompareButton } from "@/components/listings/ListingCompareButton
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { ListingPlateBadge } from "@/components/listings/ListingPlateBadge";
+import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { AccidentBadge } from "@/components/listings/AccidentBadge";
 import { UsaImportBadge } from "@/components/listings/UsaImportBadge";
 import { useListingCompare } from "@/hooks/useListingCompare";
