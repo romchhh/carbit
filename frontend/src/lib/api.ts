@@ -570,6 +570,13 @@ export type CreditLeadPayload = {
   term_months: number;
   loan_amount_uah: number;
   monthly_payment_uah: number;
+  monthly_payment_from_month2_uah?: number | null;
+  registration_mode?: "with_registration" | "without_registration";
+  nominal_rate_percent?: number;
+  real_annual_rate_percent?: number | null;
+  total_repayment_uah?: number;
+  one_time_fee_uah?: number;
+  notary_fee_uah?: number;
 };
 
 export const creditLeads = {

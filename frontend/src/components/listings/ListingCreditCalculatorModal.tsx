@@ -9,18 +9,23 @@ import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthProvider";
 import { BANK_PARTNER_BIZBANK } from "@/lib/brand-assets";
+import { BisbankPaymentScheduleTable } from "@/components/listings/BisbankPaymentScheduleTable";
 import {
   BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT,
   BISBANK_DEFAULT_TERM_MONTHS,
+  BISBANK_FLOATING_MARGIN_DEFAULT,
   BISBANK_TERM_MARKS,
   BISBANK_TERM_MAX_MONTHS,
   BISBANK_TERM_MIN_MONTHS,
   computeBisbankCreditQuote,
+  formatBisbankDateUk,
   formatMoneyUah,
   formatPercentUk,
   minDownPaymentPercent,
   resolveListingPriceUah,
+  type BisbankRegistrationMode,
 } from "@/lib/bisbank-credit-calculator";
+import { cn } from "@/lib/utils";
 import { ApiError, creditLeads } from "@/lib/api";
 import { formatListingPrice, type DisplayCurrency } from "@/lib/display-currency";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
@@ -114,6 +119,11 @@ export function ListingCreditCalculatorModal({
     Math.max(BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT, downMin),
   );
   const [termMonths, setTermMonths] = useState(BISBANK_DEFAULT_TERM_MONTHS);
+  const [registrationMode, setRegistrationMode] =
+    useState<BisbankRegistrationMode>("with_registration");
+  const [includeNotary, setIncludeNotary] = useState(false);
+  const [uidrIndexPercent, setUidrIndexPercent] = useState("");
+  const [marginPercent, setMarginPercent] = useState("");
   const [applicationOpen, setApplicationOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -125,6 +135,10 @@ export function ListingCreditCalculatorModal({
     if (!open) return;
     setDownPercent(prev => Math.max(prev, downMin, BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT));
     setTermMonths(BISBANK_DEFAULT_TERM_MONTHS);
+    setRegistrationMode("with_registration");
+    setIncludeNotary(false);
+    setUidrIndexPercent("");
+    setMarginPercent("");
     setApplicationOpen(false);
     setSubmitError("");
     setSubmitOk(false);
@@ -145,15 +159,29 @@ export function ListingCreditCalculatorModal({
     };
   }, [open, onClose]);
 
-  const quote = useMemo(
-    () =>
-      computeBisbankCreditQuote({
-        carPriceUah,
-        downPaymentPercent: downPercent,
-        termMonths,
-      }),
-    [carPriceUah, downPercent, termMonths],
-  );
+  const quote = useMemo(() => {
+    const uidr = parseFloat(uidrIndexPercent.replace(",", "."));
+    const margin = parseFloat(marginPercent.replace(",", "."));
+    return computeBisbankCreditQuote({
+      carPriceUah,
+      downPaymentPercent: downPercent,
+      termMonths,
+      registrationMode,
+      options: {
+        includeNotaryFee: includeNotary,
+        uidrIndex: Number.isFinite(uidr) ? uidr / 100 : 0,
+        margin: Number.isFinite(margin) ? margin / 100 : 0,
+      },
+    });
+  }, [
+    carPriceUah,
+    downPercent,
+    termMonths,
+    registrationMode,
+    includeNotary,
+    uidrIndexPercent,
+    marginPercent,
+  ]);
 
   const thumb = listing.images?.[0] ?? null;
   const priceLabel = formatListingPrice(
@@ -195,6 +223,13 @@ export function ListingCreditCalculatorModal({
         term_months: quote.termMonths,
         loan_amount_uah: quote.loanAmountUah,
         monthly_payment_uah: quote.monthlyPaymentUah,
+        monthly_payment_from_month2_uah: quote.monthlyPaymentFromMonth2Uah,
+        registration_mode: quote.registrationMode,
+        nominal_rate_percent: quote.nominalRatePercent,
+        real_annual_rate_percent: quote.realAnnualRatePercent,
+        total_repayment_uah: quote.totalRepaymentUah,
+        one_time_fee_uah: quote.oneTimeFeeUah,
+        notary_fee_uah: quote.notaryFeeUah,
       });
       setSubmitOk(true);
     } catch (err) {
@@ -257,6 +292,40 @@ export function ListingCreditCalculatorModal({
             ) : null}
 
             <div className="mt-5 space-y-5">
+              <div>
+                <p className="text-[13px] font-semibold text-ink">Реєстрація ТЗ</p>
+                <div
+                  className="mt-2 flex rounded-full border border-border/80 bg-surface/80 p-1"
+                  role="group"
+                  aria-label="Режим реєстрації"
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex-1 rounded-full px-2 py-2 text-[11px] font-semibold leading-tight transition-colors sm:text-[12px]",
+                      registrationMode === "with_registration"
+                        ? "bg-white text-ink shadow-sm"
+                        : "text-muted hover:text-ink",
+                    )}
+                    onClick={() => setRegistrationMode("with_registration")}
+                  >
+                    З реєстрацією
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex-1 rounded-full px-2 py-2 text-[11px] font-semibold leading-tight transition-colors sm:text-[12px]",
+                      registrationMode === "without_registration"
+                        ? "bg-white text-ink shadow-sm"
+                        : "text-muted hover:text-ink",
+                    )}
+                    onClick={() => setRegistrationMode("without_registration")}
+                  >
+                    Без реєстрації
+                  </button>
+                </div>
+              </div>
+
               <CreditSlider
                 id="credit-down"
                 label="Перший внесок"
@@ -282,6 +351,63 @@ export function ListingCreditCalculatorModal({
                 marks={BISBANK_TERM_MARKS}
                 formatMark={(mark, max) => (mark === max ? `${mark} міс.` : String(mark))}
               />
+
+              <div className="space-y-3 rounded-xl border border-border/70 bg-surface/40 px-3 py-3">
+                <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-ink">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-emerald-dark"
+                    checked={includeNotary}
+                    onChange={e => setIncludeNotary(e.target.checked)}
+                  />
+                  <span>
+                    Нотаріальні послуги та держмито
+                    <span className="block text-[11px] text-muted">
+                      0,12% × сума кредиту × строк (як у калькуляторі банку)
+                    </span>
+                  </span>
+                </label>
+
+                <details className="group text-[12px] text-ink">
+                  <summary className="cursor-pointer font-semibold text-emerald-dark marker:content-none [&::-webkit-details-marker]:hidden">
+                    <span className="underline decoration-emerald/40 underline-offset-2 group-open:no-underline">
+                      Плаваюча ставка з 25-го місяця (UIDR)
+                    </span>
+                  </summary>
+                  <p className="mt-2 text-[11px] leading-snug text-muted">
+                    Якщо індекс UIDR &gt; 0, з 25-го місяця ставка = індекс + маржа (за замовчуванням
+                    маржа{" "}
+                    {formatPercentUk(BISBANK_FLOATING_MARGIN_DEFAULT * 100, 2)} у файлі банку).
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-[11px] text-muted">Індекс UIDR, %</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
+                        className="auth-input mt-1 w-full py-2 text-[13px]"
+                        value={uidrIndexPercent}
+                        onChange={e => setUidrIndexPercent(e.target.value)}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-[11px] text-muted">Маржа, %</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder={formatPercentUk(BISBANK_FLOATING_MARGIN_DEFAULT * 100, 2).replace(
+                          "%",
+                          "",
+                        )}
+                        className="auth-input mt-1 w-full py-2 text-[13px]"
+                        value={marginPercent}
+                        onChange={e => setMarginPercent(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                </details>
+              </div>
             </div>
 
             {quote.warnings.length > 0 ? (
@@ -296,9 +422,32 @@ export function ListingCreditCalculatorModal({
               <p className="text-[12px] font-medium uppercase tracking-wide text-emerald-dark/80">
                 Орієнтовний платіж
               </p>
-              <p className="mt-1 text-[28px] font-bold tabular-nums tracking-tight text-emerald-dark">
-                {quote.loanValid ? `${formatMoneyUah(quote.monthlyPaymentUah)}/міс.` : "—"}
-              </p>
+              {quote.loanValid &&
+              quote.registrationMode === "without_registration" &&
+              quote.monthlyPaymentFromMonth2Uah != null &&
+              quote.monthlyPaymentFromMonth2Uah !== quote.monthlyPaymentUah ? (
+                <div className="mt-1 space-y-1">
+                  <p className="text-[15px] font-semibold tabular-nums text-emerald-dark">
+                    1-й місяць: {formatMoneyUah(quote.monthlyPaymentUah)}
+                  </p>
+                  <p className="text-[28px] font-bold tabular-nums tracking-tight text-emerald-dark">
+                    з 2-го: {formatMoneyUah(quote.monthlyPaymentFromMonth2Uah)}/міс.
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-1 text-[28px] font-bold tabular-nums tracking-tight text-emerald-dark">
+                  {quote.loanValid ? `${formatMoneyUah(quote.monthlyPaymentUah)}/міс.` : "—"}
+                </p>
+              )}
+              {quote.loanValid && quote.realAnnualRatePercent != null ? (
+                <p className="mt-2 text-[13px] leading-snug text-emerald-dark/90">
+                  Реальна річна ставка ≈{" "}
+                  <span className="font-bold tabular-nums">
+                    {formatPercentUk(quote.realAnnualRatePercent, 1)}
+                  </span>
+                  <span className="text-[11px] text-muted"> (XIRR, орієнтовно)</span>
+                </p>
+              ) : null}
               {quote.loanValid ? (
                 <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
                   <div>
@@ -308,9 +457,12 @@ export function ListingCreditCalculatorModal({
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-muted">Ставка</dt>
+                    <dt className="text-muted">Номінальна ставка</dt>
                     <dd className="font-semibold tabular-nums text-ink">
-                      {formatPercentUk(quote.annualRatePercent, 2)} річних
+                      {formatPercentUk(quote.nominalRatePercent, 2)} річних
+                      {quote.secondaryRatePercent != null
+                        ? ` · з 2-го ${formatPercentUk(quote.secondaryRatePercent, 2)}`
+                        : null}
                     </dd>
                   </div>
                   <div>
@@ -319,15 +471,81 @@ export function ListingCreditCalculatorModal({
                       {formatMoneyUah(quote.oneTimeFeeUah)}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-muted">Разом за строк</dt>
+                  {quote.notaryFeeUah > 0 ? (
+                    <div>
+                      <dt className="text-muted">Нотаріальні</dt>
+                      <dd className="font-semibold tabular-nums text-ink">
+                        {formatMoneyUah(quote.notaryFeeUah)}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div className={quote.notaryFeeUah > 0 ? "" : "col-span-2 sm:col-span-1"}>
+                    <dt className="text-muted">Загальна вартість кредиту</dt>
                     <dd className="font-semibold tabular-nums text-ink">
-                      {formatMoneyUah(quote.totalRepaymentUah)}
+                      {formatMoneyUah(quote.totalConsumerCostUah)}
                     </dd>
                   </div>
+                  <div>
+                    <dt className="text-muted">Чиста видача</dt>
+                    <dd className="font-semibold tabular-nums text-ink">
+                      {formatMoneyUah(quote.netDisbursementUah)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Відсотки за строк</dt>
+                    <dd className="font-semibold tabular-nums text-ink">
+                      {formatMoneyUah(quote.totalInterestUah)}
+                    </dd>
+                  </div>
+                  {quote.maturityDate ? (
+                    <div className="col-span-2">
+                      <dt className="text-muted">Дата погашення (орієнт.)</dt>
+                      <dd className="font-semibold text-ink">
+                        {formatBisbankDateUk(quote.maturityDate)}
+                      </dd>
+                    </div>
+                  ) : null}
                 </dl>
               ) : null}
             </div>
+
+            {quote.loanValid && quote.paymentSchedule.length > 0 ? (
+              <details className="mt-4 rounded-2xl border border-border/80 bg-white px-4 py-3">
+                <summary className="cursor-pointer text-[13px] font-semibold text-ink marker:content-none [&::-webkit-details-marker]:hidden">
+                  <span className="text-emerald-dark underline decoration-emerald/30 underline-offset-2 [[open]_&]:no-underline">
+                    Графік платежів ({quote.paymentSchedule.length - 1} міс.)
+                  </span>
+                </summary>
+                <div className="mt-3 rounded-xl border border-border/60 bg-surface/30 px-3 py-2.5 text-[11px] leading-snug text-muted">
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 tabular-nums text-ink">
+                    <div>
+                      <dt className="text-muted">Дата кредиту</dt>
+                      <dd className="font-medium">{formatBisbankDateUk(quote.creditDate)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted">Сума кредиту</dt>
+                      <dd className="font-medium">{formatMoneyUah(quote.loanAmountUah)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted">Строк</dt>
+                      <dd className="font-medium">{quote.termMonths} міс.</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted">Режим</dt>
+                      <dd className="font-medium">
+                        {quote.registrationMode === "with_registration"
+                          ? "З реєстрацією ТЗ"
+                          : "Без реєстрації"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+                <BisbankPaymentScheduleTable
+                  className="mt-3 max-h-[min(280px,40dvh)] overflow-y-auto"
+                  schedule={quote.paymentSchedule}
+                />
+              </details>
+            ) : null}
 
             <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white px-3 py-2.5">
               <Link
@@ -416,8 +634,10 @@ export function ListingCreditCalculatorModal({
             )}
 
             <p className="mt-3 text-[11px] leading-relaxed text-muted">
-              Розрахунок за методикою калькулятора БІЗБАНК (ануїтет, фіксована ставка). Надсилання
-              заявки не є публічною офертою; рішення приймає банк.
+              Розрахунок орієнтовний, за методикою калькулятора БІЗБАНК («готівка на автівку»):
+              ануїтет, разова комісія 2,95%, сценарії з реєстрацією та без. Реальна річна ставка
+              (XIRR) враховує комісії та графік платежів і може відрізнятися від номінальної.
+              Надсилання заявки не є публічною офертою; рішення приймає банк.
             </p>
           </div>
         </div>

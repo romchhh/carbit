@@ -26,6 +26,13 @@ class CreditLeadCreate(BaseModel):
     term_months: int = Field(ge=1, le=120)
     loan_amount_uah: int = Field(ge=0, le=10_000_000)
     monthly_payment_uah: int = Field(ge=0, le=1_000_000)
+    monthly_payment_from_month2_uah: int | None = Field(default=None, ge=0, le=1_000_000)
+    registration_mode: str | None = Field(default=None, max_length=32)
+    nominal_rate_percent: float | None = Field(default=None, ge=0, le=200)
+    real_annual_rate_percent: float | None = Field(default=None, ge=0, le=200)
+    total_repayment_uah: int | None = Field(default=None, ge=0, le=50_000_000)
+    one_time_fee_uah: int | None = Field(default=None, ge=0, le=1_000_000)
+    notary_fee_uah: int | None = Field(default=None, ge=0, le=1_000_000)
 
     @field_validator("name")
     @classmethod
@@ -77,9 +84,32 @@ async def create_credit_lead(body: CreditLeadCreate) -> CreditLeadResponse:
             f"Перший внесок: {body.down_payment_percent:.1f}%",
             f"Строк: {body.term_months} міс.",
             f"Сума кредиту: {body.loan_amount_uah:,} грн".replace(",", " "),
-            f"Платіж: {body.monthly_payment_uah:,} грн/міс.".replace(",", " "),
         ]
     )
+    if body.registration_mode == "without_registration":
+        lines.append("Режим: без реєстрації ТЗ")
+    elif body.registration_mode == "with_registration":
+        lines.append("Режим: з реєстрацією ТЗ")
+    if body.nominal_rate_percent is not None:
+        lines.append(f"Номінальна ставка: {body.nominal_rate_percent:.2f}%")
+    if body.real_annual_rate_percent is not None:
+        lines.append(f"Реальна річна (XIRR): ~{body.real_annual_rate_percent:.1f}%")
+    if (
+        body.monthly_payment_from_month2_uah is not None
+        and body.monthly_payment_from_month2_uah != body.monthly_payment_uah
+    ):
+        lines.append(
+            f"Платіж: {body.monthly_payment_uah:,} грн (1-й міс.), "
+            f"далі {body.monthly_payment_from_month2_uah:,} грн/міс.".replace(",", " ")
+        )
+    else:
+        lines.append(f"Платіж: {body.monthly_payment_uah:,} грн/міс.".replace(",", " "))
+    if body.one_time_fee_uah is not None:
+        lines.append(f"Разова комісія: {body.one_time_fee_uah:,} грн".replace(",", " "))
+    if body.notary_fee_uah is not None and body.notary_fee_uah > 0:
+        lines.append(f"Нотаріальні: {body.notary_fee_uah:,} грн".replace(",", " "))
+    if body.total_repayment_uah is not None:
+        lines.append(f"Разом за строк: {body.total_repayment_uah:,} грн".replace(",", " "))
 
     try:
         await notify_monitor_admins("\n".join(lines))
