@@ -559,6 +559,27 @@ export const sourceRequests = {
     }),
 };
 
+export type CreditLeadPayload = {
+  name: string;
+  phone: string;
+  listing_id?: string | null;
+  listing_title: string;
+  listing_url?: string | null;
+  car_price_uah: number;
+  down_payment_percent: number;
+  term_months: number;
+  loan_amount_uah: number;
+  monthly_payment_uah: number;
+};
+
+export const creditLeads = {
+  submit: (body: CreditLeadPayload) =>
+    request<{ ok: boolean; message: string }>("/credit-leads", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
 export const comparisons = {
   list: () => request<SavedComparison[]>("/comparisons"),
   create: (body: { name?: string; listing_ids: string[] }) =>

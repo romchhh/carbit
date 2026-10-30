@@ -3,8 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { PhoneInput, normalizePhoneForApi } from "@/components/auth/PhoneInput";
 import { IconX } from "@/components/icons";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
+import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/contexts/AuthProvider";
 import { BANK_PARTNER_BIZBANK } from "@/lib/brand-assets";
 import {
   BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT,
@@ -18,6 +21,7 @@ import {
   minDownPaymentPercent,
   resolveListingPriceUah,
 } from "@/lib/bisbank-credit-calculator";
+import { ApiError, creditLeads } from "@/lib/api";
 import { formatListingPrice, type DisplayCurrency } from "@/lib/display-currency";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import type { Listing } from "@/types/api";
@@ -29,6 +33,18 @@ type Props = {
   onClose: () => void;
 };
 
+function phoneNationalFromStored(phone: string | null | undefined): string {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  let national = digits;
+  if (national.startsWith("380")) national = national.slice(3);
+  else if (national.startsWith("80")) national = national.slice(2);
+  else if (national.startsWith("0")) national = national.slice(1);
+  national = national.slice(0, 9);
+  if (national.length < 9) return "";
+  return `${national.slice(0, 2)} ${national.slice(2, 5)} ${national.slice(5, 7)} ${national.slice(7, 9)}`;
+}
+
 function CreditSlider({
   id,
   label,
@@ -39,6 +55,7 @@ function CreditSlider({
   value,
   onChange,
   marks,
+  formatMark,
 }: {
   id: string;
   label: string;
@@ -49,6 +66,7 @@ function CreditSlider({
   value: number;
   onChange: (next: number) => void;
   marks?: readonly number[];
+  formatMark?: (mark: number, max: number) => string;
 }) {
   return (
     <div>
@@ -71,7 +89,9 @@ function CreditSlider({
       {marks && marks.length > 0 ? (
         <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-muted">
           {marks.map(mark => (
-            <span key={mark}>{mark === max ? `${mark} міс.` : mark}</span>
+            <span key={mark}>
+              {formatMark ? formatMark(mark, max) : String(mark)}
+            </span>
           ))}
         </div>
       ) : null}
@@ -85,6 +105,7 @@ export function ListingCreditCalculatorModal({
   displayCurrency,
   onClose,
 }: Props) {
+  const { user } = useAuth();
   const carPriceUah = resolveListingPriceUah(listing);
   const minDown = minDownPaymentPercent(carPriceUah);
   const downMin = Math.max(10, Math.ceil(minDown));
@@ -93,12 +114,23 @@ export function ListingCreditCalculatorModal({
     Math.max(BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT, downMin),
   );
   const [termMonths, setTermMonths] = useState(BISBANK_DEFAULT_TERM_MONTHS);
+  const [applicationOpen, setApplicationOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitOk, setSubmitOk] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setDownPercent(prev => Math.max(prev, downMin, BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT));
     setTermMonths(BISBANK_DEFAULT_TERM_MONTHS);
-  }, [open, listing.id, downMin]);
+    setApplicationOpen(false);
+    setSubmitError("");
+    setSubmitOk(false);
+    setName(user?.name?.trim() ?? "");
+    setPhone(phoneNationalFromStored(user?.phone));
+  }, [open, listing.id, downMin, user?.name, user?.phone]);
 
   useEffect(() => {
     if (!open) return;
@@ -132,6 +164,46 @@ export function ListingCreditCalculatorModal({
   );
   const priceUahLabel = formatMoneyUah(carPriceUah);
 
+  const handleSubmitApplication = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = name.trim();
+    if (trimmedName.length < 2) {
+      setSubmitError("Вкажіть ім'я");
+      return;
+    }
+    const normalized = normalizePhoneForApi(phone);
+    if (normalized.length !== 12) {
+      setSubmitError("Вкажіть номер телефону");
+      return;
+    }
+    if (!quote.loanValid) {
+      setSubmitError("Неможливо надіслати заявку для цих параметрів кредиту");
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      await creditLeads.submit({
+        name: trimmedName,
+        phone: normalized,
+        listing_id: listing.id,
+        listing_title: listing.title,
+        listing_url: listing.url ?? null,
+        car_price_uah: quote.carPriceUah,
+        down_payment_percent: quote.downPaymentPercent,
+        term_months: quote.termMonths,
+        loan_amount_uah: quote.loanAmountUah,
+        monthly_payment_uah: quote.monthlyPaymentUah,
+      });
+      setSubmitOk(true);
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Не вдалося надіслати заявку");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (!open) return null;
 
   return (
@@ -148,7 +220,7 @@ export function ListingCreditCalculatorModal({
         onClick={onClose}
       />
 
-      <div className="relative z-10 flex max-h-[92dvh] w-full max-w-[480px] flex-col overflow-hidden rounded-t-[1.5rem] border border-border/60 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-[1.5rem]">
+      <div className="relative z-10 flex max-h-[92dvh] w-full max-w-[520px] flex-col overflow-hidden rounded-t-[1.5rem] border border-border/60 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-[1.5rem]">
         <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
           <div>
             <h2 id="credit-calc-title" className="text-[18px] font-bold tracking-[-0.02em] text-ink">
@@ -166,127 +238,188 @@ export function ListingCreditCalculatorModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          <div className="flex gap-3 rounded-2xl border border-border/70 bg-surface/60 p-3">
-            <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-xl bg-surface">
-              <ListingPhoto
-                src={thumb}
-                alt={listing.title}
-                sizes="96px"
-                logoClassName="h-6"
+        <div className="flex-1 overflow-y-auto">
+          <div className="relative aspect-[16/10] w-full bg-surface">
+            <ListingPhoto
+              src={thumb}
+              alt={listing.title}
+              sizes="(max-width: 520px) 100vw, 520px"
+              priority
+              logoClassName="h-10 sm:h-12"
+            />
+          </div>
+
+          <div className="px-5 py-4">
+            <h3 className="text-[16px] font-bold leading-snug text-ink">{listing.title}</h3>
+            <p className="mt-1.5 text-[20px] font-bold tabular-nums text-emerald-dark">{priceLabel}</p>
+            {displayCurrency !== "UAH" ? (
+              <p className="mt-0.5 text-[13px] text-muted">≈ {priceUahLabel}</p>
+            ) : null}
+
+            <div className="mt-5 space-y-5">
+              <CreditSlider
+                id="credit-down"
+                label="Перший внесок"
+                valueLabel={`${formatMoneyUah(quote.downPaymentUah)} · ${formatPercentUk(quote.downPaymentPercent)}`}
+                min={downMin}
+                max={95}
+                step={1}
+                value={Math.max(downPercent, downMin)}
+                onChange={setDownPercent}
+                marks={[downMin, 50, 95]}
+                formatMark={mark => `${mark}%`}
+              />
+
+              <CreditSlider
+                id="credit-term"
+                label="Строк кредитування"
+                valueLabel={`${termMonths} міс.`}
+                min={BISBANK_TERM_MIN_MONTHS}
+                max={BISBANK_TERM_MAX_MONTHS}
+                step={1}
+                value={termMonths}
+                onChange={setTermMonths}
+                marks={BISBANK_TERM_MARKS}
+                formatMark={(mark, max) => (mark === max ? `${mark} міс.` : String(mark))}
               />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="line-clamp-2 text-[14px] font-semibold leading-snug text-ink">
-                {listing.title}
+
+            {quote.warnings.length > 0 ? (
+              <ul className="mt-4 space-y-1.5 rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5 text-[12px] leading-snug text-amber-900">
+                {quote.warnings.map(w => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            <div className="mt-5 rounded-2xl border border-emerald/25 bg-emerald-light/40 p-4">
+              <p className="text-[12px] font-medium uppercase tracking-wide text-emerald-dark/80">
+                Орієнтовний платіж
               </p>
-              <p className="mt-1 text-[17px] font-bold text-emerald-dark">{priceLabel}</p>
-              {displayCurrency !== "UAH" ? (
-                <p className="text-[12px] text-muted">≈ {priceUahLabel}</p>
+              <p className="mt-1 text-[28px] font-bold tabular-nums tracking-tight text-emerald-dark">
+                {quote.loanValid ? `${formatMoneyUah(quote.monthlyPaymentUah)}/міс.` : "—"}
+              </p>
+              {quote.loanValid ? (
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
+                  <div>
+                    <dt className="text-muted">Сума кредиту</dt>
+                    <dd className="font-semibold tabular-nums text-ink">
+                      {formatMoneyUah(quote.loanAmountUah)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Ставка</dt>
+                    <dd className="font-semibold tabular-nums text-ink">
+                      {formatPercentUk(quote.annualRatePercent, 2)} річних
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Разова комісія</dt>
+                    <dd className="font-semibold tabular-nums text-ink">
+                      {formatMoneyUah(quote.oneTimeFeeUah)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Разом за строк</dt>
+                    <dd className="font-semibold tabular-nums text-ink">
+                      {formatMoneyUah(quote.totalRepaymentUah)}
+                    </dd>
+                  </div>
+                </dl>
               ) : null}
             </div>
-          </div>
 
-          <div className="mt-5 space-y-5">
-            <CreditSlider
-              id="credit-down"
-              label="Перший внесок"
-              valueLabel={`${formatMoneyUah(quote.downPaymentUah)} · ${formatPercentUk(quote.downPaymentPercent)}`}
-              min={downMin}
-              max={95}
-              step={1}
-              value={Math.max(downPercent, downMin)}
-              onChange={setDownPercent}
-              marks={[downMin, 50, 95]}
-            />
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white px-3 py-2.5">
+              <Link
+                href={BANK_PARTNER_BIZBANK.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-w-0 items-center"
+              >
+                <Image
+                  src={BANK_PARTNER_BIZBANK.src}
+                  alt={BANK_PARTNER_BIZBANK.alt}
+                  width={4147}
+                  height={942}
+                  className="h-6 w-auto max-w-[140px] object-contain"
+                />
+              </Link>
+              <Link
+                href={BANK_PARTNER_BIZBANK.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-[12px] font-semibold text-emerald-dark hover:underline"
+              >
+                Деталі на сайті банку
+              </Link>
+            </div>
 
-            <CreditSlider
-              id="credit-term"
-              label="Строк кредитування"
-              valueLabel={`${termMonths} міс.`}
-              min={BISBANK_TERM_MIN_MONTHS}
-              max={BISBANK_TERM_MAX_MONTHS}
-              step={1}
-              value={termMonths}
-              onChange={setTermMonths}
-              marks={BISBANK_TERM_MARKS}
-            />
-          </div>
+            {submitOk ? (
+              <div className="mt-4 rounded-xl border border-emerald/25 bg-emerald-light/50 px-4 py-3 text-[13px] leading-snug text-emerald-dark">
+                Заявку надіслано. Менеджер банку-партнера зв&apos;яжеться з вами за вказаним номером.
+              </div>
+            ) : applicationOpen ? (
+              <form onSubmit={e => void handleSubmitApplication(e)} className="mt-4 space-y-3 rounded-2xl border border-border/80 bg-surface/50 p-4">
+                <p className="text-[14px] font-semibold text-ink">Залишити заявку</p>
+                <p className="text-[12px] leading-snug text-muted">
+                  Вкажіть контакти — передамо заявку з параметрами розрахунку банку-партнеру.
+                </p>
+                <input
+                  type="text"
+                  name="name"
+                  autoComplete="name"
+                  placeholder="Ім'я"
+                  className="auth-input w-full"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  required
+                  minLength={2}
+                />
+                <PhoneInput value={phone} onChange={setPhone} disabled={submitting} />
+                {submitError ? (
+                  <p className="text-[12px] font-medium text-red-600">{submitError}</p>
+                ) : null}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="submit"
+                    variant="emerald"
+                    size="lg"
+                    loading={submitting}
+                    disabled={!quote.loanValid}
+                    className="w-full flex-1 rounded-full hover:translate-y-0"
+                  >
+                    Надіслати заявку
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="lg"
+                    className="w-full flex-1 rounded-full hover:translate-y-0"
+                    onClick={() => setApplicationOpen(false)}
+                    disabled={submitting}
+                  >
+                    Назад
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <Button
+                type="button"
+                variant="emerald"
+                size="lg"
+                className="mt-4 w-full rounded-full hover:translate-y-0"
+                disabled={!quote.loanValid}
+                onClick={() => setApplicationOpen(true)}
+              >
+                Залишити заявку
+              </Button>
+            )}
 
-          {quote.warnings.length > 0 ? (
-            <ul className="mt-4 space-y-1.5 rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5 text-[12px] leading-snug text-amber-900">
-              {quote.warnings.map(w => (
-                <li key={w}>{w}</li>
-              ))}
-            </ul>
-          ) : null}
-
-          <div className="mt-5 rounded-2xl border border-emerald/25 bg-emerald-light/40 p-4">
-            <p className="text-[12px] font-medium uppercase tracking-wide text-emerald-dark/80">
-              Орієнтовний платіж
+            <p className="mt-3 text-[11px] leading-relaxed text-muted">
+              Розрахунок за методикою калькулятора БІЗБАНК (ануїтет, фіксована ставка). Надсилання
+              заявки не є публічною офертою; рішення приймає банк.
             </p>
-            <p className="mt-1 text-[28px] font-bold tabular-nums tracking-tight text-emerald-dark">
-              {quote.loanValid ? `${formatMoneyUah(quote.monthlyPaymentUah)}/міс.` : "—"}
-            </p>
-            {quote.loanValid ? (
-              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
-                <div>
-                  <dt className="text-muted">Сума кредиту</dt>
-                  <dd className="font-semibold tabular-nums text-ink">
-                    {formatMoneyUah(quote.loanAmountUah)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted">Ставка</dt>
-                  <dd className="font-semibold tabular-nums text-ink">
-                    {formatPercentUk(quote.annualRatePercent, 2)} річних
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted">Разова комісія</dt>
-                  <dd className="font-semibold tabular-nums text-ink">
-                    {formatMoneyUah(quote.oneTimeFeeUah)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted">Разом за строк</dt>
-                  <dd className="font-semibold tabular-nums text-ink">
-                    {formatMoneyUah(quote.totalRepaymentUah)}
-                  </dd>
-                </div>
-              </dl>
-            ) : null}
           </div>
-
-          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white px-3 py-2.5">
-            <Link
-              href={BANK_PARTNER_BIZBANK.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-w-0 items-center"
-            >
-              <Image
-                src={BANK_PARTNER_BIZBANK.src}
-                alt={BANK_PARTNER_BIZBANK.alt}
-                width={4147}
-                height={942}
-                className="h-6 w-auto max-w-[140px] object-contain"
-              />
-            </Link>
-            <Link
-              href={BANK_PARTNER_BIZBANK.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 text-[12px] font-semibold text-emerald-dark hover:underline"
-            >
-              Деталі на сайті банку
-            </Link>
-          </div>
-
-          <p className="mt-3 text-[11px] leading-relaxed text-muted">
-            Розрахунок за методикою калькулятора БІЗБАНК (ануїтет, фіксована ставка). Не є
-            публічною офертою; фактичні умови залежать від рішення банку та документів на авто.
-          </p>
         </div>
       </div>
     </div>

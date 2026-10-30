@@ -779,16 +779,14 @@ export function ListingDetailModal({
             </p>
           )}
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <ListingActions
-              listing={listing}
-              displayCurrency={displayCurrency}
-              showOpenLinks
-              openCtaClassName="flex-1 sm:min-w-[240px]"
-              vinSize="md"
-              vinShowSummary
-            />
-          </div>
+          <ListingActions
+            listing={listing}
+            displayCurrency={displayCurrency}
+            showOpenLinks
+            openCtaClassName="w-full"
+            vinSize="md"
+            vinShowSummary
+          />
         </div>
       </div>
     </div>

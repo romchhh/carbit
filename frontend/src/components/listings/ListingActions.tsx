@@ -21,7 +21,7 @@ type Props = {
   creditCompact?: boolean;
 };
 
-/** «Відкрити на …», кредит БІЗБАНК, перевірка VIN — одним блоком. */
+/** «Відкрити на …», кредит БІЗБАНК, перевірка VIN — одним блоком, кнопки на всю ширину. */
 export function ListingActions({
   listing,
   displayCurrency,
@@ -38,37 +38,29 @@ export function ListingActions({
   if (!showOpenLinks && !showCredit && !showVin) return null;
 
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div className={cn("flex w-full flex-col gap-2", className)}>
       {showOpenLinks ? (
-        <ListingOpenCta listing={listing} className={openCtaClassName} />
+        <ListingOpenCta listing={listing} className={cn("w-full", openCtaClassName)} />
       ) : null}
 
-      {(showCredit || showVin) && (
-        <div
-          className={cn(
-            "flex flex-col gap-2",
-            showCredit && showVin && "sm:flex-row sm:flex-wrap sm:items-stretch",
-          )}
-        >
-          {showCredit ? (
-            <ListingCreditCalculatorTrigger
-              listing={listing}
-              displayCurrency={displayCurrency}
-              fullWidth
-              compact={creditCompact}
-              className={showVin ? "sm:min-w-[200px] sm:flex-1" : undefined}
-            />
-          ) : null}
-          {showVin ? (
-            <VinCheckButton
-              listing={listing}
-              size={vinSize}
-              showSummary={vinShowSummary}
-              className={cn("w-full", showCredit && "sm:min-w-[180px] sm:flex-1")}
-            />
-          ) : null}
-        </div>
-      )}
+      {showCredit ? (
+        <ListingCreditCalculatorTrigger
+          listing={listing}
+          displayCurrency={displayCurrency}
+          fullWidth
+          compact={creditCompact}
+          className="w-full"
+        />
+      ) : null}
+
+      {showVin ? (
+        <VinCheckButton
+          listing={listing}
+          size={vinSize}
+          showSummary={vinShowSummary}
+          className="w-full"
+        />
+      ) : null}
     </div>
   );
 }

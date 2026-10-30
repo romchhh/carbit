@@ -33,14 +33,14 @@ export function VinCheckButton({ listing, className, size = "sm", showSummary = 
 
   return (
     <>
-      <div className={cn(showSummary && "flex w-full flex-col gap-2")}>
+      <div className={cn(showSummary ? "flex w-full flex-col gap-2" : "w-full")}>
         <button
           type="button"
           onClick={openPanel}
           disabled={searching}
           className={cn(
-            "inline-flex items-center justify-center gap-1.5 rounded-full border border-emerald/30 bg-emerald/10 font-semibold text-emerald-dark transition-colors hover:border-emerald/50 hover:bg-emerald/15 disabled:opacity-80",
-            size === "sm" ? "px-3 py-1.5 text-[11px]" : "px-4 py-2 text-[13px]",
+            "flex w-full max-w-full items-center justify-center gap-1.5 rounded-full border border-emerald/30 bg-emerald/10 font-semibold text-emerald-dark transition-colors hover:border-emerald/50 hover:bg-emerald/15 disabled:opacity-80",
+            size === "sm" ? "px-3 py-1.5 text-[11px]" : "px-4 py-2.5 text-[13px]",
             className,
           )}
         >

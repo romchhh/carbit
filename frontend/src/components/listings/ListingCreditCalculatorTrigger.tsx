@@ -56,10 +56,10 @@ export function ListingCreditCalculatorTrigger({
       <Button
         type="button"
         variant="secondary"
-        size={compact ? "sm" : "md"}
+        size={compact ? "sm" : fullWidth ? "lg" : "md"}
         className={cn(
-          "justify-center gap-2 border-border/80 bg-white hover:bg-surface",
-          fullWidth ? "w-full" : "w-full sm:w-auto",
+          "w-full justify-center gap-2 border-border/80 bg-white hover:bg-surface hover:translate-y-0",
+          fullWidth && "flex w-full max-w-none rounded-full",
           className,
         )}
         onClick={e => {
@@ -78,7 +78,7 @@ export function ListingCreditCalculatorTrigger({
         />
         <span className="truncate">{compact ? "Кредит" : "Розрахувати кредит"}</span>
         {teaser && !compact ? (
-          <span className="hidden font-normal text-muted lg:inline">· від {teaser}/міс.</span>
+          <span className="font-normal text-muted">· від {teaser}/міс.</span>
         ) : null}
       </Button>
 
