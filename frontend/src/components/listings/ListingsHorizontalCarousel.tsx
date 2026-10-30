@@ -161,7 +161,7 @@ function CarouselListingCard({
             {(listing.alternate_sources?.length ?? 0) > 0 ? (
               <SourceLinks listing={listing} iconOnly className="shrink-0" />
             ) : (
-              <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" />
+              <SourceBadge source={listing.source} className="shrink-0 px-2 py-0.5" showLabel={false} />
             )}
             {isViewed ? (
               <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-muted">

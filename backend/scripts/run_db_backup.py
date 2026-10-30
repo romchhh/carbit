@@ -2,7 +2,10 @@
 """Ручний бекап БД + Telegram адмінам.
 
   cd backend && python scripts/run_db_backup.py
-  docker compose exec worker python /app/backend/scripts/run_db_backup.py
+
+  Docker (після git pull обов'язково: docker compose build worker && docker compose up -d worker):
+  docker compose exec worker python -m app.services.backup
+  # або: docker compose exec worker python /app/backend/scripts/run_db_backup.py
 """
 
 from __future__ import annotations

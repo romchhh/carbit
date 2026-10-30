@@ -13,7 +13,7 @@ import { PricingPlans } from "@/components/pricing/PricingPlans";
 import { CtaLink } from "@/components/ui/CtaLink";
 import { IconCheck } from "@/components/icons";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { LANDING_IMAGES, SOURCE_LOGOS } from "@/lib/brand-assets";
+import { BANK_PARTNER_BIZBANK, LANDING_IMAGES, SOURCE_LOGOS } from "@/lib/brand-assets";
 import {
   HOME_DESCRIPTION,
   HOME_TITLE,
@@ -25,7 +25,7 @@ export const metadata: Metadata = pageMetadata(HOME_TITLE, HOME_DESCRIPTION, {
   alternates: { canonical: "/" },
 });
 
-const PARTNER_LOGOS = [
+const SOURCE_LOGO_ROW = [
   { src: SOURCE_LOGOS.autoRia, alt: "AUTO.RIA — оголошення авто" },
   { src: SOURCE_LOGOS.olx, alt: "OLX — продаж авто" },
   { src: SOURCE_LOGOS.imperiya, alt: "Імперія Авто" },
@@ -84,10 +84,11 @@ export default function HomePage() {
                 <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
                   Джерела оголошень
                 </p>
-                <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-5 sm:gap-3">
-                  <div className="inline-flex items-center">
-                    {PARTNER_LOGOS.map(({ src, alt }, index) => (
-                      <span
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:mt-4">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-2 sm:gap-x-3">
+                    <div className="inline-flex shrink-0 items-center">
+                      {SOURCE_LOGO_ROW.map(({ src, alt }, index) => (
+                        <span
                         key={alt}
                         className={cn(
                           "relative inline-flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-full bg-white shadow-md ring-2 ring-white/20",
@@ -103,10 +104,33 @@ export default function HomePage() {
                           height={56}
                           className="h-full w-full object-cover"
                         />
-                      </span>
-                    ))}
+                        </span>
+                      ))}
+                    </div>
+                    <span className="shrink-0 text-[12px] font-medium text-white/45 sm:text-[13px]">
+                      та інші
+                    </span>
                   </div>
-                  <span className="text-[12px] font-medium text-white/45 sm:text-[13px]">та інші</span>
+                  <a
+                    href={BANK_PARTNER_BIZBANK.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex max-w-[calc(100%-0.5rem)] shrink-0 items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 shadow-md ring-1 ring-white/15 transition hover:bg-white/95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald sm:max-w-none sm:gap-2.5 sm:rounded-xl sm:px-3 sm:py-2"
+                    aria-label={BANK_PARTNER_BIZBANK.alt}
+                  >
+                    <span className="text-[9px] font-semibold uppercase leading-none tracking-[0.12em] text-ink/45 sm:text-[10px]">
+                      Банк-партнер
+                    </span>
+                    <span className="h-3.5 w-px shrink-0 bg-ink/12" aria-hidden />
+                    <Image
+                      src={BANK_PARTNER_BIZBANK.src}
+                      alt=""
+                      width={4147}
+                      height={942}
+                      aria-hidden
+                      className="h-[17px] w-auto max-w-[100px] object-contain object-left sm:h-6 sm:max-w-[168px]"
+                    />
+                  </a>
                 </div>
 
                 <div className="mt-6 border-t border-white/10 pt-5 sm:mt-7 sm:pt-7">

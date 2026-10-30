@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import {
+  listingAttributionUrl,
   listingOpenLabel,
   listingSourceIcon,
   listingSourceLabel,
@@ -160,39 +161,111 @@ export function SourceLinks({
 export function ListingOpenCta({
   listing,
   className,
+  iconOnly = false,
 }: {
   listing: Listing;
   className?: string;
+  /** Лише іконка (сторінка / картка оголошення). */
+  iconOnly?: boolean;
 }) {
   const links = listingSourceLinks(listing);
   if (links.length === 0) return null;
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div className={cn(iconOnly ? "flex flex-wrap gap-2" : "flex flex-col gap-2", className)}>
       {links.map((link, index) => {
         const icon = listingSourceIcon(link.source);
+        const label = listingOpenLabel(link.source);
         return (
           <a
             key={`${link.source}-${link.url}`}
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
+            title={label}
+            aria-label={label}
             onClick={e => openExternalUrl(link.url, e)}
             className={cn(
-              "group inline-flex w-full items-center justify-center gap-2 rounded-full px-3.5 py-3 text-[15px] font-bold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]",
-              index === 0
-                ? "bg-emerald text-white shadow-md shadow-emerald/25 hover:bg-emerald-dark hover:shadow-lg hover:shadow-emerald/35"
-                : "border border-border bg-white text-ink shadow-sm hover:bg-surface",
+              iconOnly
+                ? "inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white shadow-sm transition-colors hover:border-emerald/40 hover:bg-surface"
+                : cn(
+                    "group inline-flex w-full items-center justify-center gap-2 rounded-full px-3.5 py-3 text-[15px] font-bold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]",
+                    index === 0
+                      ? "bg-emerald text-white shadow-md shadow-emerald/25 hover:bg-emerald-dark hover:shadow-lg hover:shadow-emerald/35"
+                      : "border border-border bg-white text-ink shadow-sm hover:bg-surface",
+                  ),
             )}
           >
             {icon ? (
-              <Image src={icon} alt="" width={18} height={18} className="rounded-sm object-contain" unoptimized />
+              <Image
+                src={icon}
+                alt=""
+                width={iconOnly ? 22 : 18}
+                height={iconOnly ? 22 : 18}
+                className="rounded-sm object-contain"
+                unoptimized
+              />
             ) : (
-              <IconGlobe size={18} />
+              <IconGlobe size={iconOnly ? 22 : 18} />
             )}
-            {listingOpenLabel(link.source)}
+            {!iconOnly ? label : null}
           </a>
         );
       })}
     </div>
+  );
+}
+
+/** «Дані надано» — іконки майданчиків без текстових назв. */
+export function SourceAttributionLinks({
+  listing,
+  className,
+  size = "sm",
+}: {
+  listing: Listing;
+  className?: string;
+  size?: "sm" | "md";
+}) {
+  const links = listingSourceLinks(listing);
+  if (links.length === 0) return null;
+
+  const iconPx = size === "md" ? 18 : 14;
+  const pad = size === "md" ? "p-1.5" : "p-1";
+
+  return (
+    <span className={cn("inline-flex flex-wrap items-center gap-1.5 align-middle", className)}>
+      {links.map(link => {
+        const icon = listingSourceIcon(link.source);
+        const label = listingSourceLabel(link.source);
+        const href = listingAttributionUrl(link.source, link.url);
+        return (
+          <a
+            key={`${link.source}-${link.url}-attr`}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={label}
+            aria-label={label}
+            onClick={e => openExternalUrl(href, e)}
+            className={cn(
+              "inline-flex items-center rounded-md border border-border/80 bg-white/95 shadow-sm transition-colors hover:border-emerald/40 hover:bg-white",
+              pad,
+            )}
+          >
+            {icon ? (
+              <Image
+                src={icon}
+                alt=""
+                width={iconPx}
+                height={iconPx}
+                className="rounded-sm object-contain"
+                unoptimized
+              />
+            ) : (
+              <IconGlobe size={iconPx} className="text-muted" />
+            )}
+          </a>
+        );
+      })}
+    </span>
   );
 }

@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight, IconEye } from "@/components/icons";
+import { ListingActions } from "@/components/listings/ListingActions";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
-import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { ListingPlateOverlay } from "@/components/listings/ListingPlateOverlay";
 import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
@@ -408,9 +408,22 @@ export function ListingCard({
                 </Badge>
               )}
             </div>
-            <VinCheckButton listing={display} showSummary />
           </div>
         )}
+
+        <div
+          className="mt-3"
+          onClick={e => e.stopPropagation()}
+          onKeyDown={e => e.stopPropagation()}
+        >
+          <ListingActions
+            listing={display}
+            displayCurrency={displayCurrency}
+            vinSize="sm"
+            vinShowSummary
+            creditCompact
+          />
+        </div>
 
         <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 sm:mt-auto sm:border-0 sm:pt-2.5">
           <div className="min-w-0 flex-1">
@@ -435,7 +448,7 @@ export function ListingCard({
             {hasMirrorSources ? (
               <SourceLinks listing={display} iconOnly />
             ) : (
-              <SourceBadge source={listing.source} variant="outline" />
+              <SourceBadge source={listing.source} variant="outline" showLabel={false} />
             )}
             <span className="hidden text-[11px] text-muted sm:inline">{sellerLabel}</span>
           </span>

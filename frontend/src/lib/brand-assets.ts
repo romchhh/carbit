@@ -18,3 +18,10 @@ export const LANDING_IMAGES = {
   howItWorksScan: "/icons/how-it-works-scan.png",
   howItWorksNotify: "/icons/how-it-works-notify.png",
 } as const;
+
+/** Горизонтальний логотип з brand kit (EPS → PNG у public/partners). */
+export const BANK_PARTNER_BIZBANK = {
+  src: "/partners/bizbank-horizontal.png",
+  href: "https://www.bisbank.com.ua/",
+  alt: "БІЗБАНК — банк-партнер",
+} as const;

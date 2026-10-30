@@ -5,14 +5,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { listings as listingsApi, favorites as favoritesApi } from "@/lib/api";
 import type { Listing } from "@/types/api";
+import { ListingActions } from "@/components/listings/ListingActions";
 import {
-  ListingOpenCta,
   keepListingMirrors,
-  listingSourceLinks,
+  SourceAttributionLinks,
 } from "@/components/listings/SourceLinks";
-import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
-import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
-import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { Button } from "@/components/ui/Button";
 import { IconArrowLeft, IconArrowRight, IconHeart } from "@/components/icons";
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
@@ -30,21 +27,16 @@ import {
 import { ListingPriceDisplay } from "@/components/listings/ListingPriceDisplay";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { ListingPlateBadge } from "@/components/listings/ListingPlateBadge";
+import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { AccidentBadge } from "@/components/listings/AccidentBadge";
 import { UsaImportBadge } from "@/components/listings/UsaImportBadge";
 import { resolveListingAccidentHad } from "@/lib/listing-accident";
 import { resolveListingUsaImport } from "@/lib/listing-usa-import";
 import { resolveDisplayCurrency } from "@/lib/display-currency";
-import {
-  listingAttributionUrl,
-  listingSourceSiteName,
-} from "@/lib/listing-source";
-import { openExternalUrl } from "@/lib/open-external";
 import { loadRecentListings, saveRecentListing } from "@/lib/recent-listings";
 import { normalizeListingIdParam } from "@/lib/listing-share";
 import { listingHasAutoRiaDetails } from "@/lib/auto-ria-details";
 import { ensureListingGallery, listingShouldFetchGallery } from "@/lib/listing-gallery";
-import { hasVinCheck } from "@/lib/vin-check";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
 import { hasSellerContact } from "@/lib/seller-contact";
 
@@ -369,11 +361,14 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 priceClassName="text-[28px]"
               />
             </div>
-            <div className="mt-4 flex flex-col gap-2">
-              <ListingOpenCta listing={listing} />
-              {hasVinCheck(listing) && (
-                <VinCheckButton listing={listing} size="md" showSummary className="w-full" />
-              )}
+            <div className="mt-4">
+              <ListingActions
+                listing={listing}
+                displayCurrency={resolveDisplayCurrency(user?.preferred_currency)}
+                showOpenLinks
+                openCtaClassName="w-full"
+                vinShowSummary
+              />
             </div>
           </section>
 
@@ -413,22 +408,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </section>
           )}
 
-          <p className="px-1 pb-2 text-center text-[11px] text-muted lg:pb-0">
-            Дані надано{" "}
-            {listingSourceLinks(listing).map((link, index, arr) => (
-              <span key={`${link.source}-${link.url}-attr`}>
-                {index > 0 ? (index === arr.length - 1 ? " та " : ", ") : null}
-                <a
-                  href={listingAttributionUrl(link.source, link.url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => openExternalUrl(listingAttributionUrl(link.source, link.url), e)}
-                  className="text-emerald-dark hover:underline"
-                >
-                  {listingSourceSiteName(link.source)}
-                </a>
-              </span>
-            ))}
+          <p className="flex flex-wrap items-center justify-center gap-2 px-1 pb-2 text-center text-[11px] text-muted lg:pb-0">
+            <span>Дані надано</span>
+            <SourceAttributionLinks listing={listing} size="md" />
           </p>
         </div>
 
@@ -478,11 +460,14 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 priceClassName="text-[32px]"
               />
             </div>
-            <div className="mt-5 space-y-2">
-              <ListingOpenCta listing={listing} />
-              {hasVinCheck(listing) && (
-                <VinCheckButton listing={listing} size="md" showSummary className="w-full" />
-              )}
+            <div className="mt-5">
+              <ListingActions
+                listing={listing}
+                displayCurrency={resolveDisplayCurrency(user?.preferred_currency)}
+                showOpenLinks
+                openCtaClassName="w-full"
+                vinShowSummary
+              />
             </div>
             {hasSellerContact(listing) && <SellerContactBlock listing={listing} compact className="mt-4 shadow-sm" />}
           </div>

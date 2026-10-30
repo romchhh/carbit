@@ -14,13 +14,11 @@ import { UsaImportBadge } from "@/components/listings/UsaImportBadge";
 import { useListingCompare } from "@/hooks/useListingCompare";
 import { AutoRiaListingDetails } from "@/components/listings/AutoRiaListingDetails";
 import { SellerContactBlock } from "@/components/listings/SellerContactBlock";
+import { ListingActions } from "@/components/listings/ListingActions";
 import {
-  ListingOpenCta,
   keepListingMirrors,
   listingSourceLinks,
 } from "@/components/listings/SourceLinks";
-import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
-import { VinCheckButton } from "@/components/listings/VinCheckButton";
 import { useAuth } from "@/contexts/AuthProvider";
 import { getAutoRiaHighlights, listingHasAutoRiaDetails } from "@/lib/auto-ria-details";
 import {
@@ -42,7 +40,6 @@ import {
   ensureReonoPhotosDeduped,
   listingShouldFetchReonoGallery,
 } from "@/lib/reono-photos";
-import { hasVinCheck } from "@/lib/vin-check";
 import { hasSellerContact } from "@/lib/seller-contact";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import {
@@ -782,15 +779,14 @@ export function ListingDetailModal({
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <ListingOpenCta listing={listing} className="flex-1 sm:min-w-[240px]" />
-            {hasVinCheck(listing) && (
-              <VinCheckButton
-                listing={listing}
-                size="md"
-                showSummary
-                className="w-full sm:w-auto sm:min-w-[180px]"
-              />
-            )}
+            <ListingActions
+              listing={listing}
+              displayCurrency={displayCurrency}
+              showOpenLinks
+              openCtaClassName="flex-1 sm:min-w-[240px]"
+              vinSize="md"
+              vinShowSummary
+            />
           </div>
         </div>
       </div>

@@ -241,6 +241,25 @@ docker compose ps
 docker compose up -d --build backend bot
 ```
 
+### Резервна копія БД (ручна)
+
+Код бекапу **всередині образу** — після `git pull` потрібен rebuild worker (і backend, якщо викликаєте API):
+
+```bash
+docker compose build worker
+docker compose up -d worker
+```
+
+Ручний бекап + відправка адмінам у Telegram:
+
+```bash
+docker compose exec worker python -m app.services.backup
+```
+
+Файли також зберігаються на хості: `database/backups/`. Щоденний автобекап — у worker (година в `.env`: `DB_BACKUP_HOUR_KYIV`, за замовч. 04:00 Київ).
+
+> Якщо `No such file or directory` для скрипта — образ ще старий, зробіть `build worker` як вище.
+
 Якщо змінився `NEXT_PUBLIC_API_URL` або frontend:
 
 ```bash
