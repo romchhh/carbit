@@ -1,10 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ListingCreditCalculatorModal } from "@/components/listings/ListingCreditCalculatorModal";
-import { BANK_PARTNER_BIZBANK } from "@/lib/brand-assets";
 import {
   BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT,
   BISBANK_DEFAULT_TERM_MONTHS,
@@ -21,7 +19,7 @@ type Props = {
   listing: Listing;
   displayCurrency: DisplayCurrency;
   className?: string;
-  /** Короткий підпис «Кредит» (вузькі картки). */
+  /** Короткий підпис на вузьких картках (той самий текст, менший розмір). */
   compact?: boolean;
   /** На всю ширину, як «Перевірити за VIN». */
   fullWidth?: boolean;
@@ -58,8 +56,8 @@ export function ListingCreditCalculatorTrigger({
         variant="secondary"
         size={compact ? "sm" : fullWidth ? "lg" : "md"}
         className={cn(
-          "w-full justify-center gap-2 border-border/80 bg-white hover:bg-surface hover:translate-y-0",
-          fullWidth && "flex w-full max-w-none rounded-full",
+          "justify-center border-emerald/20 bg-emerald-light/30 text-emerald-dark hover:bg-emerald-light/50 hover:translate-y-0",
+          fullWidth ? "flex w-full max-w-none rounded-full" : compact ? "w-auto max-w-full" : "w-full",
           className,
         )}
         onClick={e => {
@@ -68,17 +66,9 @@ export function ListingCreditCalculatorTrigger({
           setOpen(true);
         }}
       >
-        <Image
-          src={BANK_PARTNER_BIZBANK.src}
-          alt=""
-          width={4147}
-          height={942}
-          aria-hidden
-          className="h-[14px] w-auto max-w-[72px] shrink-0 object-contain sm:h-4 sm:max-w-[84px]"
-        />
-        <span className="truncate">{compact ? "Кредит" : "Розрахувати кредит"}</span>
+        <span className="truncate font-semibold">Авто в кредит</span>
         {teaser && !compact ? (
-          <span className="font-normal text-muted">· від {teaser}/міс.</span>
+          <span className="font-normal text-emerald-dark/70">· від {teaser}/міс.</span>
         ) : null}
       </Button>
 

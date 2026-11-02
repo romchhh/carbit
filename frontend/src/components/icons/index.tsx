@@ -78,6 +78,14 @@ export const IconCheck = icon(
   </>
 );
 
+export const IconInfo = icon(
+  <>
+    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M12 11v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <circle cx="12" cy="8" r="0.75" fill="currentColor" />
+  </>
+);
+
 export const IconMenu = icon(
   <>
     <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

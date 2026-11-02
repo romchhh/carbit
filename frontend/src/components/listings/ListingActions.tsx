@@ -19,6 +19,8 @@ type Props = {
   vinSize?: "sm" | "md";
   vinShowSummary?: boolean;
   creditCompact?: boolean;
+  /** Кредит окремо на картці (нижній ряд). */
+  showCredit?: boolean;
 };
 
 /** «Відкрити на …», кредит БІЗБАНК, перевірка VIN — одним блоком, кнопки на всю ширину. */
@@ -31,11 +33,12 @@ export function ListingActions({
   vinSize = "md",
   vinShowSummary = false,
   creditCompact = false,
+  showCredit = true,
 }: Props) {
-  const showCredit = resolveListingPriceUah(listing) > 0;
+  const showCreditBtn = showCredit && resolveListingPriceUah(listing) > 0;
   const showVin = hasVinCheck(listing);
 
-  if (!showOpenLinks && !showCredit && !showVin) return null;
+  if (!showOpenLinks && !showCreditBtn && !showVin) return null;
 
   return (
     <div className={cn("flex w-full flex-col gap-2", className)}>
@@ -43,7 +46,7 @@ export function ListingActions({
         <ListingOpenCta listing={listing} className={cn("w-full", openCtaClassName)} />
       ) : null}
 
-      {showCredit ? (
+      {showCreditBtn ? (
         <ListingCreditCalculatorTrigger
           listing={listing}
           displayCurrency={displayCurrency}

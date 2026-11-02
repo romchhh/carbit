@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { PhoneInput, normalizePhoneForApi } from "@/components/auth/PhoneInput";
-import { IconX } from "@/components/icons";
+import { IconInfo, IconX } from "@/components/icons";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -37,6 +37,9 @@ type Props = {
   displayCurrency: DisplayCurrency;
   onClose: () => void;
 };
+
+const CREDIT_CALC_DISCLAIMER =
+  "Розрахунок орієнтовний, за методикою калькулятора БІЗБАНК («готівка на автівку»): ануїтет, разова комісія 2,95%, сценарії з реєстрацією та без. Реальна річна ставка (XIRR) враховує комісії та графік платежів і може відрізнятися від номінальної. Надсилання заявки не є публічною офертою; рішення приймає банк.";
 
 function phoneNationalFromStored(phone: string | null | undefined): string {
   if (!phone) return "";
@@ -76,10 +79,10 @@ function CreditSlider({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3">
-        <label htmlFor={id} className="text-[13px] font-medium text-ink">
+        <label htmlFor={id} className="text-[12px] font-medium text-ink">
           {label}
         </label>
-        <span className="text-[13px] font-semibold tabular-nums text-ink">{valueLabel}</span>
+        <span className="text-[12px] font-semibold tabular-nums text-ink">{valueLabel}</span>
       </div>
       <input
         id={id}
@@ -89,7 +92,7 @@ function CreditSlider({
         step={step}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
-        className="credit-slider mt-3 w-full"
+        className="credit-slider mt-2 w-full"
       />
       {marks && marks.length > 0 ? (
         <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-muted">
@@ -130,6 +133,8 @@ export function ListingCreditCalculatorModal({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitOk, setSubmitOk] = useState(false);
+  const [quoteDetailsOpen, setQuoteDetailsOpen] = useState(false);
+  const [disclaimerOpen, setDisclaimerOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -140,6 +145,8 @@ export function ListingCreditCalculatorModal({
     setUidrIndexPercent("");
     setMarginPercent("");
     setApplicationOpen(false);
+    setQuoteDetailsOpen(false);
+    setDisclaimerOpen(false);
     setSubmitError("");
     setSubmitOk(false);
     setName(user?.name?.trim() ?? "");
@@ -150,14 +157,19 @@ export function ListingCreditCalculatorModal({
     if (!open) return;
     lockBodyScroll();
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (disclaimerOpen) {
+        setDisclaimerOpen(false);
+        return;
+      }
+      onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
       unlockBodyScroll();
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, onClose]);
+  }, [open, onClose, disclaimerOpen]);
 
   const quote = useMemo(() => {
     const uidr = parseFloat(uidrIndexPercent.replace(",", "."));
@@ -242,6 +254,7 @@ export function ListingCreditCalculatorModal({
   if (!open) return null;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-[135] flex items-end justify-center p-0 sm:items-center sm:p-4"
       role="dialog"
@@ -256,53 +269,96 @@ export function ListingCreditCalculatorModal({
       />
 
       <div className="relative z-10 flex max-h-[92dvh] w-full max-w-[520px] flex-col overflow-hidden rounded-t-[1.5rem] border border-border/60 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-[1.5rem]">
-        <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
-          <div>
-            <h2 id="credit-calc-title" className="text-[18px] font-bold tracking-[-0.02em] text-ink">
-              Калькулятор кредиту
-            </h2>
-            <p className="mt-0.5 text-[12px] text-muted">Орієнтовний розрахунок · банк-партнер</p>
+        <div className="shrink-0 border-b border-border/60 px-4 py-3 sm:px-5">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <Link
+                  href={BANK_PARTNER_BIZBANK.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald"
+                  aria-label={BANK_PARTNER_BIZBANK.alt}
+                >
+                  <Image
+                    src={BANK_PARTNER_BIZBANK.src}
+                    alt=""
+                    width={4147}
+                    height={942}
+                    aria-hidden
+                    className="h-5 w-auto max-w-[120px] object-contain sm:h-6 sm:max-w-[140px]"
+                  />
+                </Link>
+                <h2
+                  id="credit-calc-title"
+                  className="text-[14px] font-bold tracking-[-0.02em] text-ink sm:text-[15px]"
+                >
+                  Калькулятор кредиту
+                </h2>
+                <span className="text-[11px] text-muted">· орієнтовно</span>
+              </div>
+
+              <div className="mt-2 flex gap-2.5">
+                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-surface sm:h-14 sm:w-14 sm:rounded-xl">
+                  <ListingPhoto
+                    src={thumb}
+                    alt=""
+                    sizes="56px"
+                    priority
+                    logoClassName="h-5 w-5"
+                    className="h-full w-full"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="line-clamp-2 text-[13px] font-semibold leading-snug text-ink">
+                    {listing.title}
+                  </h3>
+                  <p className="mt-0.5 text-[16px] font-bold leading-tight tabular-nums text-emerald-dark sm:text-[17px]">
+                    {priceLabel}
+                    {displayCurrency !== "UAH" ? (
+                      <span className="ml-1.5 text-[11px] font-medium text-muted">
+                        ≈ {priceUahLabel}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setDisclaimerOpen(true)}
+                aria-haspopup="dialog"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-ink/20 hover:text-ink"
+                aria-label="Інформація про розрахунок"
+              >
+                <IconInfo size={16} aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-ink/20 hover:text-ink"
+                aria-label="Закрити"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-ink/20 hover:text-ink"
-            aria-label="Закрити"
-          >
-            <IconX size={18} />
-          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="relative aspect-[16/10] w-full bg-surface">
-            <ListingPhoto
-              src={thumb}
-              alt={listing.title}
-              sizes="(max-width: 520px) 100vw, 520px"
-              priority
-              logoClassName="h-10 sm:h-12"
-            />
-          </div>
-
-          <div className="px-5 py-4">
-            <h3 className="text-[16px] font-bold leading-snug text-ink">{listing.title}</h3>
-            <p className="mt-1.5 text-[20px] font-bold tabular-nums text-emerald-dark">{priceLabel}</p>
-            {displayCurrency !== "UAH" ? (
-              <p className="mt-0.5 text-[13px] text-muted">≈ {priceUahLabel}</p>
-            ) : null}
-
-            <div className="mt-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
+          <div className="space-y-4">
               <div>
-                <p className="text-[13px] font-semibold text-ink">Реєстрація ТЗ</p>
+                <p className="text-[12px] font-medium text-muted">Реєстрація ТЗ</p>
                 <div
-                  className="mt-2 flex rounded-full border border-border/80 bg-surface/80 p-1"
+                  className="mt-1.5 flex rounded-full border border-border/80 bg-surface/80 p-0.5"
                   role="group"
                   aria-label="Режим реєстрації"
                 >
                   <button
                     type="button"
                     className={cn(
-                      "flex-1 rounded-full px-2 py-2 text-[11px] font-semibold leading-tight transition-colors sm:text-[12px]",
+                      "flex-1 rounded-full px-2 py-1.5 text-[11px] font-semibold leading-tight transition-colors",
                       registrationMode === "with_registration"
                         ? "bg-white text-ink shadow-sm"
                         : "text-muted hover:text-ink",
@@ -314,7 +370,7 @@ export function ListingCreditCalculatorModal({
                   <button
                     type="button"
                     className={cn(
-                      "flex-1 rounded-full px-2 py-2 text-[11px] font-semibold leading-tight transition-colors sm:text-[12px]",
+                      "flex-1 rounded-full px-2 py-1.5 text-[11px] font-semibold leading-tight transition-colors",
                       registrationMode === "without_registration"
                         ? "bg-white text-ink shadow-sm"
                         : "text-muted hover:text-ink",
@@ -352,47 +408,44 @@ export function ListingCreditCalculatorModal({
                 formatMark={(mark, max) => (mark === max ? `${mark} міс.` : String(mark))}
               />
 
-              <div className="space-y-3 rounded-xl border border-border/70 bg-surface/40 px-3 py-3">
-                <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-ink">
+              <div className="space-y-2 rounded-lg border border-border/70 bg-surface/40 px-2.5 py-2">
+                <label className="flex cursor-pointer items-center gap-2 text-[12px] leading-snug text-ink">
                   <input
                     type="checkbox"
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-emerald-dark"
+                    className="h-3.5 w-3.5 shrink-0 rounded border-border accent-emerald-dark"
                     checked={includeNotary}
                     onChange={e => setIncludeNotary(e.target.checked)}
                   />
                   <span>
-                    Нотаріальні послуги та держмито
-                    <span className="block text-[11px] text-muted">
-                      0,12% × сума кредиту × строк (як у калькуляторі банку)
-                    </span>
+                    Нотаріальні послуги
+                    <span className="text-muted"> · 0,12%×сума×строк</span>
                   </span>
                 </label>
 
-                <details className="group text-[12px] text-ink">
-                  <summary className="cursor-pointer font-semibold text-emerald-dark marker:content-none [&::-webkit-details-marker]:hidden">
-                    <span className="underline decoration-emerald/40 underline-offset-2 group-open:no-underline">
-                      Плаваюча ставка з 25-го місяця (UIDR)
+                <details className="group text-[11px] text-ink">
+                  <summary className="cursor-pointer list-none font-medium text-emerald-dark marker:content-none [&::-webkit-details-marker]:hidden">
+                    <span className="underline decoration-emerald/30 underline-offset-2 group-open:no-underline">
+                      UIDR з 25-го місяця
                     </span>
                   </summary>
-                  <p className="mt-2 text-[11px] leading-snug text-muted">
-                    Якщо індекс UIDR &gt; 0, з 25-го місяця ставка = індекс + маржа (за замовчуванням
-                    маржа{" "}
-                    {formatPercentUk(BISBANK_FLOATING_MARGIN_DEFAULT * 100, 2)} у файлі банку).
+                  <p className="mt-1.5 text-[10px] leading-snug text-muted">
+                    Ставка = індекс + маржа (за замовч. маржа{" "}
+                    {formatPercentUk(BISBANK_FLOATING_MARGIN_DEFAULT * 100, 2)}).
                   </p>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                     <label className="block">
-                      <span className="text-[11px] text-muted">Індекс UIDR, %</span>
+                      <span className="text-[10px] text-muted">UIDR, %</span>
                       <input
                         type="text"
                         inputMode="decimal"
                         placeholder="0"
-                        className="auth-input mt-1 w-full py-2 text-[13px]"
+                        className="auth-input mt-0.5 w-full py-1.5 text-[12px]"
                         value={uidrIndexPercent}
                         onChange={e => setUidrIndexPercent(e.target.value)}
                       />
                     </label>
                     <label className="block">
-                      <span className="text-[11px] text-muted">Маржа, %</span>
+                      <span className="text-[10px] text-muted">Маржа, %</span>
                       <input
                         type="text"
                         inputMode="decimal"
@@ -400,7 +453,7 @@ export function ListingCreditCalculatorModal({
                           "%",
                           "",
                         )}
-                        className="auth-input mt-1 w-full py-2 text-[13px]"
+                        className="auth-input mt-0.5 w-full py-1.5 text-[12px]"
                         value={marginPercent}
                         onChange={e => setMarginPercent(e.target.value)}
                       />
@@ -408,169 +461,151 @@ export function ListingCreditCalculatorModal({
                   </div>
                 </details>
               </div>
-            </div>
 
             {quote.warnings.length > 0 ? (
-              <ul className="mt-4 space-y-1.5 rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5 text-[12px] leading-snug text-amber-900">
+              <ul className="mt-3 space-y-1 rounded-lg border border-amber-200/80 bg-amber-50 px-2.5 py-2 text-[11px] leading-snug text-amber-900">
                 {quote.warnings.map(w => (
                   <li key={w}>{w}</li>
                 ))}
               </ul>
             ) : null}
 
-            <div className="mt-5 rounded-2xl border border-emerald/25 bg-emerald-light/40 p-4">
-              <p className="text-[12px] font-medium uppercase tracking-wide text-emerald-dark/80">
+            <div className="mt-3 rounded-xl border border-emerald/25 bg-emerald-light/40 px-3 py-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-emerald-dark/75">
                 Орієнтовний платіж
               </p>
               {quote.loanValid &&
               quote.registrationMode === "without_registration" &&
               quote.monthlyPaymentFromMonth2Uah != null &&
               quote.monthlyPaymentFromMonth2Uah !== quote.monthlyPaymentUah ? (
-                <div className="mt-1 space-y-1">
-                  <p className="text-[15px] font-semibold tabular-nums text-emerald-dark">
-                    1-й місяць: {formatMoneyUah(quote.monthlyPaymentUah)}
+                <div className="mt-0.5 space-y-0.5">
+                  <p className="text-[13px] font-semibold tabular-nums text-emerald-dark">
+                    1-й: {formatMoneyUah(quote.monthlyPaymentUah)}
                   </p>
-                  <p className="text-[28px] font-bold tabular-nums tracking-tight text-emerald-dark">
+                  <p className="text-[22px] font-bold tabular-nums leading-tight tracking-tight text-emerald-dark">
                     з 2-го: {formatMoneyUah(quote.monthlyPaymentFromMonth2Uah)}/міс.
                   </p>
                 </div>
               ) : (
-                <p className="mt-1 text-[28px] font-bold tabular-nums tracking-tight text-emerald-dark">
+                <p className="mt-0.5 text-[22px] font-bold tabular-nums leading-tight tracking-tight text-emerald-dark">
                   {quote.loanValid ? `${formatMoneyUah(quote.monthlyPaymentUah)}/міс.` : "—"}
                 </p>
               )}
               {quote.loanValid && quote.realAnnualRatePercent != null ? (
-                <p className="mt-2 text-[13px] leading-snug text-emerald-dark/90">
-                  Реальна річна ставка ≈{" "}
+                <p className="mt-1 text-[11px] leading-snug text-emerald-dark/85">
+                  Реальна ставка ≈{" "}
                   <span className="font-bold tabular-nums">
                     {formatPercentUk(quote.realAnnualRatePercent, 1)}
                   </span>
-                  <span className="text-[11px] text-muted"> (XIRR, орієнтовно)</span>
+                  <span className="text-muted"> · XIRR</span>
                 </p>
               ) : null}
               {quote.loanValid ? (
-                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
-                  <div>
-                    <dt className="text-muted">Сума кредиту</dt>
-                    <dd className="font-semibold tabular-nums text-ink">
-                      {formatMoneyUah(quote.loanAmountUah)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Номінальна ставка</dt>
-                    <dd className="font-semibold tabular-nums text-ink">
-                      {formatPercentUk(quote.nominalRatePercent, 2)} річних
-                      {quote.secondaryRatePercent != null
-                        ? ` · з 2-го ${formatPercentUk(quote.secondaryRatePercent, 2)}`
-                        : null}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Разова комісія</dt>
-                    <dd className="font-semibold tabular-nums text-ink">
-                      {formatMoneyUah(quote.oneTimeFeeUah)}
-                    </dd>
-                  </div>
-                  {quote.notaryFeeUah > 0 ? (
-                    <div>
-                      <dt className="text-muted">Нотаріальні</dt>
-                      <dd className="font-semibold tabular-nums text-ink">
-                        {formatMoneyUah(quote.notaryFeeUah)}
-                      </dd>
+                <div className="mt-2 border-t border-emerald/15 pt-2">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 py-0.5 text-left text-[12px] font-semibold text-emerald-dark transition hover:text-emerald-dark/90"
+                    aria-expanded={quoteDetailsOpen}
+                    onClick={() => setQuoteDetailsOpen(open => !open)}
+                  >
+                    <span>Детальніше</span>
+                    <span
+                      className={cn(
+                        "text-[10px] text-muted transition-transform",
+                        quoteDetailsOpen && "rotate-180",
+                      )}
+                      aria-hidden
+                    >
+                      ▼
+                    </span>
+                  </button>
+                  {quoteDetailsOpen ? (
+                    <div className="mt-2 space-y-3">
+                      <dl className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
+                        <div>
+                          <dt className="text-muted">Сума кредиту</dt>
+                          <dd className="font-semibold tabular-nums text-ink">
+                            {formatMoneyUah(quote.loanAmountUah)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted">Номінальна ставка</dt>
+                          <dd className="font-semibold tabular-nums text-ink">
+                            {formatPercentUk(quote.nominalRatePercent, 2)} річних
+                            {quote.secondaryRatePercent != null
+                              ? ` · з 2-го ${formatPercentUk(quote.secondaryRatePercent, 2)}`
+                              : null}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted">Разова комісія</dt>
+                          <dd className="font-semibold tabular-nums text-ink">
+                            {formatMoneyUah(quote.oneTimeFeeUah)}
+                          </dd>
+                        </div>
+                        {quote.notaryFeeUah > 0 ? (
+                          <div>
+                            <dt className="text-muted">Нотаріальні</dt>
+                            <dd className="font-semibold tabular-nums text-ink">
+                              {formatMoneyUah(quote.notaryFeeUah)}
+                            </dd>
+                          </div>
+                        ) : null}
+                        <div className={quote.notaryFeeUah > 0 ? "" : "col-span-2 sm:col-span-1"}>
+                          <dt className="text-muted">Загальна вартість кредиту</dt>
+                          <dd className="font-semibold tabular-nums text-ink">
+                            {formatMoneyUah(quote.totalConsumerCostUah)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted">Чиста видача</dt>
+                          <dd className="font-semibold tabular-nums text-ink">
+                            {formatMoneyUah(quote.netDisbursementUah)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted">Відсотки за строк</dt>
+                          <dd className="font-semibold tabular-nums text-ink">
+                            {formatMoneyUah(quote.totalInterestUah)}
+                          </dd>
+                        </div>
+                        {quote.maturityDate ? (
+                          <div className="col-span-2">
+                            <dt className="text-muted">Дата погашення (орієнт.)</dt>
+                            <dd className="font-semibold text-ink">
+                              {formatBisbankDateUk(quote.maturityDate)}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+
+                      {quote.paymentSchedule.length > 0 ? (
+                        <div>
+                          <p className="text-[11px] font-semibold text-ink">
+                            Графік ({quote.paymentSchedule.length - 1} міс.)
+                          </p>
+                          <BisbankPaymentScheduleTable
+                            className="mt-1.5 max-h-[min(180px,30dvh)] overflow-y-auto"
+                            schedule={quote.paymentSchedule}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
-                  <div className={quote.notaryFeeUah > 0 ? "" : "col-span-2 sm:col-span-1"}>
-                    <dt className="text-muted">Загальна вартість кредиту</dt>
-                    <dd className="font-semibold tabular-nums text-ink">
-                      {formatMoneyUah(quote.totalConsumerCostUah)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Чиста видача</dt>
-                    <dd className="font-semibold tabular-nums text-ink">
-                      {formatMoneyUah(quote.netDisbursementUah)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Відсотки за строк</dt>
-                    <dd className="font-semibold tabular-nums text-ink">
-                      {formatMoneyUah(quote.totalInterestUah)}
-                    </dd>
-                  </div>
-                  {quote.maturityDate ? (
-                    <div className="col-span-2">
-                      <dt className="text-muted">Дата погашення (орієнт.)</dt>
-                      <dd className="font-semibold text-ink">
-                        {formatBisbankDateUk(quote.maturityDate)}
-                      </dd>
-                    </div>
-                  ) : null}
-                </dl>
+                </div>
               ) : null}
             </div>
 
-            {quote.loanValid && quote.paymentSchedule.length > 0 ? (
-              <details className="mt-4 rounded-2xl border border-border/80 bg-white px-4 py-3">
-                <summary className="cursor-pointer text-[13px] font-semibold text-ink marker:content-none [&::-webkit-details-marker]:hidden">
-                  <span className="text-emerald-dark underline decoration-emerald/30 underline-offset-2 [[open]_&]:no-underline">
-                    Графік платежів ({quote.paymentSchedule.length - 1} міс.)
-                  </span>
-                </summary>
-                <div className="mt-3 rounded-xl border border-border/60 bg-surface/30 px-3 py-2.5 text-[11px] leading-snug text-muted">
-                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 tabular-nums text-ink">
-                    <div>
-                      <dt className="text-muted">Дата кредиту</dt>
-                      <dd className="font-medium">{formatBisbankDateUk(quote.creditDate)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted">Сума кредиту</dt>
-                      <dd className="font-medium">{formatMoneyUah(quote.loanAmountUah)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted">Строк</dt>
-                      <dd className="font-medium">{quote.termMonths} міс.</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted">Режим</dt>
-                      <dd className="font-medium">
-                        {quote.registrationMode === "with_registration"
-                          ? "З реєстрацією ТЗ"
-                          : "Без реєстрації"}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-                <BisbankPaymentScheduleTable
-                  className="mt-3 max-h-[min(280px,40dvh)] overflow-y-auto"
-                  schedule={quote.paymentSchedule}
-                />
-              </details>
-            ) : null}
-
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white px-3 py-2.5">
+            <p className="mt-3 text-center">
               <Link
                 href={BANK_PARTNER_BIZBANK.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex min-w-0 items-center"
+                className="text-[12px] font-semibold text-emerald-dark hover:underline"
               >
-                <Image
-                  src={BANK_PARTNER_BIZBANK.src}
-                  alt={BANK_PARTNER_BIZBANK.alt}
-                  width={4147}
-                  height={942}
-                  className="h-6 w-auto max-w-[140px] object-contain"
-                />
+                Умови на сайті банку
               </Link>
-              <Link
-                href={BANK_PARTNER_BIZBANK.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 text-[12px] font-semibold text-emerald-dark hover:underline"
-              >
-                Деталі на сайті банку
-              </Link>
-            </div>
+            </p>
 
             {submitOk ? (
               <div className="mt-4 rounded-xl border border-emerald/25 bg-emerald-light/50 px-4 py-3 text-[13px] leading-snug text-emerald-dark">
@@ -632,16 +667,59 @@ export function ListingCreditCalculatorModal({
                 Залишити заявку
               </Button>
             )}
-
-            <p className="mt-3 text-[11px] leading-relaxed text-muted">
-              Розрахунок орієнтовний, за методикою калькулятора БІЗБАНК («готівка на автівку»):
-              ануїтет, разова комісія 2,95%, сценарії з реєстрацією та без. Реальна річна ставка
-              (XIRR) враховує комісії та графік платежів і може відрізнятися від номінальної.
-              Надсилання заявки не є публічною офертою; рішення приймає банк.
-            </p>
           </div>
         </div>
       </div>
     </div>
+
+    {disclaimerOpen ? (
+      <div className="fixed inset-0 z-[145] flex items-end justify-center p-4 sm:items-center">
+        <button
+          type="button"
+          className="absolute inset-0 bg-ink/50 backdrop-blur-[2px]"
+          aria-label="Закрити"
+          onClick={() => setDisclaimerOpen(false)}
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="credit-calc-disclaimer-title"
+          className="relative z-10 w-full max-w-[400px] overflow-hidden rounded-2xl border border-border/70 bg-white shadow-2xl"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-3 border-b border-border/60 px-4 py-3 sm:px-5">
+            <h3
+              id="credit-calc-disclaimer-title"
+              className="text-[15px] font-bold text-ink"
+            >
+              Про розрахунок
+            </h3>
+            <button
+              type="button"
+              onClick={() => setDisclaimerOpen(false)}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-ink/20 hover:text-ink"
+              aria-label="Закрити"
+            >
+              <IconX size={16} />
+            </button>
+          </div>
+          <p className="max-h-[min(50dvh,320px)] overflow-y-auto px-4 py-4 text-[13px] leading-relaxed text-muted sm:px-5">
+            {CREDIT_CALC_DISCLAIMER}
+          </p>
+          <div className="border-t border-border/70 bg-surface/40 px-4 py-3 sm:px-5">
+            <Button
+              type="button"
+              variant="emerald"
+              size="md"
+              className="w-full rounded-full hover:translate-y-0 sm:w-auto sm:min-w-[140px]"
+              onClick={() => setDisclaimerOpen(false)}
+            >
+              Зрозуміло
+            </Button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }

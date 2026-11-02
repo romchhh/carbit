@@ -22,6 +22,7 @@ export const LANDING_IMAGES = {
 /** Горизонтальний логотип з brand kit (EPS → PNG у public/partners). */
 export const BANK_PARTNER_BIZBANK = {
   src: "/partners/bizbank-horizontal.png",
+  logoWhiteSrc: "/partners/bizbank-white.svg",
   href: "https://www.bisbank.com.ua/",
   alt: "БІЗБАНК — банк-партнер",
 } as const;

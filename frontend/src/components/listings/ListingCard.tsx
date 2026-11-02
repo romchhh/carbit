@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrowLeft, IconArrowRight, IconEye } from "@/components/icons";
 import { ListingActions } from "@/components/listings/ListingActions";
+import { ListingCreditCalculatorTrigger } from "@/components/listings/ListingCreditCalculatorTrigger";
 import { ListingFavoriteButton } from "@/components/listings/ListingFavoriteButton";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { ListingShareButton } from "@/components/listings/ListingShareButton";
@@ -21,6 +22,7 @@ import { SourceLinks } from "@/components/listings/SourceLinks";
 import { PublishedTimeBadge } from "@/components/listings/PublishedTimeBadge";
 import { AccidentBadge } from "@/components/listings/AccidentBadge";
 import { UsaImportBadge } from "@/components/listings/UsaImportBadge";
+import { resolveListingPriceUah } from "@/lib/bisbank-credit-calculator";
 import { resolveListingAccidentHad } from "@/lib/listing-accident";
 import { resolveListingUsaImport } from "@/lib/listing-usa-import";
 import { listingIsNewCar } from "@/lib/listing-source";
@@ -96,6 +98,7 @@ export function ListingCard({
   const isNewCar = listingIsNewCar(display);
   const hadAccident = resolveListingAccidentHad(display) === true;
   const isUsaImport = resolveListingUsaImport(display);
+  const showCreditCta = resolveListingPriceUah(display) > 0;
   const plateLabel = display.plate?.trim() || "";
   const [photoIndex, setPhotoIndex] = useState(0);
   const photoCount = images.length;
@@ -140,8 +143,9 @@ export function ListingCard({
         }
       }}
       className={cn(
-        "group cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-white text-left shadow-[0_2px_12px_-6px_rgba(10,12,14,0.12)] transition-all",
-        "hover:border-emerald/30 hover:shadow-[0_8px_24px_-10px_rgba(10,12,14,0.16)]",
+        "group relative cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-white text-left shadow-[0_2px_12px_-6px_rgba(10,12,14,0.12)] transition-all",
+        "hover:border-emerald/35 hover:shadow-[0_10px_28px_-12px_rgba(16,185,129,0.25)]",
+        "active:scale-[0.995]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40",
         "sm:flex sm:gap-5 sm:p-5 lg:gap-6 lg:p-6 lg:rounded-[1.35rem]",
         isNewForMonitor && "border-emerald/40 ring-1 ring-emerald/20",
@@ -421,7 +425,7 @@ export function ListingCard({
             displayCurrency={displayCurrency}
             vinSize="sm"
             vinShowSummary
-            creditCompact
+            showCredit={false}
           />
         </div>
 
@@ -452,26 +456,36 @@ export function ListingCard({
             )}
             <span className="hidden text-[11px] text-muted sm:inline">{sellerLabel}</span>
           </span>
+        </div>
+
+        <div
+          className={cn(
+            "mt-2 flex items-center justify-end gap-2 sm:mt-2.5",
+            !showVinBlock && "mt-3 border-t border-border/60 pt-3 sm:border-0 sm:pt-0",
+          )}
+          onClick={e => e.stopPropagation()}
+          onKeyDown={e => e.stopPropagation()}
+        >
+          {showCreditCta ? (
+            <ListingCreditCalculatorTrigger
+              listing={display}
+              displayCurrency={displayCurrency}
+              compact
+              className="!h-9 min-w-0 flex-1 !rounded-full !px-3 text-[12px] sm:max-w-[200px] sm:flex-none"
+            />
+          ) : (
+            <span className="min-w-0 flex-1 sm:hidden" aria-hidden />
+          )}
           <span
             className={cn(
-              "ml-auto flex shrink-0 items-center gap-0.5 text-[12px] font-semibold",
-              isViewed ? "text-muted" : "text-emerald-dark",
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm transition duration-200",
+              isViewed
+                ? "bg-surface text-muted ring-1 ring-border/70"
+                : "bg-emerald text-white group-hover:scale-105 group-hover:bg-emerald-dark group-hover:shadow-md",
             )}
+            aria-hidden
           >
-            {isViewed ? (
-              <>
-                <IconEye size={12} />
-                Переглянуто
-              </>
-            ) : (
-              <>
-                Деталі
-                <IconArrowRight
-                  size={12}
-                  className="transition-transform group-hover:translate-x-0.5"
-                />
-              </>
-            )}
+            {isViewed ? <IconEye size={16} /> : <IconArrowRight size={18} />}
           </span>
         </div>
       </div>
