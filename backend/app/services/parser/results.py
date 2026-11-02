@@ -7,7 +7,7 @@ from app.core.timezone import as_kyiv, now_kyiv
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.models import Listing, SearchListing, SearchQuery
+from app.models.models import Listing, SearchListing, SearchQuery, User
 from app.schemas.schemas import ListingOut, PaginatedListings, SearchFilters, SearchQueryOut
 from app.services.listings.serialize import listing_to_out
 from app.services.parser.filter_groups import filters_group_key, parse_search_filters
@@ -323,16 +323,23 @@ async def get_cached_preview_results(
 
 
 async def mark_search_listings_seen(db: AsyncSession, search: SearchQuery) -> int:
+    """Знімає бейдж «нове». Не знімає авто, які ще не пішли в Telegram."""
     rows = await db.scalars(
         select(SearchListing).where(
             SearchListing.search_id == search.id,
             SearchListing.is_new.is_(True),
         )
     )
-    count = 0
+    owner = await db.get(User, search.user_id)
+    needs_telegram = bool(owner and owner.telegram_connected and owner.telegram_id)
+    cleared = 0
+    pending = 0
     for row in rows.all():
+        if needs_telegram and row.notified_at is None:
+            pending += 1
+            continue
         row.is_new = False
-        count += 1
-    search.new_count = 0
+        cleared += 1
+    search.new_count = pending
     await db.flush()
-    return count
+    return cleared

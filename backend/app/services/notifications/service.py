@@ -21,6 +21,7 @@ from app.services.listings.serialize import listing_to_out
 from app.services.notifications.freshness import (
     coerce_notification_max_hours,
     is_listing_fresh_for_notification,
+    monitor_telegram_window_hours,
 )
 from app.services.parser.filter_groups import (
     listing_matches_search_query,
@@ -37,6 +38,37 @@ logger = logging.getLogger(__name__)
 def monitor_telegram_delivery_done(notification: Notification) -> bool:
     """Telegram доставлено — повторна догонка не потрібна."""
     return bool(notification.sent_telegram)
+
+
+def take_fair_monitor_rows(rows: list, *, limit: int, per_user: int = 25) -> list:
+    """Чергує користувачів, щоб один моніторинг не з'їдав увесь ліміт відправки."""
+    if limit <= 0 or not rows:
+        return []
+    buckets: dict[str, list] = {}
+    order: list[str] = []
+    for row in rows:
+        user = row[2]
+        user_id = str(getattr(user, "id", "") or "")
+        if user_id not in buckets:
+            buckets[user_id] = []
+            order.append(user_id)
+        buckets[user_id].append(row)
+
+    picked: list = []
+    sent_for_user: dict[str, int] = {uid: 0 for uid in order}
+    while len(picked) < limit:
+        progressed = False
+        for uid in order:
+            if sent_for_user[uid] >= per_user or not buckets[uid]:
+                continue
+            picked.append(buckets[uid].pop(0))
+            sent_for_user[uid] += 1
+            progressed = True
+            if len(picked) >= limit:
+                break
+        if not progressed:
+            break
+    return picked
 
 
 async def _duplicate_family_ids(db: AsyncSession, listing: Listing) -> set[str]:
@@ -208,7 +240,7 @@ async def _attempt_listing_match_telegram(
         listing.published_at,
         max_hours=max_published_hours,
         allow_none=True,
-        discovered_at=listing.found_at,
+        discovered_at=getattr(listing, "found_at", None),
     ):
         logger.info(
             "Skip Telegram notify for %s: published_at=%s max_hours=%s",
@@ -275,6 +307,7 @@ async def _attempt_listing_match_telegram(
     if result:
         notification.sent_telegram = True
         await flush_session(db)
+        await asyncio.sleep(0.35)
         return True
 
     logger.warning(
@@ -400,14 +433,14 @@ async def notify_monitor_listing_after_link(
         )
         return False
 
-    max_hours = coerce_notification_max_hours(
+    max_hours = monitor_telegram_window_hours(
         settings.get("notification_max_published_hours", 6)
     )
     if not is_listing_fresh_for_notification(
         listing.published_at,
         max_hours=max_hours,
         allow_none=False,
-        discovered_at=listing.found_at,
+        discovered_at=getattr(listing, "found_at", None),
     ):
         return False
 
@@ -451,12 +484,12 @@ async def deliver_pending_monitor_telegram(
     limit: int = 40,
     persist_each: bool = False,
 ) -> int:
-    """Догоняє Telegram лише для непереглянутих (is_new) свіжих авто в моніторингу."""
+    """Догоняє Telegram для нових і для раніше невідправлених авто (навіть якщо кабінет уже відкрили)."""
     settings = await get_parser_settings()
     if not settings.get("notify_telegram", True):
         return 0
 
-    max_hours = coerce_notification_max_hours(
+    max_hours = monitor_telegram_window_hours(
         settings.get("notification_max_published_hours", 6)
     )
 
@@ -471,41 +504,43 @@ async def deliver_pending_monitor_telegram(
         )
         .limit(1)
     )
+    unsent_subq = (
+        select(Notification.id)
+        .where(
+            Notification.user_id == User.id,
+            Notification.search_id == SearchListing.search_id,
+            Notification.listing_id == SearchListing.listing_id,
+            Notification.type == NotificationType.listing_match,
+            Notification.sent_telegram.is_(False),
+        )
+        .limit(1)
+    )
     stmt = (
         select(SearchListing, SearchQuery, User, Listing)
         .join(SearchQuery, SearchQuery.id == SearchListing.search_id)
         .join(User, User.id == SearchQuery.user_id)
         .join(Listing, Listing.id == SearchListing.listing_id)
         .where(
-            SearchListing.is_new.is_(True),
             SearchQuery.is_active.is_(True),
             User.telegram_connected.is_(True),
             User.telegram_id.isnot(None),
+            or_(
+                SearchListing.is_new.is_(True),
+                exists(unsent_subq),
+            ),
             ~exists(sent_subq),
         )
-        .limit(max(1, limit))
+        .order_by(asc(SearchListing.first_seen_at))
+        .limit(max(limit * 4, limit))
     )
     if search_ids:
         stmt = stmt.where(SearchQuery.id.in_(search_ids))
 
-    rows = (await db.execute(stmt)).all()
+    rows = take_fair_monitor_rows(list((await db.execute(stmt)).all()), limit=max(1, limit))
     delivered = 0
     for sl, search, user, listing in rows:
         if persist_each:
             await commit_session(db)
-
-        if not is_listing_fresh_for_notification(
-            listing.published_at,
-            max_hours=max_hours,
-            allow_none=False,
-            discovered_at=listing.found_at,
-        ):
-            sl.is_new = False
-            search.new_count = max(0, (search.new_count or 0) - 1)
-            await flush_session(db)
-            if persist_each:
-                await commit_session(db)
-            continue
 
         if not listing_matches_search_query(listing, search):
             logger.info(
@@ -558,7 +593,7 @@ async def deliver_pending_monitor_telegram(
                 listing,
                 search,
                 latest,
-                skip_freshness_check=False,
+                skip_freshness_check=True,
                 max_published_hours=max_hours,
                 alert_line=alert_line,
                 alert_emoji=alert_emoji,
@@ -577,7 +612,7 @@ async def deliver_pending_monitor_telegram(
             user,
             listing,
             search=search,
-            skip_freshness_check=False,
+            skip_freshness_check=True,
             max_published_hours=max_hours,
         )
         if monitor_telegram_delivery_done(notification):

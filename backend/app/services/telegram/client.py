@@ -1,3 +1,4 @@
+import asyncio
 import html
 import json
 import logging
@@ -56,12 +57,27 @@ class TelegramClient:
     def enabled(self) -> bool:
         return bool(self.token)
 
+    async def _post_with_retry(self, client: httpx.AsyncClient, method: str, **kwargs: Any) -> httpx.Response:
+        """Один повтор після 429, інакше черга сповіщень обривається на першому авто."""
+        res = await client.post(f"{self.base}/{method}", **kwargs)
+        if res.status_code != 429:
+            return res
+        wait = 1.0
+        try:
+            wait = float(res.json().get("parameters", {}).get("retry_after", 1))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            wait = 1.0
+        wait = min(max(wait, 0.4), 8.0)
+        logger.warning("Telegram 429 on %s, retry in %.1fs", method, wait)
+        await asyncio.sleep(wait)
+        return await client.post(f"{self.base}/{method}", **kwargs)
+
     async def _call(self, method: str, payload: dict) -> dict | None:
         if not self.enabled:
             logger.warning("Telegram bot token not configured")
             return None
-        async with httpx.AsyncClient(timeout=15) as client:
-            res = await client.post(f"{self.base}/{method}", json=payload)
+        async with httpx.AsyncClient(timeout=20) as client:
+            res = await self._post_with_retry(client, method, json=payload)
             from app.services.admin.api_usage import record_api_request
 
             await record_api_request("telegram_bot", method, success=res.status_code < 400)
@@ -82,7 +98,7 @@ class TelegramClient:
             logger.warning("Telegram bot token not configured")
             return None
         async with httpx.AsyncClient(timeout=timeout) as client:
-            res = await client.post(f"{self.base}/{method}", data=data, files=files)
+            res = await self._post_with_retry(client, method, data=data, files=files)
             from app.services.admin.api_usage import record_api_request
 
             await record_api_request("telegram_bot", method, success=res.status_code < 400)

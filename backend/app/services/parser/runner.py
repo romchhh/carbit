@@ -21,7 +21,7 @@ from app.services.parser.filter_groups import FilterGroup, filters_group_key, gr
 from app.services.telegram_channels.mapper import listing_out_matches_filters
 from app.services.parser.linking import link_listing_to_search
 from app.services.parser.settings import get_filter_cache, get_parser_settings, set_filter_cache
-from app.services.notifications.freshness import coerce_notification_max_hours
+from app.services.notifications.freshness import monitor_telegram_window_hours
 from app.services.monitoring.parser_status import is_benign_parser_error, is_transient_partial_source_error
 from app.services.search.multi_source import (
     normalize_sources,
@@ -145,13 +145,12 @@ async def _process_group(
     log.append(f"Група {group.key[:8]}… — {len(group.search_ids)} пошук(ів)" + (" [схожі]" if group.similar else ""))
 
     settings = await get_parser_settings()
-    max_hours = coerce_notification_max_hours(
+    notify_hours = monitor_telegram_window_hours(
         settings.get("notification_max_published_hours", 6)
     )
-    max_hours_int = max(1, int(round(max_hours)))
-    # Ширше вікно пошуку, ніж Telegram — щоб не пропускати авто між циклами.
+    max_hours_int = max(1, int(round(notify_hours)))
+    # Пошук і Telegram — одне вікно, щоб авто з кабінету не губились у боті.
     discover_hours = max(max_hours_int, 24)
-    notify_hours = max_hours
     monitor_ttl = _monitor_cache_ttl(settings)
     monitor_run = notify
 
@@ -291,7 +290,7 @@ async def _process_group(
         reset_monitor_search_ids(monitor_ctx)
 
     log.append(
-        f"  · Джерела: {', '.join(parse_sources)} · пошук ≤ {discover_hours} год · Telegram ≤ {max_hours_int} год"
+        f"  · Джерела: {', '.join(parse_sources)} · пошук і Telegram ≤ {discover_hours} год"
     )
 
     for status in outcome.sources:

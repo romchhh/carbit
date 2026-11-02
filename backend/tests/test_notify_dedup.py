@@ -245,5 +245,22 @@ class CreateNotificationSkipTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(notif.sent_telegram)
 
 
+class FairMonitorQueueTests(unittest.TestCase):
+    def test_round_robin_does_not_starve_second_user(self):
+        from types import SimpleNamespace
+
+        from app.services.notifications.service import take_fair_monitor_rows
+
+        def row(user_id: str, listing_id: str):
+            return (listing_id, None, SimpleNamespace(id=user_id), None)
+
+        rows = [row("ideas", f"a{i}") for i in range(10)] + [row("other", f"b{i}") for i in range(3)]
+        picked = take_fair_monitor_rows(rows, limit=6, per_user=25)
+        users = [item[2].id for item in picked]
+        self.assertIn("other", users)
+        self.assertEqual(users.count("other"), 3)
+        self.assertEqual(users.count("ideas"), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

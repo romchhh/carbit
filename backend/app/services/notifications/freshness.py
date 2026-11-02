@@ -15,6 +15,17 @@ from app.services.auto_ria.constants import (
 # Допускаємо невелику різницю годинників джерела
 _MAX_FUTURE_SKEW_SECONDS = 300
 DEFAULT_NOTIFICATION_MAX_HOURS = 6.0
+# Пошук моніторингу дивиться ~24 год. Вужче вікно для Telegram залишало авто в кабінеті
+# без повідомлення (у бот ішло лише найсвіжіше).
+MONITOR_TELEGRAM_WINDOW_HOURS = 24.0
+
+
+def monitor_telegram_window_hours(configured: object | None = None) -> float:
+    """Вікно Telegram не вужче за вікно пошуку моніторингу."""
+    parsed = coerce_notification_max_hours(
+        configured if configured is not None else MONITOR_TELEGRAM_WINDOW_HOURS
+    )
+    return max(parsed, MONITOR_TELEGRAM_WINDOW_HOURS)
 
 
 def coerce_notification_max_hours(value: object, default: float = DEFAULT_NOTIFICATION_MAX_HOURS) -> float:

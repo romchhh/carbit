@@ -16,7 +16,7 @@ from app.services.listings.upsert import upsert_listing
 from app.services.parser.filter_groups import parse_search_filters
 from app.services.parser.linking import link_listing_to_search
 from app.services.parser.settings import get_parser_settings
-from app.services.notifications.freshness import coerce_notification_max_hours
+from app.services.notifications.freshness import monitor_telegram_window_hours
 from app.services.search.brand_model_keywords import (
     collect_brand_keyword_variants,
     collect_model_keyword_variants,
@@ -135,7 +135,7 @@ async def ingest_telegram_listing(
     parser_settings = await get_parser_settings()
     if not parser_settings.get("notify_telegram", True):
         notify = False
-    max_hours = coerce_notification_max_hours(
+    max_hours = monitor_telegram_window_hours(
         parser_settings.get("notification_max_published_hours", 6)
     )
 

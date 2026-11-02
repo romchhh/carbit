@@ -49,6 +49,12 @@ class NotificationFreshnessTests(unittest.TestCase):
         self.assertEqual(coerce_notification_max_hours(-1), DEFAULT_NOTIFICATION_MAX_HOURS)
         self.assertEqual(coerce_notification_max_hours(48), 24.0)
 
+    def test_monitor_window_is_at_least_24h(self):
+        from app.services.notifications.freshness import monitor_telegram_window_hours
+
+        self.assertEqual(monitor_telegram_window_hours(6), 24.0)
+        self.assertEqual(monitor_telegram_window_hours(None), 24.0)
+
     def test_auto_ria_top_mapping(self):
         self.assertEqual(auto_ria_top_for_max_hours(1), AUTO_RIA_TOP_HOUR)
         self.assertEqual(auto_ria_top_for_max_hours(2), AUTO_RIA_TOP_3H)
