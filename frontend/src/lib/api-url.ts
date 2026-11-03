@@ -13,6 +13,10 @@ export function getApiUrl(): string {
     if (!configured || isInternalBackendUrl(configured)) {
       return DEFAULT_PROD_API;
     }
+    // Відносний /api/v1 — Next proxy, один origin (важливо для 127.0.0.1:3000).
+    if (configured.startsWith("/")) {
+      return configured.replace(/\/$/, "") || DEFAULT_PROD_API;
+    }
     return configured;
   }
 

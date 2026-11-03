@@ -56,7 +56,7 @@ export function ListingCreditCalculatorTrigger({
         variant="secondary"
         size={compact ? "sm" : fullWidth ? "lg" : "md"}
         className={cn(
-          "justify-center border-emerald/20 bg-emerald-light/30 text-emerald-dark hover:bg-emerald-light/50 hover:translate-y-0",
+          "justify-center border-emerald/15 bg-white text-emerald-dark shadow-none hover:bg-emerald-light/40 hover:translate-y-0",
           fullWidth ? "flex w-full max-w-none rounded-full" : compact ? "w-auto max-w-full" : "w-full",
           className,
         )}

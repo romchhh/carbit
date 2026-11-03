@@ -143,9 +143,8 @@ export function ListingCard({
         }
       }}
       className={cn(
-        "group relative cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-white text-left shadow-[0_2px_12px_-6px_rgba(10,12,14,0.12)] transition-all",
+        "group relative cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-white text-left shadow-[0_2px_12px_-6px_rgba(10,12,14,0.12)] transition-[border-color,box-shadow,opacity]",
         "hover:border-emerald/35 hover:shadow-[0_10px_28px_-12px_rgba(16,185,129,0.25)]",
-        "active:scale-[0.995]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald/40",
         "sm:flex sm:gap-5 sm:p-5 lg:gap-6 lg:p-6 lg:rounded-[1.35rem]",
         isNewForMonitor && "border-emerald/40 ring-1 ring-emerald/20",
@@ -358,36 +357,36 @@ export function ListingCard({
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-3 lg:mt-4 lg:gap-2">
+        <div className="mt-2.5 flex flex-wrap gap-1.5 sm:mt-3">
           {display.year > 0 && (
-            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
+            <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-ink/90">
               {display.year}
             </span>
           )}
           {mileageKm != null && mileageKm > 0 && (
-            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
+            <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-ink/90">
               {formatMileage(mileageKm)}
             </span>
           )}
           {engineVolume != null && (
-            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
+            <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-ink/90">
               {formatEngineVolume(engineVolume)}
             </span>
           )}
           {display.transmission && (
-            <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
+            <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-ink/90">
               {display.transmission}
             </span>
           )}
           {fuel && (
-            <span className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]">
+            <span className="max-w-full truncate rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-ink/90">
               {fuel.split(",")[0]?.trim()}
             </span>
           )}
           {highlights.map((item, index) => (
             <span
               key={`${item}-${index}`}
-              className="max-w-full truncate rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink lg:px-3.5 lg:py-1.5 lg:text-[13px]"
+              className="max-w-full truncate rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-ink/90"
             >
               {item}
             </span>
@@ -429,64 +428,60 @@ export function ListingCard({
           />
         </div>
 
-        <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 sm:mt-auto sm:border-0 sm:pt-2.5">
-          <div className="min-w-0 flex-1">
-            <span className="block truncate text-[12px] text-muted">{shortRegion(region)}</span>
-            {refreshedLabel ? (
-              <span className="mt-0.5 block truncate text-[11px] text-muted/80">
-                {refreshedLabel}
-                {publishedLabel ? ` · ${publishedLabel}` : ""}
+        <div className="mt-3 border-t border-border/50 pt-3 sm:mt-auto sm:pt-3">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium text-ink">{shortRegion(region) || "—"}</p>
+              <p className="mt-0.5 truncate text-[11px] text-muted">
+                {refreshedLabel ? (
+                  <>
+                    {refreshedLabel}
+                    {publishedLabel ? ` · ${publishedLabel}` : ""}
+                  </>
+                ) : (
+                  publishedLabel || "—"
+                )}
+              </p>
+            </div>
+            <div
+              className="flex shrink-0 items-center gap-1.5"
+              onClick={e => e.stopPropagation()}
+              onKeyDown={e => e.stopPropagation()}
+            >
+              {showCreditCta ? (
+                <ListingCreditCalculatorTrigger
+                  listing={display}
+                  displayCurrency={displayCurrency}
+                  compact
+                  className="!h-8 shrink-0 !rounded-full !px-3 text-[11px] sm:!h-9 sm:!px-3.5 sm:text-[12px]"
+                />
+              ) : null}
+              {hasMirrorSources && (
+                <span className="hidden rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 sm:inline-flex">
+                  VIN-дубль
+                </span>
+              )}
+              {hasMirrorSources ? (
+                <SourceLinks listing={display} iconOnly />
+              ) : (
+                <SourceBadge source={listing.source} variant="outline" showLabel={false} />
+              )}
+              <span className="max-w-[5.5rem] truncate text-[11px] text-muted sm:max-w-none">
+                {sellerLabel}
               </span>
-            ) : (
-              publishedLabel && (
-                <span className="mt-0.5 block truncate text-[11px] text-muted/80">{publishedLabel}</span>
-              )
-            )}
+              <span
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition duration-200 sm:h-10 sm:w-10",
+                  isViewed
+                    ? "bg-surface text-muted ring-1 ring-border/70"
+                    : "bg-emerald text-white shadow-sm group-hover:bg-emerald-dark",
+                )}
+                aria-hidden
+              >
+                {isViewed ? <IconEye size={15} /> : <IconArrowRight size={17} />}
+              </span>
+            </div>
           </div>
-          <span className="flex items-center gap-1.5">
-            {hasMirrorSources && (
-              <span className="hidden rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 sm:inline-flex">
-                VIN-дубль
-              </span>
-            )}
-            {hasMirrorSources ? (
-              <SourceLinks listing={display} iconOnly />
-            ) : (
-              <SourceBadge source={listing.source} variant="outline" showLabel={false} />
-            )}
-            <span className="hidden text-[11px] text-muted sm:inline">{sellerLabel}</span>
-          </span>
-        </div>
-
-        <div
-          className={cn(
-            "mt-2 flex items-center justify-end gap-2 sm:mt-2.5",
-            !showVinBlock && "mt-3 border-t border-border/60 pt-3 sm:border-0 sm:pt-0",
-          )}
-          onClick={e => e.stopPropagation()}
-          onKeyDown={e => e.stopPropagation()}
-        >
-          {showCreditCta ? (
-            <ListingCreditCalculatorTrigger
-              listing={display}
-              displayCurrency={displayCurrency}
-              compact
-              className="!h-9 min-w-0 flex-1 !rounded-full !px-3 text-[12px] sm:max-w-[200px] sm:flex-none"
-            />
-          ) : (
-            <span className="min-w-0 flex-1 sm:hidden" aria-hidden />
-          )}
-          <span
-            className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm transition duration-200",
-              isViewed
-                ? "bg-surface text-muted ring-1 ring-border/70"
-                : "bg-emerald text-white group-hover:scale-105 group-hover:bg-emerald-dark group-hover:shadow-md",
-            )}
-            aria-hidden
-          >
-            {isViewed ? <IconEye size={16} /> : <IconArrowRight size={18} />}
-          </span>
         </div>
       </div>
     </article>

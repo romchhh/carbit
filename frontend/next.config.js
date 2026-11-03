@@ -22,8 +22,8 @@ function isInternalBackendUrl(url) {
 const apiUrl = (() => {
   const fromEnv = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (fromEnv && !isInternalBackendUrl(fromEnv)) return fromEnv;
-  if (process.env.NODE_ENV === "production") return "/api/v1";
-  return "http://localhost:8000/api/v1";
+  // Локально та на prod — same-origin proxy (/api/v1 → backend), без CORS (127.0.0.1 vs localhost).
+  return "/api/v1";
 })();
 
 const siteUrl = (

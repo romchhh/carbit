@@ -115,7 +115,8 @@
   }
 
   .credit-slider {
-    @apply h-2 w-full cursor-pointer appearance-none rounded-full bg-border/80;
+    @apply h-2.5 w-full cursor-pointer appearance-none rounded-full bg-border/70;
+    touch-action: none;
   }
 
   .credit-slider::-webkit-slider-thumb {
