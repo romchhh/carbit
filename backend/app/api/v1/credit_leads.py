@@ -1,14 +1,19 @@
-"""Заявки на кредит (калькулятор БІЗБАНК) — сповіщення адмінам у Telegram."""
+"""Заявки на кредит (калькулятор БІЗБАНК) — email банку + сповіщення адмінам у Telegram."""
 
 from __future__ import annotations
 
 import html
+import logging
 import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.config import settings
+from app.services.email import send_credit_lead_email
 from app.services.monitoring.alerts import notify_monitor_admins
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/credit-leads", tags=["credit-leads"])
 
@@ -111,9 +116,74 @@ async def create_credit_lead(body: CreditLeadCreate) -> CreditLeadResponse:
     if body.total_repayment_uah is not None:
         lines.append(f"Разом за строк: {body.total_repayment_uah:,} грн".replace(",", " "))
 
+    email_to = (settings.CREDIT_LEAD_EMAIL or "").strip()
+    if email_to:
+        def money(n: int) -> str:
+            return f"{n:,} грн".replace(",", " ")
+
+        email_rows: list[tuple[str, str]] = [
+            ("Ім'я", html.escape(body.name)),
+            ("Телефон", html.escape(phone_display)),
+            ("Авто", html.escape(body.listing_title)),
+        ]
+        if body.listing_id:
+            email_rows.append(("ID оголошення", html.escape(body.listing_id)))
+        if body.listing_url:
+            email_rows.append(
+                (
+                    "Посилання",
+                    f'<a href="{html.escape(body.listing_url, quote=True)}">{html.escape(body.listing_url)}</a>',
+                )
+            )
+        email_rows.extend(
+            [
+                ("Ціна авто", money(body.car_price_uah)),
+                ("Перший внесок", f"{body.down_payment_percent:.1f}%"),
+                ("Строк", f"{body.term_months} міс."),
+                ("Сума кредиту", money(body.loan_amount_uah)),
+            ]
+        )
+        if body.registration_mode == "without_registration":
+            email_rows.append(("Режим", "без реєстрації ТЗ"))
+        elif body.registration_mode == "with_registration":
+            email_rows.append(("Режим", "з реєстрацією ТЗ"))
+        if body.nominal_rate_percent is not None:
+            email_rows.append(("Номінальна ставка", f"{body.nominal_rate_percent:.2f}%"))
+        if body.real_annual_rate_percent is not None:
+            email_rows.append(("Реальна річна (XIRR)", f"~{body.real_annual_rate_percent:.1f}%"))
+        if (
+            body.monthly_payment_from_month2_uah is not None
+            and body.monthly_payment_from_month2_uah != body.monthly_payment_uah
+        ):
+            email_rows.append(
+                (
+                    "Платіж",
+                    f"{money(body.monthly_payment_uah)} (1-й міс.), далі {money(body.monthly_payment_from_month2_uah)}/міс.",
+                )
+            )
+        else:
+            email_rows.append(("Платіж", f"{money(body.monthly_payment_uah)}/міс."))
+        if body.one_time_fee_uah is not None:
+            email_rows.append(("Разова комісія", money(body.one_time_fee_uah)))
+        if body.notary_fee_uah is not None and body.notary_fee_uah > 0:
+            email_rows.append(("Нотаріальні", money(body.notary_fee_uah)))
+        if body.total_repayment_uah is not None:
+            email_rows.append(("Разом за строк", money(body.total_repayment_uah)))
+
+        try:
+            await send_credit_lead_email(
+                to=email_to,
+                subject=f"Заявка на кредит — {body.name} — {body.listing_title[:80]}",
+                rows=email_rows,
+            )
+        except Exception as exc:
+            raise HTTPException(503, "Не вдалося надіслати заявку. Спробуйте пізніше.") from exc
+    else:
+        logger.warning("CREDIT_LEAD_EMAIL is empty — credit lead email skipped")
+
     try:
         await notify_monitor_admins("\n".join(lines))
-    except Exception as exc:
-        raise HTTPException(503, "Не вдалося надіслати заявку. Спробуйте пізніше.") from exc
+    except Exception:
+        logger.exception("Failed to notify admins about credit lead")
 
     return CreditLeadResponse()

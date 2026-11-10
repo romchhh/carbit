@@ -136,6 +136,8 @@ GOOGLE_REDIRECT_URI=https://carbit.info/api/v1/auth/google/callback
 
 # Email (Resend — привʼязка email у кабінеті, не для login)
 RESEND_API_KEY=...
+# Заявки з кредитного калькулятора → БІЗБАНК
+CREDIT_LEAD_EMAIL=Урдей Іван Остапович <Ivan.Urdei@bisbank.com.ua>
 
 # Telegram parser
 TELEGRAM_ENABLED=true
