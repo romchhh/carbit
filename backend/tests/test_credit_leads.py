@@ -60,8 +60,12 @@ class CreditLeadTests(unittest.TestCase):
                 new_callable=AsyncMock,
             ) as notify_admins,
             patch(
-                "app.api.v1.credit_leads.settings.CREDIT_LEAD_EMAIL",
-                "Урдей Іван Остапович <Ivan.Urdei@bisbank.com.ua>",
+                "app.api.v1.credit_leads.CREDIT_LEAD_EMAILS",
+                (
+                    "Урдей Іван Остапович <Ivan.Urdei@bisbank.com.ua>",
+                    "romanbiznesssmen@gmail.com",
+                    "zond.agency@gmail.com",
+                ),
             ),
         ):
             res = self.client.post("/api/v1/credit-leads", json=_VALID_PAYLOAD)
@@ -70,7 +74,14 @@ class CreditLeadTests(unittest.TestCase):
         self.assertTrue(res.json()["ok"])
         send_email.assert_awaited_once()
         kwargs = send_email.await_args.kwargs
-        self.assertIn("Ivan.Urdei@bisbank.com.ua", kwargs["to"])
+        self.assertEqual(
+            kwargs["to"],
+            [
+                "Урдей Іван Остапович <Ivan.Urdei@bisbank.com.ua>",
+                "romanbiznesssmen@gmail.com",
+                "zond.agency@gmail.com",
+            ],
+        )
         self.assertIn("Тест Тестовий", kwargs["subject"])
         self.assertTrue(any(label == "Телефон" for label, _ in kwargs["rows"]))
         notify_admins.assert_awaited_once()
@@ -87,8 +98,8 @@ class CreditLeadTests(unittest.TestCase):
                 new_callable=AsyncMock,
             ) as notify_admins,
             patch(
-                "app.api.v1.credit_leads.settings.CREDIT_LEAD_EMAIL",
-                "Ivan.Urdei@bisbank.com.ua",
+                "app.api.v1.credit_leads.CREDIT_LEAD_EMAILS",
+                ("Ivan.Urdei@bisbank.com.ua",),
             ),
         ):
             res = self.client.post("/api/v1/credit-leads", json=_VALID_PAYLOAD)

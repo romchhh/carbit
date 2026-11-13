@@ -8,9 +8,14 @@ from app.services.email_templates import verification_code_email, welcome_email,
 logger = logging.getLogger(__name__)
 
 
-async def send_email(to: str, subject: str, html: str) -> None:
+async def send_email(to: str | list[str], subject: str, html: str) -> None:
+    recipients = [to] if isinstance(to, str) else list(to)
+    recipients = [r.strip() for r in recipients if r and r.strip()]
+    if not recipients:
+        logger.warning("send_email called with empty recipients — skipping")
+        return
     if not settings.RESEND_API_KEY:
-        logger.warning("RESEND_API_KEY not set — skipping email to %s", to)
+        logger.warning("RESEND_API_KEY not set — skipping email to %s", recipients)
         return
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -22,7 +27,7 @@ async def send_email(to: str, subject: str, html: str) -> None:
             },
             json={
                 "from": settings.EMAIL_FROM,
-                "to": [to],
+                "to": recipients,
                 "subject": subject,
                 "html": html,
             },
@@ -48,8 +53,8 @@ async def send_password_reset_email(to: str, name: str, reset_url: str) -> None:
     await send_email(to, subject, html)
 
 
-async def send_credit_lead_email(*, to: str, subject: str, rows: list[tuple[str, str]]) -> None:
-    """Надсилає заявку на кредит на email банку/менеджера."""
+async def send_credit_lead_email(*, to: str | list[str], subject: str, rows: list[tuple[str, str]]) -> None:
+    """Надсилає заявку на кредит на email банку/менеджера (можна кілька адрес)."""
     body_rows = "".join(
         f"<tr>"
         f'<td style="padding:6px 12px 6px 0;color:#6b7280;vertical-align:top;white-space:nowrap;">{label}</td>'

@@ -113,8 +113,6 @@ class Settings(BaseSettings):
     # Email (Resend)
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "Carbit <info@13vplus.com>"
-    # Заявки з кредитного калькулятора (БІЗБАНК)
-    CREDIT_LEAD_EMAIL: str = "Урдей Іван Остапович <Ivan.Urdei@bisbank.com.ua>"
     FRONTEND_URL: str = "http://localhost:3000"
     PUBLIC_API_BASE: str = ""
 
@@ -226,6 +224,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Заявки з кредитного калькулятора (БІЗБАНК + внутрішні копії). Не з .env — лише код.
+CREDIT_LEAD_EMAILS: tuple[str, ...] = (
+    "Урдей Іван Остапович <Ivan.Urdei@bisbank.com.ua>",
+    "romanbiznesssmen@gmail.com",
+    "zond.agency@gmail.com",
+)
 
 
 def monitor_admin_chat_ids() -> list[str]:

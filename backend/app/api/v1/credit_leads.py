@@ -9,7 +9,7 @@ import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.config import settings
+from app.core.config import CREDIT_LEAD_EMAILS
 from app.services.email import send_credit_lead_email
 from app.services.monitoring.alerts import notify_monitor_admins
 
@@ -116,8 +116,8 @@ async def create_credit_lead(body: CreditLeadCreate) -> CreditLeadResponse:
     if body.total_repayment_uah is not None:
         lines.append(f"Разом за строк: {body.total_repayment_uah:,} грн".replace(",", " "))
 
-    email_to = (settings.CREDIT_LEAD_EMAIL or "").strip()
-    if email_to:
+    email_recipients = [addr.strip() for addr in CREDIT_LEAD_EMAILS if addr and addr.strip()]
+    if email_recipients:
         def money(n: int) -> str:
             return f"{n:,} грн".replace(",", " ")
 
@@ -172,14 +172,14 @@ async def create_credit_lead(body: CreditLeadCreate) -> CreditLeadResponse:
 
         try:
             await send_credit_lead_email(
-                to=email_to,
+                to=email_recipients,
                 subject=f"Заявка на кредит — {body.name} — {body.listing_title[:80]}",
                 rows=email_rows,
             )
         except Exception as exc:
             raise HTTPException(503, "Не вдалося надіслати заявку. Спробуйте пізніше.") from exc
     else:
-        logger.warning("CREDIT_LEAD_EMAIL is empty — credit lead email skipped")
+        logger.warning("CREDIT_LEAD_EMAILS is empty — credit lead email skipped")
 
     try:
         await notify_monitor_admins("\n".join(lines))
