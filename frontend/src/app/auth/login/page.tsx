@@ -12,6 +12,7 @@ import { ApiError } from "@/lib/api";
 import { resolvePostAuthRedirect } from "@/lib/search-draft";
 import { CodeInput } from "@/components/auth/CodeInput";
 import { PhoneInput, normalizePhoneForApi } from "@/components/auth/PhoneInput";
+import { PersonalDataConsentCheckbox } from "@/components/auth/PersonalDataConsentCheckbox";
 
 const HERO_IMAGE = "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80";
 const TESTIMONIAL_AVATAR =
@@ -39,6 +40,7 @@ function AuthForm() {
   const [phoneName, setPhoneName] = useState("");
   const [password, setPassword] = useState("");
   const [codeChannel, setCodeChannel] = useState<CodeChannel>("sms");
+  const [personalDataConsent, setPersonalDataConsent] = useState(false);
 
   const redirect = searchParams.get("redirect");
   const destination = resolvePostAuthRedirect(redirect);
@@ -69,6 +71,7 @@ function AuthForm() {
     setError("");
     setSuccess("");
     setCodeChannel("sms");
+    setPersonalDataConsent(false);
   };
 
   const startResendCooldown = () => {
@@ -94,6 +97,10 @@ function AuthForm() {
       setError("Вкажіть ім'я");
       return;
     }
+    if (tab === "register" && !personalDataConsent) {
+      setError("Потрібно надати згоду на обробку персональних даних");
+      return;
+    }
 
     setError("");
     setSuccess("");
@@ -104,6 +111,7 @@ function AuthForm() {
         tab === "login" ? "login" : "register",
         tab === "register" ? phoneName.trim() : undefined,
         delivery,
+        tab === "register" ? personalDataConsent : false,
       );
       setPhoneStep("verify");
       setCodeChannel(result.channel === "telegram" ? "telegram" : "sms");
@@ -137,6 +145,7 @@ function AuthForm() {
         tab === "login" ? "login" : "register",
         tab === "register" ? phoneName.trim() : undefined,
         true,
+        tab === "register" ? personalDataConsent : false,
       );
       router.replace(
         tab === "register"
@@ -387,6 +396,13 @@ function AuthForm() {
             />
           )}
           <PhoneInput value={phone} onChange={setPhone} disabled={loading} />
+          {tab === "register" ? (
+            <PersonalDataConsentCheckbox
+              checked={personalDataConsent}
+              onChange={setPersonalDataConsent}
+              disabled={loading}
+            />
+          ) : null}
           {success && (
             <p className="text-[13px] text-emerald-dark bg-emerald-light/50 border border-emerald/20 rounded-lg px-3 py-2">
               {success}
@@ -397,7 +413,15 @@ function AuthForm() {
               {error}
             </p>
           )}
-          <Button type="submit" loading={loading} size="md" variant="emerald" showArrow className="w-full">
+          <Button
+            type="submit"
+            loading={loading}
+            size="md"
+            variant="emerald"
+            showArrow
+            className="w-full"
+            disabled={tab === "register" && !personalDataConsent}
+          >
             {tab === "login" ? "Отримати код" : "Надіслати код SMS"}
           </Button>
           {tab === "login" && (
@@ -423,6 +447,10 @@ function AuthForm() {
         {" · "}
         <Link href="/privacy" className="hover:text-ink">
           Конфіденційність
+        </Link>
+        {" · "}
+        <Link href="/personal-data" className="hover:text-ink">
+          Порядок ПД
         </Link>
       </p>
     </div>

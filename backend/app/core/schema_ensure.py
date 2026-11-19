@@ -188,6 +188,23 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
                     text("ALTER TABLE users ADD COLUMN phone_verified_at DATETIME")
                 )
                 logger.warning("Added missing users.phone_verified_at column")
+            if "phone_otp_channel" not in cols:
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN phone_otp_channel VARCHAR(16)")
+                )
+                logger.warning("Added missing users.phone_otp_channel column")
+            if "personal_data_consent_at" not in cols:
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN personal_data_consent_at DATETIME")
+                )
+                logger.warning("Added missing users.personal_data_consent_at column")
+            if "personal_data_consent_version" not in cols:
+                await conn.execute(
+                    text(
+                        "ALTER TABLE users ADD COLUMN personal_data_consent_version VARCHAR(64)"
+                    )
+                )
+                logger.warning("Added missing users.personal_data_consent_version column")
 
             if "monitoring_source_requests" not in tables:
                 await conn.execute(
@@ -506,6 +523,31 @@ async def ensure_runtime_schema(engine: AsyncEngine) -> None:
                 text("ALTER TABLE users ADD COLUMN phone_verified_at TIMESTAMPTZ")
             )
             logger.warning("Added missing users.phone_verified_at column")
+
+        for col_name, col_sql in (
+            ("phone_otp_channel", "ALTER TABLE users ADD COLUMN phone_otp_channel VARCHAR(16)"),
+            (
+                "personal_data_consent_at",
+                "ALTER TABLE users ADD COLUMN personal_data_consent_at TIMESTAMPTZ",
+            ),
+            (
+                "personal_data_consent_version",
+                "ALTER TABLE users ADD COLUMN personal_data_consent_version VARCHAR(64)",
+            ),
+        ):
+            exists = await conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_name = 'users' AND column_name = :column
+                    """
+                ),
+                {"column": col_name},
+            )
+            if exists.first() is None:
+                await conn.execute(text(col_sql))
+                logger.warning("Added missing users.%s column", col_name)
 
         msr_exists = await conn.execute(
             text(

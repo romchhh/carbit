@@ -24,6 +24,7 @@ const columns: {
       { label: "Публічна оферта", href: "/oferta" },
       { label: "Умови використання", href: "/terms" },
       { label: "Конфіденційність", href: "/privacy" },
+      { label: "Порядок обробки ПД", href: "/personal-data" },
     ],
   },
   {
@@ -133,6 +134,9 @@ export function Footer() {
             </Link>
             <Link href="/privacy" className="transition-colors hover:text-white">
               Політика конфіденційності
+            </Link>
+            <Link href="/personal-data" className="transition-colors hover:text-white">
+              Порядок обробки ПД
             </Link>
           </div>
         </div>

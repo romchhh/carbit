@@ -74,6 +74,11 @@ class User(Base):
     telegram_avatar_path: Mapped[str | None] = mapped_column(String, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
     phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # SMS/Telegram OTP channel used for phone verification (NBU/BKI evidence)
+    phone_otp_channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Bisbank personal-data / credit-history consent at registration
+    personal_data_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    personal_data_consent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     plan: Mapped[PlanTier] = mapped_column(StrEnum(PlanTier), default=PlanTier.free)
     plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

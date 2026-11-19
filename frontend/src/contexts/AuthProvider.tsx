@@ -27,6 +27,7 @@ interface AuthContextValue {
     intent: "login" | "register",
     name?: string,
     delivery?: "auto" | "sms",
+    personalDataConsent?: boolean,
   ) => Promise<{ message: string; channel?: "sms" | "telegram" }>;
   verifyPhoneCode: (
     phone: string,
@@ -34,6 +35,7 @@ interface AuthContextValue {
     intent: "login" | "register",
     name?: string,
     remember?: boolean,
+    personalDataConsent?: boolean,
   ) => Promise<void>;
   phoneLogin: (phone: string, password: string, remember?: boolean) => Promise<void>;
   setPassword: (password: string, currentPassword?: string) => Promise<void>;
@@ -144,12 +146,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     intent: "login" | "register",
     name?: string,
     delivery: "auto" | "sms" = "auto",
+    personalDataConsent = false,
   ) => {
     return api.auth.phoneSendCode({
       phone,
       intent,
       name: name?.trim() || undefined,
       delivery,
+      personal_data_consent: intent === "register" ? personalDataConsent : undefined,
     });
   };
 
@@ -159,6 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     intent: "login" | "register",
     name?: string,
     remember = true,
+    personalDataConsent = false,
   ) => {
     const { access_token } = await api.auth.phoneVerify({
       phone,
@@ -166,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       intent,
       name: name?.trim() || undefined,
       remember,
+      personal_data_consent: intent === "register" ? personalDataConsent : undefined,
     });
     setToken(access_token, remember);
     if (intent === "register") {

@@ -186,6 +186,50 @@ export default function AdminClientDetailPage({ params }: { params: Promise<{ id
         ))}
       </div>
 
+      <section className="bg-white border border-border rounded-xl p-6 mb-4 space-y-3">
+        <h2 className="text-[15px] font-bold text-ink">Верифікація та згода (БІЗБАНК / НБУ)</h2>
+        <dl className="grid gap-2 text-[13px] sm:grid-cols-2">
+          <div>
+            <dt className="text-muted">Телефон</dt>
+            <dd className="font-medium text-ink">{user.phone ? `+${user.phone}` : "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted">Підтверджено OTP</dt>
+            <dd className="font-medium text-ink">
+              {user.phone_verified_at ? formatKyivDate(user.phone_verified_at) : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted">Канал OTP</dt>
+            <dd className="font-medium uppercase text-ink">{user.phone_otp_channel || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted">Згода на ПД / БКІ</dt>
+            <dd className="font-medium text-ink">
+              {user.personal_data_consent_at ? formatKyivDate(user.personal_data_consent_at) : "—"}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-muted">Версія порядку згоди</dt>
+            <dd className="font-medium text-ink">
+              {user.personal_data_consent_version || "—"}
+              {user.personal_data_consent_version ? (
+                <>
+                  {" · "}
+                  <a href="/personal-data" target="_blank" rel="noopener noreferrer" className="text-emerald-dark hover:underline">
+                    /personal-data
+                  </a>
+                </>
+              ) : null}
+            </dd>
+          </div>
+        </dl>
+        <p className="text-[11px] leading-relaxed text-muted">
+          Для запитів НБУ/БКІ: клієнт підтвердив номер одноразовим паролем (OTP) і надав згоду на
+          обробку персональних даних та доступ до кредитної історії.
+        </p>
+      </section>
+
       <section className="bg-white border border-border rounded-xl p-6 mb-4 space-y-4">
         <h2 className="text-[15px] font-bold text-ink">Тариф</h2>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">

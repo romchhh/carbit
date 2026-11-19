@@ -61,6 +61,7 @@ class PhoneSendCodeRequest(BaseModel):
     intent: str = Field(pattern=r"^(login|register)$")
     name: str | None = Field(default=None, max_length=100)
     delivery: str = Field(default="auto", pattern=r"^(auto|sms)$")
+    personal_data_consent: bool = False
 
     @field_validator("name")
     @classmethod
@@ -77,6 +78,7 @@ class PhoneVerifyRequest(BaseModel):
     intent: str = Field(pattern=r"^(login|register)$")
     name: str | None = Field(default=None, max_length=100)
     remember: bool = True
+    personal_data_consent: bool = False
 
     @field_validator("name")
     @classmethod

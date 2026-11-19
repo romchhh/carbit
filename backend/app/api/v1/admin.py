@@ -123,6 +123,11 @@ class AdminUserDetailOut(AdminUserOut):
     searches: list[dict]
     billing_subscriptions: list[AdminBillingSubOut] = Field(default_factory=list)
     billing_summary: dict = Field(default_factory=dict)
+    phone: str | None = None
+    phone_verified_at: datetime | None = None
+    phone_otp_channel: str | None = None
+    personal_data_consent_at: datetime | None = None
+    personal_data_consent_version: str | None = None
 
 
 class AdminUserUpdate(BaseModel):
@@ -373,6 +378,11 @@ async def admin_user_detail(
             "failed_charges": failed_charges,
             "subscriptions_count": len(billing_rows),
         },
+        phone=user.phone,
+        phone_verified_at=user.phone_verified_at,
+        phone_otp_channel=user.phone_otp_channel,
+        personal_data_consent_at=user.personal_data_consent_at,
+        personal_data_consent_version=user.personal_data_consent_version,
     )
 
 

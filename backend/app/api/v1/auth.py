@@ -201,6 +201,11 @@ async def phone_send_code(
         name = (body.name or "").strip()
         if not name:
             raise HTTPException(status_code=400, detail="Вкажіть ім'я для реєстрації")
+        if not body.personal_data_consent:
+            raise HTTPException(
+                status_code=400,
+                detail="Потрібна згода на обробку персональних даних та доступ до кредитної історії",
+            )
 
     if not await phone_verify_svc.phone_auth_resend_allowed(phone):
         raise HTTPException(status_code=429, detail="Зачекайте хвилину перед повторною відправкою")
@@ -209,6 +214,7 @@ async def phone_send_code(
         phone,
         intent=intent,
         name=(body.name or "").strip() or None,
+        personal_data_consent=bool(body.personal_data_consent) if intent == "register" else False,
     )
 
     delivery = (body.delivery or "auto").strip().lower()
@@ -229,6 +235,8 @@ async def phone_send_code(
     except Exception as exc:
         logger.exception("Failed to deliver auth code to %s", phone)
         raise HTTPException(status_code=502, detail="Не вдалося надіслати код. Спробуйте пізніше.") from exc
+
+    await phone_verify_svc.update_phone_auth_meta(phone, otp_channel=channel)
 
     return MessageResponse(
         message=message,
@@ -265,11 +273,28 @@ async def phone_verify(
         if not name:
             raise HTTPException(status_code=400, detail="Вкажіть ім'я для реєстрації")
 
+        consented = bool(data.get("personal_data_consent")) or bool(body.personal_data_consent)
+        if not consented:
+            raise HTTPException(
+                status_code=400,
+                detail="Потрібна згода на обробку персональних даних та доступ до кредитної історії",
+            )
+
+        from app.core.config import PERSONAL_DATA_CONSENT_VERSION
+
+        verified_at = now_kyiv()
+        otp_channel = (data.get("otp_channel") or "sms").strip().lower()
+        if otp_channel not in ("sms", "telegram"):
+            otp_channel = "sms"
+
         user = User(
             email=phone_placeholder_email(phone),
             name=name,
             phone=phone,
-            phone_verified_at=now_kyiv(),
+            phone_verified_at=verified_at,
+            phone_otp_channel=otp_channel,
+            personal_data_consent_at=verified_at,
+            personal_data_consent_version=PERSONAL_DATA_CONSENT_VERSION,
         )
         db.add(user)
         await db.flush()

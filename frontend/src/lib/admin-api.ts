@@ -94,6 +94,11 @@ export interface AdminUserDetail extends AdminUser {
     failed_charges: number;
     subscriptions_count: number;
   };
+  phone?: string | null;
+  phone_verified_at?: string | null;
+  phone_otp_channel?: string | null;
+  personal_data_consent_at?: string | null;
+  personal_data_consent_version?: string | null;
 }
 
 export const adminApi = {

@@ -27,13 +27,49 @@ async def _set_cooldown(cooldown_key: str) -> None:
     await r.setex(cooldown_key, RESEND_COOLDOWN, "1")
 
 
-async def store_phone_auth(phone: str, *, intent: str, name: str | None = None) -> str:
+async def store_phone_auth(
+    phone: str,
+    *,
+    intent: str,
+    name: str | None = None,
+    personal_data_consent: bool = False,
+    otp_channel: str | None = None,
+) -> str:
     r = await get_redis()
     code = _generate_code()
-    payload = json.dumps({"code": code, "attempts": 0, "intent": intent, "name": name})
+    payload = json.dumps(
+        {
+            "code": code,
+            "attempts": 0,
+            "intent": intent,
+            "name": name,
+            "personal_data_consent": bool(personal_data_consent),
+            "otp_channel": otp_channel,
+        }
+    )
     await r.setex(f"phone_auth:{phone}", CODE_TTL, payload)
     await _set_cooldown(f"phone_auth_cd:{phone}")
     return code
+
+
+async def update_phone_auth_meta(
+    phone: str,
+    *,
+    otp_channel: str | None = None,
+    personal_data_consent: bool | None = None,
+) -> None:
+    r = await get_redis()
+    key = f"phone_auth:{phone}"
+    raw = await r.get(key)
+    if not raw:
+        return
+    data = json.loads(raw)
+    if otp_channel is not None:
+        data["otp_channel"] = otp_channel
+    if personal_data_consent is not None:
+        data["personal_data_consent"] = bool(personal_data_consent)
+    ttl = await r.ttl(key)
+    await r.setex(key, ttl if ttl and ttl > 0 else CODE_TTL, json.dumps(data))
 
 
 async def phone_auth_resend_allowed(phone: str) -> bool:

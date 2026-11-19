@@ -6,6 +6,7 @@ import { IconX } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { CodeInput } from "@/components/auth/CodeInput";
 import { PhoneInput, normalizePhoneForApi } from "@/components/auth/PhoneInput";
+import { PersonalDataConsentCheckbox } from "@/components/auth/PersonalDataConsentCheckbox";
 import { CarbitLogo } from "@/components/brand/CarbitLogo";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -43,6 +44,7 @@ export function AuthGateModal({
   const [phoneCode, setPhoneCode] = useState("");
   const [phoneName, setPhoneName] = useState("");
   const [codeChannel, setCodeChannel] = useState<CodeChannel>("sms");
+  const [personalDataConsent, setPersonalDataConsent] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -69,6 +71,7 @@ export function AuthGateModal({
     setPhoneStep("form");
     setPhoneCode("");
     setCodeChannel("sms");
+    setPersonalDataConsent(false);
     resetMessages();
   };
 
@@ -95,6 +98,10 @@ export function AuthGateModal({
       setError("Вкажіть ім'я");
       return;
     }
+    if (tab === "register" && !personalDataConsent) {
+      setError("Потрібно надати згоду на обробку персональних даних");
+      return;
+    }
 
     resetMessages();
     setLoading(true);
@@ -104,6 +111,7 @@ export function AuthGateModal({
         tab === "login" ? "login" : "register",
         tab === "register" ? phoneName.trim() : undefined,
         delivery,
+        tab === "register" ? personalDataConsent : false,
       );
       setPhoneStep("verify");
       setCodeChannel(result.channel === "telegram" ? "telegram" : "sms");
@@ -137,6 +145,7 @@ export function AuthGateModal({
         tab === "login" ? "login" : "register",
         tab === "register" ? phoneName.trim() : undefined,
         true,
+        tab === "register" ? personalDataConsent : false,
       );
       onAuthenticated();
     } catch (err) {
@@ -293,6 +302,13 @@ export function AuthGateModal({
                   />
                 )}
                 <PhoneInput value={phone} onChange={setPhone} disabled={loading} />
+                {tab === "register" ? (
+                  <PersonalDataConsentCheckbox
+                    checked={personalDataConsent}
+                    onChange={setPersonalDataConsent}
+                    disabled={loading}
+                  />
+                ) : null}
 
                 {success && (
                   <p className="rounded-lg border border-emerald/20 bg-emerald-light/50 px-3 py-2 text-[13px] text-emerald-dark">
@@ -305,7 +321,15 @@ export function AuthGateModal({
                   </p>
                 )}
 
-                <Button type="submit" loading={loading} size="md" variant="emerald" showArrow className="w-full">
+                <Button
+                  type="submit"
+                  loading={loading}
+                  size="md"
+                  variant="emerald"
+                  showArrow
+                  className="w-full"
+                  disabled={tab === "register" && !personalDataConsent}
+                >
                   {tab === "login" ? "Отримати код" : "Надіслати код SMS"}
                 </Button>
               </form>
@@ -317,6 +341,10 @@ export function AuthGateModal({
                 {" · "}
                 <Link href="/privacy" className="hover:text-ink" onClick={onClose}>
                   Конфіденційність
+                </Link>
+                {" · "}
+                <Link href="/personal-data" className="hover:text-ink" onClick={onClose}>
+                  Порядок ПД
                 </Link>
               </p>
             </>

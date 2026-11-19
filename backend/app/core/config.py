@@ -232,6 +232,9 @@ CREDIT_LEAD_EMAILS: tuple[str, ...] = (
     "zond.agency@gmail.com",
 )
 
+# Версія згоди на обробку персональних даних / БКІ (порядок на /personal-data).
+PERSONAL_DATA_CONSENT_VERSION = "bisbank-2026-11-19"
+
 
 def monitor_admin_chat_ids() -> list[str]:
     raw = (settings.MONITOR_ADMIN_IDS or settings.TELEGRAM_ADMIN_CHAT_ID or "").strip()

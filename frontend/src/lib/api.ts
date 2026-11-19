@@ -225,6 +225,7 @@ export const auth = {
     intent: "login" | "register";
     name?: string;
     delivery?: "auto" | "sms";
+    personal_data_consent?: boolean;
   }) =>
     request<{ message: string; expires_in?: number; channel?: "sms" | "telegram" }>(
       "/auth/phone/send-code",
@@ -239,6 +240,7 @@ export const auth = {
     intent: "login" | "register";
     name?: string;
     remember?: boolean;
+    personal_data_consent?: boolean;
   }) =>
     request<TokenResponse>("/auth/phone/verify", {
       method: "POST",
