@@ -384,7 +384,9 @@ export function ListingCreditCalculatorModal({
                 step={1}
                 value={Math.max(downPercent, downMin)}
                 onChange={setDownPercent}
-                marks={[downMin, 50, 95]}
+                marks={[downMin, 50, 95]
+                  .filter((mark, i, arr) => mark >= downMin && mark <= 95 && arr.indexOf(mark) === i)
+                  .sort((a, b) => a - b)}
                 formatMark={mark => `${mark}%`}
               />
 
