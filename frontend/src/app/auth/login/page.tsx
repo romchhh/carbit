@@ -18,7 +18,6 @@ const HERO_IMAGE = "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7
 const TESTIMONIAL_AVATAR =
   "https://media.istockphoto.com/id/1485546774/uk/%D1%84%D0%BE%D1%82%D0%BE/%D0%BB%D0%B8%D1%81%D0%B8%D0%B9-%D1%87%D0%BE%D0%BB%D0%BE%D0%B2%D1%96%D0%BA-%D0%BF%D0%BE%D1%81%D0%BC%D1%96%D1%85%D0%B0%D1%94%D1%82%D1%8C%D1%81%D1%8F-%D0%BD%D0%B0-%D0%BA%D0%B0%D0%BC%D0%B5%D1%80%D1%83-%D1%81%D1%82%D0%BE%D1%8F%D1%87%D0%B8-%D0%B7%D1%96-%D1%81%D1%85%D1%80%D0%B5%D1%89%D0%B5%D0%BD%D0%B8%D0%BC%D0%B8-%D1%80%D1%83%D0%BA%D0%B0%D0%BC%D0%B8.jpg?s=612x612&w=0&k=20&c=k8rWF64vFG376FAR8UmfKKEjqXvLkAGM4FRbucNTgUw=";
 
-type Tab = "login" | "register";
 type PhoneStep = "form" | "verify";
 type LoginMethod = "code" | "password";
 type CodeChannel = "sms" | "telegram";
@@ -28,7 +27,6 @@ function AuthForm() {
   const router = useRouter();
   const { sendPhoneCode, verifyPhoneCode, phoneLogin, user, loading: authLoading, initialized } = useAuth();
 
-  const [tab, setTab] = useState<Tab>("login");
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("code");
   const [phoneStep, setPhoneStep] = useState<PhoneStep>("form");
   const [loading, setLoading] = useState(false);
@@ -37,10 +35,10 @@ function AuthForm() {
   const [success, setSuccess] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneCode, setPhoneCode] = useState("");
-  const [phoneName, setPhoneName] = useState("");
   const [password, setPassword] = useState("");
   const [codeChannel, setCodeChannel] = useState<CodeChannel>("sms");
   const [personalDataConsent, setPersonalDataConsent] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   const redirect = searchParams.get("redirect");
   const destination = resolvePostAuthRedirect(redirect);
@@ -51,28 +49,12 @@ function AuthForm() {
   }, [initialized, authLoading, user, router, destination]);
 
   useEffect(() => {
-    const tabParam = searchParams.get("tab");
     const sessionParam = searchParams.get("session");
-
     if (sessionParam === "revoked" || sessionStorage.getItem("carbit_session_revoked") === "1") {
       setError("Ви увійшли з іншого пристрою. Безкоштовний тариф дозволяє 1 активну сесію — увійдіть знову.");
       sessionStorage.removeItem("carbit_session_revoked");
     }
-
-    if (tabParam === "register") setTab("register");
   }, [searchParams]);
-
-  const handleTabChange = (next: Tab) => {
-    setTab(next);
-    setPhoneStep("form");
-    setLoginMethod("code");
-    setPhoneCode("");
-    setPassword("");
-    setError("");
-    setSuccess("");
-    setCodeChannel("sms");
-    setPersonalDataConsent(false);
-  };
 
   const startResendCooldown = () => {
     setResendCooldown(60);
@@ -93,14 +75,6 @@ function AuthForm() {
       setError("Введіть повний номер телефону");
       return;
     }
-    if (tab === "register" && !phoneName.trim()) {
-      setError("Вкажіть ім'я");
-      return;
-    }
-    if (tab === "register" && !personalDataConsent) {
-      setError("Потрібно надати згоду на обробку персональних даних");
-      return;
-    }
 
     setError("");
     setSuccess("");
@@ -108,17 +82,22 @@ function AuthForm() {
     try {
       const result = await sendPhoneCode(
         normalized,
-        tab === "login" ? "login" : "register",
-        tab === "register" ? phoneName.trim() : undefined,
+        "auth",
+        undefined,
         delivery,
-        tab === "register" ? personalDataConsent : false,
+        personalDataConsent,
       );
+      setIsNewUser(Boolean(result.is_new_user));
       setPhoneStep("verify");
       setCodeChannel(result.channel === "telegram" ? "telegram" : "sms");
       setSuccess(result.message);
       startResendCooldown();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не вдалося надіслати код");
+      const message = err instanceof ApiError ? err.message : "Не вдалося надіслати код";
+      setError(message);
+      if (message.toLowerCase().includes("згода")) {
+        setIsNewUser(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -139,19 +118,16 @@ function AuthForm() {
     const normalized = normalizePhoneForApi(phone);
     setLoading(true);
     try {
-      await verifyPhoneCode(
+      const result = await verifyPhoneCode(
         normalized,
         phoneCode,
-        tab === "login" ? "login" : "register",
-        tab === "register" ? phoneName.trim() : undefined,
+        "auth",
+        undefined,
         true,
-        tab === "register" ? personalDataConsent : false,
+        personalDataConsent,
       );
-      router.replace(
-        tab === "register"
-          ? "/app/account?setPassword=1"
-          : resolvePostAuthRedirect(redirect),
-      );
+      const created = Boolean(result.is_new_user) || isNewUser;
+      router.replace(created ? "/app/account?setPassword=1" : resolvePostAuthRedirect(redirect));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Помилка підтвердження");
     } finally {
@@ -192,9 +168,7 @@ function AuthForm() {
     const channelHint =
       codeChannel === "telegram"
         ? "Код надіслано в Telegram, привʼязаний до вашого акаунта."
-        : tab === "register"
-          ? `Код надіслано SMS на ${displayPhone}`
-          : `Код надіслано SMS на ${displayPhone}`;
+        : `Код надіслано SMS на ${displayPhone}`;
 
     return (
       <div className="w-full max-w-[420px]">
@@ -246,7 +220,7 @@ function AuthForm() {
               className="w-full"
               disabled={phoneCode.length !== 6}
             >
-              {tab === "login" ? "Увійти" : "Створити акаунт"}
+              {isNewUser ? "Створити акаунт" : "Увійти"}
             </Button>
 
             <div className="space-y-2 text-center text-[13px] text-muted">
@@ -264,7 +238,7 @@ function AuthForm() {
                   {resendCooldown > 0 ? `Повторити через ${resendCooldown}с` : "Надіслати знову"}
                 </button>
               </p>
-              {tab === "login" && codeChannel === "telegram" && (
+              {codeChannel === "telegram" && (
                 <p>
                   Telegram недоступний?{" "}
                   <button
@@ -296,62 +270,45 @@ function AuthForm() {
       </div>
 
       <div className="bg-white rounded-[1.5rem] border border-border/60 shadow-card p-6 sm:p-7">
-        <div className="flex bg-surface rounded-full p-1 border border-border/60">
-          {(["login", "register"] as Tab[]).map(t => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => handleTabChange(t)}
-              className={cn(
-                "flex-1 py-2.5 text-[14px] font-semibold rounded-full transition-all duration-200",
-                tab === t ? "bg-ink text-white shadow-md" : "text-muted hover:text-ink",
-              )}
-            >
-              {t === "login" ? "Вхід" : "Реєстрація"}
-            </button>
-          ))}
-        </div>
-
-        <p className="mt-5 text-[14px] text-muted leading-relaxed">
-          {tab === "login"
-            ? loginMethod === "password"
-              ? "Вхід за номером телефону та паролем — без SMS-коду."
-              : "Введіть номер телефону. Код надішлемо в Telegram, якщо він привʼязаний, інакше — SMS."
-            : "Введіть імʼя та номер. Код підтвердження надішлемо SMS."}
+        <h1 className="text-[28px] font-black tracking-[-0.03em] text-ink leading-none">
+          Вхід / Реєстрація
+        </h1>
+        <p className="mt-3 text-[14px] text-muted leading-relaxed">
+          {loginMethod === "password"
+            ? "Вхід за номером телефону та паролем — без SMS-коду."
+            : "Введіть номер телефону. Якщо акаунта ще немає — створимо його після SMS-коду."}
         </p>
 
-        {tab === "login" && (
-          <div className="mt-4 flex rounded-full border border-border/60 bg-surface p-0.5 text-[12px] font-semibold">
-            <button
-              type="button"
-              onClick={() => {
-                setLoginMethod("code");
-                setError("");
-              }}
-              className={cn(
-                "flex-1 rounded-full py-2 transition-colors",
-                loginMethod === "code" ? "bg-white text-ink shadow-sm" : "text-muted",
-              )}
-            >
-              Код SMS / Telegram
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setLoginMethod("password");
-                setError("");
-              }}
-              className={cn(
-                "flex-1 rounded-full py-2 transition-colors",
-                loginMethod === "password" ? "bg-white text-ink shadow-sm" : "text-muted",
-              )}
-            >
-              Пароль
-            </button>
-          </div>
-        )}
+        <div className="mt-4 flex rounded-full border border-border/60 bg-surface p-0.5 text-[12px] font-semibold">
+          <button
+            type="button"
+            onClick={() => {
+              setLoginMethod("code");
+              setError("");
+            }}
+            className={cn(
+              "flex-1 rounded-full py-2 transition-colors",
+              loginMethod === "code" ? "bg-white text-ink shadow-sm" : "text-muted",
+            )}
+          >
+            Код SMS / Telegram
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLoginMethod("password");
+              setError("");
+            }}
+            className={cn(
+              "flex-1 rounded-full py-2 transition-colors",
+              loginMethod === "password" ? "bg-white text-ink shadow-sm" : "text-muted",
+            )}
+          >
+            Пароль
+          </button>
+        </div>
 
-        {tab === "login" && loginMethod === "password" ? (
+        {loginMethod === "password" ? (
           <form onSubmit={handlePhonePasswordLogin} className="mt-4 space-y-3">
             <PhoneInput value={phone} onChange={setPhone} disabled={loading} />
             <input
@@ -383,48 +340,28 @@ function AuthForm() {
             </p>
           </form>
         ) : (
-        <form onSubmit={handlePhoneSendCode} className="mt-4 space-y-3">
-          {tab === "register" && (
-            <input
-              type="text"
-              placeholder="Ім'я"
-              className="auth-input"
-              value={phoneName}
-              onChange={e => setPhoneName(e.target.value)}
-              required
-              autoComplete="name"
-            />
-          )}
-          <PhoneInput value={phone} onChange={setPhone} disabled={loading} />
-          {tab === "register" ? (
+          <form onSubmit={handlePhoneSendCode} className="mt-4 space-y-3">
+            <PhoneInput value={phone} onChange={setPhone} disabled={loading} />
             <PersonalDataConsentCheckbox
               checked={personalDataConsent}
               onChange={setPersonalDataConsent}
               disabled={loading}
+              required={false}
+              hint="Обовʼязково для нових акаунтів"
             />
-          ) : null}
-          {success && (
-            <p className="text-[13px] text-emerald-dark bg-emerald-light/50 border border-emerald/20 rounded-lg px-3 py-2">
-              {success}
-            </p>
-          )}
-          {error && (
-            <p className="text-[13px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
-          <Button
-            type="submit"
-            loading={loading}
-            size="md"
-            variant="emerald"
-            showArrow
-            className="w-full"
-            disabled={tab === "register" && !personalDataConsent}
-          >
-            {tab === "login" ? "Отримати код" : "Надіслати код SMS"}
-          </Button>
-          {tab === "login" && (
+            {success && (
+              <p className="text-[13px] text-emerald-dark bg-emerald-light/50 border border-emerald/20 rounded-lg px-3 py-2">
+                {success}
+              </p>
+            )}
+            {error && (
+              <p className="text-[13px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+            <Button type="submit" loading={loading} size="md" variant="emerald" showArrow className="w-full">
+              Отримати код
+            </Button>
             <p className="text-[11px] text-center text-muted">
               Є пароль?{" "}
               <button
@@ -435,8 +372,7 @@ function AuthForm() {
                 Увійти з паролем
               </button>
             </p>
-          )}
-        </form>
+          </form>
         )}
       </div>
 

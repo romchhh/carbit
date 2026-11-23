@@ -222,22 +222,25 @@ export const auth = {
   googleLoginUrl: () => `${apiUrl()}/auth/google`,
   phoneSendCode: (body: {
     phone: string;
-    intent: "login" | "register";
+    intent: "login" | "register" | "auth";
     name?: string;
     delivery?: "auto" | "sms";
     personal_data_consent?: boolean;
   }) =>
-    request<{ message: string; expires_in?: number; channel?: "sms" | "telegram" }>(
-      "/auth/phone/send-code",
-      {
-        method: "POST",
-        body: JSON.stringify(body),
-      },
-    ),
+    request<{
+      message: string;
+      expires_in?: number;
+      channel?: "sms" | "telegram";
+      is_new_user?: boolean;
+      resolved_intent?: "login" | "register";
+    }>("/auth/phone/send-code", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   phoneVerify: (body: {
     phone: string;
     code: string;
-    intent: "login" | "register";
+    intent: "login" | "register" | "auth";
     name?: string;
     remember?: boolean;
     personal_data_consent?: boolean;

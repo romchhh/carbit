@@ -9,6 +9,9 @@ type PersonalDataConsentCheckboxProps = {
   disabled?: boolean;
   className?: string;
   linkTarget?: "_blank" | "_self";
+  /** HTML required — для нових акаунтів краще false + серверна перевірка */
+  required?: boolean;
+  hint?: string;
 };
 
 export function PersonalDataConsentCheckbox({
@@ -17,6 +20,8 @@ export function PersonalDataConsentCheckbox({
   disabled = false,
   className,
   linkTarget = "_blank",
+  required = false,
+  hint,
 }: PersonalDataConsentCheckboxProps) {
   return (
     <label
@@ -32,7 +37,7 @@ export function PersonalDataConsentCheckbox({
         checked={checked}
         disabled={disabled}
         onChange={e => onChange(e.target.checked)}
-        required
+        required={required}
       />
       <span>
         Надаю згоду на обробку моїх персональних даних згідно з{" "}
@@ -46,6 +51,7 @@ export function PersonalDataConsentCheckbox({
           порядком
         </Link>{" "}
         їх обробки та на доступ до моєї кредитної історії у будь-якому бюро кредитних історій.
+        {hint ? <span className="mt-1 block text-[11px] text-muted">{hint}</span> : null}
       </span>
     </label>
   );

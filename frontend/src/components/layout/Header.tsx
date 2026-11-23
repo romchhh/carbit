@@ -213,20 +213,13 @@ export function Header() {
             ) : (
               <>
                 <Link href="/auth/login" className={cn(
-                  "hidden sm:inline-flex text-[13px] px-4 py-2 font-medium",
-                  headerActionClass,
-                  lightHeader ? "text-white" : "text-muted hover:text-ink"
-                )}>
-                  Увійти
-                </Link>
-                <Link href="/auth/login" className={cn(
                   "hidden sm:inline-flex group items-center gap-2 text-[13px] font-semibold px-4 py-2 transition-all duration-300 hover:-translate-y-0.5",
                   lightHeader
                     ? "bg-white text-ink hover:bg-white/90 shadow-lg shadow-black/20 hover:ring-1 hover:ring-white/50"
                     : "bg-ink text-white hover:bg-ink-2 shadow-md shadow-ink/15 hover:ring-1 hover:ring-ink/25",
                   "rounded-full"
                 )}>
-                  Зареєструватися
+                  Вхід / Реєстрація
                   <span className={cn(
                     "w-5 h-5 rounded-full flex items-center justify-center group-hover:translate-x-0.5 transition-transform",
                     lightHeader ? "bg-ink/10" : "bg-white/15"
@@ -323,16 +316,9 @@ export function Header() {
                 <Link
                   href="/auth/login"
                   onClick={() => setMenuOpen(false)}
-                  className="flex items-center justify-center w-full py-3 rounded-full border border-white/25 text-white text-[14px] font-medium hover:ring-1 hover:ring-white/35 hover:bg-white/10 transition-all"
-                >
-                  Увійти
-                </Link>
-                <Link
-                  href="/auth/login"
-                  onClick={() => setMenuOpen(false)}
                   className="group flex items-center justify-center gap-2 w-full py-3 rounded-full bg-emerald text-white text-[14px] font-semibold hover:bg-emerald-dark hover:ring-1 hover:ring-emerald/50 shadow-lg shadow-emerald/30 transition-all"
                 >
-                  Зареєструватися
+                  Вхід / Реєстрація
                   <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
                     <IconArrowRight size={12} />
                   </span>

@@ -168,6 +168,13 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
     return token_json_response(await issue_user_access_token(user), max_age=max_age)
 
 
+def _default_phone_user_name(phone: str) -> str:
+    """Ім'я за замовчуванням для авто-реєстрації (можна змінити в кабінеті)."""
+    if len(phone) >= 12 and phone.startswith("380"):
+        return f"+{phone[:3]} {phone[3:5]} {phone[5:8]} {phone[8:10]} {phone[10:12]}"
+    return f"+{phone}"
+
+
 @router.post("/phone/send-code", response_model=MessageResponse)
 async def phone_send_code(
     body: PhoneSendCodeRequest,
@@ -179,8 +186,8 @@ async def phone_send_code(
     except PhoneValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    intent = body.intent.strip().lower()
-    if intent not in ("login", "register"):
+    intent_in = body.intent.strip().lower()
+    if intent_in not in ("login", "register", "auth"):
         raise HTTPException(status_code=400, detail="Невірний intent")
 
     await enforce_rate_limit(
@@ -192,15 +199,17 @@ async def phone_send_code(
 
     existing = await get_verified_phone_user(db, phone)
 
+    if intent_in == "auth":
+        intent = "login" if existing else "register"
+    else:
+        intent = intent_in
+
     if intent == "login":
         if not existing:
             raise HTTPException(status_code=404, detail="Номер не зареєстровано. Створіть акаунт.")
     else:
-        if existing:
+        if existing and intent_in != "auth":
             raise HTTPException(status_code=400, detail="Цей номер вже зареєстровано. Увійдіть.")
-        name = (body.name or "").strip()
-        if not name:
-            raise HTTPException(status_code=400, detail="Вкажіть ім'я для реєстрації")
         if not body.personal_data_consent:
             raise HTTPException(
                 status_code=400,
@@ -210,10 +219,14 @@ async def phone_send_code(
     if not await phone_verify_svc.phone_auth_resend_allowed(phone):
         raise HTTPException(status_code=429, detail="Зачекайте хвилину перед повторною відправкою")
 
+    name = (body.name or "").strip() or None
+    if intent == "register" and not name:
+        name = _default_phone_user_name(phone)
+
     code = await phone_verify_svc.store_phone_auth(
         phone,
         intent=intent,
-        name=(body.name or "").strip() or None,
+        name=name,
         personal_data_consent=bool(body.personal_data_consent) if intent == "register" else False,
     )
 
@@ -242,6 +255,8 @@ async def phone_send_code(
         message=message,
         expires_in=phone_verify_svc.CODE_TTL,
         channel=channel,
+        is_new_user=intent == "register",
+        resolved_intent=intent,
     )
 
 
@@ -256,11 +271,16 @@ async def phone_verify(
     except PhoneValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    intent = body.intent.strip().lower()
-    data = await phone_verify_svc.verify_phone_auth(phone, body.code, intent=intent)
+    intent_in = body.intent.strip().lower()
+    data = await phone_verify_svc.verify_phone_auth(phone, body.code, intent=intent_in)
     if not data:
         raise HTTPException(status_code=400, detail="Невірний або прострочений код")
 
+    intent = (data.get("intent") or intent_in).strip().lower()
+    if intent not in ("login", "register"):
+        intent = "login" if await get_verified_phone_user(db, phone) else "register"
+
+    is_new_user = False
     if intent == "login":
         user = await get_verified_phone_user(db, phone)
         if not user:
@@ -269,9 +289,7 @@ async def phone_verify(
         if await is_phone_taken(db, phone):
             raise HTTPException(status_code=400, detail="Цей номер вже зареєстровано")
 
-        name = (body.name or data.get("name") or "").strip()
-        if not name:
-            raise HTTPException(status_code=400, detail="Вкажіть ім'я для реєстрації")
+        name = (body.name or data.get("name") or "").strip() or _default_phone_user_name(phone)
 
         consented = bool(data.get("personal_data_consent")) or bool(body.personal_data_consent)
         if not consented:
@@ -303,13 +321,19 @@ async def phone_verify(
 
         grant_signup_trial(user)
         await db.flush()
+        is_new_user = True
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
 
     max_age = AUTH_COOKIE_MAX_AGE if body.remember else None
-    status_code = status.HTTP_201_CREATED if intent == "register" else status.HTTP_200_OK
-    return token_json_response(await issue_user_access_token(user), max_age=max_age, status_code=status_code)
+    status_code = status.HTTP_201_CREATED if is_new_user else status.HTTP_200_OK
+    return token_json_response(
+        await issue_user_access_token(user),
+        max_age=max_age,
+        status_code=status_code,
+        is_new_user=is_new_user,
+    )
 
 
 @router.post("/phone/login", response_model=TokenResponse)

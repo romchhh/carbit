@@ -13,7 +13,6 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { ApiError } from "@/lib/api";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 
-type Tab = "login" | "register";
 type PhoneStep = "form" | "verify";
 type CodeChannel = "sms" | "telegram";
 
@@ -29,12 +28,11 @@ export function AuthGateModal({
   open,
   onClose,
   onAuthenticated,
-  headline = "Увійдіть, щоб зберегти пошук",
-  description = "Створіть акаунт за хвилину — збережіть фільтри, підключіть моніторинг і отримуйте нові авто в Telegram.",
+  headline = "Вхід / Реєстрація",
+  description = "Введіть номер телефону. Якщо акаунта ще немає — створимо його після SMS-коду.",
 }: Props) {
   const { sendPhoneCode, verifyPhoneCode } = useAuth();
 
-  const [tab, setTab] = useState<Tab>("login");
   const [phoneStep, setPhoneStep] = useState<PhoneStep>("form");
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -42,9 +40,9 @@ export function AuthGateModal({
   const [success, setSuccess] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneCode, setPhoneCode] = useState("");
-  const [phoneName, setPhoneName] = useState("");
   const [codeChannel, setCodeChannel] = useState<CodeChannel>("sms");
   const [personalDataConsent, setPersonalDataConsent] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -66,15 +64,6 @@ export function AuthGateModal({
     setSuccess("");
   };
 
-  const handleTabChange = (next: Tab) => {
-    setTab(next);
-    setPhoneStep("form");
-    setPhoneCode("");
-    setCodeChannel("sms");
-    setPersonalDataConsent(false);
-    resetMessages();
-  };
-
   const startResendCooldown = () => {
     setResendCooldown(60);
     const interval = setInterval(() => {
@@ -94,31 +83,28 @@ export function AuthGateModal({
       setError("Введіть повний номер телефону");
       return;
     }
-    if (tab === "register" && !phoneName.trim()) {
-      setError("Вкажіть ім'я");
-      return;
-    }
-    if (tab === "register" && !personalDataConsent) {
-      setError("Потрібно надати згоду на обробку персональних даних");
-      return;
-    }
 
     resetMessages();
     setLoading(true);
     try {
       const result = await sendPhoneCode(
         normalized,
-        tab === "login" ? "login" : "register",
-        tab === "register" ? phoneName.trim() : undefined,
+        "auth",
+        undefined,
         delivery,
-        tab === "register" ? personalDataConsent : false,
+        personalDataConsent,
       );
+      setIsNewUser(Boolean(result.is_new_user));
       setPhoneStep("verify");
       setCodeChannel(result.channel === "telegram" ? "telegram" : "sms");
       setSuccess(result.message);
       startResendCooldown();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не вдалося надіслати код");
+      const message = err instanceof ApiError ? err.message : "Не вдалося надіслати код";
+      setError(message);
+      if (message.toLowerCase().includes("згода")) {
+        setIsNewUser(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -142,10 +128,10 @@ export function AuthGateModal({
       await verifyPhoneCode(
         normalized,
         phoneCode,
-        tab === "login" ? "login" : "register",
-        tab === "register" ? phoneName.trim() : undefined,
+        "auth",
+        undefined,
         true,
-        tab === "register" ? personalDataConsent : false,
+        personalDataConsent,
       );
       onAuthenticated();
     } catch (err) {
@@ -223,7 +209,7 @@ export function AuthGateModal({
                   className="w-full"
                   disabled={phoneCode.length !== 6}
                 >
-                  {tab === "login" ? "Увійти" : "Створити акаунт"}
+                  {isNewUser ? "Створити акаунт" : "Увійти"}
                 </Button>
 
                 <div className="space-y-2 text-center text-[12px] text-muted">
@@ -241,7 +227,7 @@ export function AuthGateModal({
                       {resendCooldown > 0 ? `Повторити через ${resendCooldown}с` : "Надіслати знову"}
                     </button>
                   </p>
-                  {tab === "login" && codeChannel === "telegram" && (
+                  {codeChannel === "telegram" && (
                     <p>
                       Telegram недоступний?{" "}
                       <button
@@ -267,48 +253,15 @@ export function AuthGateModal({
               </h2>
               <p className="mt-2 text-[13px] leading-relaxed text-muted">{description}</p>
 
-              <div className="mt-4 flex rounded-full border border-border/60 bg-surface p-1">
-                {(["login", "register"] as Tab[]).map(t => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => handleTabChange(t)}
-                    className={cn(
-                      "flex-1 rounded-full py-2 text-[13px] font-semibold transition-all",
-                      tab === t ? "bg-ink text-white shadow-md" : "text-muted hover:text-ink",
-                    )}
-                  >
-                    {t === "login" ? "Вхід" : "Реєстрація"}
-                  </button>
-                ))}
-              </div>
-
-              <p className="mt-4 text-[13px] leading-relaxed text-muted">
-                {tab === "login"
-                  ? "Код надішлемо в Telegram, якщо він привʼязаний, інакше — SMS."
-                  : "Код підтвердження надішлемо SMS."}
-              </p>
-
               <form onSubmit={handlePhoneSendCode} className="mt-4 space-y-3">
-                {tab === "register" && (
-                  <input
-                    type="text"
-                    placeholder="Ім'я"
-                    className="auth-input"
-                    value={phoneName}
-                    onChange={e => setPhoneName(e.target.value)}
-                    required
-                    autoComplete="name"
-                  />
-                )}
                 <PhoneInput value={phone} onChange={setPhone} disabled={loading} />
-                {tab === "register" ? (
-                  <PersonalDataConsentCheckbox
-                    checked={personalDataConsent}
-                    onChange={setPersonalDataConsent}
-                    disabled={loading}
-                  />
-                ) : null}
+                <PersonalDataConsentCheckbox
+                  checked={personalDataConsent}
+                  onChange={setPersonalDataConsent}
+                  disabled={loading}
+                  required={false}
+                  hint="Обовʼязково для нових акаунтів"
+                />
 
                 {success && (
                   <p className="rounded-lg border border-emerald/20 bg-emerald-light/50 px-3 py-2 text-[13px] text-emerald-dark">
@@ -321,16 +274,8 @@ export function AuthGateModal({
                   </p>
                 )}
 
-                <Button
-                  type="submit"
-                  loading={loading}
-                  size="md"
-                  variant="emerald"
-                  showArrow
-                  className="w-full"
-                  disabled={tab === "register" && !personalDataConsent}
-                >
-                  {tab === "login" ? "Отримати код" : "Надіслати код SMS"}
+                <Button type="submit" loading={loading} size="md" variant="emerald" showArrow className="w-full">
+                  Отримати код
                 </Button>
               </form>
 

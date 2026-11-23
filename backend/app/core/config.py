@@ -228,7 +228,6 @@ settings = Settings()
 # Заявки з кредитного калькулятора (БІЗБАНК + внутрішні копії). Не з .env — лише код.
 CREDIT_LEAD_EMAILS: tuple[str, ...] = (
     "Урдей Іван Остапович <Ivan.Urdei@bisbank.com.ua>",
-    "romanbiznesssmen@gmail.com",
     "zond.agency@gmail.com",
 )
 

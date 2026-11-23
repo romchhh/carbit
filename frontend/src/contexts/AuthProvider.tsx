@@ -24,19 +24,24 @@ interface AuthContextValue {
   resetPassword: (token: string, password: string) => Promise<void>;
   sendPhoneCode: (
     phone: string,
-    intent: "login" | "register",
+    intent?: "login" | "register" | "auth",
     name?: string,
     delivery?: "auto" | "sms",
     personalDataConsent?: boolean,
-  ) => Promise<{ message: string; channel?: "sms" | "telegram" }>;
+  ) => Promise<{
+    message: string;
+    channel?: "sms" | "telegram";
+    is_new_user?: boolean;
+    resolved_intent?: "login" | "register";
+  }>;
   verifyPhoneCode: (
     phone: string,
     code: string,
-    intent: "login" | "register",
+    intent?: "login" | "register" | "auth",
     name?: string,
     remember?: boolean,
     personalDataConsent?: boolean,
-  ) => Promise<void>;
+  ) => Promise<{ is_new_user?: boolean }>;
   phoneLogin: (phone: string, password: string, remember?: boolean) => Promise<void>;
   setPassword: (password: string, currentPassword?: string) => Promise<void>;
 }
@@ -143,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const sendPhoneCode = async (
     phone: string,
-    intent: "login" | "register",
+    intent: "login" | "register" | "auth" = "auth",
     name?: string,
     delivery: "auto" | "sms" = "auto",
     personalDataConsent = false,
@@ -153,31 +158,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       intent,
       name: name?.trim() || undefined,
       delivery,
-      personal_data_consent: intent === "register" ? personalDataConsent : undefined,
+      personal_data_consent: personalDataConsent || undefined,
     });
   };
 
   const verifyPhoneCode = async (
     phone: string,
     code: string,
-    intent: "login" | "register",
+    intent: "login" | "register" | "auth" = "auth",
     name?: string,
     remember = true,
     personalDataConsent = false,
   ) => {
-    const { access_token } = await api.auth.phoneVerify({
+    const { access_token, is_new_user } = await api.auth.phoneVerify({
       phone,
       code,
       intent,
       name: name?.trim() || undefined,
       remember,
-      personal_data_consent: intent === "register" ? personalDataConsent : undefined,
+      personal_data_consent: personalDataConsent || undefined,
     });
     setToken(access_token, remember);
-    if (intent === "register") {
+    if (is_new_user || intent === "register") {
       markOnboardingPending();
     }
     setUser(await api.auth.me());
+    return { is_new_user: Boolean(is_new_user) };
   };
 
   const phoneLogin = async (phone: string, password: string, remember = true) => {

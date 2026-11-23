@@ -19,7 +19,7 @@ export function PublicListingShell({ children }: { children: React.ReactNode }) 
               Увійти
             </Link>
             <Link
-              href="/auth/login?tab=register"
+              href="/auth/login"
               className="rounded-full bg-emerald px-3.5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-dark"
             >
               Спробувати

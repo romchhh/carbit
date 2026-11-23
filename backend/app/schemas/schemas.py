@@ -28,6 +28,8 @@ class MessageResponse(BaseModel):
     message: str
     expires_in: int | None = None
     channel: str | None = None
+    is_new_user: bool | None = None
+    resolved_intent: str | None = None
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -58,7 +60,8 @@ class SetPasswordRequest(BaseModel):
 
 class PhoneSendCodeRequest(BaseModel):
     phone: str = Field(min_length=9, max_length=32)
-    intent: str = Field(pattern=r"^(login|register)$")
+    # auth = єдине вікно: існуючі → login, нові → register
+    intent: str = Field(pattern=r"^(login|register|auth)$")
     name: str | None = Field(default=None, max_length=100)
     delivery: str = Field(default="auto", pattern=r"^(auto|sms)$")
     personal_data_consent: bool = False
@@ -75,7 +78,7 @@ class PhoneSendCodeRequest(BaseModel):
 class PhoneVerifyRequest(BaseModel):
     phone: str = Field(min_length=9, max_length=32)
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
-    intent: str = Field(pattern=r"^(login|register)$")
+    intent: str = Field(pattern=r"^(login|register|auth)$")
     name: str | None = Field(default=None, max_length=100)
     remember: bool = True
     personal_data_consent: bool = False
@@ -138,6 +141,7 @@ class UserProfileUpdate(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    is_new_user: bool | None = None
 
 
 # User

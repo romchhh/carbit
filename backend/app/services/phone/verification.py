@@ -84,7 +84,9 @@ async def verify_phone_auth(phone: str, code: str, *, intent: str) -> dict | Non
         return None
 
     data = json.loads(raw)
-    if data.get("intent") != intent:
+    stored_intent = data.get("intent")
+    # intent=auth приймає будь-який збережений login/register після send-code
+    if intent != "auth" and stored_intent != intent:
         return None
 
     if not compare_digest(str(data.get("code", "")), code.strip()):
