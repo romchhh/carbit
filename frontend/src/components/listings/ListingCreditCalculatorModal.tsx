@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { PhoneInput, normalizePhoneForApi } from "@/components/auth/PhoneInput";
 import { IconInfo, IconX } from "@/components/icons";
@@ -38,7 +38,11 @@ type Props = {
 };
 
 const CREDIT_CALC_DISCLAIMER =
-  "Розрахунок орієнтовний, за методикою калькулятора БІЗБАНК («готівка на автівку»): фіксована ставка 29,95% річних, ануїтет, разова комісія 2,95%. Реальна річна ставка (XIRR) враховує комісію та графік платежів і може відрізнятися від номінальної. Надсилання заявки не є публічною офертою; рішення приймає банк.";
+  "Розрахунок орієнтовний, за методикою калькулятора БІЗБАНК («готівка на автівку»): фіксована ставка 29,95% річних, ануїтет, разова комісія 2,95%. Надсилання заявки не є публічною офертою; рішення приймає банк.";
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
 
 function phoneNationalFromStored(phone: string | null | undefined): string {
   if (!phone) return "";
@@ -56,6 +60,7 @@ function CreditSlider({
   id,
   label,
   valueLabel,
+  valueControl,
   min,
   max,
   step,
@@ -66,7 +71,8 @@ function CreditSlider({
 }: {
   id: string;
   label: string;
-  valueLabel: string;
+  valueLabel?: string;
+  valueControl?: ReactNode;
   min: number;
   max: number;
   step: number;
@@ -77,13 +83,15 @@ function CreditSlider({
 }) {
   return (
     <div className="rounded-xl bg-surface/50 px-3 py-3">
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <label htmlFor={id} className="text-[13px] font-medium text-ink">
           {label}
         </label>
-        <span className="shrink-0 whitespace-nowrap text-[14px] font-semibold tabular-nums tracking-tight text-ink">
-          {valueLabel}
-        </span>
+        {valueControl ?? (
+          <span className="shrink-0 whitespace-nowrap text-[14px] font-semibold tabular-nums tracking-tight text-ink">
+            {valueLabel}
+          </span>
+        )}
       </div>
       <input
         id={id}
@@ -122,6 +130,7 @@ export function ListingCreditCalculatorModal({
   const [downPercent, setDownPercent] = useState(() =>
     Math.max(BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT, downMin),
   );
+  const [downAmountDraft, setDownAmountDraft] = useState("");
   const [termMonths, setTermMonths] = useState(BISBANK_DEFAULT_TERM_MONTHS);
   const [applicationOpen, setApplicationOpen] = useState(false);
   const [name, setName] = useState("");
@@ -134,7 +143,10 @@ export function ListingCreditCalculatorModal({
 
   useEffect(() => {
     if (!open) return;
-    setDownPercent(prev => Math.max(prev, downMin, BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT));
+    const nextDown = Math.max(downMin, BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT);
+    setDownPercent(nextDown);
+    const nextAmount = Math.round((carPriceUah * nextDown) / 100);
+    setDownAmountDraft(nextAmount > 0 ? String(nextAmount) : "");
     setTermMonths(BISBANK_DEFAULT_TERM_MONTHS);
     setApplicationOpen(false);
     setQuoteDetailsOpen(false);
@@ -143,7 +155,7 @@ export function ListingCreditCalculatorModal({
     setSubmitOk(false);
     setName(user?.name?.trim() ?? "");
     setPhone(phoneNationalFromStored(user?.phone));
-  }, [open, listing.id, downMin, user?.name, user?.phone]);
+  }, [open, listing.id, downMin, carPriceUah, user?.name, user?.phone]);
 
   useEffect(() => {
     if (!open) return;
@@ -174,6 +186,28 @@ export function ListingCreditCalculatorModal({
       }),
     [carPriceUah, deferredDownPercent, deferredTermMonths],
   );
+
+  useEffect(() => {
+    if (!open) return;
+    setDownAmountDraft(String(quote.downPaymentUah));
+  }, [open, quote.downPaymentUah]);
+
+  const applyDownAmountDraft = (raw: string) => {
+    const normalized = raw.replace(/\s/g, "").replace(",", ".");
+    const amount = Math.round(Number(normalized));
+    if (!Number.isFinite(amount) || carPriceUah <= 0) {
+      setDownAmountDraft(String(quote.downPaymentUah));
+      return;
+    }
+    const pct = clampNumber((amount / carPriceUah) * 100, downMin, 95);
+    setDownPercent(Math.round(pct * 10) / 10);
+  };
+
+  const setDownPercentFromSlider = (next: number) => {
+    const pct = clampNumber(next, downMin, 95);
+    setDownPercent(pct);
+    setDownAmountDraft(String(Math.round((carPriceUah * pct) / 100)));
+  };
 
   const thumb = listing.images?.[0] ?? null;
   const priceLabel = formatListingPrice(
@@ -322,12 +356,33 @@ export function ListingCreditCalculatorModal({
               <CreditSlider
                 id="credit-down"
                 label="Перший внесок"
-                valueLabel={`${formatMoneyUah(quote.downPaymentUah)} · ${formatPercentUk(quote.downPaymentPercent)}`}
+                valueControl={
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      aria-label="Перший внесок, грн"
+                      className="auth-input w-[7.5rem] py-1 text-right text-[13px] font-semibold tabular-nums"
+                      value={downAmountDraft}
+                      onChange={e => setDownAmountDraft(e.target.value.replace(/[^\d\s]/g, ""))}
+                      onBlur={() => applyDownAmountDraft(downAmountDraft)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                    />
+                    <span className="shrink-0 text-[12px] tabular-nums text-ink/70">
+                      грн · {formatPercentUk(quote.downPaymentPercent)}
+                    </span>
+                  </div>
+                }
                 min={downMin}
                 max={95}
                 step={1}
                 value={Math.max(downPercent, downMin)}
-                onChange={setDownPercent}
+                onChange={setDownPercentFromSlider}
                 marks={[downMin, 50, 95]
                   .filter((mark, i, arr) => mark >= downMin && mark <= 95 && arr.indexOf(mark) === i)
                   .sort((a, b) => a - b)}
@@ -367,11 +422,6 @@ export function ListingCreditCalculatorModal({
                       "—"
                     )}
                   </p>
-                  {quote.loanValid && quote.realAnnualRatePercent != null ? (
-                    <p className="shrink-0 pb-0.5 text-right text-[12px] tabular-nums text-ink/80">
-                      XIRR {formatPercentUk(quote.realAnnualRatePercent, 1)}
-                    </p>
-                  ) : null}
                 </div>
               {quote.loanValid ? (
                 <div className="mt-3">
