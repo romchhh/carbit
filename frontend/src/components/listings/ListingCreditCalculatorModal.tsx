@@ -117,7 +117,7 @@ export function ListingCreditCalculatorModal({
   const { user } = useAuth();
   const carPriceUah = resolveListingPriceUah(listing);
   const minDown = minDownPaymentPercent(carPriceUah);
-  const downMin = Math.max(10, Math.ceil(minDown));
+  const downMin = Math.max(0, Math.ceil(minDown));
 
   const [downPercent, setDownPercent] = useState(() =>
     Math.max(BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT, downMin),

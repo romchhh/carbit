@@ -13,8 +13,8 @@ import {
 } from "@/lib/display-currency";
 import type { Listing } from "@/types/api";
 
-export const BISBANK_LOAN_MIN_UAH = 5_000;
-export const BISBANK_LOAN_MAX_UAH = 500_000;
+export const BISBANK_LOAN_MIN_UAH = 0;
+export const BISBANK_LOAN_MAX_UAH = 1_000_000;
 export const BISBANK_TERM_MIN_MONTHS = 6;
 export const BISBANK_TERM_MAX_MONTHS = 60;
 
@@ -316,11 +316,12 @@ export function computeBisbankCreditQuote(input: BisbankCreditInputs): BisbankCr
 
   const loanValid =
     carPriceUah > 0 &&
+    loanAmountUah > 0 &&
     loanAmountUah >= BISBANK_LOAN_MIN_UAH &&
     loanAmountUah <= BISBANK_LOAN_MAX_UAH;
 
-  if (carPriceUah > 0 && loanAmountUah < BISBANK_LOAN_MIN_UAH) {
-    warnings.push(`Мін. сума кредиту — ${formatMoneyUah(BISBANK_LOAN_MIN_UAH)}.`);
+  if (carPriceUah > 0 && loanAmountUah === 0) {
+    warnings.push("Зменшіть перший внесок, щоб отримати суму кредиту.");
   }
 
   const oneTimeFeeUah = loanValid
