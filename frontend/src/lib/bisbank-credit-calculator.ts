@@ -1,11 +1,9 @@
 /**
- * Орієнтовний кредит «готівка на автівку» — kalkulyator_gotivka-na-avtivku.xlsx
+ * Орієнтовний кредит «готівка на автівку» — лист «Графік платежів».
  *
- * Сценарії:
- * - with_registration: «Графік платежів 1» — фікс. 29,95% (D9), PPMT/IPMT
- * - without_registration: «Графік платежів 2» — 1-й період 29,95%, далі 55,95% (H7) на залишок F25
- *
- * Комісії: C11 2,95%; C10 0%; P12 0,12%×сума×строк (опц.); UIDR+маржа з 25-го місяця (опц.)
+ * Один сценарій: фіксована 29,95% (C9) на весь строк, ануїтет PPMT/IPMT.
+ * Разова комісія C11 2,95%, щомісячна C10 0%.
+ * Нотаріальні 0,12% і плаваюча ставка UIDR з 25-го місяця не застосовуються.
  */
 
 import {
@@ -20,33 +18,19 @@ export const BISBANK_LOAN_MAX_UAH = 500_000;
 export const BISBANK_TERM_MIN_MONTHS = 6;
 export const BISBANK_TERM_MAX_MONTHS = 60;
 
-export const BISBANK_RATE_NOMINAL = 0.29949999999999999;
-export const BISBANK_RATE_WITHOUT_REG_FROM_MONTH2 = 0.5595;
+export const BISBANK_RATE_NOMINAL = 0.2995;
 export const BISBANK_ONE_TIME_FEE_RATE = 0.0295;
 export const BISBANK_MONTHLY_FEE_RATE = 0;
-/** F14 — ставка з 25-го місяця при UIDR (якщо індекс > 0). */
-export const BISBANK_FLOATING_MARGIN_DEFAULT = 0.1699;
-export const BISBANK_NOTARY_RATE_PER_TERM = 0.0012;
 
 export const BISBANK_DEFAULT_DOWN_PAYMENT_PERCENT = 15;
 export const BISBANK_DEFAULT_TERM_MONTHS = 36;
 
-export type BisbankRegistrationMode = "with_registration" | "without_registration";
-
-export type BisbankCreditOptions = {
-  /** M12 «наявне» — нотаріальні/держмито P12. */
-  includeNotaryFee?: boolean;
-  /** F12+F13 > 0 — з 25-го місяця ставка = uidrIndex + margin (інакше номінал на весь строк). */
-  uidrIndex?: number;
-  margin?: number;
-};
+export type BisbankRegistrationMode = "with_registration";
 
 export type BisbankCreditInputs = {
   carPriceUah: number;
   downPaymentPercent: number;
   termMonths: number;
-  registrationMode?: BisbankRegistrationMode;
-  options?: BisbankCreditOptions;
   /** Як D3 у файлі банку; за замовчуванням — сьогодні. */
   creditDate?: Date;
 };
@@ -186,11 +170,7 @@ function daysBetween(from: Date, to: Date): number {
 export function buildBisbankPaymentSchedule(params: {
   loanAmountUah: number;
   termMonths: number;
-  registrationMode: BisbankRegistrationMode;
-  uidrIndex: number;
-  margin: number;
   oneTimeFeeUah: number;
-  notaryFeeUah: number;
   creditDate: Date;
 }): BisbankPaymentScheduleRow[] {
   const n = Math.max(1, Math.round(params.termMonths));
@@ -199,7 +179,7 @@ export function buildBisbankPaymentSchedule(params: {
   const rows: BisbankPaymentScheduleRow[] = [];
 
   const disbursementDate = creditDate;
-  const netLoan = loan - params.oneTimeFeeUah - params.notaryFeeUah;
+  const netLoan = loan - params.oneTimeFeeUah;
   rows.push({
     index: 0,
     paymentDate: disbursementDate,
@@ -209,7 +189,7 @@ export function buildBisbankPaymentSchedule(params: {
     interestUah: 0,
     monthlyFeeUah: 0,
     oneTimeFeeUah: params.oneTimeFeeUah,
-    notaryUah: params.notaryFeeUah,
+    notaryUah: 0,
     paymentTotalUah: 0,
     cashflowUah: netLoan,
     balanceAfterUah: loan,
@@ -218,69 +198,18 @@ export function buildBisbankPaymentSchedule(params: {
 
   if (loan === 0) return rows;
 
-  const floatingStartsAt = 25;
-  const useFloating =
-    params.registrationMode === "with_registration" &&
-    params.uidrIndex + params.margin > 1e-9 &&
-    n >= floatingStartsAt;
-
   let balance = loan;
   let prevDate = disbursementDate;
-  let withoutRegPhase2Pv = 0;
-  let withoutRegPhase2N = 0;
-  let withoutRegSteadyPayment = 0;
+  const annualRate = BISBANK_RATE_NOMINAL;
 
   for (let month = 1; month <= n; month++) {
     const paymentDate = bisbankPaymentDate(creditDate, month);
     const daysInPeriod = daysBetween(prevDate, paymentDate);
     prevDate = paymentDate;
 
-    let annualRate = BISBANK_RATE_NOMINAL;
-    let payment = 0;
-    let principal = 0;
-    let interest = 0;
-
-    if (params.registrationMode === "without_registration") {
-      if (month === 1) {
-        annualRate = BISBANK_RATE_NOMINAL;
-        payment = pmtPositive(annualRate, n, loan);
-        principal = ppmtPositive(annualRate, 1, n, loan);
-        interest = ipmtPositive(annualRate, 1, n, loan);
-        withoutRegPhase2Pv = loan - principal;
-        withoutRegPhase2N = n - 1;
-        withoutRegSteadyPayment =
-          withoutRegPhase2N > 0
-            ? pmtPositive(BISBANK_RATE_WITHOUT_REG_FROM_MONTH2, withoutRegPhase2N, withoutRegPhase2Pv)
-            : 0;
-      } else {
-        annualRate = BISBANK_RATE_WITHOUT_REG_FROM_MONTH2;
-        payment = withoutRegSteadyPayment;
-        principal = ppmtPositive(
-          annualRate,
-          month - 1,
-          withoutRegPhase2N,
-          withoutRegPhase2Pv,
-        );
-        interest = payment - principal;
-      }
-    } else if (useFloating && month >= floatingStartsAt) {
-      annualRate = params.uidrIndex + params.margin;
-      const remaining = n - month + 1;
-      payment = pmtPositive(annualRate, remaining, balance);
-      interest = balance * (annualRate / 12);
-      principal = payment - interest;
-    } else if (useFloating) {
-      annualRate = BISBANK_RATE_NOMINAL;
-      payment = pmtPositive(annualRate, n, loan);
-      principal = ppmtPositive(annualRate, month, n, loan);
-      interest = ipmtPositive(annualRate, month, n, loan);
-    } else {
-      annualRate = BISBANK_RATE_NOMINAL;
-      payment = pmtPositive(annualRate, n, loan);
-      principal = ppmtPositive(annualRate, month, n, loan);
-      interest = ipmtPositive(annualRate, month, n, loan);
-    }
-
+    const payment = pmtPositive(annualRate, n, loan);
+    const principal = ppmtPositive(annualRate, month, n, loan);
+    const interest = ipmtPositive(annualRate, month, n, loan);
     const monthlyFeeUah = Math.round(loan * BISBANK_MONTHLY_FEE_RATE);
     const paymentTotal = payment + monthlyFeeUah;
     balance = Math.max(0, balance - principal);
@@ -359,11 +288,7 @@ export function computeXirr(
 
 export function computeBisbankCreditQuote(input: BisbankCreditInputs): BisbankCreditQuote {
   const warnings: string[] = [];
-  const registrationMode = input.registrationMode ?? "with_registration";
-  const options = input.options ?? {};
-  const includeNotary = Boolean(options.includeNotaryFee);
-  const uidrIndex = Math.max(0, options.uidrIndex ?? 0);
-  const margin = Math.max(0, options.margin ?? 0);
+  const registrationMode: BisbankRegistrationMode = "with_registration";
 
   const carPriceUah = Math.max(0, Math.round(input.carPriceUah));
   const termMonths = clamp(
@@ -401,21 +326,14 @@ export function computeBisbankCreditQuote(input: BisbankCreditInputs): BisbankCr
   const oneTimeFeeUah = loanValid
     ? Math.round(loanAmountUah * BISBANK_ONE_TIME_FEE_RATE)
     : 0;
-  const notaryFeeUah =
-    loanValid && includeNotary
-      ? Math.round(loanAmountUah * termMonths * BISBANK_NOTARY_RATE_PER_TERM)
-      : 0;
+  const notaryFeeUah = 0;
 
   const creditDate = startOfLocalDay(input.creditDate ?? new Date());
   const paymentSchedule = loanValid
     ? buildBisbankPaymentSchedule({
         loanAmountUah,
         termMonths,
-        registrationMode,
-        uidrIndex,
-        margin,
         oneTimeFeeUah,
-        notaryFeeUah,
         creditDate,
       })
     : [];
@@ -423,22 +341,17 @@ export function computeBisbankCreditQuote(input: BisbankCreditInputs): BisbankCr
   const paymentRows = paymentSchedule.filter(r => r.index > 0);
   const monthlyPaymentUah =
     paymentRows.length > 0 ? Math.round(paymentRows[0].paymentTotalUah) : 0;
-  const monthlyPaymentFromMonth2Uah =
-    registrationMode === "without_registration" && paymentRows.length > 1
-      ? Math.round(paymentRows[1].paymentTotalUah)
-      : null;
+  const monthlyPaymentFromMonth2Uah = null;
 
   const totalInterestUah = Math.round(
     paymentRows.reduce((s, r) => s + r.interestUah, 0),
   );
   const totalRepaymentUah = Math.round(
-    paymentRows.reduce((s, r) => s + r.paymentTotalUah, 0) +
-      oneTimeFeeUah +
-      notaryFeeUah,
+    paymentRows.reduce((s, r) => s + r.paymentTotalUah, 0) + oneTimeFeeUah,
   );
   const totalConsumerCostUah = totalRepaymentUah;
   const netDisbursementUah = loanValid
-    ? Math.round(loanAmountUah - oneTimeFeeUah - notaryFeeUah)
+    ? Math.round(loanAmountUah - oneTimeFeeUah)
     : 0;
 
   let realAnnualRatePercent: number | null = null;
@@ -452,21 +365,7 @@ export function computeBisbankCreditQuote(input: BisbankCreditInputs): BisbankCr
   const maturityDate = loanValid ? bisbankMaturityDate(creditDate, termMonths) : null;
 
   const nominalRatePercent = Math.round(BISBANK_RATE_NOMINAL * 10000) / 100;
-  const secondaryRatePercent =
-    registrationMode === "without_registration"
-      ? Math.round(BISBANK_RATE_WITHOUT_REG_FROM_MONTH2 * 10000) / 100
-      : null;
-
-  if (registrationMode === "without_registration") {
-    warnings.push(
-      "Без підтвердження реєстрації ТЗ у банку застосовується підвищена ставка з 2-го місяця (як «Графік платежів 2»).",
-    );
-  }
-  if (uidrIndex + margin > 0 && termMonths >= 25 && registrationMode === "with_registration") {
-    warnings.push(
-      `З 25-го місяця застосовується плаваюча ставка ${formatPercentUk((uidrIndex + margin) * 100, 2)} (UIDR + маржа).`,
-    );
-  }
+  const secondaryRatePercent = null;
 
   return {
     carPriceUah,
