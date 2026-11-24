@@ -528,8 +528,8 @@ async def run_parser_cycle(
         try:
             from app.services.notifications.service import deliver_pending_monitor_telegram
 
-            for _ in range(5):
-                extra = await deliver_pending_monitor_telegram(db, limit=100)
+            for _ in range(4):
+                extra = await deliver_pending_monitor_telegram(db, limit=30)
                 if not extra:
                     break
                 total_notifications += extra

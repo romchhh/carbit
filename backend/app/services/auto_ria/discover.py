@@ -14,7 +14,9 @@ from app.services.auto_ria_beta.service import fetch_auto_ria_beta_batch
 
 logger = logging.getLogger(__name__)
 
-HTML_DISCOVER_TIMEOUT_SECONDS = 25.0
+# Менше за AUTO_RIA_POOL_TIMEOUT (25с), інакше моніторинг скасовує сторінку
+# рівно на ліміті і це виглядає як порожня видача AUTO.RIA.
+HTML_DISCOVER_TIMEOUT_SECONDS = 20.0
 HTML_FALLBACK_MESSAGE = "HTML-парсер AUTO.RIA недоступний."
 _API_FALLBACK_SUFFIX = " Перемкнуто на API."
 

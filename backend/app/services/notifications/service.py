@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from sqlalchemy import asc, desc, exists, func, nulls_last, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.sqlite_retry import commit_session, flush_session
 from app.core.timezone import now_kyiv
@@ -29,7 +30,13 @@ from app.services.parser.filter_groups import (
 )
 from app.services.parser.settings import get_parser_settings
 from app.services.listings.duplicates import listings_look_same, listing_vin_for_dedup
-from app.services.telegram.client import telegram_client, SOURCE_LABELS
+from app.services.telegram.client import (
+    SOURCE_LABELS,
+    TelegramPermanentError,
+    TelegramRateLimit,
+    TelegramTransientError,
+    telegram_client,
+)
 from app.services.telegram_channels.mapper import fix_telegram_listing_url
 
 logger = logging.getLogger(__name__)
@@ -38,6 +45,20 @@ logger = logging.getLogger(__name__)
 def monitor_telegram_delivery_done(notification: Notification) -> bool:
     """Telegram доставлено — повторна догонка не потрібна."""
     return bool(notification.sent_telegram)
+
+
+TELEGRAM_GIVE_UP_ATTEMPTS = 4
+
+
+def note_telegram_delivery_failure(notification: Notification) -> int:
+    """Рахує невдалі спроби. Після ліміту картку пропускаємо, щоб черга не стопорилась."""
+    payload = dict(notification.payload or {})
+    attempts = int(payload.get("telegram_attempts") or 0) + 1
+    payload["telegram_attempts"] = attempts
+    notification.payload = payload
+    if hasattr(notification, "_sa_instance_state"):
+        flag_modified(notification, "payload")
+    return attempts
 
 
 def take_fair_monitor_rows(rows: list, *, limit: int, per_user: int = 25) -> list:
@@ -291,23 +312,39 @@ async def _attempt_listing_match_telegram(
     search_name = search_monitor_display_name(search) if search else "Carbit"
     result = None
     for attempt in range(2):
-        result = await telegram_client.send_listing_card(
-            user.telegram_id,
-            listing_data,
-            search_name,
-            search_id=search.id if search else None,
-            listing_id=listing.id,
-            alert_line=alert_line,
-            alert_emoji=alert_emoji,
-        )
+        try:
+            result = await telegram_client.send_listing_card(
+                user.telegram_id,
+                listing_data,
+                search_name,
+                search_id=search.id if search else None,
+                listing_id=listing.id,
+                alert_line=alert_line,
+                alert_emoji=alert_emoji,
+            )
+        except (TelegramRateLimit, TelegramPermanentError):
+            raise
+        except TelegramTransientError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Telegram listing card error user=%s listing=%s: %s",
+                user.id,
+                listing.id,
+                exc,
+            )
+            raise TelegramTransientError(str(exc)) from exc
         if result:
             break
+        if telegram_client.last_failure == "transient":
+            raise TelegramTransientError("telegram temporarily unavailable")
         if attempt == 0:
             await asyncio.sleep(0.6)
     if result:
         notification.sent_telegram = True
         await flush_session(db)
-        await asyncio.sleep(0.35)
+        # ~1 повідомлення/с в один чат — інакше Telegram ріже бота і черга згодом глухне.
+        await asyncio.sleep(1.05)
         return True
 
     logger.warning(
@@ -444,37 +481,46 @@ async def notify_monitor_listing_after_link(
     ):
         return False
 
-    notification = await create_listing_notification(
-        db,
-        user,
-        listing,
-        search=search,
-        max_published_hours=max_hours,
-        skip_freshness_check=False,
-    )
-    if not notification.sent_telegram and not monitor_telegram_delivery_done(notification):
-        if user.telegram_connected and user.telegram_id:
-            alert_line = (notification.payload or {}).get("cross_source_alert")
-            alert_emoji = "🔗" if alert_line else "🚗"
-            if alert_line is None:
-                alert_line, alert_emoji = await build_cross_source_telegram_alert(
-                    db, user.id, listing
+    notification: Notification | None = None
+    try:
+        notification = await create_listing_notification(
+            db,
+            user,
+            listing,
+            search=search,
+            max_published_hours=max_hours,
+            skip_freshness_check=False,
+        )
+        if not notification.sent_telegram and not monitor_telegram_delivery_done(notification):
+            if user.telegram_connected and user.telegram_id:
+                alert_line = (notification.payload or {}).get("cross_source_alert")
+                alert_emoji = "🔗" if alert_line else "🚗"
+                if alert_line is None:
+                    alert_line, alert_emoji = await build_cross_source_telegram_alert(
+                        db, user.id, listing
+                    )
+                await _attempt_listing_match_telegram(
+                    db,
+                    user,
+                    listing,
+                    search,
+                    notification,
+                    skip_freshness_check=False,
+                    max_published_hours=max_hours,
+                    alert_line=alert_line,
+                    alert_emoji=alert_emoji,
                 )
-            await _attempt_listing_match_telegram(
-                db,
-                user,
-                listing,
-                search,
-                notification,
-                skip_freshness_check=False,
-                max_published_hours=max_hours,
-                alert_line=alert_line,
-                alert_emoji=alert_emoji,
-            )
+    except (TelegramRateLimit, TelegramPermanentError, TelegramTransientError) as exc:
+        logger.warning(
+            "Immediate Telegram notify deferred listing=%s search=%s: %s",
+            listing.id,
+            search.id,
+            exc,
+        )
 
-    if monitor_telegram_delivery_done(notification):
+    if notification and monitor_telegram_delivery_done(notification):
         sl.notified_at = now_kyiv()
-    return bool(notification.sent_telegram)
+    return bool(notification and notification.sent_telegram)
 
 
 async def deliver_pending_monitor_telegram(
@@ -530,7 +576,7 @@ async def deliver_pending_monitor_telegram(
             ),
             ~exists(sent_subq),
         )
-        .order_by(asc(SearchListing.first_seen_at))
+        .order_by(desc(SearchListing.first_seen_at))
         .limit(max(limit * 4, limit))
     )
     if search_ids:
@@ -538,92 +584,19 @@ async def deliver_pending_monitor_telegram(
 
     rows = take_fair_monitor_rows(list((await db.execute(stmt)).all()), limit=max(1, limit))
     delivered = 0
-    for sl, search, user, listing in rows:
-        if persist_each:
-            await commit_session(db)
-
-        if not listing_matches_search_query(listing, search):
-            logger.info(
-                "Drop stale monitor link: listing %s not matching search %s",
-                listing.id,
-                search.id,
-            )
-            sl.is_new = False
-            search.new_count = max(0, (search.new_count or 0) - 1)
-            await flush_session(db)
-            if persist_each:
-                await commit_session(db)
-            continue
-
-        latest = await db.scalar(
-            select(Notification)
-            .where(
-                Notification.user_id == user.id,
-                Notification.search_id == search.id,
-                Notification.listing_id == listing.id,
-                Notification.type == NotificationType.listing_match,
-            )
-            .order_by(desc(Notification.created_at))
-            .limit(1)
-        )
-        if latest and latest.sent_telegram:
-            sl.notified_at = now_kyiv()
-            delivered += 1
-            await flush_session(db)
-            if persist_each:
-                await commit_session(db)
-            continue
-        if latest and monitor_telegram_delivery_done(latest):
-            sl.notified_at = now_kyiv()
-            await flush_session(db)
-            if persist_each:
-                await commit_session(db)
-            continue
-        if latest:
-            payload = latest.payload or {}
-            alert_line = payload.get("cross_source_alert")
-            alert_emoji = "🔗" if alert_line else "🚗"
-            if alert_line is None:
-                alert_line, alert_emoji = await build_cross_source_telegram_alert(
-                    db, user.id, listing
-                )
-            ok = await _attempt_listing_match_telegram(
-                db,
-                user,
-                listing,
-                search,
-                latest,
-                skip_freshness_check=True,
-                max_published_hours=max_hours,
-                alert_line=alert_line,
-                alert_emoji=alert_emoji,
-            )
-            if ok:
-                delivered += 1
-            if ok or monitor_telegram_delivery_done(latest):
-                sl.notified_at = now_kyiv()
-            await flush_session(db)
-            if persist_each:
-                await commit_session(db)
-            continue
-
-        notification = await create_listing_notification(
+    try:
+        delivered = await _deliver_monitor_rows(
             db,
-            user,
-            listing,
-            search=search,
-            skip_freshness_check=True,
-            max_published_hours=max_hours,
+            rows,
+            max_hours=max_hours,
+            persist_each=persist_each,
         )
-        if monitor_telegram_delivery_done(notification):
-            sl.notified_at = now_kyiv()
-        if notification.sent_telegram:
-            delivered += 1
-
-        await flush_session(db)
-        if persist_each:
-            await commit_session(db)
-
+    except TelegramRateLimit as exc:
+        logger.warning(
+            "Monitor Telegram paused on rate limit (retry %.0fs), delivered=%s",
+            exc.retry_after,
+            delivered,
+        )
     if delivered:
         if not persist_each:
             await flush_session(db)
@@ -633,6 +606,185 @@ async def deliver_pending_monitor_telegram(
             search_ids,
         )
     return delivered
+
+
+async def _deliver_monitor_rows(
+    db: AsyncSession,
+    rows: list,
+    *,
+    max_hours: float,
+    persist_each: bool,
+) -> int:
+    delivered = 0
+    skipped_users: set[str] = set()
+    consecutive_transient = 0
+    for sl, search, user, listing in rows:
+        user_id = str(getattr(user, "id", "") or "")
+        if user_id and user_id in skipped_users:
+            continue
+        try:
+            sent = await _deliver_one_monitor_row(
+                db,
+                sl,
+                search,
+                user,
+                listing,
+                max_hours=max_hours,
+                persist_each=persist_each,
+            )
+        except TelegramRateLimit as exc:
+            logger.warning(
+                "Monitor Telegram paused on rate limit (retry %.0fs), delivered=%s",
+                exc.retry_after,
+                delivered,
+            )
+            break
+        except TelegramPermanentError as exc:
+            if user_id:
+                skipped_users.add(user_id)
+            logger.warning(
+                "Skip remaining Telegram for user %s this batch: %s",
+                user_id,
+                exc,
+            )
+            continue
+        except TelegramTransientError as exc:
+            consecutive_transient += 1
+            logger.warning(
+                "Transient Telegram error listing=%s (%s/3): %s",
+                getattr(listing, "id", None),
+                consecutive_transient,
+                exc,
+            )
+            if consecutive_transient >= 3:
+                logger.warning(
+                    "Monitor Telegram paused after repeated transient errors, delivered=%s",
+                    delivered,
+                )
+                break
+            continue
+        except Exception:
+            logger.exception(
+                "Monitor Telegram row failed listing=%s search=%s",
+                getattr(listing, "id", None),
+                getattr(search, "id", None),
+            )
+            continue
+        consecutive_transient = 0
+        if sent:
+            delivered += 1
+    return delivered
+
+
+async def _deliver_one_monitor_row(
+    db: AsyncSession,
+    sl: SearchListing,
+    search: SearchQuery,
+    user: User,
+    listing: Listing,
+    *,
+    max_hours: float,
+    persist_each: bool,
+) -> bool:
+    if persist_each:
+        await commit_session(db)
+
+    if not listing_matches_search_query(listing, search):
+        logger.info(
+            "Drop stale monitor link: listing %s not matching search %s",
+            listing.id,
+            search.id,
+        )
+        sl.is_new = False
+        search.new_count = max(0, (search.new_count or 0) - 1)
+        await flush_session(db)
+        if persist_each:
+            await commit_session(db)
+        return False
+
+    latest = await db.scalar(
+        select(Notification)
+        .where(
+            Notification.user_id == user.id,
+            Notification.search_id == search.id,
+            Notification.listing_id == listing.id,
+            Notification.type == NotificationType.listing_match,
+        )
+        .order_by(desc(Notification.created_at))
+        .limit(1)
+    )
+    if latest and latest.sent_telegram:
+        sl.notified_at = now_kyiv()
+        await flush_session(db)
+        if persist_each:
+            await commit_session(db)
+        return True
+    if latest and monitor_telegram_delivery_done(latest):
+        sl.notified_at = now_kyiv()
+        await flush_session(db)
+        if persist_each:
+            await commit_session(db)
+        return False
+    if latest:
+        payload = latest.payload or {}
+        alert_line = payload.get("cross_source_alert")
+        alert_emoji = "🔗" if alert_line else "🚗"
+        if alert_line is None:
+            alert_line, alert_emoji = await build_cross_source_telegram_alert(
+                db, user.id, listing
+            )
+        ok = await _attempt_listing_match_telegram(
+            db,
+            user,
+            listing,
+            search,
+            latest,
+            skip_freshness_check=True,
+            max_published_hours=max_hours,
+            alert_line=alert_line,
+            alert_emoji=alert_emoji,
+        )
+        gave_up = False
+        if not ok and note_telegram_delivery_failure(latest) >= TELEGRAM_GIVE_UP_ATTEMPTS:
+            gave_up = True
+            sl.is_new = False
+            logger.warning(
+                "Gave up Telegram for listing %s search %s after %s attempts",
+                listing.id,
+                search.id,
+                TELEGRAM_GIVE_UP_ATTEMPTS,
+            )
+        if ok or gave_up:
+            sl.notified_at = now_kyiv()
+        await flush_session(db)
+        if persist_each:
+            await commit_session(db)
+        return ok
+
+    notification = await create_listing_notification(
+        db,
+        user,
+        listing,
+        search=search,
+        skip_freshness_check=True,
+        max_published_hours=max_hours,
+    )
+    if notification.sent_telegram:
+        sl.notified_at = now_kyiv()
+    elif note_telegram_delivery_failure(notification) >= TELEGRAM_GIVE_UP_ATTEMPTS:
+        sl.notified_at = now_kyiv()
+        sl.is_new = False
+        logger.warning(
+            "Gave up Telegram for listing %s search %s after %s attempts",
+            listing.id,
+            search.id,
+            TELEGRAM_GIVE_UP_ATTEMPTS,
+        )
+
+    await flush_session(db)
+    if persist_each:
+        await commit_session(db)
+    return bool(notification.sent_telegram)
 
 
 async def get_unread_count(db: AsyncSession, user_id: str) -> int:

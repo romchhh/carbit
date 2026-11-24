@@ -834,7 +834,7 @@ async def _fetch_source_pool(
             cache_ttl_seconds=cache_ttl_seconds,
         )
 
-    # AUTO.RIA: HTML-картки/ID, деталі — /auto/info; фолбек на /auto/search.
+    # AUTO.RIA для моніторингу і пошуку — HTML через проксі, без публічного ключа developers.ria.com.
     from app.services.auto_ria.discover import discover_auto_ria
     from app.services.auto_ria_beta.constants import PAGE_SIZE as HTML_PAGE_SIZE, POOL_MAX_ITEMS
     from app.services.search.pool_cache import hydrate_tagged_auto_ria_ids

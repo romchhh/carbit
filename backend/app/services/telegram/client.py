@@ -48,43 +48,114 @@ def _valid_photo_url(url: str | None) -> str | None:
     return normalized
 
 
+class TelegramRateLimit(RuntimeError):
+    """Бот уперся в ліміт Telegram. Поточну пачку треба зупинити, а не палити решту авто."""
+
+    def __init__(self, retry_after: float):
+        self.retry_after = retry_after
+        super().__init__(f"telegram rate limit, retry after {retry_after:.0f}s")
+
+
+class TelegramPermanentError(RuntimeError):
+    """Чат недоступний: користувач заблокував бота або чату більше немає."""
+
+    def __init__(self, description: str):
+        self.description = description
+        super().__init__(description)
+
+
+class TelegramTransientError(RuntimeError):
+    """Мережа або Telegram тимчасово не відповіли. Авто лишається в черзі."""
+
+
+_PERMANENT_CHAT_MARKERS = (
+    "bot was blocked by the user",
+    "user is deactivated",
+    "chat not found",
+    "peer_id_invalid",
+    "bot can't initiate conversation",
+    "bot was kicked",
+    "have no rights to send",
+    "group chat was upgraded to a supergroup",
+)
+
+
+def telegram_failure_is_permanent(description: str) -> bool:
+    text = (description or "").lower()
+    return any(marker in text for marker in _PERMANENT_CHAT_MARKERS)
+
+
+def telegram_button_url(url: object) -> str | None:
+    """Telegram відхиляє всю картку, якщо в кнопці невалідний URL."""
+    if not isinstance(url, str):
+        return None
+    cleaned = url.strip()
+    if cleaned.startswith("https://") or cleaned.startswith("http://"):
+        return cleaned
+    return None
+
+
 class TelegramClient:
     def __init__(self, token: str | None = None):
         self.token = token or settings.TELEGRAM_BOT_TOKEN
         self.base = f"https://api.telegram.org/bot{self.token}"
+        self.last_failure: str | None = None
 
     @property
     def enabled(self) -> bool:
         return bool(self.token)
 
     async def _post_with_retry(self, client: httpx.AsyncClient, method: str, **kwargs: Any) -> httpx.Response:
-        """Один повтор після 429, інакше черга сповіщень обривається на першому авто."""
+        """Після 429 чекаємо retry_after. Якщо ліміт лишився — зупиняємо пачку."""
         res = await client.post(f"{self.base}/{method}", **kwargs)
-        if res.status_code != 429:
-            return res
         wait = 1.0
-        try:
-            wait = float(res.json().get("parameters", {}).get("retry_after", 1))
-        except (TypeError, ValueError, json.JSONDecodeError):
-            wait = 1.0
-        wait = min(max(wait, 0.4), 8.0)
-        logger.warning("Telegram 429 on %s, retry in %.1fs", method, wait)
-        await asyncio.sleep(wait)
-        return await client.post(f"{self.base}/{method}", **kwargs)
+        for _ in range(2):
+            if res.status_code != 429:
+                return res
+            try:
+                wait = float(res.json().get("parameters", {}).get("retry_after", 1))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                wait = 1.0
+            wait = min(max(wait, 1.0), 40.0)
+            logger.warning("Telegram 429 on %s, retry in %.1fs", method, wait)
+            await asyncio.sleep(wait)
+            res = await client.post(f"{self.base}/{method}", **kwargs)
+        if res.status_code == 429:
+            raise TelegramRateLimit(wait)
+        return res
+
+    def _note_http_failure(self, status: int, description: str) -> None:
+        if telegram_failure_is_permanent(description):
+            self.last_failure = "permanent"
+            raise TelegramPermanentError(description)
+        self.last_failure = "transient" if status >= 500 or status == 0 else "rejected"
 
     async def _call(self, method: str, payload: dict) -> dict | None:
         if not self.enabled:
             logger.warning("Telegram bot token not configured")
+            self.last_failure = "transient"
             return None
-        async with httpx.AsyncClient(timeout=20) as client:
-            res = await self._post_with_retry(client, method, json=payload)
-            from app.services.admin.api_usage import record_api_request
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                res = await self._post_with_retry(client, method, json=payload)
+        except httpx.HTTPError as exc:
+            logger.warning("Telegram API %s network error: %s", method, exc)
+            self.last_failure = "transient"
+            return None
+        from app.services.admin.api_usage import record_api_request
 
-            await record_api_request("telegram_bot", method, success=res.status_code < 400)
-            if res.status_code >= 400:
-                logger.error("Telegram API %s: %s", method, res.text)
-                return None
-            return res.json()
+        await record_api_request("telegram_bot", method, success=res.status_code < 400)
+        if res.status_code >= 400:
+            description = res.text
+            try:
+                description = str(res.json().get("description") or res.text)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                description = res.text
+            logger.error("Telegram API %s: %s", method, description)
+            self._note_http_failure(res.status_code, description)
+            return None
+        self.last_failure = None
+        return res.json()
 
     async def _call_multipart(
         self,
@@ -96,16 +167,29 @@ class TelegramClient:
     ) -> dict | None:
         if not self.enabled:
             logger.warning("Telegram bot token not configured")
+            self.last_failure = "transient"
             return None
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            res = await self._post_with_retry(client, method, data=data, files=files)
-            from app.services.admin.api_usage import record_api_request
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                res = await self._post_with_retry(client, method, data=data, files=files)
+        except httpx.HTTPError as exc:
+            logger.warning("Telegram API %s network error: %s", method, exc)
+            self.last_failure = "transient"
+            return None
+        from app.services.admin.api_usage import record_api_request
 
-            await record_api_request("telegram_bot", method, success=res.status_code < 400)
-            if res.status_code >= 400:
-                logger.error("Telegram API %s (multipart): %s", method, res.text)
-                return None
-            return res.json()
+        await record_api_request("telegram_bot", method, success=res.status_code < 400)
+        if res.status_code >= 400:
+            description = res.text
+            try:
+                description = str(res.json().get("description") or res.text)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                description = res.text
+            logger.error("Telegram API %s (multipart): %s", method, description)
+            self._note_http_failure(res.status_code, description)
+            return None
+        self.last_failure = None
+        return res.json()
 
     async def send_message(
         self,
@@ -114,7 +198,11 @@ class TelegramClient:
         reply_markup: dict | None = None,
         parse_mode: str = "HTML",
     ) -> dict | None:
-        payload: dict[str, Any] = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            "text": text[:4096],
+            "parse_mode": parse_mode,
+        }
         if reply_markup:
             payload["reply_markup"] = reply_markup
         return await self._call("sendMessage", payload)
@@ -287,26 +375,31 @@ class TelegramClient:
             else f"{settings.FRONTEND_URL.rstrip('/')}/app/search"
         )
 
-        markup = {
-            "inline_keyboard": [
-                [
-                    {"text": "🌐 Переглянути", "url": app_listing_url or listing.get("url") or settings.FRONTEND_URL},
-                ],
-                [
-                    {"text": "⚙️ Налаштувати фільтри", "url": filters_url},
-                    {"text": "🔗 Джерело", "url": listing.get("url") or app_listing_url},
-                ],
-            ]
-        }
+        view_url = telegram_button_url(app_listing_url) or telegram_button_url(listing.get("url")) or telegram_button_url(settings.FRONTEND_URL)
+        source_url = telegram_button_url(listing.get("url")) or view_url
+        filters_button_url = telegram_button_url(filters_url)
+        keyboard: list[list[dict[str, str]]] = []
+        if view_url:
+            keyboard.append([{"text": "🌐 Переглянути", "url": view_url}])
+        second: list[dict[str, str]] = []
+        if filters_button_url:
+            second.append({"text": "⚙️ Налаштувати фільтри", "url": filters_button_url})
+        if source_url:
+            second.append({"text": "🔗 Джерело", "url": source_url})
+        if second:
+            keyboard.append(second)
         if search_id:
-            markup["inline_keyboard"].append(
-                [
-                    {
-                        "text": "⏸ Відключити моніторинг",
-                        "callback_data": f"mon:ask:{search_id}",
-                    }
-                ]
-            )
+            callback = f"mon:ask:{search_id}"
+            if len(callback.encode("utf-8")) <= 64:
+                keyboard.append(
+                    [
+                        {
+                            "text": "⏸ Відключити моніторинг",
+                            "callback_data": callback,
+                        }
+                    ]
+                )
+        markup = {"inline_keyboard": keyboard} if keyboard else None
 
         images = listing.get("images") or []
         raw_image = images[0] if images else listing.get("photo_url")
@@ -325,7 +418,11 @@ class TelegramClient:
                 return result
             logger.warning("Telegram sendPhoto by file failed: %s", local_path)
 
-        return await self.send_message(chat_id, caption, reply_markup=markup)
+        result = await self.send_message(chat_id, caption, reply_markup=markup)
+        if result or markup is None:
+            return result
+        logger.warning("Telegram sendMessage with buttons failed, retrying plain text")
+        return await self.send_message(chat_id, caption)
 
     async def get_user_profile_photo_path(self, user_id: str | int) -> str | None:
         data = await self._call("getUserProfilePhotos", {"user_id": int(user_id), "limit": 1})

@@ -250,9 +250,13 @@ def test_listings_from_cars_collapses_identical_newauto_stock():
 
 
 def test_search_card_prefers_embedded_date_over_future_card_text():
+    from datetime import timedelta
+
+    from app.core.timezone import now_kyiv
     from app.services.auto_ria_beta.parser import ScrapedCar, _apply_search_posted_dates
 
-    car = ScrapedCar(car_id=1, url="https://auto.ria.com/uk/auto_test_1.html", posted="15.11.2026")
+    future = (now_kyiv() + timedelta(days=30)).strftime("%d.%m.%Y")
+    car = ScrapedCar(car_id=1, url="https://auto.ria.com/uk/auto_test_1.html", posted=future)
     _apply_search_posted_dates([car], {1: "18 годин тому"})
     assert car.posted == "18 годин тому"
 
@@ -341,6 +345,19 @@ def test_parse_total_count_ignores_empty_space_match():
     html = "<html><body> пропозицій <script>{\"id\":\"sortButtonContentCount\",\"elements\":[{\"content\":\"512 пропозицій\"}]}</script></body></html>"
     assert parse_total_count(html) == 512
     assert parse_total_count("<p>   пропозицій</p>") == 0
+
+
+def test_search_card_uses_add_date_when_publish_time_missing():
+    from app.services.auto_ria_beta.parser import parse_search_page
+
+    html = """
+    <a href="/uk/auto_zeekr_001_40655791.html">Zeekr 001 2024 41 875 $ 20 тис. км Київ</a>
+    {"id":"Auto40655791","addDate":"19 листопада"}
+    """
+    cars, _total = parse_search_page(html)
+    assert len(cars) == 1
+    assert cars[0].car_id == 40655791
+    assert cars[0].posted == "19 листопада"
 
 
 def test_search_card_vin_present_is_not_treated_as_vin():

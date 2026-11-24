@@ -257,10 +257,17 @@ def parse_total_count(html: str) -> int:
 
 def _card_publish_time(html: str, start: int) -> str | None:
     chunk = html[start : start + 15000]
-    date_match = re.search(r'"publishTime"\s*:\s*"([^"]+)"', chunk)
-    if not date_match:
-        return None
-    return date_match.group(1).strip() or None
+    for pattern in (
+        r'"publishTime"\s*:\s*"([^"]+)"',
+        r'"addDate"\s*:\s*"([^"]+)"',
+    ):
+        date_match = re.search(pattern, chunk)
+        if not date_match:
+            continue
+        text = date_match.group(1).strip()
+        if text:
+            return text
+    return None
 
 
 def _nearby_embedded_date(html: str, start: int) -> str | None:
