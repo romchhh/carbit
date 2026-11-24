@@ -24,5 +24,7 @@ export const BANK_PARTNER_BIZBANK = {
   src: "/partners/bizbank-horizontal.png",
   logoWhiteSrc: "/partners/bizbank-white.svg",
   href: "https://www.bisbank.com.ua/",
+  /** Сторінка продукту «Готівка на автівку» — кнопка «Умови банку». */
+  creditHref: "https://www.bisbank.com.ua/credits/kredyt-hotivka-na-avtivku/",
   alt: "БІЗБАНК — банк-партнер",
 } as const;

@@ -568,7 +568,7 @@ export function ListingCreditCalculatorModal({
 
             <p className="text-center">
               <Link
-                href={BANK_PARTNER_BIZBANK.href}
+                href={BANK_PARTNER_BIZBANK.creditHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[12px] font-medium text-ink/75 underline-offset-2 hover:text-ink hover:underline"
